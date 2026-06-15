@@ -95,6 +95,9 @@ begin
         now()
     );
 
+    -- Seed default modules and master menus for this company
+    perform fn_seed_client_modules(v_client_id, v_company_id);
+
     return json_build_object(
         'client_id',   v_client_id,
         'client_no',   v_client_no,
