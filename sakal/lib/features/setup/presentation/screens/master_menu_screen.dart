@@ -199,11 +199,9 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
   }
 
   Widget _buildTable() {
-    return Scrollbar(
-      thumbVisibility: true,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(32, 16, 32, 32),
-        child: ClipRRect(
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(32, 16, 32, 32),
+      child: ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: Table(
             border: TableBorder.all(color: AppColors.border, width: 1),
@@ -223,7 +221,6 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
             ],
           ),
         ),
-      ),
     );
   }
 
