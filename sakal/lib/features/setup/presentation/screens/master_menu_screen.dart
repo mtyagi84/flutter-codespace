@@ -21,10 +21,13 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    // addPostFrameCallback avoids calling setState during initState
+    // (async fns run synchronously to first await — setState before that = lifecycle violation)
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
@@ -202,27 +205,35 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
   static const _w = [140.0, 120.0, 190.0, 250.0, 150.0, 54.0, 72.0, 64.0];
 
   Widget _buildTable() {
-    return ListView(
+    // SingleChildScrollView inside Expanded: gets tight width+height from Expanded.
+    // Column(start) gives Container loose constraints so it can shrink to table width.
+    // Row(mainAxisSize: min) sizes to its SizedBox children — no ambiguous fill.
+    return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(32, 16, 32, 32),
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: AppColors.border),
-            borderRadius: BorderRadius.circular(8),
-            color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.border),
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.white,
+            ),
+            clipBehavior: Clip.hardEdge,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeaderRow(),
+                ..._entries.expand((e) => [
+                      const Divider(height: 1, thickness: 1, color: AppColors.border),
+                      _buildDataRow(e),
+                    ]),
+              ],
+            ),
           ),
-          clipBehavior: Clip.hardEdge,
-          child: Column(
-            children: [
-              _buildHeaderRow(),
-              ..._entries.expand((e) => [
-                    const Divider(height: 1, thickness: 1, color: AppColors.border),
-                    _buildDataRow(e),
-                  ]),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -235,6 +246,7 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
     return ColoredBox(
       color: AppColors.surfaceVariant,
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           _hcell('MODULE', _w[0], style),
           _vd(), _hcell('FEATURE CODE', _w[1], style),
@@ -243,7 +255,7 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
           _vd(), _hcell('GROUP',        _w[4], style),
           _vd(), _hcell('SER.',         _w[5], style, center: true),
           _vd(), _hcell('ACTIVE',       _w[6], style, center: true),
-          _vd(), SizedBox(width: _w[7]),
+          _vd(), SizedBox(width: _w[7], height: 40),
         ],
       ),
     );
@@ -260,6 +272,7 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
     return ColoredBox(
       color: active ? Colors.white : const Color(0xFFF9FAFB),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           _dcell(_moduleName(e['module_id'] as String?), _w[0],
@@ -312,7 +325,6 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
     );
   }
 
-  // Vertical column divider
   Widget _vd() => const SizedBox(
         width: 1, height: 48,
         child: ColoredBox(color: AppColors.border),
