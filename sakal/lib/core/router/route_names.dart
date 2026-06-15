@@ -8,6 +8,9 @@ class RouteNames {
   static const String group = '/group/:groupCode';
   static String groupPath(String groupCode) => '/group/$groupCode';
 
+  // Auth (inside shell)
+  static const String changePassword = '/auth/change-password';
+
   // Setup / Admin
   static const String masterMenu  = '/setup/master-menu';
   static const String company     = '/setup/company';

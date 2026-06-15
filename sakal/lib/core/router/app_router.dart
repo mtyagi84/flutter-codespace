@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/auth/presentation/screens/change_password_screen.dart';
 import '../../features/auth/presentation/screens/landing_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
@@ -43,6 +44,9 @@ final appRouter = GoRouter(
           builder: (c, s) => GroupLandingScreen(
               groupCode: s.pathParameters['groupCode']!),
         ),
+
+        // Auth (inside shell)
+        GoRoute(path: RouteNames.changePassword, builder: (c, s) => const ChangePasswordScreen()),
 
         // Administration
         GoRoute(path: RouteNames.masterMenu,  builder: (c, s) => const MasterMenuScreen()),
