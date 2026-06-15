@@ -157,7 +157,7 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
     }
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildHeader(),
         const SizedBox(height: 8),
@@ -209,7 +209,7 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
               0: FixedColumnWidth(140),  // Module
               1: FixedColumnWidth(120),  // Feature Code
               2: FixedColumnWidth(190),  // Feature Name
-              3: FlexColumnWidth(),      // Screen Name
+              3: FixedColumnWidth(250),  // Screen Name
               4: FixedColumnWidth(150),  // Group
               5: FixedColumnWidth(54),   // Ser.
               6: FixedColumnWidth(72),   // Active
