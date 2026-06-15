@@ -1,0 +1,58 @@
+name: sakal
+description: SAKAL ERP - Sampurna Business Solution by Rigevedam Innovations
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.5.1
+
+  # Navigation
+  go_router: ^14.0.0
+
+  # Local database (offline)
+  drift: ^2.19.1
+  drift_flutter: ^0.2.1
+  sqlite3_flutter_libs: ^0.5.24
+
+  # Network
+  dio: ^5.6.0
+
+  # Secure token storage
+  flutter_secure_storage: ^9.2.2
+
+  # Connectivity detection
+  connectivity_plus: ^6.0.5
+
+  # Utilities
+  intl: ^0.19.0
+  uuid: ^4.4.2
+  crypto: ^3.0.3
+  shared_preferences: ^2.3.2
+  path_provider: ^2.1.4
+
+  # Immutable models (used when we add code gen)
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+  # Code generation (activated when needed)
+  build_runner: ^2.4.13
+  drift_dev: ^2.19.1
+  freezed: ^2.5.7
+  json_serializable: ^6.8.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
