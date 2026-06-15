@@ -1,0 +1,249 @@
+# SAKAL ERP — Flutter Multi-Platform ERP
+
+## Project Overview
+**SAKAL** (Sampurna = Complete in Sanskrit) is a full ERP system built by **Rigevedam Innovations** for retail/wholesale stores targeting DRC (Congo) and Zambia — regions with unstable internet. The app works fully online and offline.
+
+- **App ID**: `com.rigevedam.sakal`
+- **Version**: 1.0.0
+- **GitHub**: https://github.com/mtyagi84/flutter-codespace
+- **Codespace**: https://psychic-meme-q7jp9q54wj53pvv.github.dev
+- **Flutter project root**: `C:\Manglu\SAKAL\sakal\`
+- **Codespace project path**: `/workspaces/flutter-codespace/sakal/`
+
+---
+
+## Tech Stack
+
+| Layer | Choice |
+|---|---|
+| Framework | Flutter 3.x — Web, Android, iOS, Desktop (one codebase) |
+| State management | `flutter_riverpod ^2.5.1` |
+| Navigation | `go_router ^14.0.0` |
+| Local DB (offline) | `drift` + `drift_flutter` + `sqlite3_flutter_libs` |
+| Remote DB | PostgreSQL |
+| API layer | PostgREST — auto REST from PG schema; PG functions for complex reports |
+| HTTP client | `dio ^5.6.0` |
+| Auth tokens | `flutter_secure_storage` (JWT) |
+| Connectivity | `connectivity_plus` |
+| Models | `freezed` + `json_serializable` (code generation not yet activated) |
+
+---
+
+## Architecture: Feature-first + Clean Architecture
+
+```
+lib/
+├── core/                    # Shared infrastructure (no business logic)
+│   ├── config/              # AppConfig, AppConstants
+│   ├── database/tables/     # Drift table definitions per module
+│   ├── network/             # Dio client, auth interceptor, connectivity
+│   ├── sync/                # Offline→Online sync engine
+│   ├── auth/                # Session manager, token storage
+│   ├── errors/              # Failure types, AppException types
+│   ├── theme/               # AppTheme, AppColors (Material 3)
+│   ├── router/              # GoRouter config, RouteNames constants
+│   ├── layout/              # Responsive layout (sidebar/bottom nav)
+│   ├── utils/               # Currency, date, validators, ID generator
+│   └── widgets/             # Shared UI components (SakalButton, SakalDataTable...)
+│
+└── features/                # One folder per ERP module
+    ├── auth/                # Login, change password
+    ├── setup/               # Client, company, location, currency setup
+    │   ├── client/
+    │   ├── company/
+    │   ├── location/
+    │   └── currency/
+    ├── master/              # Shared master data
+    │   ├── customers/
+    │   ├── suppliers/
+    │   ├── products/
+    │   ├── accounts/        # Chart of Accounts
+    │   ├── uom/
+    │   └── tax_codes/
+    ├── users/               # User management + menu permissions
+    ├── dashboard/           # Home screen with KPIs
+    ├── sales/               # Invoices, receipts, returns
+    ├── purchase/            # POs, GRN, purchase invoices, payments
+    ├── inventory/           # Stock, transfers, adjustments
+    ├── finance/             # Double-entry bookkeeping, reports
+    └── reports/             # Cross-module reports
+```
+
+Each feature follows Clean Architecture internally:
+```
+feature/
+├── data/
+│   ├── datasources/     # local_ds.dart (Drift) + remote_ds.dart (PostgREST)
+│   ├── models/          # JSON-serializable models
+│   └── repositories/    # Repository implementations
+├── domain/
+│   ├── entities/        # Pure Dart business objects
+│   ├── repositories/    # Abstract interfaces
+│   └── usecases/        # Business logic
+└── presentation/
+    ├── providers/        # Riverpod providers
+    ├── screens/          # Full-page widgets
+    └── widgets/          # Feature-specific widgets
+```
+
+---
+
+## Multi-Tenant Design
+
+**Every single table has**: `client_id + company_id + location_id`
+
+```
+clients → companies → locations
+```
+- 1 client → multiple companies
+- 1 company → multiple locations (stores/warehouses, each can have own server)
+- Consolidation: UPSERT from location servers → central server (no conflicts — composite key)
+- Same codebase works for SaaS (cloud-hosted) or on-premise (client's LAN server)
+
+---
+
+## Multi-Currency Design
+
+Set at **company setup**:
+1. **Base currency** — all financial books shown in this by default
+2. **Local currency** — regional currency (e.g. FC for DRC, ZMW for Zambia)
+
+Set at **customer/supplier creation**:
+3. **Ledger currency** — currency that party sees their ledger in
+
+Every transaction stores exchange rate → all 3 currencies derived automatically.
+
+---
+
+## ERP Modules
+
+| Module | Status |
+|---|---|
+| Auth (login, session) | UI done, logic pending |
+| Setup (client, company, location, currency) | Pending |
+| Master (customers, suppliers, products, COA, UOM, tax) | Pending |
+| Users & Permissions | Pending |
+| Sales (invoices, receipts, returns) | Pending |
+| Purchase (PO, GRN, invoices, payments) | Pending |
+| Inventory (stock, transfers, adjustments) | Pending |
+| Finance (double-entry, trial balance, P&L, balance sheet) | Pending |
+| Dashboard | Placeholder only |
+| Reports | Pending |
+
+**Finance is full double-entry bookkeeping** — every sales/purchase/payment transaction auto-posts journal entries (DR/CR). Chart of Accounts is hierarchical.
+
+---
+
+## User Permission System
+
+```
+users  ──→  user_menu_permissions  ←──  menus
+                  ↓
+       can_add | can_edit | can_view | can_approve
+       (separate rights per menu item)
+```
+
+---
+
+## Offline Strategy
+
+**Scenario 1 — Office (LAN)**:
+Flutter → PostgREST → PostgreSQL (local server). No internet needed if on LAN.
+
+**Scenario 2 — Field (offline)**:
+Flutter → Drift (SQLite on device). Master data pre-synced before leaving.
+
+**Scenario 3 — Back online**:
+Pending transactions → push to server → mark SYNCED.
+
+Rules:
+- Master data: full replace on sync (server wins)
+- Transactions: append-only — PENDING → SYNCED, never re-pushed
+- No FAILED state — failures stay PENDING, auto-retry on next sync
+
+---
+
+## Backend (PostgreSQL + PostgREST)
+
+SQL lives in `backend/` alongside Flutter code:
+
+```
+backend/
+├── migrations/      # Numbered SQL files — run in order
+│   ├── 001_tenancy.sql
+│   ├── 002_users_permissions.sql
+│   ├── 003_currencies.sql
+│   ├── 004_master_data.sql
+│   ├── 005_finance.sql
+│   ├── 006_sales.sql
+│   ├── 007_purchase.sql
+│   └── 008_inventory.sql
+├── functions/       # PG functions for complex reports (trial balance, P&L, stock valuation)
+├── rls/             # Row Level Security policies (client_id isolation)
+└── seeds/           # Default COA, currencies seed data
+```
+
+---
+
+## Theme & Brand
+
+```dart
+// app_colors.dart
+primary:    #1B3A6B  // Deep Navy
+secondary:  #D4860B  // Amber Gold
+positive:   #2E7D32  // Green (profit)
+negative:   #C62828  // Red (loss/error)
+background: #F5F7FA
+surface:    #FFFFFF
+```
+
+Material 3. Sidebar navigation on Web/Desktop. Bottom navigation on Mobile.
+
+---
+
+## Development Workflow
+
+1. Claude edits files at `C:\Manglu\SAKAL\sakal\`
+2. Commit + push from local terminal
+3. In Codespace terminal: `git pull`
+4. In Codespace terminal: `flutter run -d web-server --web-port 8080 --web-hostname 0.0.0.0`
+
+### Adding a new module (future)
+1. Add folder under `lib/features/<module>/` with `data/domain/presentation` structure
+2. Add route in `lib/core/router/route_names.dart` and `app_router.dart`
+3. Add Drift table in `lib/core/database/tables/<module>_tables.dart`
+4. Register table in `lib/core/database/app_database.dart`
+5. Add SQL migration in `backend/migrations/`
+
+### Changing DB schema (Drift)
+- Increment `schemaVersion` in `app_database.dart`
+- Add migration step in `MigrationStrategy`
+
+---
+
+## Key Coding Conventions
+
+- Vanilla Dart / Flutter — no unnecessary abstraction
+- Riverpod for all state — no setState except purely local UI state
+- Repository pattern — UI never touches datasources directly
+- All IndexedDB/Drift operations return Futures/Streams
+- No comments unless WHY is non-obvious
+- Flat imports — use barrel files (`feature/feature.dart`) when a feature grows large
+- No external CDN dependencies — app must work fully offline
+
+---
+
+## Route Names Reference
+
+```dart
+RouteNames.login           // /login
+RouteNames.dashboard       // /dashboard
+RouteNames.sales           // /sales
+RouteNames.salesInvoices   // /sales/invoices
+RouteNames.purchase        // /purchase
+RouteNames.inventory       // /inventory
+RouteNames.finance         // /finance
+RouteNames.customers       // /master/customers
+RouteNames.products        // /master/products
+// ... see lib/core/router/route_names.dart for full list
+```
