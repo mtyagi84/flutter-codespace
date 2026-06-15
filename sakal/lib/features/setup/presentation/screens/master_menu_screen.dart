@@ -140,6 +140,10 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
 
   // ── Build ─────────────────────────────────────────────────────────
 
+  // Column widths: 8 columns + 7 one-pixel dividers = 1047px total
+  static const _w = [140.0, 120.0, 190.0, 250.0, 150.0, 54.0, 72.0, 64.0];
+  static const _tableWidth = 1047.0;
+
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
@@ -159,84 +163,71 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildHeader(),
-        const SizedBox(height: 8),
-        Expanded(child: _buildTable()),
-      ],
-    );
-  }
-
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 28, 32, 0),
-      child: Row(
-        children: [
-          // Expanded avoids Spacer() — Spacer is flex and causes tight-infinite
-          // width to propagate to ElevatedButton when parent has unbounded width.
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Master Menu',
-                    style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary)),
-                const SizedBox(height: 4),
-                Text(
-                  '${_entries.length} entries · ${_modules.length} modules',
-                  style: const TextStyle(
-                      fontSize: 13, color: AppColors.textSecondary),
-                ),
-              ],
-            ),
-          ),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add Menu Entry'),
-            onPressed: () => _openDialog(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Column widths: 8 columns + 7 one-pixel dividers = 1047px total
-  static const _w = [140.0, 120.0, 190.0, 250.0, 150.0, 54.0, 72.0, 64.0];
-  static const _tableWidth = 1047.0;
-
-  Widget _buildTable() {
-    // Outer SingleChildScrollView (vertical): Expanded gives it tight width+height.
-    // Inner SingleChildScrollView (horizontal): gives its child unconstrained width,
-    // so Row(mainAxisSize:min) can be 1047px without constraint violations when the
-    // content pane is narrower than the table — which caused the render loop.
+    // Single top-level vertical scroll — no Expanded+nested-scroll tangle.
+    // Appshell's Expanded provides bounded height as viewport; the Column
+    // child grows freely, scrolling when taller than viewport.
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(32, 16, 32, 32),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: AppColors.border),
-            borderRadius: BorderRadius.circular(8),
-            color: Colors.white,
-          ),
-          clipBehavior: Clip.hardEdge,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.fromLTRB(32, 28, 32, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Page header ──────────────────────────────────────────
+          Row(
             children: [
-              _buildHeaderRow(),
-              ..._entries.expand((e) => [
-                    Container(width: _tableWidth, height: 1, color: AppColors.border),
-                    _buildDataRow(e),
-                  ]),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Master Menu',
+                        style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary)),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${_entries.length} entries · ${_modules.length} modules',
+                      style: const TextStyle(
+                          fontSize: 13, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Add Menu Entry'),
+                onPressed: () => _openDialog(),
+              ),
             ],
           ),
-        ),
+          const SizedBox(height: 16),
+
+          // ── Table — horizontal scroll only ───────────────────────
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.border),
+                borderRadius: BorderRadius.circular(8),
+                color: Colors.white,
+              ),
+              clipBehavior: Clip.hardEdge,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeaderRow(),
+                  ..._entries.expand((e) => [
+                        Container(
+                            width: _tableWidth, height: 1,
+                            color: AppColors.border),
+                        _buildDataRow(e),
+                      ]),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
