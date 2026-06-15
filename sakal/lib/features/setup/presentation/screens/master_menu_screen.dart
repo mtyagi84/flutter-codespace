@@ -234,7 +234,7 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
         color: AppColors.textSecondary,
         letterSpacing: 0.5);
     return TableRow(
-      decoration: const TableRowDecoration(color: AppColors.surfaceVariant),
+      decoration: const BoxDecoration(color: AppColors.surfaceVariant),
       children: [
         _hcell('MODULE', style),
         _hcell('FEATURE CODE', style),
@@ -259,7 +259,7 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
         );
 
     return TableRow(
-      decoration: TableRowDecoration(
+      decoration: BoxDecoration(
         color: dimmed ? const Color(0xFFF9FAFB) : Colors.white,
       ),
       children: [
