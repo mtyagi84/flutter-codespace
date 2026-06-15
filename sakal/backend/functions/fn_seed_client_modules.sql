@@ -11,20 +11,25 @@ create or replace function fn_seed_client_modules(
     p_company_id uuid
 ) returns void language plpgsql security definer as $$
 declare
-    v_sl uuid; v_pr uuid; v_in uuid; v_fn uuid;
+    v_ad uuid; v_sl uuid; v_pr uuid; v_in uuid; v_fn uuid;
 begin
     -- --------------------------------------------------------
-    -- Modules (SL, PR, IN, FN)
+    -- Modules (AD=0, SL=1, PR=2, IN=3, FN=4)
+    -- AD is serial 0 so it always appears first in sidebar
     -- --------------------------------------------------------
     insert into ric_system_modules
         (client_id, company_id, module_code, module_name, serial_no)
     values
-        (p_client_id, p_company_id, 'SL', 'Sales',     1),
-        (p_client_id, p_company_id, 'PR', 'Purchase',  2),
-        (p_client_id, p_company_id, 'IN', 'Inventory', 3),
-        (p_client_id, p_company_id, 'FN', 'Finance',   4);
+        (p_client_id, p_company_id, 'AD', 'Administration', 0),
+        (p_client_id, p_company_id, 'SL', 'Sales',          1),
+        (p_client_id, p_company_id, 'PR', 'Purchase',        2),
+        (p_client_id, p_company_id, 'IN', 'Inventory',       3),
+        (p_client_id, p_company_id, 'FN', 'Finance',         4);
 
     -- Capture module IDs for foreign keys
+    select id into v_ad from ric_system_modules
+    where client_id = p_client_id and company_id = p_company_id and module_code = 'AD';
+
     select id into v_sl from ric_system_modules
     where client_id = p_client_id and company_id = p_company_id and module_code = 'SL';
 
@@ -36,6 +41,18 @@ begin
 
     select id into v_fn from ric_system_modules
     where client_id = p_client_id and company_id = p_company_id and module_code = 'FN';
+
+    -- --------------------------------------------------------
+    -- Master Menus — Administration
+    -- --------------------------------------------------------
+    insert into ric_master_menus
+        (client_id, company_id, module_id, feature_code, feature_name, screen_name, serial_no)
+    values
+        (p_client_id, p_company_id, v_ad, 'AD-USR', 'User Management',  '/setup/users',       1),
+        (p_client_id, p_company_id, v_ad, 'AD-PRM', 'User Permissions', '/setup/permissions', 2),
+        (p_client_id, p_company_id, v_ad, 'AD-CMP', 'Company Setup',    '/setup/company',     3),
+        (p_client_id, p_company_id, v_ad, 'AD-LOC', 'Location Setup',   '/setup/locations',   4),
+        (p_client_id, p_company_id, v_ad, 'AD-CUR', 'Currency Setup',   '/setup/currencies',  5);
 
     -- --------------------------------------------------------
     -- Master Menus — Sales
