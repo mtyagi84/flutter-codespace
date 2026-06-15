@@ -190,12 +190,10 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
                     ],
                   ),
                 ),
-                UnconstrainedBox(
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Add Menu Entry'),
-                    onPressed: () => _openDialog(),
-                  ),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add Menu Entry'),
+                  onPressed: () => _openDialog(),
                 ),
               ],
             ),

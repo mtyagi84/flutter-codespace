@@ -73,7 +73,11 @@ class AppTheme {
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primary,
             foregroundColor: AppColors.textOnPrimary,
-            minimumSize: const Size(double.infinity, 48),
+            // Finite minimum width — callers that need full-width buttons
+            // must wrap in SizedBox(width: double.infinity, child: ...).
+            // Size(double.infinity, 48) caused crash when button is a
+            // non-flex Row child receiving unconstrained width.
+            minimumSize: const Size(64, 48),
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8)),
             elevation: 0,
