@@ -198,104 +198,130 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
     );
   }
 
+  // Column widths — must sum to a value that fits the content pane
+  static const _w = [140.0, 120.0, 190.0, 250.0, 150.0, 54.0, 72.0, 64.0];
+
   Widget _buildTable() {
-    return SingleChildScrollView(
+    return ListView(
       padding: const EdgeInsets.fromLTRB(32, 16, 32, 32),
-      child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Table(
-            border: TableBorder.all(color: AppColors.border, width: 1),
-            columnWidths: const {
-              0: FixedColumnWidth(140),  // Module
-              1: FixedColumnWidth(120),  // Feature Code
-              2: FixedColumnWidth(190),  // Feature Name
-              3: FixedColumnWidth(250),  // Screen Name
-              4: FixedColumnWidth(150),  // Group
-              5: FixedColumnWidth(54),   // Ser.
-              6: FixedColumnWidth(72),   // Active
-              7: FixedColumnWidth(64),   // Edit
-            },
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(8),
+            color: Colors.white,
+          ),
+          clipBehavior: Clip.hardEdge,
+          child: Column(
             children: [
-              _headerRow(),
-              ..._entries.map(_entryRow),
+              _buildHeaderRow(),
+              ..._entries.expand((e) => [
+                    const Divider(height: 1, thickness: 1, color: AppColors.border),
+                    _buildDataRow(e),
+                  ]),
             ],
           ),
         ),
+      ],
     );
   }
 
-  TableRow _headerRow() {
+  Widget _buildHeaderRow() {
     const style = TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w700,
         color: AppColors.textSecondary,
         letterSpacing: 0.5);
-    return TableRow(
-      decoration: const BoxDecoration(color: AppColors.surfaceVariant),
-      children: [
-        _hcell('MODULE', style),
-        _hcell('FEATURE CODE', style),
-        _hcell('FEATURE NAME', style),
-        _hcell('SCREEN NAME', style),
-        _hcell('GROUP', style),
-        _hcell('SER.', style, center: true),
-        _hcell('ACTIVE', style, center: true),
-        _hcell('', style),
-      ],
-    );
-  }
-
-  TableRow _entryRow(Map<String, dynamic> e) {
-    final active = e['is_active'] as bool? ?? true;
-    final dimmed = !active;
-
-    TextStyle body(bool mono) => TextStyle(
-          fontSize: 13,
-          color: (dimmed ? AppColors.textDisabled : AppColors.textPrimary),
-          fontFamily: mono ? 'monospace' : null,
-        );
-
-    return TableRow(
-      decoration: BoxDecoration(
-        color: dimmed ? const Color(0xFFF9FAFB) : Colors.white,
+    return ColoredBox(
+      color: AppColors.surfaceVariant,
+      child: Row(
+        children: [
+          _hcell('MODULE', _w[0], style),
+          _vd(), _hcell('FEATURE CODE', _w[1], style),
+          _vd(), _hcell('FEATURE NAME', _w[2], style),
+          _vd(), _hcell('SCREEN NAME',  _w[3], style),
+          _vd(), _hcell('GROUP',        _w[4], style),
+          _vd(), _hcell('SER.',         _w[5], style, center: true),
+          _vd(), _hcell('ACTIVE',       _w[6], style, center: true),
+          _vd(), SizedBox(width: _w[7]),
+        ],
       ),
-      children: [
-        _dcell(_moduleName(e['module_id'] as String?), body(false)),
-        _dcell(e['feature_code'] as String? ?? '', body(true).copyWith(color: dimmed ? AppColors.textDisabled : AppColors.primary, fontSize: 12)),
-        _dcell(e['feature_name'] as String? ?? '', body(false)),
-        _dcell(e['screen_name']  as String? ?? '', body(true).copyWith(color: dimmed ? AppColors.textDisabled : AppColors.textSecondary, fontSize: 12)),
-        _dcell(e['group_name']   as String? ?? '—', body(false).copyWith(fontSize: 12, color: dimmed ? AppColors.textDisabled : AppColors.textSecondary)),
-        _dcell((e['serial_no'] as int? ?? 0).toString(), body(false).copyWith(color: AppColors.textSecondary), center: true),
-        // Active toggle
-        TableCell(
-          verticalAlignment: TableCellVerticalAlignment.middle,
-          child: Center(
-            child: Switch.adaptive(
-              value: active,
-              activeColor: AppColors.positive,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              onChanged: (_) => _toggleActive(e['id'] as String, active),
-            ),
-          ),
-        ),
-        // Edit
-        TableCell(
-          verticalAlignment: TableCellVerticalAlignment.middle,
-          child: Center(
-            child: IconButton(
-              icon: const Icon(Icons.edit_outlined, size: 17),
-              color: AppColors.primary,
-              tooltip: 'Edit',
-              onPressed: () => _openDialog(e),
-            ),
-          ),
-        ),
-      ],
     );
   }
 
-  TableCell _hcell(String text, TextStyle style, {bool center = false}) =>
-      TableCell(
+  Widget _buildDataRow(Map<String, dynamic> e) {
+    final active = e['is_active'] as bool? ?? true;
+    final tc  = active ? AppColors.textPrimary   : AppColors.textDisabled;
+    final sc  = active ? AppColors.textSecondary : AppColors.textDisabled;
+    final pc  = active ? AppColors.primary       : AppColors.textDisabled;
+    const fs  = 13.0;
+    const fsm = 12.0;
+
+    return ColoredBox(
+      color: active ? Colors.white : const Color(0xFFF9FAFB),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _dcell(_moduleName(e['module_id'] as String?), _w[0],
+              TextStyle(fontSize: fs, color: tc)),
+          _vd(),
+          _dcell(e['feature_code'] as String? ?? '', _w[1],
+              TextStyle(fontSize: fsm, color: pc, fontFamily: 'monospace')),
+          _vd(),
+          _dcell(e['feature_name'] as String? ?? '', _w[2],
+              TextStyle(fontSize: fs, color: tc)),
+          _vd(),
+          _dcell(e['screen_name'] as String? ?? '', _w[3],
+              TextStyle(fontSize: fsm, color: sc, fontFamily: 'monospace')),
+          _vd(),
+          _dcell(e['group_name'] as String? ?? '—', _w[4],
+              TextStyle(fontSize: fsm, color: sc)),
+          _vd(),
+          _dcell((e['serial_no'] as int? ?? 0).toString(), _w[5],
+              TextStyle(fontSize: fs, color: sc), center: true),
+          _vd(),
+          SizedBox(
+            width: _w[6],
+            height: 48,
+            child: Center(
+              child: Switch.adaptive(
+                value: active,
+                activeColor: AppColors.positive,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                onChanged: (_) => _toggleActive(e['id'] as String, active),
+              ),
+            ),
+          ),
+          _vd(),
+          SizedBox(
+            width: _w[7],
+            height: 48,
+            child: Center(
+              child: IconButton(
+                icon: const Icon(Icons.edit_outlined, size: 17),
+                color: AppColors.primary,
+                tooltip: 'Edit',
+                constraints: const BoxConstraints(),
+                padding: EdgeInsets.zero,
+                onPressed: () => _openDialog(e),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Vertical column divider
+  Widget _vd() => const SizedBox(
+        width: 1, height: 48,
+        child: ColoredBox(color: AppColors.border),
+      );
+
+  Widget _hcell(String text, double w, TextStyle style,
+          {bool center = false}) =>
+      SizedBox(
+        width: w,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Text(text,
@@ -304,12 +330,14 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
         ),
       );
 
-  TableCell _dcell(String text, TextStyle style, {bool center = false}) =>
-      TableCell(
-        verticalAlignment: TableCellVerticalAlignment.middle,
+  Widget _dcell(String text, double w, TextStyle style,
+          {bool center = false}) =>
+      SizedBox(
+        width: w,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           child: Text(text,
+              overflow: TextOverflow.ellipsis,
               textAlign: center ? TextAlign.center : TextAlign.left,
               style: style),
         ),
