@@ -163,84 +163,76 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // GoRouter's ShellRoute Overlay can hand down infinite width during
-        // route transition frames on Flutter Web. Return empty until the
-        // next frame delivers finite constraints.
-        if (!constraints.hasBoundedWidth) return const SizedBox.shrink();
+    // MediaQuery.sizeOf resolves at build time from the true window size —
+    // never infinite, never affected by GoRouter's transition constraints.
+    final double screenW = MediaQuery.sizeOf(context).width;
 
-        // SizedBox pins the subtree to the actual viewport width so no
-        // descendant (e.g. ElevatedButton inside Row+Expanded) can ever
-        // receive tight-infinite constraints.
-        return SizedBox(
-          width: constraints.maxWidth,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(32, 28, 32, 32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return SizedBox(
+      width: screenW,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(32, 28, 32, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Page header ──────────────────────────────────────────
+            Row(
               children: [
-                // ── Page header ──────────────────────────────────────────
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('Master Menu',
-                              style: TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.textPrimary)),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${_entries.length} entries · ${_modules.length} modules',
-                            style: const TextStyle(
-                                fontSize: 13, color: AppColors.textSecondary),
-                          ),
-                        ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Master Menu',
+                          style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary)),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_entries.length} entries · ${_modules.length} modules',
+                        style: const TextStyle(
+                            fontSize: 13, color: AppColors.textSecondary),
                       ),
-                    ),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Add Menu Entry'),
-                      onPressed: () => _openDialog(),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // ── Table — horizontal scroll only ───────────────────────
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: AppColors.border),
-                      borderRadius: BorderRadius.circular(8),
-                      color: Colors.white,
-                    ),
-                    clipBehavior: Clip.hardEdge,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildHeaderRow(),
-                        ..._entries.expand((e) => [
-                              Container(
-                                  width: _tableWidth, height: 1,
-                                  color: AppColors.border),
-                              _buildDataRow(e),
-                            ]),
-                      ],
-                    ),
+                    ],
                   ),
+                ),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add Menu Entry'),
+                  onPressed: () => _openDialog(),
                 ),
               ],
             ),
-          ),
-        );
-      },
+            const SizedBox(height: 16),
+
+            // ── Table — horizontal scroll only ───────────────────────
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.white,
+                ),
+                clipBehavior: Clip.hardEdge,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeaderRow(),
+                    ..._entries.expand((e) => [
+                          Container(
+                              width: _tableWidth, height: 1,
+                              color: AppColors.border),
+                          _buildDataRow(e),
+                        ]),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
