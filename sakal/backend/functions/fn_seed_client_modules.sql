@@ -7,8 +7,9 @@
 -- ============================================================
 
 create or replace function fn_seed_client_modules(
-    p_client_id  uuid,
-    p_company_id uuid
+    p_client_id      uuid,
+    p_company_id     uuid,
+    p_admin_user_id  uuid default null
 ) returns void language plpgsql security definer as $$
 declare
     v_ad uuid; v_sl uuid; v_pr uuid; v_in uuid; v_fn uuid;
@@ -100,6 +101,13 @@ begin
         (p_client_id, p_company_id, v_fn, 'FN-TRB', 'Trial Balance',  '/finance/trial-balance',  3, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-PNL', 'Profit & Loss',  '/finance/profit-loss',    4, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-BSH', 'Balance Sheet',  '/finance/balance-sheet',  5, false, false, false);
+
+    -- --------------------------------------------------------
+    -- Grant full admin access to first user (if provided)
+    -- --------------------------------------------------------
+    if p_admin_user_id is not null then
+        perform fn_grant_admin_access(p_admin_user_id, p_client_id, p_company_id);
+    end if;
 
 end;
 $$;

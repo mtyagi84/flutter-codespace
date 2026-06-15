@@ -1,20 +1,23 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/models/menu_models.dart';
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/services/local_storage.dart';
 import '../../../../core/theme/app_colors.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey      = GlobalKey<FormState>();
   final _clientNoCtrl = TextEditingController();
   final _usernameCtrl = TextEditingController();
@@ -43,22 +46,43 @@ class _LoginScreenState extends State<LoginScreen> {
         : _clientNoCtrl.text.trim().toUpperCase();
 
     try {
-      final res = await DioClient.instance.post('/rpc/fn_login', data: {
+      final loginRes = await DioClient.instance.post('/rpc/fn_login', data: {
         'p_client_no': clientNo,
         'p_username':  _usernameCtrl.text.trim(),
         'p_password':  _passwordCtrl.text,
       });
-      final data = res.data as Map<String, dynamic>;
+      final d = loginRes.data as Map<String, dynamic>;
 
-      // Save session if not already saved (first login on this device)
       if (!_clientSaved) {
         await LocalStorage.saveClientSession(
-          clientNo: data['client_no'] as String,
-          clientId: data['client_id'] as String,
+          clientNo: d['client_no'] as String,
+          clientId: d['client_id'] as String,
         );
       }
 
-      if (mounted) context.go(RouteNames.dashboard);
+      // Fetch menu before navigating so sidebar is ready on first paint
+      final menuRes = await DioClient.instance.post('/rpc/fn_get_user_menu', data: {
+        'p_user_id':   d['user_id'],
+        'p_client_id': d['client_id'],
+        'p_company_id': d['company_id'],
+      });
+      final menuList = (menuRes.data as List<dynamic>)
+          .map((e) => MenuModule.fromJson(e as Map<String, dynamic>))
+          .toList();
+
+      if (!mounted) return;
+      ref.read(sessionProvider.notifier).state = UserSession(
+        userId:    d['user_id'] as String,
+        clientId:  d['client_id'] as String,
+        clientNo:  d['client_no'] as String,
+        companyId: d['company_id'] as String,
+        fullName:  d['full_name'] as String,
+        username:  d['username'] as String,
+        locationId: d['location_id'] as String?,
+      );
+      ref.read(menuProvider.notifier).state = menuList;
+
+      context.go(RouteNames.dashboard);
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] as String? ?? '';
       setState(() => _error = _friendlyError(msg));

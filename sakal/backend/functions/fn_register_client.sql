@@ -26,6 +26,7 @@ declare
     v_client_id   uuid;
     v_company_id  uuid;
     v_location_id uuid;
+    v_user_id     uuid;
     v_client_no   text;
 begin
     -- Reject duplicate email (case-insensitive)
@@ -93,10 +94,10 @@ begin
         lower(trim(p_email)), trim(p_phone),
         crypt(p_password, gen_salt('bf')), false,
         now()
-    );
+    ) returning id into v_user_id;
 
-    -- Seed default modules and master menus for this company
-    perform fn_seed_client_modules(v_client_id, v_company_id);
+    -- Seed modules, master menus, and grant full admin access to first user
+    perform fn_seed_client_modules(v_client_id, v_company_id, v_user_id);
 
     return json_build_object(
         'client_id',   v_client_id,
