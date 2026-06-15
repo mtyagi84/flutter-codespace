@@ -27,6 +27,14 @@ class AppShell extends ConsumerWidget {
       );
     }
 
+    final double sidebarW = collapsed ? 56.0 : 240.0;
+    // Compute content width from MediaQuery (build time) rather than relying
+    // on Expanded's flex algorithm (layout time). GoRouter's Overlay passes
+    // loose/unbounded constraints to child screens during Codespace resize
+    // events; a hard MediaQuery-derived SizedBox prevents that entirely.
+    final double contentW =
+        (MediaQuery.sizeOf(context).width - sidebarW - 1.0).clamp(0.0, double.infinity);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: const TopBar(),
@@ -35,12 +43,12 @@ class AppShell extends ConsumerWidget {
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeInOut,
-            width: collapsed ? 56 : 240,
+            width: sidebarW,
             child: const Sidebar(),
           ),
           const VerticalDivider(
               width: 1, thickness: 1, color: AppColors.border),
-          Expanded(child: child),
+          SizedBox(width: contentW, child: child),
         ],
       ),
     );

@@ -163,13 +163,7 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
       );
     }
 
-    // MediaQuery.sizeOf resolves at build time from the true window size —
-    // never infinite, never affected by GoRouter's transition constraints.
-    final double screenW = MediaQuery.sizeOf(context).width;
-
-    return SizedBox(
-      width: screenW,
-      child: SingleChildScrollView(
+    return SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(32, 28, 32, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -232,7 +226,6 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
             ),
           ],
         ),
-      ),
     );
   }
 
