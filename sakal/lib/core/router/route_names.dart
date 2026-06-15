@@ -9,6 +9,7 @@ class RouteNames {
   static String groupPath(String groupCode) => '/group/$groupCode';
 
   // Setup / Admin
+  static const String masterMenu  = '/setup/master-menu';
   static const String company     = '/setup/company';
   static const String locations   = '/setup/locations';
   static const String currencies  = '/setup/currencies';

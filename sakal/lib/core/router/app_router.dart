@@ -4,6 +4,7 @@ import '../../features/auth/presentation/screens/landing_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
+import '../../features/setup/presentation/screens/master_menu_screen.dart';
 import '../layout/app_shell.dart';
 import '../layout/group_landing_screen.dart';
 import '../services/local_storage.dart';
@@ -44,6 +45,7 @@ final appRouter = GoRouter(
         ),
 
         // Administration
+        GoRoute(path: RouteNames.masterMenu,  builder: (c, s) => const MasterMenuScreen()),
         GoRoute(path: RouteNames.company,     builder: (c, s) => const _Placeholder('Company Setup')),
         GoRoute(path: RouteNames.locations,   builder: (c, s) => const _Placeholder('Location Setup')),
         GoRoute(path: RouteNames.currencies,  builder: (c, s) => const _Placeholder('Currency Setup')),
