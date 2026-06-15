@@ -201,38 +201,38 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
     );
   }
 
-  // Column widths — must sum to a value that fits the content pane
+  // Column widths: 8 columns + 7 one-pixel dividers = 1047px total
   static const _w = [140.0, 120.0, 190.0, 250.0, 150.0, 54.0, 72.0, 64.0];
+  static const _tableWidth = 1047.0;
 
   Widget _buildTable() {
-    // SingleChildScrollView inside Expanded: gets tight width+height from Expanded.
-    // Column(start) gives Container loose constraints so it can shrink to table width.
-    // Row(mainAxisSize: min) sizes to its SizedBox children — no ambiguous fill.
+    // Outer SingleChildScrollView (vertical): Expanded gives it tight width+height.
+    // Inner SingleChildScrollView (horizontal): gives its child unconstrained width,
+    // so Row(mainAxisSize:min) can be 1047px without constraint violations when the
+    // content pane is narrower than the table — which caused the render loop.
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(32, 16, 32, 32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: AppColors.border),
-              borderRadius: BorderRadius.circular(8),
-              color: Colors.white,
-            ),
-            clipBehavior: Clip.hardEdge,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeaderRow(),
-                ..._entries.expand((e) => [
-                      const Divider(height: 1, thickness: 1, color: AppColors.border),
-                      _buildDataRow(e),
-                    ]),
-              ],
-            ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(8),
+            color: Colors.white,
           ),
-        ],
+          clipBehavior: Clip.hardEdge,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeaderRow(),
+              ..._entries.expand((e) => [
+                    Container(width: _tableWidth, height: 1, color: AppColors.border),
+                    _buildDataRow(e),
+                  ]),
+            ],
+          ),
+        ),
       ),
     );
   }
