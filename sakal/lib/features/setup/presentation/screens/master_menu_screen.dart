@@ -174,23 +174,27 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
       padding: const EdgeInsets.fromLTRB(32, 28, 32, 0),
       child: Row(
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Master Menu',
-                  style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary)),
-              const SizedBox(height: 4),
-              Text(
-                '${_entries.length} entries · ${_modules.length} modules',
-                style: const TextStyle(
-                    fontSize: 13, color: AppColors.textSecondary),
-              ),
-            ],
+          // Expanded avoids Spacer() — Spacer is flex and causes tight-infinite
+          // width to propagate to ElevatedButton when parent has unbounded width.
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Master Menu',
+                    style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary)),
+                const SizedBox(height: 4),
+                Text(
+                  '${_entries.length} entries · ${_modules.length} modules',
+                  style: const TextStyle(
+                      fontSize: 13, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
           ),
-          const Spacer(),
           ElevatedButton.icon(
             icon: const Icon(Icons.add, size: 18),
             label: const Text('Add Menu Entry'),
