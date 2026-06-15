@@ -14,9 +14,9 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final session = ref.watch(sessionProvider);
+    final session   = ref.watch(sessionProvider);
+    final collapsed = ref.watch(sidebarCollapsedProvider);
 
-    // Session cleared (app restart or logout) — redirect to login
     if (session == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         context.go(RouteNames.login);
@@ -32,8 +32,14 @@ class AppShell extends ConsumerWidget {
       appBar: const TopBar(),
       body: Row(
         children: [
-          const Sidebar(),
-          const VerticalDivider(width: 1, thickness: 1, color: AppColors.border),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            width: collapsed ? 56 : 240,
+            child: const Sidebar(),
+          ),
+          const VerticalDivider(
+              width: 1, thickness: 1, color: AppColors.border),
           Expanded(child: child),
         ],
       ),

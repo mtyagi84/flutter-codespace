@@ -5,6 +5,7 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../layout/app_shell.dart';
+import '../layout/group_landing_screen.dart';
 import '../services/local_storage.dart';
 import 'route_names.dart';
 
@@ -22,62 +23,83 @@ final appRouter = GoRouter(
   },
   routes: [
     // Public routes
-    GoRoute(
-      path: RouteNames.landing,
-      builder: (context, state) => const LandingScreen(),
-    ),
-    GoRoute(
-      path: RouteNames.login,
-      builder: (context, state) => const LoginScreen(),
-    ),
-    GoRoute(
-      path: RouteNames.register,
-      builder: (context, state) => const RegisterScreen(),
-    ),
+    GoRoute(path: RouteNames.landing,  builder: (c, s) => const LandingScreen()),
+    GoRoute(path: RouteNames.login,    builder: (c, s) => const LoginScreen()),
+    GoRoute(path: RouteNames.register, builder: (c, s) => const RegisterScreen()),
 
-    // Authenticated routes — all wrapped in AppShell
+    // Authenticated routes — all wrapped in AppShell (sidebar + topbar)
     ShellRoute(
       builder: (context, state, child) => AppShell(child: child),
       routes: [
         GoRoute(
           path: RouteNames.dashboard,
-          builder: (context, state) => const DashboardScreen(),
+          builder: (c, s) => const DashboardScreen(),
         ),
+
+        // Group landing — dynamic, used by sidebar group headers
         GoRoute(
-          path: RouteNames.company,
-          builder: (context, state) => const PlaceholderScreen(title: 'Company Setup'),
+          path: RouteNames.group,
+          builder: (c, s) => GroupLandingScreen(
+              groupCode: s.pathParameters['groupCode']!),
         ),
-        GoRoute(
-          path: RouteNames.users,
-          builder: (context, state) => const PlaceholderScreen(title: 'User Management'),
-        ),
-        GoRoute(
-          path: RouteNames.permissions,
-          builder: (context, state) => const PlaceholderScreen(title: 'User Permissions'),
-        ),
-        GoRoute(
-          path: RouteNames.locations,
-          builder: (context, state) => const PlaceholderScreen(title: 'Location Setup'),
-        ),
-        GoRoute(
-          path: RouteNames.currencies,
-          builder: (context, state) => const PlaceholderScreen(title: 'Currency Setup'),
-        ),
+
+        // Administration
+        GoRoute(path: RouteNames.company,     builder: (c, s) => const _Placeholder('Company Setup')),
+        GoRoute(path: RouteNames.locations,   builder: (c, s) => const _Placeholder('Location Setup')),
+        GoRoute(path: RouteNames.currencies,  builder: (c, s) => const _Placeholder('Currency Setup')),
+        GoRoute(path: RouteNames.users,       builder: (c, s) => const _Placeholder('User Management')),
+        GoRoute(path: RouteNames.permissions, builder: (c, s) => const _Placeholder('User Permissions')),
+
+        // Sales
+        GoRoute(path: RouteNames.salesInvoices, builder: (c, s) => const _Placeholder('Sales Invoice')),
+        GoRoute(path: RouteNames.salesReturns,  builder: (c, s) => const _Placeholder('Sales Return')),
+        GoRoute(path: RouteNames.salesReceipts, builder: (c, s) => const _Placeholder('Cash Receipt')),
+
+        // Purchase
+        GoRoute(path: RouteNames.purchaseOrders,   builder: (c, s) => const _Placeholder('Purchase Order')),
+        GoRoute(path: RouteNames.goodsReceipt,     builder: (c, s) => const _Placeholder('Goods Receipt')),
+        GoRoute(path: RouteNames.purchaseInvoices, builder: (c, s) => const _Placeholder('Purchase Invoice')),
+        GoRoute(path: RouteNames.supplierPayment,  builder: (c, s) => const _Placeholder('Supplier Payment')),
+
+        // Inventory
+        GoRoute(path: RouteNames.stockList,        builder: (c, s) => const _Placeholder('Stock List')),
+        GoRoute(path: RouteNames.stockTransfers,   builder: (c, s) => const _Placeholder('Stock Transfer')),
+        GoRoute(path: RouteNames.stockAdjustments, builder: (c, s) => const _Placeholder('Stock Adjustment')),
+
+        // Finance
+        GoRoute(path: RouteNames.journalEntry, builder: (c, s) => const _Placeholder('Journal Entry')),
+        GoRoute(path: RouteNames.cashBook,     builder: (c, s) => const _Placeholder('Cash Book')),
+        GoRoute(path: RouteNames.trialBalance, builder: (c, s) => const _Placeholder('Trial Balance')),
+        GoRoute(path: RouteNames.profitLoss,   builder: (c, s) => const _Placeholder('Profit & Loss')),
+        GoRoute(path: RouteNames.balanceSheet, builder: (c, s) => const _Placeholder('Balance Sheet')),
       ],
     ),
   ],
 );
 
-// Temporary placeholder until each screen is built
-class PlaceholderScreen extends StatelessWidget {
+class _Placeholder extends StatelessWidget {
   final String title;
-  const PlaceholderScreen({required this.title, super.key});
+  const _Placeholder(this.title);
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Text(title,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.construction_outlined,
+              size: 48, color: Color(0xFFADB5BD)),
+          const SizedBox(height: 16),
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1D23))),
+          const SizedBox(height: 8),
+          const Text('Coming soon',
+              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+        ],
+      ),
     );
   }
 }

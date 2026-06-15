@@ -72,13 +72,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       if (!mounted) return;
       ref.read(sessionProvider.notifier).state = UserSession(
-        userId:    d['user_id'] as String,
-        clientId:  d['client_id'] as String,
-        clientNo:  d['client_no'] as String,
-        companyId: d['company_id'] as String,
-        fullName:  d['full_name'] as String,
-        username:  d['username'] as String,
-        locationId: d['location_id'] as String?,
+        userId:      d['user_id'] as String,
+        clientId:    d['client_id'] as String,
+        clientNo:    d['client_no'] as String,
+        companyId:   d['company_id'] as String,
+        companyName: d['company_name'] as String? ?? '',
+        fullName:    d['full_name'] as String,
+        username:    d['username'] as String,
+        locationId:  d['location_id'] as String?,
       );
       ref.read(menuProvider.notifier).state = menuList;
 

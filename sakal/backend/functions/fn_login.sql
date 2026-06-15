@@ -11,8 +11,9 @@ create or replace function fn_login(
     p_password  text
 ) returns json language plpgsql security definer as $$
 declare
-    v_client ric_clients%rowtype;
-    v_user   rim_users%rowtype;
+    v_client       ric_clients%rowtype;
+    v_user         rim_users%rowtype;
+    v_company_name text;
 begin
     -- Find and validate client
     select * into v_client
@@ -77,11 +78,17 @@ begin
         last_login_at   = now()
     where id = v_user.id;
 
+    -- Fetch company name for session
+    select company_name into v_company_name
+    from ric_companies
+    where id = v_user.company_id;
+
     return json_build_object(
         'user_id',      v_user.id,
         'client_id',    v_user.client_id,
         'client_no',    v_client.client_no,
         'company_id',   v_user.company_id,
+        'company_name', coalesce(v_company_name, ''),
         'location_id',  v_user.default_location_id,
         'full_name',    v_user.full_name,
         'username',     v_user.username,

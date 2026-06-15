@@ -6,6 +6,7 @@ class UserSession {
   final String clientId;
   final String clientNo;
   final String companyId;
+  final String companyName;
   final String? locationId;
   final String fullName;
   final String username;
@@ -15,14 +16,30 @@ class UserSession {
     required this.clientId,
     required this.clientNo,
     required this.companyId,
+    required this.companyName,
     this.locationId,
     required this.fullName,
     required this.username,
   });
+
+  UserSession copyWith({
+    String? companyId,
+    String? companyName,
+  }) =>
+      UserSession(
+        userId:      userId,
+        clientId:    clientId,
+        clientNo:    clientNo,
+        companyId:   companyId   ?? this.companyId,
+        companyName: companyName ?? this.companyName,
+        locationId:  locationId,
+        fullName:    fullName,
+        username:    username,
+      );
 }
 
-// Holds user identity after login — cleared on app close
 final sessionProvider = StateProvider<UserSession?>((ref) => null);
 
-// Holds the sidebar menu for the logged-in user
 final menuProvider = StateProvider<List<MenuModule>>((ref) => []);
+
+final sidebarCollapsedProvider = StateProvider<bool>((ref) => false);
