@@ -37,6 +37,9 @@ dependencies:
   shared_preferences: ^2.3.2
   path_provider: ^2.1.4
 
+  # Image picking (logo, stamp, watermark) — works on Web, Android, iOS
+  image_picker: ^1.1.2
+
   # Immutable models (used when we add code gen)
   freezed_annotation: ^2.4.4
   json_annotation: ^4.9.0
