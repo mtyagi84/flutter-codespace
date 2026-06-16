@@ -3,7 +3,8 @@
     "allow": [
       "Bash(git commit -m ' *)",
       "Bash(mkdir -p \"C:\\\\Manglu\\\\SAKAL\\\\backend\\\\functions\")",
-      "Bash(mkdir -p \"C:\\\\Manglu\\\\SAKAL\\\\backend\\\\migrations\")"
+      "Bash(mkdir -p \"C:\\\\Manglu\\\\SAKAL\\\\backend\\\\migrations\")",
+      "Bash(git mv *)"
     ]
   }
 }
