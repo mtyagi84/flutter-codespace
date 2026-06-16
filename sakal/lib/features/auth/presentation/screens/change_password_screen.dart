@@ -1,8 +1,10 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
+import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class ChangePasswordScreen extends ConsumerStatefulWidget {
@@ -134,7 +136,7 @@ class _ChangePasswordScreenState
                           validator: (v) =>
                               (v == null || v.isEmpty) ? 'Required' : null,
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 20),
 
                         // New password
                         TextFormField(
@@ -153,10 +155,24 @@ class _ChangePasswordScreenState
                           validator: (v) {
                             if (v == null || v.isEmpty) return 'Required';
                             if (v.length < 8) return 'Minimum 8 characters';
+                            if (!v.contains(RegExp(r'[A-Z]'))) {
+                              return 'Include at least one uppercase letter';
+                            }
+                            if (!v.contains(RegExp(r'[0-9]'))) {
+                              return 'Include at least one number';
+                            }
                             return null;
                           },
                         ),
-                        const SizedBox(height: 16),
+
+                        // Password strength bar — live, no extra setState
+                        const SizedBox(height: 8),
+                        ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: _newCtrl,
+                          builder: (_, value, __) =>
+                              _StrengthBar(password: value.text),
+                        ),
+                        const SizedBox(height: 20),
 
                         // Confirm new password
                         TextFormField(
@@ -210,7 +226,7 @@ class _ChangePasswordScreenState
                         ),
                         const SizedBox(height: 10),
                         TextButton(
-                          onPressed: () {},
+                          onPressed: () => context.go(RouteNames.dashboard),
                           child: const Text('Cancel'),
                         ),
                       ],
@@ -222,6 +238,65 @@ class _ChangePasswordScreenState
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Password strength bar ──────────────────────────────────────────────────
+
+class _StrengthBar extends StatelessWidget {
+  final String password;
+  const _StrengthBar({required this.password});
+
+  int get _score {
+    if (password.isEmpty) return 0;
+    int s = 0;
+    if (password.length >= 8) s++;
+    if (password.contains(RegExp(r'[A-Z]'))) s++;
+    if (password.contains(RegExp(r'[0-9]'))) s++;
+    if (password.contains(RegExp(r'[^A-Za-z0-9]'))) s++;
+    return s;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = _score;
+    const colors = [
+      AppColors.negative,   // 1 — Weak
+      Color(0xFFE65100),    // 2 — Fair  (deep orange)
+      Color(0xFFF9A825),    // 3 — Good  (amber)
+      AppColors.positive,   // 4 — Strong
+    ];
+    const labels = ['Weak', 'Fair', 'Good', 'Strong'];
+    final barColor  = s == 0 ? const Color(0xFFE0E0E0) : colors[s - 1];
+    final label     = s == 0 ? '' : labels[s - 1];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: List.generate(4, (i) => Expanded(
+            child: Container(
+              height: 4,
+              margin: EdgeInsets.only(right: i < 3 ? 4 : 0),
+              decoration: BoxDecoration(
+                color: i < s ? barColor : const Color(0xFFE0E0E0),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          )),
+        ),
+        if (label.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Strength: $label',
+            style: TextStyle(
+                fontSize: 11,
+                color: barColor,
+                fontWeight: FontWeight.w600),
+          ),
+        ],
+      ],
     );
   }
 }

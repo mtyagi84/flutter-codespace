@@ -56,7 +56,9 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
           child: PopupMenuButton<String>(
             offset: const Offset(0, 48),
             onSelected: (val) async {
-              if (val == 'switch_company') {
+              if (val == 'change_password') {
+                context.go(RouteNames.changePassword);
+              } else if (val == 'switch_company') {
                 await _showSwitchCompanyDialog(context, ref, session!);
               } else if (val == 'logout') {
                 ref.read(sessionProvider.notifier).state = null;
@@ -118,6 +120,17 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
                         size: 16, color: AppColors.textSecondary),
                     SizedBox(width: 10),
                     Text('Switch Company'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'change_password',
+                child: Row(
+                  children: [
+                    Icon(Icons.lock_reset_outlined,
+                        size: 16, color: AppColors.textSecondary),
+                    SizedBox(width: 10),
+                    Text('Change Password'),
                   ],
                 ),
               ),
