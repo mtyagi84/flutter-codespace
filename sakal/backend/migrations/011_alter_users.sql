@@ -7,7 +7,7 @@
 ALTER TABLE rim_users
   ADD COLUMN IF NOT EXISTS salutation    text
       CHECK (salutation IN ('Mr', 'Mrs', 'Ms', 'Dr', 'Prof')),
-  ADD COLUMN IF NOT EXISTS photo_url     text,
+  ADD COLUMN IF NOT EXISTS photo         text,
   ADD COLUMN IF NOT EXISTS language_code text NOT NULL DEFAULT 'en',
   ADD COLUMN IF NOT EXISTS theme         text NOT NULL DEFAULT 'light'
       CHECK (theme IN ('light', 'dark'));
@@ -26,7 +26,7 @@ CREATE OR REPLACE FUNCTION fn_create_user(
     p_salutation            text    DEFAULT NULL,
     p_email                 text    DEFAULT NULL,
     p_phone                 text    DEFAULT NULL,
-    p_photo_url             text    DEFAULT NULL,
+    p_photo                 text    DEFAULT NULL,
     p_language_code         text    DEFAULT 'en',
     p_theme                 text    DEFAULT 'light',
     p_password              text    DEFAULT 'Change@123',
@@ -43,7 +43,7 @@ BEGIN
     INSERT INTO rim_users (
         client_id, company_id, default_location_id,
         username, full_name, salutation,
-        email, phone, photo_url,
+        email, phone, photo,
         language_code, theme,
         password_hash, must_change_password,
         is_active, is_deleted,
@@ -51,7 +51,7 @@ BEGIN
     ) VALUES (
         p_client_id, p_company_id, p_location_id,
         p_username, p_full_name, p_salutation,
-        p_email, p_phone, p_photo_url,
+        p_email, p_phone, p_photo,
         p_language_code, p_theme,
         crypt(p_password, gen_salt('bf')), p_must_change_password,
         true, false,

@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -45,7 +47,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
             'is_deleted': 'eq.false',
             'select':
                 'id,salutation,full_name,username,email,phone,'
-                'language_code,theme,photo_url,is_active,default_location_id',
+                'language_code,theme,photo,is_active,default_location_id',
             'order': 'full_name.asc',
           },
         ),
@@ -346,8 +348,8 @@ class _TableRow extends StatelessWidget {
     final fullName   = row['full_name']  as String? ?? '';
     final salutation = row['salutation'] as String?;
     final username   = row['username']   as String? ?? '';
-    final langCode   = row['language_code'] as String? ?? 'en';
-    final photoUrl   = row['photo_url']  as String?;
+    final langCode    = row['language_code'] as String? ?? 'en';
+    final photoBase64 = row['photo'] as String?;
 
     final displayName = [if (salutation != null) salutation, fullName]
         .where((s) => s.isNotEmpty)
@@ -362,7 +364,7 @@ class _TableRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           _Avatar(
-            photoUrl: photoUrl,
+            photoBase64: photoBase64,
             initials: _initials(fullName),
             active: active,
           ),
@@ -461,23 +463,24 @@ class _TableRow extends StatelessWidget {
 // ── Avatar ────────────────────────────────────────────────────────────────────
 
 class _Avatar extends StatelessWidget {
-  final String? photoUrl;
+  final String? photoBase64;
   final String  initials;
   final bool    active;
 
-  const _Avatar({this.photoUrl, required this.initials, required this.active});
+  const _Avatar({this.photoBase64, required this.initials, required this.active});
 
   @override
   Widget build(BuildContext context) {
+    final hasPhoto = photoBase64 != null && photoBase64!.isNotEmpty;
     return Stack(
       children: [
         CircleAvatar(
           radius: 22,
           backgroundColor: AppColors.primary.withOpacity(0.12),
-          backgroundImage: (photoUrl != null && photoUrl!.isNotEmpty)
-              ? NetworkImage(photoUrl!)
+          backgroundImage: hasPhoto
+              ? MemoryImage(const Base64Decoder().convert(photoBase64!))
               : null,
-          child: (photoUrl == null || photoUrl!.isEmpty)
+          child: !hasPhoto
               ? Text(initials,
                   style: const TextStyle(
                       fontSize: 13,
@@ -551,19 +554,19 @@ class _UserDialog extends ConsumerStatefulWidget {
 }
 
 class _UserDialogState extends ConsumerState<_UserDialog> {
-  final _formKey      = GlobalKey<FormState>();
-  final _nameCtrl     = TextEditingController();
-  final _userCtrl     = TextEditingController();
-  final _emailCtrl    = TextEditingController();
-  final _phoneCtrl    = TextEditingController();
-  final _photoCtrl    = TextEditingController();
-  final _pwCtrl       = TextEditingController();
-  final _confirmCtrl  = TextEditingController();
+  final _formKey     = GlobalKey<FormState>();
+  final _nameCtrl    = TextEditingController();
+  final _userCtrl    = TextEditingController();
+  final _emailCtrl   = TextEditingController();
+  final _phoneCtrl   = TextEditingController();
+  final _pwCtrl      = TextEditingController();
+  final _confirmCtrl = TextEditingController();
 
   String? _salutation;
   String  _language    = 'en';
   String  _theme       = 'light';
   String? _locationId;
+  String? _photoBase64;
   bool    _mustChange  = true;
   bool    _saving      = false;
   String? _error;
@@ -577,15 +580,15 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
     super.initState();
     final d = widget.existing;
     if (d != null) {
-      _nameCtrl.text  = d['full_name']          ?? '';
-      _userCtrl.text  = d['username']           ?? '';
-      _emailCtrl.text = d['email']              ?? '';
-      _phoneCtrl.text = d['phone']              ?? '';
-      _photoCtrl.text = d['photo_url']          ?? '';
-      _salutation     = d['salutation']         as String?;
-      _language       = d['language_code']      as String? ?? 'en';
-      _theme          = d['theme']              as String? ?? 'light';
+      _nameCtrl.text  = d['full_name']           ?? '';
+      _userCtrl.text  = d['username']            ?? '';
+      _emailCtrl.text = d['email']               ?? '';
+      _phoneCtrl.text = d['phone']               ?? '';
+      _salutation     = d['salutation']          as String?;
+      _language       = d['language_code']       as String? ?? 'en';
+      _theme          = d['theme']               as String? ?? 'light';
       _locationId     = d['default_location_id'] as String?;
+      _photoBase64    = d['photo']               as String?;
     }
   }
 
@@ -595,10 +598,21 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
     _userCtrl.dispose();
     _emailCtrl.dispose();
     _phoneCtrl.dispose();
-    _photoCtrl.dispose();
     _pwCtrl.dispose();
     _confirmCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickPhoto() async {
+    final file = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 400,
+      maxHeight: 400,
+      imageQuality: 85,
+    );
+    if (file == null || !mounted) return;
+    final bytes = await file.readAsBytes();
+    setState(() => _photoBase64 = base64Encode(bytes));
   }
 
   Future<void> _save() async {
@@ -619,8 +633,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                 ? null : _emailCtrl.text.trim(),
             'phone':               _phoneCtrl.text.trim().isEmpty
                 ? null : _phoneCtrl.text.trim(),
-            'photo_url':           _photoCtrl.text.trim().isEmpty
-                ? null : _photoCtrl.text.trim(),
+            'photo':               _photoBase64,
             'language_code':       _language,
             'theme':               _theme,
             'default_location_id': _locationId,
@@ -643,8 +656,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                 ? null : _emailCtrl.text.trim(),
             'p_phone':                _phoneCtrl.text.trim().isEmpty
                 ? null : _phoneCtrl.text.trim(),
-            'p_photo_url':            _photoCtrl.text.trim().isEmpty
-                ? null : _photoCtrl.text.trim(),
+            'p_photo':                _photoBase64,
             'p_language_code':        _language,
             'p_theme':                _theme,
             'p_password':             _pwCtrl.text,
@@ -868,15 +880,14 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                 ),
                 const SizedBox(height: 14),
 
-                // ── Photo URL ──────────────────────────────────────────
-                TextFormField(
-                  controller: _photoCtrl,
-                  keyboardType: TextInputType.url,
-                  decoration: const InputDecoration(
-                    labelText: 'Photo URL',
-                    prefixIcon: Icon(Icons.image_outlined),
-                    hintText: 'https://...',
-                  ),
+                // ── Profile Photo ──────────────────────────────────────
+                _PhotoPicker(
+                  photoBase64: _photoBase64,
+                  initials: _nameCtrl.text.trim().isEmpty
+                      ? '?'
+                      : _nameCtrl.text.trim()[0].toUpperCase(),
+                  onPick: _pickPhoto,
+                  onClear: () => setState(() => _photoBase64 = null),
                 ),
 
                 // ── Password fields (Add only) ─────────────────────────
@@ -984,6 +995,85 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Profile photo picker ──────────────────────────────────────────────────────
+
+class _PhotoPicker extends StatelessWidget {
+  final String?      photoBase64;
+  final String       initials;
+  final VoidCallback onPick;
+  final VoidCallback onClear;
+
+  const _PhotoPicker({
+    required this.photoBase64,
+    required this.initials,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = photoBase64 != null && photoBase64!.isNotEmpty;
+    return Row(
+      children: [
+        // Avatar preview
+        CircleAvatar(
+          radius: 36,
+          backgroundColor: AppColors.primary.withOpacity(0.12),
+          backgroundImage: hasPhoto
+              ? MemoryImage(const Base64Decoder().convert(photoBase64!))
+              : null,
+          child: !hasPhoto
+              ? Text(initials,
+                  style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary))
+              : null,
+        ),
+        const SizedBox(width: 16),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Profile Photo',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary)),
+            const SizedBox(height: 2),
+            const Text('Picked from gallery, stored securely.',
+                style: TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: onPick,
+                  icon: const Icon(Icons.upload_outlined, size: 16),
+                  label: Text(hasPhoto ? 'Change Photo' : 'Pick Photo'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 8),
+                    textStyle: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                if (hasPhoto) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: 'Remove photo',
+                    icon: const Icon(Icons.delete_outline,
+                        size: 18, color: AppColors.negative),
+                    onPressed: onClear,
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
