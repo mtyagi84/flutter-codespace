@@ -17,6 +17,8 @@ class RouteNames {
   static const String locations   = '/setup/locations';
   static const String currencies  = '/setup/currencies';
   static const String countries   = '/setup/countries';
+  static const String divisions   = '/setup/divisions';
+  static const String cities      = '/setup/cities';
   static const String users       = '/setup/users';
   static const String permissions = '/setup/permissions';
 

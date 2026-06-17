@@ -6,8 +6,10 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../../features/setup/presentation/screens/company_screen.dart';
+import '../../features/setup/presentation/screens/cities_screen.dart';
 import '../../features/setup/presentation/screens/countries_screen.dart';
 import '../../features/setup/presentation/screens/currencies_screen.dart';
+import '../../features/setup/presentation/screens/divisions_screen.dart';
 import '../../features/setup/presentation/screens/locations_screen.dart';
 import '../../features/setup/presentation/screens/master_menu_screen.dart';
 import '../layout/app_shell.dart';
@@ -58,6 +60,8 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.locations,   builder: (c, s) => const LocationsScreen()),
         GoRoute(path: RouteNames.currencies,  builder: (c, s) => const CurrenciesScreen()),
         GoRoute(path: RouteNames.countries,   builder: (c, s) => const CountriesScreen()),
+        GoRoute(path: RouteNames.divisions,   builder: (c, s) => const DivisionsScreen()),
+        GoRoute(path: RouteNames.cities,      builder: (c, s) => const CitiesScreen()),
         GoRoute(path: RouteNames.users,       builder: (c, s) => const _Placeholder('User Management')),
         GoRoute(path: RouteNames.permissions, builder: (c, s) => const _Placeholder('User Permissions')),
 
