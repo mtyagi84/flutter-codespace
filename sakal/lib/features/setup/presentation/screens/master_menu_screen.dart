@@ -131,7 +131,6 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
         entry:          entry,
         existingGroups: _existingGroups(),
         onSave: (data, id) async {
-          Navigator.of(context).pop();
           await _save(data, id);
         },
       ),
@@ -445,6 +444,7 @@ class _EntryDialogState extends State<_EntryDialog> {
       'is_active':            _isActive,
     };
 
+    if (mounted) Navigator.of(context).pop();
     await widget.onSave(data, widget.entry?['id'] as String?);
   }
 
