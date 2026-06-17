@@ -12,6 +12,7 @@ import '../../features/setup/presentation/screens/currencies_screen.dart';
 import '../../features/setup/presentation/screens/divisions_screen.dart';
 import '../../features/setup/presentation/screens/locations_screen.dart';
 import '../../features/setup/presentation/screens/master_menu_screen.dart';
+import '../../features/setup/presentation/screens/users_screen.dart';
 import '../layout/app_shell.dart';
 import '../layout/group_landing_screen.dart';
 import '../services/local_storage.dart';
@@ -62,7 +63,7 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.countries,   builder: (c, s) => const CountriesScreen()),
         GoRoute(path: RouteNames.divisions,   builder: (c, s) => const DivisionsScreen()),
         GoRoute(path: RouteNames.cities,      builder: (c, s) => const CitiesScreen()),
-        GoRoute(path: RouteNames.users,       builder: (c, s) => const _Placeholder('User Management')),
+        GoRoute(path: RouteNames.users,       builder: (c, s) => const UsersScreen()),
         GoRoute(path: RouteNames.permissions, builder: (c, s) => const _Placeholder('User Permissions')),
 
         // Sales
