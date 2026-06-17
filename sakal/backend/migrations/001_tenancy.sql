@@ -81,9 +81,9 @@ create table ric_locations (
 -- ------------------------------------------------------------
 -- Indexes
 -- ------------------------------------------------------------
-create index on ric_companies (client_id);
-create index on ric_locations (client_id);
-create index on ric_locations (company_id);
+create index idx_ric_companies_client_id  on ric_companies (client_id);
+create index idx_ric_locations_client_id  on ric_locations (client_id);
+create index idx_ric_locations_company_id on ric_locations (company_id);
 
 
 -- ------------------------------------------------------------
