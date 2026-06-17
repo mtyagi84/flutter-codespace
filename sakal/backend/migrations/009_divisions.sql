@@ -8,6 +8,16 @@
 --   WHERE country_code = ? AND (is_system = true OR (client_id = ? AND company_id = ?))
 -- ============================================================
 
+-- Shared trigger function — sets updated_at = now() on every UPDATE.
+-- Defined here once; reused by 010_cities.sql and any future table.
+CREATE OR REPLACE FUNCTION fn_set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE TABLE IF NOT EXISTS rim_divisions (
     id              uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
     client_id       uuid        REFERENCES ric_clients(id),    -- NULL for system rows
