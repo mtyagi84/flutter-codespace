@@ -31,6 +31,7 @@ final appRouter = GoRouter(
     final hasClient = LocalStorage.clientNo != null;
 
     if (loc == RouteNames.register) return null;
+    if (loc == RouteNames.login)    return null;
     if (!hasClient && loc != RouteNames.landing) return RouteNames.landing;
     if (hasClient && loc == RouteNames.landing)  return RouteNames.login;
     return null;
