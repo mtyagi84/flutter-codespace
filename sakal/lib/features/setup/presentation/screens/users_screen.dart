@@ -665,7 +665,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
           },
         );
       }
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
       widget.onSaved();
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] as String?
@@ -709,7 +709,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                     const Spacer(),
                     IconButton(
                         icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.of(context).pop()),
+                        onPressed: () => Navigator.of(context, rootNavigator: true).pop()),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -972,7 +972,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                   children: [
                     TextButton(
                         onPressed:
-                            _saving ? null : () => Navigator.of(context).pop(),
+                            _saving ? null : () => Navigator.of(context, rootNavigator: true).pop(),
                         child: const Text('Cancel')),
                     const SizedBox(width: 12),
                     SizedBox(
@@ -1120,7 +1120,7 @@ class _ResetPasswordDialogState
         },
       );
       if (mounted) {
-        Navigator.of(context).pop();
+        Navigator.of(context, rootNavigator: true).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Password reset. User must change it on next login.'),
@@ -1165,7 +1165,7 @@ class _ResetPasswordDialogState
                     ),
                     IconButton(
                         icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.of(context).pop()),
+                        onPressed: () => Navigator.of(context, rootNavigator: true).pop()),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -1217,7 +1217,7 @@ class _ResetPasswordDialogState
                     TextButton(
                         onPressed: _saving
                             ? null
-                            : () => Navigator.of(context).pop(),
+                            : () => Navigator.of(context, rootNavigator: true).pop(),
                         child: const Text('Cancel')),
                     const SizedBox(width: 12),
                     SizedBox(

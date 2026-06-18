@@ -480,7 +480,7 @@ class _DivisionDialogState extends State<_DivisionDialog> {
       'division_type':  _type,
     };
 
-    if (mounted) Navigator.of(context).pop();
+    if (mounted) Navigator.of(context, rootNavigator: true).pop();
     await widget.onSave(data, widget.entry?['id'] as String?);
   }
 
@@ -508,7 +508,7 @@ class _DivisionDialogState extends State<_DivisionDialog> {
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
                   ),
                 ],
               ),
@@ -586,7 +586,7 @@ class _DivisionDialogState extends State<_DivisionDialog> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
+                          onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
                           child: const Text('Cancel'),
                         ),
                         const SizedBox(width: 12),

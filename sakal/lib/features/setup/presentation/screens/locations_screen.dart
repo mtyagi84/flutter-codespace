@@ -490,7 +490,7 @@ class _LocationDialogState extends ConsumerState<_LocationDialog> {
           options: Options(headers: {'Prefer': 'return=minimal'}),
         );
       }
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
       widget.onSaved();
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] as String? ?? 'Save failed. Please try again.';
@@ -526,7 +526,7 @@ class _LocationDialogState extends ConsumerState<_LocationDialog> {
                     const Spacer(),
                     IconButton(
                         icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.of(context).pop()),
+                        onPressed: () => Navigator.of(context, rootNavigator: true).pop()),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -632,7 +632,7 @@ class _LocationDialogState extends ConsumerState<_LocationDialog> {
                     TextButton(
                         onPressed: _saving
                             ? null
-                            : () => Navigator.of(context).pop(),
+                            : () => Navigator.of(context, rootNavigator: true).pop(),
                         child: const Text('Cancel')),
                     const SizedBox(width: 12),
                     SizedBox(

@@ -444,7 +444,7 @@ class _EntryDialogState extends State<_EntryDialog> {
       'is_active':            _isActive,
     };
 
-    if (mounted) Navigator.of(context).pop();
+    if (mounted) Navigator.of(context, rootNavigator: true).pop();
     await widget.onSave(data, widget.entry?['id'] as String?);
   }
 
@@ -676,7 +676,7 @@ class _EntryDialogState extends State<_EntryDialog> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
                     child: const Text('Cancel'),
                   ),
                   const SizedBox(width: 12),
@@ -722,7 +722,7 @@ class _DialogHeader extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.close),
             tooltip: 'Close',
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
           ),
         ],
       ),
