@@ -289,7 +289,7 @@ class _ChartOfAccountsScreenState
         'accounting_std':   _addParent?['accounting_std'] ?? 'OHADA',
         'created_by':       session.userId,
       },
-      if (isParty) ...{
+      if (_postingAllowed && isParty) ...{
         'party_type':       _partyType,
         'contact_person':   _contactCtrl.text.trim().nullIfEmpty,
         'phone':            _phoneCtrl.text.trim().nullIfEmpty,
@@ -518,7 +518,7 @@ class _ChartOfAccountsScreenState
           padding: const EdgeInsets.all(24),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-            // Node type (only editable on new accounts)
+            // Node type
             if (isAdd) ...[
               const _Label('Node Type *'),
               const SizedBox(height: 8),
@@ -526,17 +526,29 @@ class _ChartOfAccountsScreenState
                 _TypeChip(label: 'Group', selected: !_postingAllowed,
                     onTap: () => setState(() => _postingAllowed = false)),
                 const SizedBox(width: 10),
-                _TypeChip(label: 'Ledger', selected: _postingAllowed,
-                    onTap: () => setState(() => _postingAllowed = true)),
+                _TypeChip(
+                  label: 'Ledger',
+                  selected: _postingAllowed,
+                  onTap: _addParent == null
+                      ? null
+                      : () => setState(() => _postingAllowed = true),
+                ),
               ]),
               const SizedBox(height: 4),
               Text(
-                _postingAllowed
-                    ? 'Ledger: leaf node, transactions post here. No children allowed.'
-                    : 'Group: organises accounts. Cannot post transactions directly.',
+                _addParent == null
+                    ? 'Root accounts must be Groups — they organise top-level sections.'
+                    : _postingAllowed
+                        ? 'Ledger: leaf node, transactions post here. No children allowed.'
+                        : 'Group: organises accounts. Cannot post transactions directly.',
                 style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
               ),
               const SizedBox(height: 20),
+            ] else ...[
+              const _Label('Node Type'),
+              const SizedBox(height: 6),
+              _ReadOnlyField(_postingAllowed ? 'Ledger' : 'Group'),
+              const SizedBox(height: 16),
             ],
 
             // Account Code
@@ -562,10 +574,10 @@ class _ChartOfAccountsScreenState
               decoration: const InputDecoration(isDense: true,
                   hintText: 'Enter account name'),
             ),
-            const SizedBox(height: 16),
-
-            // Nature + Currency row
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // Nature + Currency — Ledger nodes only
+            if (_postingAllowed) ...[
+              const SizedBox(height: 16),
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                 const _Label('Nature *'),
@@ -599,10 +611,11 @@ class _ChartOfAccountsScreenState
                   onChanged: (v) => setState(() => _currencyId = v),
                 ),
               ])),
-            ]),
+              ]),
+            ],
 
             // ── Party Details (Customer / Supplier only) ──────────────────
-            if (isParty) ...[
+            if (_postingAllowed && isParty) ...[
               const SizedBox(height: 20),
               ExpansionTile(
                 initiallyExpanded: _partyExpanded,
@@ -959,10 +972,12 @@ class _Label extends StatelessWidget {
 }
 
 class _TypeChip extends StatelessWidget {
-  final String label;
-  final bool   selected;
-  final VoidCallback onTap;
-  const _TypeChip({required this.label, required this.selected, required this.onTap});
+  final String      label;
+  final bool        selected;
+  final VoidCallback? onTap;
+  const _TypeChip({required this.label, required this.selected, this.onTap});
+
+  bool get _disabled => onTap == null;
 
   @override
   Widget build(BuildContext context) => InkWell(
@@ -972,15 +987,21 @@ class _TypeChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         border: Border.all(
-            color: selected ? AppColors.primary : AppColors.border,
+            color: selected ? AppColors.primary
+                : _disabled ? AppColors.border.withOpacity(0.4)
+                : AppColors.border,
             width: selected ? 2 : 1),
         borderRadius: BorderRadius.circular(6),
-        color: selected ? const Color(0xFFEAF0FB) : AppColors.surface,
+        color: selected ? const Color(0xFFEAF0FB)
+            : _disabled ? AppColors.surfaceVariant
+            : AppColors.surface,
       ),
       child: Text(label, style: TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w600,
-          color: selected ? AppColors.primary : AppColors.textSecondary)),
+          color: selected ? AppColors.primary
+              : _disabled ? AppColors.textDisabled
+              : AppColors.textSecondary)),
     ),
   );
 }
