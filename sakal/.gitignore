@@ -4,6 +4,9 @@
 *.pyc
 *.swp
 .DS_Store
+
+# Microsoft Office temp/lock files
+~$*
 .atom/
 .build/
 .buildlog/

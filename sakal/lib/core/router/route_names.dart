@@ -38,6 +38,15 @@ class RouteNames {
   static const String stockTransfers  = '/inventory/transfers';
   static const String stockAdjustments = '/inventory/adjustments';
 
+  // Accounting admin (Setup group)
+  static const String accountingSetup  = '/setup/accounting';
+  static const String financialYears   = '/setup/financial-years';
+
+  // Master data
+  static const String chartOfAccounts  = '/master/accounts';
+  static const String customerMaster   = '/master/customers';
+  static const String supplierMaster   = '/master/suppliers';
+
   // Finance
   static const String journalEntry  = '/finance/journal';
   static const String cashBook      = '/finance/cashbook';

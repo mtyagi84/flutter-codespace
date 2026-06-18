@@ -14,6 +14,10 @@ import '../../features/setup/presentation/screens/locations_screen.dart';
 import '../../features/setup/presentation/screens/master_menu_screen.dart';
 import '../../features/setup/presentation/screens/permissions_screen.dart';
 import '../../features/setup/presentation/screens/users_screen.dart';
+import '../../features/setup/presentation/screens/accounting_setup_screen.dart';
+import '../../features/master/presentation/screens/chart_of_accounts_screen.dart';
+import '../../features/master/presentation/screens/customer_master_screen.dart';
+import '../../features/master/presentation/screens/supplier_master_screen.dart';
 import '../layout/app_shell.dart';
 import '../layout/group_landing_screen.dart';
 import '../services/local_storage.dart';
@@ -64,8 +68,15 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.countries,   builder: (c, s) => const CountriesScreen()),
         GoRoute(path: RouteNames.divisions,   builder: (c, s) => const DivisionsScreen()),
         GoRoute(path: RouteNames.cities,      builder: (c, s) => const CitiesScreen()),
-        GoRoute(path: RouteNames.users,       builder: (c, s) => const UsersScreen()),
-        GoRoute(path: RouteNames.permissions, builder: (c, s) => const PermissionsScreen()),
+        GoRoute(path: RouteNames.users,          builder: (c, s) => const UsersScreen()),
+        GoRoute(path: RouteNames.permissions,    builder: (c, s) => const PermissionsScreen()),
+        GoRoute(path: RouteNames.accountingSetup,builder: (c, s) => const AccountingSetupScreen()),
+        GoRoute(path: RouteNames.financialYears, builder: (c, s) => const _Placeholder('Financial Years')),
+
+        // Master data
+        GoRoute(path: RouteNames.chartOfAccounts,builder: (c, s) => const ChartOfAccountsScreen()),
+        GoRoute(path: RouteNames.customerMaster, builder: (c, s) => const CustomerMasterScreen()),
+        GoRoute(path: RouteNames.supplierMaster, builder: (c, s) => const SupplierMasterScreen()),
 
         // Sales
         GoRoute(path: RouteNames.salesInvoices, builder: (c, s) => const _Placeholder('Sales Invoice')),
