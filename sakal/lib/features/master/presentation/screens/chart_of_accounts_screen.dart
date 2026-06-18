@@ -34,6 +34,7 @@ class _ChartOfAccountsScreenState
   List<Map<String, dynamic>> _accounts   = [];
   List<Map<String, dynamic>> _currencies = [];
   List<Map<String, dynamic>> _countries  = [];
+  List<Map<String, dynamic>> _divisions  = [];
   List<Map<String, dynamic>> _cities     = [];
   bool    _loading = true;
   String? _error;
@@ -43,10 +44,10 @@ class _ChartOfAccountsScreenState
   List<Map<String, dynamic>> _roots    = [];
   Map<String, List<Map<String, dynamic>>> _childMap = {};
 
-  // Panel state: 'none' | 'add' | 'edit'
-  String _panelMode = 'none';
-  Map<String, dynamic>? _editNode;    // node being edited
-  Map<String, dynamic>? _addParent;   // parent for add mode
+  // Panel state
+  String _panelMode = 'none'; // 'none' | 'add' | 'edit'
+  Map<String, dynamic>? _editNode;
+  Map<String, dynamic>? _addParent;
 
   // Form controllers
   final _nameCtrl    = TextEditingController();
@@ -67,13 +68,21 @@ class _ChartOfAccountsScreenState
   String? _currencyId;
   String? _partyType;
   String? _countryId;
+  String? _countryCode;   // ISO code for querying cities/divisions
+  String? _divisionId;
   String? _cityId;
   bool    _creditBlocked  = false;
+  bool    _isActive       = true;
   bool    _partyExpanded  = false;
   bool    _isAutoCode     = false;
   String? _autoCode;
   bool    _saving         = false;
   String? _saveError;
+
+  // Resizable panel
+  double _leftWidth = 310.0;
+  static const double _minLeftWidth = 200.0;
+  static const double _maxLeftWidth = 520.0;
 
   @override
   void initState() {
@@ -115,7 +124,7 @@ class _ChartOfAccountsScreenState
         DioClient.instance.get('/rim_countries', queryParameters: {
           'client_id':  'eq.${session.clientId}',
           'company_id': 'eq.${session.companyId}',
-          'select':     'id,country_name',
+          'select':     'id,country_name,country_code',
           'order':      'country_name.asc',
         }),
       ]);
@@ -134,16 +143,33 @@ class _ChartOfAccountsScreenState
     }
   }
 
-  Future<void> _loadCities(String countryId) async {
+  Future<void> _loadDivisions() async {
+    if (_countryCode == null) return;
     final session = ref.read(sessionProvider)!;
     try {
-      final res = await DioClient.instance.get('/rim_cities', queryParameters: {
-        'client_id':    'eq.${session.clientId}',
-        'company_id':   'eq.${session.companyId}',
-        'country_id':   'eq.$countryId',
-        'select':       'id,city_name',
-        'order':        'city_name.asc',
+      final res = await DioClient.instance.get('/rim_divisions', queryParameters: {
+        'country_code': 'eq.$_countryCode',
+        'or':           '(is_system.eq.true,and(client_id.eq.${session.clientId},company_id.eq.${session.companyId}))',
+        'order':        'division_name.asc',
+        'select':       'id,division_name',
       });
+      if (mounted) setState(() => _divisions = List<Map<String, dynamic>>.from(res.data as List));
+    } on DioException { /* silent */ }
+  }
+
+  Future<void> _loadCities() async {
+    if (_countryCode == null) return;
+    final session = ref.read(sessionProvider)!;
+    final params = <String, dynamic>{
+      'client_id':    'eq.${session.clientId}',
+      'company_id':   'eq.${session.companyId}',
+      'country_code': 'eq.$_countryCode',
+      'select':       'id,city_name',
+      'order':        'city_name.asc',
+    };
+    if (_divisionId != null) params['division_id'] = 'eq.$_divisionId';
+    try {
+      final res = await DioClient.instance.get('/rim_cities', queryParameters: params);
       if (mounted) setState(() => _cities = List<Map<String, dynamic>>.from(res.data as List));
     } on DioException { /* silent */ }
   }
@@ -151,14 +177,11 @@ class _ChartOfAccountsScreenState
   Future<void> _loadAutoCode(String parentId) async {
     final session = ref.read(sessionProvider)!;
     try {
-      final res = await DioClient.instance.post(
-        '/rpc/fn_next_account_code',
-        data: {
-          'p_client_id':  session.clientId,
-          'p_company_id': session.companyId,
-          'p_parent_id':  parentId,
-        },
-      );
+      final res = await DioClient.instance.post('/rpc/fn_next_account_code', data: {
+        'p_client_id':  session.clientId,
+        'p_company_id': session.companyId,
+        'p_parent_id':  parentId,
+      });
       if (mounted) setState(() => _autoCode = res.data as String?);
     } on DioException { /* silent */ }
   }
@@ -170,18 +193,13 @@ class _ChartOfAccountsScreenState
     _roots    = [];
     for (final a in _accounts) {
       final pid = a['parent_id'] as String?;
-      if (pid == null) {
-        _roots.add(a);
-      } else {
-        (_childMap[pid] ??= []).add(a);
-      }
+      if (pid == null) _roots.add(a);
+      else (_childMap[pid] ??= []).add(a);
     }
   }
 
   void _autoExpandRoots() {
-    for (final r in _roots) {
-      _expanded.add(r['id'] as String);
-    }
+    for (final r in _roots) _expanded.add(r['id'] as String);
   }
 
   List<({Map<String, dynamic> node, int depth})> _visibleNodes() {
@@ -190,9 +208,7 @@ class _ChartOfAccountsScreenState
       for (final n in nodes) {
         result.add((node: n, depth: depth));
         final id = n['id'] as String;
-        if (_expanded.contains(id)) {
-          traverse(_childMap[id] ?? [], depth + 1);
-        }
+        if (_expanded.contains(id)) traverse(_childMap[id] ?? [], depth + 1);
       }
     }
     traverse(_roots, 0);
@@ -214,17 +230,24 @@ class _ChartOfAccountsScreenState
       _nature         = autoNature;
       _isAutoCode     = needsAuto;
       _autoCode       = null;
-      _partyExpanded  = needsAuto; // expand party section for Customer/Supplier
+      _partyExpanded  = needsAuto;
+      _isActive       = true;
       _saveError      = null;
       _clearForm();
       _daysCtrl.text  = '30';
     });
-
     if (needsAuto) _loadAutoCode(parent['id'] as String);
   }
 
   void _openEdit(Map<String, dynamic> node) {
-    final nat = node['account_nature'] as String? ?? 'General';
+    final nat          = node['account_nature'] as String? ?? 'General';
+    final cId          = node['country_id'] as String?;
+    final country      = cId != null
+        ? _countries.firstWhere((c) => c['id'] == cId, orElse: () => {})
+        : <String, dynamic>{};
+    final targetDivId  = node['division_id'] as String?;
+    final targetCityId = node['city_id'] as String?;
+
     setState(() {
       _panelMode      = 'edit';
       _editNode       = node;
@@ -234,11 +257,16 @@ class _ChartOfAccountsScreenState
       _isAutoCode     = false;
       _currencyId     = node['account_currency_id'] as String?;
       _partyType      = node['party_type'] as String?;
-      _countryId      = node['country_id'] as String?;
-      _cityId         = node['city_id'] as String?;
+      _countryId      = cId;
+      _countryCode    = country['country_code'] as String?;
+      _divisionId     = null;   // set after divisions load
+      _cityId         = null;   // set after cities load
       _creditBlocked  = node['is_credit_blocked'] as bool? ?? false;
+      _isActive       = node['is_active'] as bool? ?? true;
       _partyExpanded  = false;
       _saveError      = null;
+      _divisions      = [];
+      _cities         = [];
       _nameCtrl.text    = node['account_name']   as String? ?? '';
       _codeCtrl.text    = node['account_code']   as String? ?? '';
       _contactCtrl.text = node['contact_person'] as String? ?? '';
@@ -248,62 +276,75 @@ class _ChartOfAccountsScreenState
       _addr2Ctrl.text   = node['address_line2']  as String? ?? '';
       _taxIdCtrl.text   = node['tax_id']         as String? ?? '';
       _catCtrl.text     = node['party_category'] as String? ?? '';
-      _limitCtrl.text   = (node['credit_limit'] != null)
+      _limitCtrl.text   = node['credit_limit'] != null
           ? node['credit_limit'].toString() : '';
       _daysCtrl.text    = (node['credit_days'] ?? 30).toString();
     });
-    if (_countryId != null) _loadCities(_countryId!);
+
+    if (_countryCode != null) {
+      _loadDivisions().then((_) {
+        if (mounted) setState(() => _divisionId = targetDivId);
+      });
+      _loadCities().then((_) {
+        if (mounted) setState(() => _cityId = targetCityId);
+      });
+    }
   }
 
   void _clearForm() {
     _nameCtrl.clear(); _codeCtrl.clear(); _contactCtrl.clear();
     _phoneCtrl.clear(); _emailCtrl.clear(); _addr1Ctrl.clear();
     _addr2Ctrl.clear(); _taxIdCtrl.clear(); _catCtrl.clear();
-    _limitCtrl.clear(); _currencyId = null; _partyType = null;
-    _countryId = null; _cityId = null; _creditBlocked = false;
-    _cities = [];
+    _limitCtrl.clear();
+    _currencyId = null; _partyType   = null;
+    _countryId  = null; _countryCode = null;
+    _divisionId = null; _cityId      = null;
+    _divisions  = [];   _cities      = [];
+    _creditBlocked = false; _isActive = true;
   }
 
   Future<void> _save() async {
     final name = _nameCtrl.text.trim();
     final code = _isAutoCode ? (_autoCode ?? '') : _codeCtrl.text.trim();
-    if (name.isEmpty) { setState(() => _saveError = 'Account name is required.'); return; }
-    if (code.isEmpty) { setState(() => _saveError = 'Account code is required.'); return; }
+    if (name.isEmpty) { setState(() => _saveError = 'Name is required.'); return; }
+    if (code.isEmpty) { setState(() => _saveError = 'Code is required.'); return; }
 
     final session = ref.read(sessionProvider)!;
     setState(() { _saving = true; _saveError = null; });
 
     final isParty = _nature == 'Customer' || _nature == 'Supplier';
     final payload = <String, dynamic>{
-      'client_id':          session.clientId,
-      'company_id':         session.companyId,
-      'account_code':       code,
-      'account_name':       name,
-      'posting_allowed':    _postingAllowed,
-      'account_nature':     _nature,
+      'client_id':           session.clientId,
+      'company_id':          session.companyId,
+      'account_code':        code,
+      'account_name':        name,
+      'posting_allowed':     _postingAllowed,
+      'account_nature':      _nature,
       'account_currency_id': _currencyId,
-      'is_system_fixed':    false,
-      'updated_by':         session.userId,
+      'is_active':           _isActive,
+      'is_system_fixed':     false,
+      'updated_by':          session.userId,
       if (_panelMode == 'add') ...{
-        'parent_id':        _addParent?['id'],
-        'accounting_std':   _addParent?['accounting_std'] ?? 'OHADA',
-        'created_by':       session.userId,
+        'parent_id':       _addParent?['id'],
+        'accounting_std':  _addParent?['accounting_std'] ?? 'OHADA',
+        'created_by':      session.userId,
       },
       if (_postingAllowed && isParty) ...{
-        'party_type':       _partyType,
-        'contact_person':   _contactCtrl.text.trim().nullIfEmpty,
-        'phone':            _phoneCtrl.text.trim().nullIfEmpty,
-        'email':            _emailCtrl.text.trim().nullIfEmpty,
-        'address_line1':    _addr1Ctrl.text.trim().nullIfEmpty,
-        'address_line2':    _addr2Ctrl.text.trim().nullIfEmpty,
-        'country_id':       _countryId,
-        'city_id':          _cityId,
-        'tax_id':           _taxIdCtrl.text.trim().nullIfEmpty,
-        'party_category':   _catCtrl.text.trim().nullIfEmpty,
-        'credit_limit':     _limitCtrl.text.trim().isEmpty
+        'party_type':        _partyType,
+        'contact_person':    _contactCtrl.text.trim().nullIfEmpty,
+        'phone':             _phoneCtrl.text.trim().nullIfEmpty,
+        'email':             _emailCtrl.text.trim().nullIfEmpty,
+        'address_line1':     _addr1Ctrl.text.trim().nullIfEmpty,
+        'address_line2':     _addr2Ctrl.text.trim().nullIfEmpty,
+        'country_id':        _countryId,
+        'division_id':       _divisionId,
+        'city_id':           _cityId,
+        'tax_id':            _taxIdCtrl.text.trim().nullIfEmpty,
+        'party_category':    _catCtrl.text.trim().nullIfEmpty,
+        'credit_limit':      _limitCtrl.text.trim().isEmpty
             ? null : double.tryParse(_limitCtrl.text.trim()),
-        'credit_days':      int.tryParse(_daysCtrl.text.trim()) ?? 30,
-        'is_credit_blocked':_creditBlocked,
+        'credit_days':       int.tryParse(_daysCtrl.text.trim()) ?? 30,
+        'is_credit_blocked': _creditBlocked,
       },
     };
 
@@ -335,9 +376,12 @@ class _ChartOfAccountsScreenState
         title: const Text('Delete Account'),
         content: const Text('This account will be soft-deleted and hidden. Continue?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.of(context, rootNavigator: true).pop(false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.of(context, rootNavigator: true).pop(true),
             style: FilledButton.styleFrom(backgroundColor: AppColors.negative),
             child: const Text('Delete'),
           ),
@@ -364,18 +408,30 @@ class _ChartOfAccountsScreenState
         child: Text(_error!, style: const TextStyle(color: AppColors.negative)));
 
     return Row(children: [
-      SizedBox(width: 310, child: _leftPanel()),
-      const VerticalDivider(width: 1, thickness: 1, color: AppColors.border),
+      SizedBox(width: _leftWidth, child: _leftPanel()),
+      // Draggable resize handle
+      GestureDetector(
+        onHorizontalDragUpdate: (d) => setState(() {
+          _leftWidth = (_leftWidth + d.delta.dx)
+              .clamp(_minLeftWidth, _maxLeftWidth);
+        }),
+        child: MouseRegion(
+          cursor: SystemMouseCursors.resizeColumn,
+          child: SizedBox(
+            width: 6,
+            child: Center(child: Container(width: 1, color: AppColors.border)),
+          ),
+        ),
+      ),
       Expanded(child: _rightPanel()),
     ]);
   }
 
-  // ── Left panel — tree ─────────────────────────────────────────────────────
+  // ── Left panel ────────────────────────────────────────────────────────────
 
   Widget _leftPanel() {
     final visible = _visibleNodes();
     return Column(children: [
-      // Header
       Container(
         color: AppColors.surface,
         padding: const EdgeInsets.fromLTRB(16, 16, 8, 12),
@@ -383,41 +439,33 @@ class _ChartOfAccountsScreenState
           const Expanded(child: Text('Accounts',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
                   color: AppColors.textPrimary))),
-          IconButton(
-            icon: const Icon(Icons.refresh, size: 18),
-            tooltip: 'Refresh',
-            onPressed: _load,
-          ),
+          IconButton(icon: const Icon(Icons.refresh, size: 18),
+              tooltip: 'Refresh', onPressed: _load),
         ]),
       ),
       const Divider(height: 1, color: AppColors.border),
-
-      // Tree list
       Expanded(
         child: ListView.builder(
           itemCount: visible.length,
           itemBuilder: (_, i) {
             final item = visible[i];
             return _NodeRow(
-              node:       item.node,
-              depth:      item.depth,
-              expanded:   _expanded.contains(item.node['id'] as String),
+              node:        item.node,
+              depth:       item.depth,
+              expanded:    _expanded.contains(item.node['id'] as String),
               hasChildren: (_childMap[item.node['id'] as String]?.isNotEmpty ?? false),
-              isSelected: (_panelMode == 'edit' &&
-                  _editNode?['id'] == item.node['id']),
+              isSelected:  (_panelMode == 'edit' && _editNode?['id'] == item.node['id']),
               onToggle: () => setState(() {
                 final id = item.node['id'] as String;
                 if (_expanded.contains(id)) _expanded.remove(id);
                 else _expanded.add(id);
               }),
-              onEdit:  () => _openEdit(item.node),
-              onAdd:   () => _openAdd(item.node),
+              onEdit: () => _openEdit(item.node),
+              onAdd:  () => _openAdd(item.node),
             );
           },
         ),
       ),
-
-      // Add root group button
       const Divider(height: 1, color: AppColors.border),
       Padding(
         padding: const EdgeInsets.all(12),
@@ -434,6 +482,7 @@ class _ChartOfAccountsScreenState
               _nature         = 'General';
               _isAutoCode     = false;
               _partyExpanded  = false;
+              _isActive       = true;
               _saveError      = null;
               _clearForm();
             }),
@@ -445,17 +494,15 @@ class _ChartOfAccountsScreenState
 
   // ── Right panel ───────────────────────────────────────────────────────────
 
-  Widget _rightPanel() {
-    return switch (_panelMode) {
-      'add'  => _formPanel(),
-      'edit' => _formPanel(),
-      _      => _emptyPanel(),
-    };
-  }
+  Widget _rightPanel() => switch (_panelMode) {
+    'add'  => _formPanel(),
+    'edit' => _formPanel(),
+    _      => _emptyPanel(),
+  };
 
   Widget _emptyPanel() => Center(
     child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Icon(Icons.account_tree_outlined, size: 48, color: AppColors.textDisabled),
+      const Icon(Icons.account_tree_outlined, size: 48, color: AppColors.textDisabled),
       const SizedBox(height: 16),
       const Text('Select a group to add an account under it,',
           style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
@@ -465,19 +512,27 @@ class _ChartOfAccountsScreenState
   );
 
   Widget _formPanel() {
-    final isAdd      = _panelMode == 'add';
-    final isFixed    = _editNode?['is_system_fixed'] == true;
-    final isParty    = _nature == 'Customer' || _nature == 'Supplier';
-    final canDelete  = !isAdd && !isFixed &&
+    final isAdd     = _panelMode == 'add';
+    final isFixed   = _editNode?['is_system_fixed'] == true;
+    final isGroup   = !_postingAllowed;
+    final isParty   = _nature == 'Customer' || _nature == 'Supplier';
+    final canDelete = !isAdd && !isFixed &&
         (_childMap[_editNode?['id'] as String? ?? '']?.isEmpty ?? true);
-    final parentName = isAdd
+
+    final parentLabel = isAdd
         ? (_addParent != null
-            ? '${_addParent!['account_code']} — ${_addParent!['account_name']}'
+            ? 'Under: ${_addParent!['account_code']} — ${_addParent!['account_name']}'
             : '(None — Root Group)')
         : null;
 
+    // Labels change for Group vs Ledger
+    final codeLabel  = isGroup ? 'Group Code *'  : 'Account Code *';
+    final nameLabel  = isGroup ? 'Group Name *'  : 'Account Name *';
+    final codeHint   = isGroup ? 'e.g. 6100'     : 'e.g. 6150';
+    final nameHint   = isGroup ? 'Enter group name' : 'Enter account name';
+
     return Column(children: [
-      // Panel header
+      // Header
       Container(
         color: AppColors.surface,
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
@@ -486,8 +541,8 @@ class _ChartOfAccountsScreenState
             Text(isAdd ? 'Add Account' : 'Account Details',
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
                     color: AppColors.textPrimary)),
-            if (isAdd && parentName != null)
-              Text('Under: $parentName',
+            if (parentLabel != null)
+              Text(parentLabel,
                   style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
             if (!isAdd && isFixed)
               const Row(children: [
@@ -518,13 +573,16 @@ class _ChartOfAccountsScreenState
           padding: const EdgeInsets.all(24),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-            // Node type
+            // ── Node Type ──────────────────────────────────────────────────
             if (isAdd) ...[
               const _Label('Node Type *'),
               const SizedBox(height: 8),
               Row(children: [
-                _TypeChip(label: 'Group', selected: !_postingAllowed,
-                    onTap: () => setState(() => _postingAllowed = false)),
+                _TypeChip(
+                  label: 'Group',
+                  selected: !_postingAllowed,
+                  onTap: () => setState(() => _postingAllowed = false),
+                ),
                 const SizedBox(width: 10),
                 _TypeChip(
                   label: 'Ledger',
@@ -551,8 +609,8 @@ class _ChartOfAccountsScreenState
               const SizedBox(height: 16),
             ],
 
-            // Account Code
-            const _Label('Account Code *'),
+            // ── Code ───────────────────────────────────────────────────────
+            _Label(codeLabel),
             const SizedBox(height: 6),
             if (_isAutoCode)
               _ReadOnlyField(_autoCode ?? 'Generating…', suffix: 'Auto')
@@ -560,61 +618,80 @@ class _ChartOfAccountsScreenState
               TextField(
                 controller: _codeCtrl,
                 enabled: isAdd || !isFixed,
-                decoration: const InputDecoration(isDense: true,
-                    hintText: 'e.g. 6150'),
+                decoration: InputDecoration(isDense: true, hintText: codeHint),
               ),
             const SizedBox(height: 16),
 
-            // Account Name
-            const _Label('Account Name *'),
+            // ── Name ───────────────────────────────────────────────────────
+            _Label(nameLabel),
             const SizedBox(height: 6),
             TextField(
               controller: _nameCtrl,
               enabled: !isFixed,
-              decoration: const InputDecoration(isDense: true,
-                  hintText: 'Enter account name'),
+              decoration: InputDecoration(isDense: true, hintText: nameHint),
             ),
-            // Nature + Currency — Ledger nodes only
+            const SizedBox(height: 12),
+
+            // ── Active (all account types) ─────────────────────────────────
+            SwitchListTile.adaptive(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Active',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500,
+                      color: AppColors.textPrimary)),
+              subtitle: Text(
+                isGroup
+                    ? 'Inactive groups are hidden in the accounts tree'
+                    : 'Inactive accounts cannot be selected in transactions',
+                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+              ),
+              value: _isActive,
+              activeColor: AppColors.positive,
+              onChanged: isFixed ? null : (v) => setState(() => _isActive = v),
+            ),
+
+            // ── Nature + Currency (Ledger only) ────────────────────────────
             if (_postingAllowed) ...[
               const SizedBox(height: 16),
               Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                const _Label('Nature *'),
-                const SizedBox(height: 6),
-                _addParent?['account_nature'] != null &&
-                        _addParent!['account_nature'] != 'General'
-                    ? _ReadOnlyField(_nature)
-                    : DropdownButtonFormField<String>(
-                        value: _nature,
-                        decoration: const InputDecoration(isDense: true),
-                        items: _natures.map((n) => DropdownMenuItem(
-                            value: n, child: Text(n))).toList(),
-                        onChanged: isFixed ? null
-                            : (v) => setState(() => _nature = v!),
-                      ),
-              ])),
-              const SizedBox(width: 16),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                const _Label('Currency'),
-                const SizedBox(height: 6),
-                DropdownButtonFormField<String>(
-                  value: _currencyId,
-                  decoration: const InputDecoration(isDense: true,
-                      hintText: 'Select…'),
-                  items: _currencies.map((c) => DropdownMenuItem(
-                    value: c['id'] as String,
-                    child: Text('${c['currency_id']} — ${c['currency_name']}',
-                        overflow: TextOverflow.ellipsis),
-                  )).toList(),
-                  onChanged: (v) => setState(() => _currencyId = v),
-                ),
-              ])),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  const _Label('Nature *'),
+                  const SizedBox(height: 6),
+                  _addParent?['account_nature'] != null &&
+                          _addParent!['account_nature'] != 'General'
+                      ? _ReadOnlyField(_nature)
+                      : DropdownButtonFormField<String>(
+                          value: _nature,
+                          decoration: const InputDecoration(isDense: true),
+                          items: _natures.map((n) => DropdownMenuItem(
+                              value: n, child: Text(n))).toList(),
+                          onChanged: isFixed
+                              ? null
+                              : (v) => setState(() => _nature = v!),
+                        ),
+                ])),
+                const SizedBox(width: 16),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  const _Label('Currency'),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    value: _currencyId,
+                    decoration: const InputDecoration(
+                        isDense: true, hintText: 'Select…'),
+                    items: _currencies.map((c) => DropdownMenuItem(
+                      value: c['id'] as String,
+                      child: Text('${c['currency_id']} — ${c['currency_name']}',
+                          overflow: TextOverflow.ellipsis),
+                    )).toList(),
+                    onChanged: (v) => setState(() => _currencyId = v),
+                  ),
+                ])),
               ]),
             ],
 
-            // ── Party Details (Customer / Supplier only) ──────────────────
+            // ── Party Details (Customer / Supplier Ledger only) ────────────
             if (_postingAllowed && isParty) ...[
               const SizedBox(height: 20),
               ExpansionTile(
@@ -627,7 +704,8 @@ class _ChartOfAccountsScreenState
                         color: AppColors.textPrimary)),
                 subtitle: Text(
                   _partyExpanded ? '' : _partyDetailHint(),
-                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                  style: const TextStyle(fontSize: 11,
+                      color: AppColors.textSecondary),
                 ),
                 children: [
                   const SizedBox(height: 12),
@@ -639,7 +717,8 @@ class _ChartOfAccountsScreenState
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
                     value: _partyType,
-                    decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
+                    decoration: const InputDecoration(
+                        isDense: true, hintText: 'Select…'),
                     items: _partyTypes.map((t) => DropdownMenuItem(
                         value: t, child: Text(t))).toList(),
                     onChanged: (v) => setState(() => _partyType = v),
@@ -648,7 +727,8 @@ class _ChartOfAccountsScreenState
 
                   // Contact + Phone
                   Row(children: [
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    Expanded(child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                       const _Label('Contact Person'),
                       const SizedBox(height: 6),
@@ -656,7 +736,8 @@ class _ChartOfAccountsScreenState
                           decoration: const InputDecoration(isDense: true)),
                     ])),
                     const SizedBox(width: 16),
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    Expanded(child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                       const _Label('Phone'),
                       const SizedBox(height: 6),
@@ -673,52 +754,86 @@ class _ChartOfAccountsScreenState
                       decoration: const InputDecoration(isDense: true)),
                   const SizedBox(height: 14),
 
-                  // Address
+                  // Address Line 1 & 2
                   const _Label('Address Line 1'),
                   const SizedBox(height: 6),
                   TextField(controller: _addr1Ctrl,
                       decoration: const InputDecoration(isDense: true)),
                   const SizedBox(height: 10),
                   TextField(controller: _addr2Ctrl,
-                      decoration: const InputDecoration(isDense: true,
-                          hintText: 'Address Line 2')),
+                      decoration: const InputDecoration(
+                          isDense: true, hintText: 'Address Line 2')),
                   const SizedBox(height: 14),
 
-                  // Country + City
-                  Row(children: [
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      const _Label('Country'),
-                      const SizedBox(height: 6),
-                      DropdownButtonFormField<String>(
-                        value: _countryId,
-                        decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
-                        items: _countries.map((c) => DropdownMenuItem(
-                            value: c['id'] as String,
-                            child: Text(c['country_name'] as String,
-                                overflow: TextOverflow.ellipsis))).toList(),
-                        onChanged: (v) {
-                          setState(() { _countryId = v; _cityId = null; _cities = []; });
-                          if (v != null) _loadCities(v);
-                        },
-                      ),
-                    ])),
-                    const SizedBox(width: 16),
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      const _Label('City'),
-                      const SizedBox(height: 6),
-                      DropdownButtonFormField<String>(
-                        value: _cityId,
-                        decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
-                        items: _cities.map((c) => DropdownMenuItem(
-                            value: c['id'] as String,
-                            child: Text(c['city_name'] as String,
-                                overflow: TextOverflow.ellipsis))).toList(),
-                        onChanged: (v) => setState(() => _cityId = v),
-                      ),
-                    ])),
-                  ]),
+                  // Country — searchable
+                  const _Label('Country'),
+                  const SizedBox(height: 6),
+                  _SearchablePicker(
+                    value: _countryId,
+                    hint: 'Select country…',
+                    items: _countries,
+                    labelKey: 'country_name',
+                    valueKey: 'id',
+                    onChanged: (item) {
+                      setState(() {
+                        _countryId   = item?['id'] as String?;
+                        _countryCode = item?['country_code'] as String?;
+                        _divisionId  = null;
+                        _cityId      = null;
+                        _divisions   = [];
+                        _cities      = [];
+                      });
+                      if (_countryCode != null) {
+                        _loadDivisions();
+                        _loadCities();
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Division / State / Province
+                  const _Label('Division / State / Province'),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    value: _divisionId,
+                    decoration: const InputDecoration(
+                        isDense: true, hintText: 'Select division…'),
+                    items: [
+                      const DropdownMenuItem<String>(
+                          value: null, child: Text('— No division —')),
+                      ..._divisions.map((d) => DropdownMenuItem(
+                        value: d['id'] as String,
+                        child: Text(d['division_name'] as String,
+                            overflow: TextOverflow.ellipsis),
+                      )),
+                    ],
+                    onChanged: _countryCode == null
+                        ? null
+                        : (v) {
+                            setState(() {
+                              _divisionId = v;
+                              _cityId     = null;
+                              _cities     = [];
+                            });
+                            _loadCities();
+                          },
+                  ),
+                  const SizedBox(height: 14),
+
+                  // City
+                  const _Label('City'),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    value: _cityId,
+                    decoration: const InputDecoration(
+                        isDense: true, hintText: 'Select…'),
+                    items: _cities.map((c) => DropdownMenuItem(
+                      value: c['id'] as String,
+                      child: Text(c['city_name'] as String,
+                          overflow: TextOverflow.ellipsis),
+                    )).toList(),
+                    onChanged: (v) => setState(() => _cityId = v),
+                  ),
                   const SizedBox(height: 14),
 
                   // Tax ID
@@ -730,17 +845,19 @@ class _ChartOfAccountsScreenState
 
                   // Category + Credit Days + Credit Limit
                   Row(children: [
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    Expanded(child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                       const _Label('Category'),
                       const SizedBox(height: 6),
                       TextField(controller: _catCtrl,
-                          decoration: const InputDecoration(isDense: true,
-                              hintText: 'e.g. Wholesale')),
+                          decoration: const InputDecoration(
+                              isDense: true, hintText: 'e.g. Wholesale')),
                     ])),
                     const SizedBox(width: 12),
                     SizedBox(width: 90, child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                       const _Label('Credit Days'),
                       const SizedBox(height: 6),
                       TextField(controller: _daysCtrl,
@@ -748,14 +865,15 @@ class _ChartOfAccountsScreenState
                           decoration: const InputDecoration(isDense: true)),
                     ])),
                     const SizedBox(width: 12),
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    Expanded(child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                       const _Label('Credit Limit'),
                       const SizedBox(height: 6),
                       TextField(controller: _limitCtrl,
                           keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(isDense: true,
-                              hintText: '0.00')),
+                          decoration: const InputDecoration(
+                              isDense: true, hintText: '0.00')),
                     ])),
                   ]),
                   const SizedBox(height: 14),
@@ -767,7 +885,8 @@ class _ChartOfAccountsScreenState
                       onChanged: (v) => setState(() => _creditBlocked = v!),
                     ),
                     const Text('Credit Blocked',
-                        style: TextStyle(fontSize: 13, color: AppColors.textPrimary)),
+                        style: TextStyle(fontSize: 13,
+                            color: AppColors.textPrimary)),
                   ]),
                 ],
               ),
@@ -776,7 +895,8 @@ class _ChartOfAccountsScreenState
             if (_saveError != null) ...[
               const SizedBox(height: 16),
               Text(_saveError!,
-                  style: const TextStyle(color: AppColors.negative, fontSize: 13)),
+                  style: const TextStyle(
+                      color: AppColors.negative, fontSize: 13)),
             ],
 
             const SizedBox(height: 24),
@@ -791,8 +911,8 @@ class _ChartOfAccountsScreenState
                   onPressed: _saving ? null : _save,
                   child: _saving
                       ? const SizedBox(width: 18, height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2,
-                              color: Colors.white))
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
                       : Text(isAdd ? 'Save Account' : 'Save Changes'),
                 ),
               ]),
@@ -817,10 +937,10 @@ class _ChartOfAccountsScreenState
 
 class _NodeRow extends StatefulWidget {
   final Map<String, dynamic> node;
-  final int     depth;
-  final bool    expanded;
-  final bool    hasChildren;
-  final bool    isSelected;
+  final int          depth;
+  final bool         expanded;
+  final bool         hasChildren;
+  final bool         isSelected;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
   final VoidCallback onAdd;
@@ -845,10 +965,10 @@ class _NodeRowState extends State<_NodeRow> {
 
   @override
   Widget build(BuildContext context) {
-    final node      = widget.node;
-    final isFixed   = node['is_system_fixed'] == true;
-    final isLeaf    = node['posting_allowed'] == true;
-    final nature    = node['account_nature'] as String? ?? 'General';
+    final node        = widget.node;
+    final isFixed     = node['is_system_fixed'] == true;
+    final isLeaf      = node['posting_allowed']  == true;
+    final nature      = node['account_nature']   as String? ?? 'General';
     final natureColor = _natureColors[nature];
 
     return MouseRegion(
@@ -863,7 +983,6 @@ class _NodeRowState extends State<_NodeRow> {
               : _hovered ? AppColors.surfaceVariant : null,
           padding: EdgeInsets.only(left: 8.0 + widget.depth * 16.0, right: 8),
           child: Row(children: [
-            // Expand/collapse toggle
             SizedBox(
               width: 20,
               child: !isLeaf
@@ -880,16 +999,12 @@ class _NodeRowState extends State<_NodeRow> {
                   : null,
             ),
             const SizedBox(width: 4),
-
-            // Node icon
             Icon(
               isLeaf ? Icons.description_outlined : Icons.folder_outlined,
               size: 15,
               color: isFixed ? AppColors.textDisabled : AppColors.textSecondary,
             ),
             const SizedBox(width: 6),
-
-            // Account code
             Text(
               node['account_code'] as String? ?? '',
               style: TextStyle(
@@ -899,8 +1014,6 @@ class _NodeRowState extends State<_NodeRow> {
               ),
             ),
             const SizedBox(width: 8),
-
-            // Account name
             Expanded(
               child: Text(
                 node['account_name'] as String? ?? '',
@@ -914,9 +1027,7 @@ class _NodeRowState extends State<_NodeRow> {
                 ),
               ),
             ),
-
-            // Nature badge
-            if (natureColor != null && _hovered == false && !widget.isSelected)
+            if (natureColor != null && !_hovered && !widget.isSelected)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
@@ -927,15 +1038,12 @@ class _NodeRowState extends State<_NodeRow> {
                     style: TextStyle(fontSize: 10, color: natureColor,
                         fontWeight: FontWeight.w600)),
               ),
-
-            // Lock icon for fixed accounts
             if (isFixed)
               const Padding(
                 padding: EdgeInsets.only(left: 4),
-                child: Icon(Icons.lock_outline, size: 13, color: AppColors.textDisabled),
+                child: Icon(Icons.lock_outline, size: 13,
+                    color: AppColors.textDisabled),
               ),
-
-            // Hover actions
             if (_hovered) ...[
               IconButton(
                 icon: const Icon(Icons.edit_outlined, size: 15),
@@ -960,6 +1068,157 @@ class _NodeRowState extends State<_NodeRow> {
   }
 }
 
+// ── Searchable Picker ─────────────────────────────────────────────────────────
+
+class _SearchablePicker extends StatelessWidget {
+  final String?                    value;
+  final String                     hint;
+  final List<Map<String, dynamic>> items;
+  final String                     labelKey;
+  final String                     valueKey;
+  final ValueChanged<Map<String, dynamic>?> onChanged;
+
+  const _SearchablePicker({
+    required this.value,
+    required this.hint,
+    required this.items,
+    required this.labelKey,
+    required this.valueKey,
+    required this.onChanged,
+  });
+
+  String? get _displayLabel {
+    if (value == null) return null;
+    final item = items.firstWhere(
+      (i) => i[valueKey] == value,
+      orElse: () => {},
+    );
+    return item[labelKey] as String?;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _displayLabel;
+    return InkWell(
+      onTap: () async {
+        final result = await showDialog<Map<String, dynamic>>(
+          context: context,
+          builder: (ctx) => _SearchDialog(
+              title: hint, items: items, labelKey: labelKey),
+        );
+        if (result != null) onChanged(result);
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(children: [
+          Expanded(
+            child: Text(
+              label ?? hint,
+              style: TextStyle(
+                fontSize: 13,
+                color: label != null
+                    ? AppColors.textPrimary
+                    : AppColors.textDisabled,
+              ),
+            ),
+          ),
+          if (value != null)
+            GestureDetector(
+              onTap: () => onChanged(null),
+              child: const Icon(Icons.close, size: 16,
+                  color: AppColors.textSecondary),
+            )
+          else
+            const Icon(Icons.arrow_drop_down, size: 20,
+                color: AppColors.textSecondary),
+        ]),
+      ),
+    );
+  }
+}
+
+class _SearchDialog extends StatefulWidget {
+  final String                     title;
+  final List<Map<String, dynamic>> items;
+  final String                     labelKey;
+
+  const _SearchDialog({
+    required this.title,
+    required this.items,
+    required this.labelKey,
+  });
+
+  @override
+  State<_SearchDialog> createState() => _SearchDialogState();
+}
+
+class _SearchDialogState extends State<_SearchDialog> {
+  String _query = '';
+  late List<Map<String, dynamic>> _filtered;
+
+  @override
+  void initState() {
+    super.initState();
+    _filtered = widget.items;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+      contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      content: SizedBox(
+        width: 360,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: 'Search…',
+              prefixIcon: Icon(Icons.search, size: 18),
+              isDense: true,
+            ),
+            onChanged: (v) => setState(() {
+              _query = v;
+              _filtered = widget.items
+                  .where((i) => (i[widget.labelKey] as String)
+                      .toLowerCase()
+                      .contains(_query.toLowerCase()))
+                  .toList();
+            }),
+          ),
+          const SizedBox(height: 8),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 320),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _filtered.length,
+              itemBuilder: (_, i) => ListTile(
+                dense: true,
+                title: Text(_filtered[i][widget.labelKey] as String,
+                    style: const TextStyle(fontSize: 13)),
+                onTap: () => Navigator.of(context, rootNavigator: true)
+                    .pop(_filtered[i]),
+              ),
+            ),
+          ),
+        ]),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
+}
+
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
 class _Label extends StatelessWidget {
@@ -972,8 +1231,8 @@ class _Label extends StatelessWidget {
 }
 
 class _TypeChip extends StatelessWidget {
-  final String      label;
-  final bool        selected;
+  final String       label;
+  final bool         selected;
   final VoidCallback? onTap;
   const _TypeChip({required this.label, required this.selected, this.onTap});
 
@@ -1007,7 +1266,7 @@ class _TypeChip extends StatelessWidget {
 }
 
 class _ReadOnlyField extends StatelessWidget {
-  final String value;
+  final String  value;
   final String? suffix;
   const _ReadOnlyField(this.value, {this.suffix});
 
@@ -1022,7 +1281,8 @@ class _ReadOnlyField extends StatelessWidget {
     ),
     child: Row(children: [
       Expanded(child: Text(value,
-          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary))),
+          style: const TextStyle(fontSize: 13,
+              color: AppColors.textSecondary))),
       if (suffix != null)
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -1031,13 +1291,13 @@ class _ReadOnlyField extends StatelessWidget {
             borderRadius: BorderRadius.circular(4),
           ),
           child: Text(suffix!,
-              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+              style: const TextStyle(fontSize: 10,
+                  color: AppColors.textSecondary)),
         ),
     ]),
   );
 }
 
-// Extension helper
 extension _NullIfEmpty on String {
   String? get nullIfEmpty => isEmpty ? null : this;
 }
