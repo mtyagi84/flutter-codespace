@@ -91,6 +91,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
     if (row == null || _saving.contains(featureCode)) return;
 
     bool newView    = row['view_allowed']        as bool? ?? false;
+    bool newAdd     = row['add_allowed']          as bool? ?? false;
     bool newEdit    = row['edit_allowed']         as bool? ?? false;
     bool newApprove = row['approve_allowed']      as bool? ?? false;
     bool newCopy    = row['copy_allowed']         as bool? ?? false;
@@ -100,7 +101,11 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
     switch (field) {
       case 'view_allowed':
         newView = newVal;
-        if (!newVal) { newEdit = false; newApprove = false; newCopy = false; newExcel = false; }
+        if (!newVal) { newAdd = false; newEdit = false; newApprove = false; newCopy = false; newExcel = false; }
+        break;
+      case 'add_allowed':
+        newAdd = newVal;
+        if (newVal) newView = true;
         break;
       case 'edit_allowed':
         newEdit = newVal;
@@ -126,6 +131,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
       _features[featureCode] = {
         ...row,
         'view_allowed':         newView,
+        'add_allowed':          newAdd,
         'edit_allowed':         newEdit,
         'approve_allowed':      newApprove,
         'copy_allowed':         newCopy,
@@ -142,6 +148,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
         'p_module_id':            row['module_id'],
         'p_feature_code':         featureCode,
         'p_view_allowed':         newView,
+        'p_add_allowed':          newAdd,
         'p_edit_allowed':         newEdit,
         'p_approve_allowed':      newApprove,
         'p_copy_allowed':         newCopy,
@@ -172,6 +179,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
         _features[key] = {
           ..._features[key]!,
           'view_allowed': true,
+          'add_allowed':  true,
           'edit_allowed': true,
         };
         _saving.add(key);
@@ -187,6 +195,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
           'p_module_id':            f['module_id'],
           'p_feature_code':         f['feature_code'],
           'p_view_allowed':         true,
+          'p_add_allowed':          true,
           'p_edit_allowed':         true,
           'p_approve_allowed':      f['approve_allowed'],
           'p_copy_allowed':         f['copy_allowed'],
@@ -210,6 +219,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
         _features[key] = {
           ..._features[key]!,
           'view_allowed':         false,
+          'add_allowed':          false,
           'edit_allowed':         false,
           'approve_allowed':      false,
           'copy_allowed':         false,
@@ -228,6 +238,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
           'p_module_id':            f['module_id'],
           'p_feature_code':         f['feature_code'],
           'p_view_allowed':         false,
+          'p_add_allowed':          false,
           'p_edit_allowed':         false,
           'p_approve_allowed':      false,
           'p_copy_allowed':         false,
@@ -844,6 +855,7 @@ class _PermHeader extends StatelessWidget {
                     color: AppColors.textSecondary)),
           ),
           SizedBox(width: 70,  child: _CH('View')),
+          SizedBox(width: 70,  child: _CH('Add')),
           SizedBox(width: 70,  child: _CH('Edit')),
           SizedBox(width: 80,  child: _CH('Approve')),
           SizedBox(width: 70,  child: _CH('Copy')),
@@ -911,6 +923,14 @@ class _FeatureRow extends StatelessWidget {
               value:    feature['view_allowed'] as bool? ?? false,
               enabled:  !saving,
               onToggle: () => onToggle('view_allowed'),
+            ),
+          ),
+          SizedBox(
+            width: 70,
+            child: _PBox(
+              value:    feature['add_allowed'] as bool? ?? false,
+              enabled:  !saving,
+              onToggle: () => onToggle('add_allowed'),
             ),
           ),
           SizedBox(

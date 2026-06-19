@@ -3,6 +3,7 @@ class MenuFeature {
   final String featureName;
   final String screenName;
   final int serialNo;
+  final bool addAllowed;
   final bool editAllowed;
   final bool approveAllowed;
   final bool copyAllowed;
@@ -13,6 +14,7 @@ class MenuFeature {
     required this.featureName,
     required this.screenName,
     required this.serialNo,
+    required this.addAllowed,
     required this.editAllowed,
     required this.approveAllowed,
     required this.copyAllowed,
@@ -24,6 +26,7 @@ class MenuFeature {
         featureName:        j['feature_name'] as String,
         screenName:         j['screen_name'] as String,
         serialNo:           j['serial_no'] as int? ?? 0,
+        addAllowed:         j['add_allowed'] as bool? ?? false,
         editAllowed:        j['edit_allowed'] as bool? ?? false,
         approveAllowed:     j['approve_allowed'] as bool? ?? false,
         copyAllowed:        j['copy_allowed'] as bool? ?? false,
@@ -35,6 +38,7 @@ class MenuFeature {
     'feature_name':         featureName,
     'screen_name':          screenName,
     'serial_no':            serialNo,
+    'add_allowed':          addAllowed,
     'edit_allowed':         editAllowed,
     'approve_allowed':      approveAllowed,
     'copy_allowed':         copyAllowed,

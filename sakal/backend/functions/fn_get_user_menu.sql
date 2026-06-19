@@ -31,6 +31,7 @@ begin
                                     'feature_name',         mm.feature_name,
                                     'screen_name',          mm.screen_name,
                                     'serial_no',            mm.serial_no,
+                                    'add_allowed',          um.add_allowed,
                                     'edit_allowed',         um.edit_allowed,
                                     'approve_allowed',      um.approve_allowed,
                                     'copy_allowed',         um.copy_allowed,
