@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/permission_cascade.dart';
 
 class PermissionsScreen extends ConsumerStatefulWidget {
   const PermissionsScreen({super.key});
@@ -90,53 +91,19 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
     final row = _features[featureCode];
     if (row == null || _saving.contains(featureCode)) return;
 
-    bool newView    = row['view_allowed']        as bool? ?? false;
-    bool newAdd     = row['add_allowed']          as bool? ?? false;
-    bool newEdit    = row['edit_allowed']         as bool? ?? false;
-    bool newApprove = row['approve_allowed']      as bool? ?? false;
-    bool newCopy    = row['copy_allowed']         as bool? ?? false;
-    bool newExcel   = row['excel_upload_allowed'] as bool? ?? false;
-
-    final newVal = !(row[field] as bool? ?? false);
-    switch (field) {
-      case 'view_allowed':
-        newView = newVal;
-        if (!newVal) { newAdd = false; newEdit = false; newApprove = false; newCopy = false; newExcel = false; }
-        break;
-      case 'add_allowed':
-        newAdd = newVal;
-        if (newVal) newView = true;
-        break;
-      case 'edit_allowed':
-        newEdit = newVal;
-        if (newVal) newView = true;
-        break;
-      case 'approve_allowed':
-        newApprove = newVal;
-        if (newVal) newView = true;
-        break;
-      case 'copy_allowed':
-        newCopy = newVal;
-        if (newVal) newView = true;
-        break;
-      case 'excel_upload_allowed':
-        newExcel = newVal;
-        if (newVal) newView = true;
-        break;
-    }
+    final updated = applyPermissionToggle({
+      'view_allowed':         row['view_allowed']        as bool? ?? false,
+      'add_allowed':          row['add_allowed']          as bool? ?? false,
+      'edit_allowed':         row['edit_allowed']         as bool? ?? false,
+      'approve_allowed':      row['approve_allowed']      as bool? ?? false,
+      'copy_allowed':         row['copy_allowed']         as bool? ?? false,
+      'excel_upload_allowed': row['excel_upload_allowed'] as bool? ?? false,
+    }, field);
 
     // Optimistic update
     setState(() {
       _saving.add(featureCode);
-      _features[featureCode] = {
-        ...row,
-        'view_allowed':         newView,
-        'add_allowed':          newAdd,
-        'edit_allowed':         newEdit,
-        'approve_allowed':      newApprove,
-        'copy_allowed':         newCopy,
-        'excel_upload_allowed': newExcel,
-      };
+      _features[featureCode] = {...row, ...updated};
     });
 
     final session = ref.read(sessionProvider)!;
@@ -147,12 +114,12 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
         'p_user_id':              _selectedUserId,
         'p_module_id':            row['module_id'],
         'p_feature_code':         featureCode,
-        'p_view_allowed':         newView,
-        'p_add_allowed':          newAdd,
-        'p_edit_allowed':         newEdit,
-        'p_approve_allowed':      newApprove,
-        'p_copy_allowed':         newCopy,
-        'p_excel_upload_allowed': newExcel,
+        'p_view_allowed':         updated['view_allowed'],
+        'p_add_allowed':          updated['add_allowed'],
+        'p_edit_allowed':         updated['edit_allowed'],
+        'p_approve_allowed':      updated['approve_allowed'],
+        'p_copy_allowed':         updated['copy_allowed'],
+        'p_excel_upload_allowed': updated['excel_upload_allowed'],
         'p_updated_by':           session.userId,
       });
     } on DioException {

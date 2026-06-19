@@ -112,7 +112,24 @@ Breakpoints used in SAKAL:
 
 ---
 
-## I — Final Verification
+## I — Tests (Option A — written in same session as the screen)
+
+### Flutter unit tests (`flutter test`)
+- [ ] Model test: `fromJson` parses all fields correctly
+- [ ] Model test: missing optional fields default to safe values
+- [ ] Model test: `toJson → fromJson` round-trip is lossless
+- [ ] Logic test: any pure business logic extracted into a utility function and tested
+- [ ] All new test files placed under `test/` mirroring the `lib/` path
+
+### Backend pgTAP tests (run in Supabase SQL Editor)
+- [ ] Each new PG function has a test in `backend/tests/NNN_<name>_test.sql`
+- [ ] Tests cover: happy path, default/COALESCE values, upsert idempotency
+- [ ] Test file ends with `ROLLBACK` — no permanent changes to DB
+- [ ] All tests show `ok N — …` with no `not ok` lines
+
+---
+
+## J — Final Verification
 
 - [ ] Golden path tested end-to-end (create → view → edit → approve)
 - [ ] Permission restriction tested (log in as user with no rights → screen/buttons hidden)
@@ -125,3 +142,4 @@ Breakpoints used in SAKAL:
 
 *Last updated: 2026-06-20*
 *Permission model: view / add / edit / approve / copy / excel_upload — no delete (reversals only, OHADA compliance)*
+*Testing: Option A — unit tests + pgTAP written per screen in the same session*
