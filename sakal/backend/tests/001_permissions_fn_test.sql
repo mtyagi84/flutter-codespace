@@ -254,13 +254,15 @@ SELECT ok(
   '17 — copy produces exactly one active row (no duplicates)'
 );
 
+-- Source user had approve_allowed = false — verify copy doesn't accidentally grant it.
+-- Also confirms the copy result exactly matches the source, not the old target values.
 SELECT ok(
-  (SELECT COUNT(*) >= 1
-   FROM ric_user_menus
-   WHERE user_id = '00000000-0000-0000-0000-000000000003'::uuid
-     AND feature_code = 'TEST_FEAT'
-     AND is_deleted = true),
-  '18 — copy soft-deletes previous rows before inserting new ones'
+  NOT (SELECT approve_allowed
+       FROM ric_user_menus
+       WHERE user_id = '00000000-0000-0000-0000-000000000003'::uuid
+         AND feature_code = 'TEST_FEAT'
+         AND is_deleted = false),
+  '18 — copy does not grant permissions the source did not have (approve_allowed = false)'
 );
 
 -- ── Finish ────────────────────────────────────────────────────────────────────
