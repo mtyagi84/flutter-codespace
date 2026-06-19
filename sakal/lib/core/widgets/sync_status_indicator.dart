@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../sync/sync_engine.dart';
@@ -7,6 +8,9 @@ class SyncStatusIndicator extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // SQLite WASM not loaded on Flutter Web — skip entirely
+    if (kIsWeb) return const SizedBox.shrink();
+
     return ref.watch(pendingSyncCountProvider).when(
       data: (count) {
         if (count == 0) return const SizedBox.shrink();

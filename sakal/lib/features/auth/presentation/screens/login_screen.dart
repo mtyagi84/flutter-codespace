@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -112,8 +113,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ref.read(sessionProvider.notifier).state = session;
       ref.read(menuProvider.notifier).state    = menuList;
 
-      // Route to sync screen if pending offline documents exist
-      final pending = await ref.read(syncEngineProvider).pendingCount();
+      // Route to sync screen if pending offline documents exist.
+      // On Flutter Web the SQLite WASM runtime is not loaded — skip the check.
+      int pending = 0;
+      if (!kIsWeb) {
+        try {
+          pending = await ref.read(syncEngineProvider).pendingCount();
+        } catch (_) {}
+      }
       if (!mounted) return;
       context.go(pending > 0 ? RouteNames.sync : RouteNames.dashboard);
     } on DioException catch (e) {
@@ -294,8 +301,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     (v == null || v.isEmpty) ? 'Password is required' : null,
               ),
 
-              // Work Offline toggle — only shown after first online login
-              if (_clientSaved && _hasCache) ...[
+              // Work Offline toggle — only on native (mobile/desktop); web is always online
+              if (!kIsWeb && _clientSaved && _hasCache) ...[
                 const SizedBox(height: 16),
                 InkWell(
                   borderRadius: BorderRadius.circular(8),
