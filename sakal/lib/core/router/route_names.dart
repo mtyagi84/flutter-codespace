@@ -48,6 +48,7 @@ class RouteNames {
   static const String supplierMaster   = '/master/suppliers';
 
   // Finance
+  static const String exchangeRates = '/finance/exchange-rates';
   static const String journalEntry  = '/finance/journal';
   static const String cashBook      = '/finance/cashbook';
   static const String trialBalance  = '/finance/trial-balance';

@@ -19,6 +19,7 @@ import '../../features/setup/presentation/screens/accounting_setup_screen.dart';
 import '../../features/master/presentation/screens/chart_of_accounts_screen.dart';
 import '../../features/master/presentation/screens/customer_master_screen.dart';
 import '../../features/master/presentation/screens/supplier_master_screen.dart';
+import '../../features/finance/presentation/screens/exchange_rate_screen.dart';
 import '../layout/app_shell.dart';
 import '../layout/group_landing_screen.dart';
 import '../services/local_storage.dart';
@@ -99,7 +100,8 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.stockAdjustments, builder: (c, s) => const _Placeholder('Stock Adjustment')),
 
         // Finance
-        GoRoute(path: RouteNames.journalEntry, builder: (c, s) => const _Placeholder('Journal Entry')),
+        GoRoute(path: RouteNames.exchangeRates, builder: (c, s) => const ExchangeRateScreen()),
+        GoRoute(path: RouteNames.journalEntry,  builder: (c, s) => const _Placeholder('Journal Entry')),
         GoRoute(path: RouteNames.cashBook,     builder: (c, s) => const _Placeholder('Cash Book')),
         GoRoute(path: RouteNames.trialBalance, builder: (c, s) => const _Placeholder('Trial Balance')),
         GoRoute(path: RouteNames.profitLoss,   builder: (c, s) => const _Placeholder('Profit & Loss')),
