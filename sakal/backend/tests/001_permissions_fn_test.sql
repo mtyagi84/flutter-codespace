@@ -17,14 +17,19 @@ BEGIN;
 SELECT plan(18);   -- update this number if you add more tests
 
 -- ── Fixtures ─────────────────────────────────────────────────────────────────
--- FK chain: ric_clients → ric_companies → ric_system_modules → ric_master_menus
--- created_by is nullable (no rim_users FK required in tests).
+-- Full FK chain that must be satisfied:
+--   ric_clients → ric_companies → rim_users
+--                              → ric_system_modules → ric_master_menus
+--                                                   → ric_user_menus (user_id + composite feature FK)
+-- created_by columns are nullable everywhere — omitted in test inserts.
 
 DO $$
 DECLARE
-  v_client_id  uuid := '00000000-0000-0000-0000-000000000001';
-  v_company_id uuid := '00000000-0000-0000-0000-000000000002';
-  v_module_id  uuid := '00000000-0000-0000-0000-000000000004';
+  v_client_id     uuid := '00000000-0000-0000-0000-000000000001';
+  v_company_id    uuid := '00000000-0000-0000-0000-000000000002';
+  v_user_id       uuid := '00000000-0000-0000-0000-000000000003';
+  v_module_id     uuid := '00000000-0000-0000-0000-000000000004';
+  v_src_user_id   uuid := '00000000-0000-0000-ffff-000000000001';
 BEGIN
   -- 1. Root tenant
   INSERT INTO ric_clients (id, client_name, is_active, is_deleted, created_at)
@@ -36,12 +41,23 @@ BEGIN
   VALUES (v_company_id, v_client_id, 'TEST COMPANY', true, false, now())
   ON CONFLICT (id) DO NOTHING;
 
-  -- 3. Module (created_by = NULL — FK to rim_users is nullable)
+  -- 3. Test user (required by ric_user_menus.user_id FK)
+  --    password_hash = 'x' — not used in permission tests
+  INSERT INTO rim_users (id, client_id, company_id, username, full_name, password_hash, is_active, is_deleted, created_at)
+  VALUES (v_user_id, v_client_id, v_company_id, 'test_user', 'Test User', 'x', true, false, now())
+  ON CONFLICT (id) DO NOTHING;
+
+  -- 4. Source user for fn_copy_user_permissions test
+  INSERT INTO rim_users (id, client_id, company_id, username, full_name, password_hash, is_active, is_deleted, created_at)
+  VALUES (v_src_user_id, v_client_id, v_company_id, 'src_user', 'Source User', 'x', true, false, now())
+  ON CONFLICT (id) DO NOTHING;
+
+  -- 5. Module
   INSERT INTO ric_system_modules (id, client_id, company_id, module_code, module_name, serial_no, is_active, is_deleted, created_at)
   VALUES (v_module_id, v_client_id, v_company_id, 'TEST_MOD', 'Test Module', 1, true, false, now())
   ON CONFLICT (client_id, company_id, module_code) DO NOTHING;
 
-  -- 4. Menu feature
+  -- 6. Menu feature (satisfies composite FK on ric_user_menus)
   INSERT INTO ric_master_menus (client_id, company_id, module_id, feature_code, feature_name, screen_name, group_code, group_name, group_serial_no, serial_no, approve_allowed, copy_allowed, excel_upload_allowed, is_active, is_deleted, created_at)
   VALUES (v_client_id, v_company_id, v_module_id, 'TEST_FEAT', 'Test Feature', 'testScreen', 'GRP1', 'Group 1', 1, 1, true, true, true, true, false, now())
   ON CONFLICT (client_id, company_id, feature_code) DO NOTHING;
