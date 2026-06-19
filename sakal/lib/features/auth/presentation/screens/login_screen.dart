@@ -8,6 +8,8 @@ import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/services/local_storage.dart';
+import '../../../../core/services/offline_session_cache.dart';
+import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -22,12 +24,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _clientNoCtrl = TextEditingController();
   final _usernameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
-  bool _obscure  = true;
-  bool _loading  = false;
+  bool _obscure     = true;
+  bool _loading     = false;
+  bool _workOffline = false;
+  bool _hasCache    = false;
   String? _error;
 
-  // If client_no is already saved on device, we don't show the input field
   bool get _clientSaved => LocalStorage.clientNo != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkCache();
+  }
+
+  Future<void> _checkCache() async {
+    final has = await OfflineSessionCache.hasCachedCredentials();
+    if (mounted) setState(() => _hasCache = has);
+  }
 
   @override
   void dispose() {
@@ -39,6 +53,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    _workOffline ? await _submitOffline() : await _submitOnline();
+  }
+
+  // ── Online path ────────────────────────────────────────────────
+  Future<void> _submitOnline() async {
     setState(() { _loading = true; _error = null; });
 
     final clientNo = _clientSaved
@@ -60,10 +79,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         );
       }
 
-      // Fetch menu before navigating so sidebar is ready on first paint
       final menuRes = await DioClient.instance.post('/rpc/fn_get_user_menu', data: {
-        'p_user_id':   d['user_id'],
-        'p_client_id': d['client_id'],
+        'p_user_id':    d['user_id'],
+        'p_client_id':  d['client_id'],
         'p_company_id': d['company_id'],
       });
       final menuList = (menuRes.data as List<dynamic>)
@@ -71,7 +89,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .toList();
 
       if (!mounted) return;
-      ref.read(sessionProvider.notifier).state = UserSession(
+
+      final session = UserSession(
         userId:      d['user_id'] as String,
         clientId:    d['client_id'] as String,
         clientNo:    d['client_no'] as String,
@@ -81,12 +100,61 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         username:    d['username'] as String,
         locationId:  d['location_id'] as String?,
       );
-      ref.read(menuProvider.notifier).state = menuList;
 
-      context.go(RouteNames.dashboard);
+      // Cache credentials for future offline login
+      await OfflineSessionCache.save(
+        username: _usernameCtrl.text.trim(),
+        password: _passwordCtrl.text,
+        session:  session,
+        menu:     menuList,
+      );
+
+      ref.read(sessionProvider.notifier).state = session;
+      ref.read(menuProvider.notifier).state    = menuList;
+
+      // Route to sync screen if pending offline documents exist
+      final pending = await ref.read(syncEngineProvider).pendingCount();
+      if (!mounted) return;
+      context.go(pending > 0 ? RouteNames.sync : RouteNames.dashboard);
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] as String? ?? '';
       setState(() => _error = _friendlyError(msg));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  // ── Offline path ───────────────────────────────────────────────
+  Future<void> _submitOffline() async {
+    setState(() { _loading = true; _error = null; });
+
+    try {
+      final result = await OfflineSessionCache.tryLogin(
+        username: _usernameCtrl.text.trim(),
+        password: _passwordCtrl.text,
+      );
+
+      if (!mounted) return;
+
+      if (result == null) {
+        setState(() => _error =
+            'Offline login failed. Check your credentials or sign in online first.');
+        return;
+      }
+
+      ref.read(sessionProvider.notifier).state = UserSession(
+        userId:      result.session.userId,
+        clientId:    result.session.clientId,
+        clientNo:    result.session.clientNo,
+        companyId:   result.session.companyId,
+        companyName: result.session.companyName,
+        locationId:  result.session.locationId,
+        fullName:    result.session.fullName,
+        username:    result.session.username,
+        offlineMode: true,
+      );
+      ref.read(menuProvider.notifier).state = result.menu;
+      context.go(RouteNames.dashboard);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -113,7 +181,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _Logo(),
+                const _Logo(),
                 const SizedBox(height: 40),
                 _buildCard(),
                 const SizedBox(height: 24),
@@ -146,12 +214,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary)),
               const SizedBox(height: 4),
-              const Text('Enter your credentials to continue',
-                  style: TextStyle(
-                      fontSize: 13, color: AppColors.textSecondary)),
+              Text(
+                _workOffline
+                    ? 'Using cached credentials — no internet needed'
+                    : 'Enter your credentials to continue',
+                style: const TextStyle(
+                    fontSize: 13, color: AppColors.textSecondary),
+              ),
               const SizedBox(height: 28),
 
-              // Client ID — shown only if not saved locally
+              // Client ID — show pill if saved, input if not
               if (_clientSaved) ...[
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -222,7 +294,73 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     (v == null || v.isEmpty) ? 'Password is required' : null,
               ),
 
-              // Error
+              // Work Offline toggle — only shown after first online login
+              if (_clientSaved && _hasCache) ...[
+                const SizedBox(height: 16),
+                InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => setState(() => _workOffline = !_workOffline),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: _workOffline
+                          ? const Color(0xFFE65100).withOpacity(0.08)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: _workOffline
+                            ? const Color(0xFFE65100).withOpacity(0.5)
+                            : AppColors.border,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _workOffline
+                              ? Icons.check_box_outlined
+                              : Icons.check_box_outline_blank,
+                          size: 18,
+                          color: _workOffline
+                              ? const Color(0xFFE65100)
+                              : AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Work Offline',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: _workOffline
+                                      ? const Color(0xFFE65100)
+                                      : AppColors.textPrimary,
+                                ),
+                              ),
+                              const Text(
+                                'No internet connection required',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.wifi_off_rounded,
+                            size: 16,
+                            color: _workOffline
+                                ? const Color(0xFFE65100)
+                                : AppColors.textSecondary.withOpacity(0.4)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+
+              // Error banner
               if (_error != null) ...[
                 const SizedBox(height: 16),
                 Container(
@@ -234,6 +372,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         color: AppColors.negative.withOpacity(0.3)),
                   ),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Icon(Icons.error_outline,
                           color: AppColors.negative, size: 16),
@@ -252,13 +391,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
+                  style: _workOffline
+                      ? ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFE65100))
+                      : null,
                   onPressed: _loading ? null : _submit,
                   child: _loading
                       ? const SizedBox(
                           height: 20, width: 20,
                           child: CircularProgressIndicator(
                               color: Colors.white, strokeWidth: 2))
-                      : const Text('Sign In'),
+                      : Text(_workOffline ? 'Sign In Offline' : 'Sign In'),
                 ),
               ),
             ],
@@ -270,6 +413,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 }
 
 class _Logo extends StatelessWidget {
+  const _Logo();
+
   @override
   Widget build(BuildContext context) {
     return Column(

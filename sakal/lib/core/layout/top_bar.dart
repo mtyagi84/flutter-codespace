@@ -8,9 +8,13 @@ import '../providers/session_provider.dart';
 import '../router/route_names.dart';
 import '../services/local_storage.dart';
 import '../theme/app_colors.dart';
+import '../utils/responsive.dart';
+import '../widgets/sync_status_indicator.dart';
 
 class TopBar extends ConsumerWidget implements PreferredSizeWidget {
-  const TopBar({super.key});
+  final GlobalKey<ScaffoldState>? scaffoldKey;
+
+  const TopBar({this.scaffoldKey, super.key});
 
   @override
   Size get preferredSize => const Size.fromHeight(56);
@@ -19,6 +23,7 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final session   = ref.watch(sessionProvider);
     final collapsed = ref.watch(sidebarCollapsedProvider);
+    final mobile    = Responsive.isMobile(context);
 
     return AppBar(
       backgroundColor: AppColors.surface,
@@ -29,12 +34,15 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
       titleSpacing: 0,
       leading: IconButton(
         icon: Icon(
-          collapsed ? Icons.menu : Icons.menu_open,
+          mobile ? Icons.menu : (collapsed ? Icons.menu : Icons.menu_open),
           color: AppColors.textSecondary,
         ),
-        tooltip: collapsed ? 'Expand sidebar' : 'Collapse sidebar',
-        onPressed: () => ref.read(sidebarCollapsedProvider.notifier).state =
-            !collapsed,
+        tooltip: mobile
+            ? 'Open menu'
+            : (collapsed ? 'Expand sidebar' : 'Collapse sidebar'),
+        onPressed: mobile
+            ? () => scaffoldKey?.currentState?.openDrawer()
+            : () => ref.read(sidebarCollapsedProvider.notifier).state = !collapsed,
       ),
       title: Row(
         children: [
@@ -51,6 +59,7 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
         ],
       ),
       actions: [
+        const SyncStatusIndicator(),
         Padding(
           padding: const EdgeInsets.only(right: 8),
           child: PopupMenuButton<String>(

@@ -4,16 +4,25 @@ import 'package:go_router/go_router.dart';
 import '../providers/session_provider.dart';
 import '../router/route_names.dart';
 import '../theme/app_colors.dart';
+import '../utils/responsive.dart';
+import '../widgets/offline_banner.dart';
 import 'sidebar.dart';
 import 'top_bar.dart';
 
-class AppShell extends ConsumerWidget {
+class AppShell extends ConsumerStatefulWidget {
   final Widget child;
 
   const AppShell({required this.child, super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends ConsumerState<AppShell> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  Widget build(BuildContext context) {
     final session   = ref.watch(sessionProvider);
     final collapsed = ref.watch(sidebarCollapsedProvider);
 
@@ -27,17 +36,31 @@ class AppShell extends ConsumerWidget {
       );
     }
 
+    final offline = session.offlineMode;
+
+    if (Responsive.isMobile(context)) {
+      return Scaffold(
+        key: _scaffoldKey,
+        backgroundColor: AppColors.background,
+        appBar: TopBar(scaffoldKey: _scaffoldKey),
+        drawer: const Drawer(child: Sidebar()),
+        body: Column(
+          children: [
+            if (offline) const OfflineBanner(),
+            Expanded(child: widget.child),
+          ],
+        ),
+      );
+    }
+
     final double sidebarW = collapsed ? 56.0 : 240.0;
-    // Compute content width from MediaQuery (build time) rather than relying
-    // on Expanded's flex algorithm (layout time). GoRouter's Overlay passes
-    // loose/unbounded constraints to child screens during Codespace resize
-    // events; a hard MediaQuery-derived SizedBox prevents that entirely.
     final double contentW =
         (MediaQuery.sizeOf(context).width - sidebarW - 1.0).clamp(0.0, double.infinity);
 
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: AppColors.background,
-      appBar: const TopBar(),
+      appBar: TopBar(scaffoldKey: _scaffoldKey),
       body: Row(
         children: [
           AnimatedContainer(
@@ -48,7 +71,15 @@ class AppShell extends ConsumerWidget {
           ),
           const VerticalDivider(
               width: 1, thickness: 1, color: AppColors.border),
-          SizedBox(width: contentW, child: child),
+          SizedBox(
+            width: contentW,
+            child: Column(
+              children: [
+                if (offline) const OfflineBanner(),
+                Expanded(child: widget.child),
+              ],
+            ),
+          ),
         ],
       ),
     );

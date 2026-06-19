@@ -4,6 +4,7 @@ import '../../features/auth/presentation/screens/change_password_screen.dart';
 import '../../features/auth/presentation/screens/landing_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
+import '../../features/auth/presentation/screens/sync_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../../features/setup/presentation/screens/company_screen.dart';
 import '../../features/setup/presentation/screens/cities_screen.dart';
@@ -32,6 +33,7 @@ final appRouter = GoRouter(
 
     if (loc == RouteNames.register) return null;
     if (loc == RouteNames.login)    return null;
+    if (loc == RouteNames.sync)     return null;
     if (!hasClient && loc != RouteNames.landing) return RouteNames.landing;
     if (hasClient && loc == RouteNames.landing)  return RouteNames.login;
     return null;
@@ -41,6 +43,7 @@ final appRouter = GoRouter(
     GoRoute(path: RouteNames.landing,  builder: (c, s) => const LandingScreen()),
     GoRoute(path: RouteNames.login,    builder: (c, s) => const LoginScreen()),
     GoRoute(path: RouteNames.register, builder: (c, s) => const RegisterScreen()),
+    GoRoute(path: RouteNames.sync,     builder: (c, s) => const SyncScreen()),
 
     // Authenticated routes — all wrapped in AppShell (sidebar + topbar)
     ShellRoute(

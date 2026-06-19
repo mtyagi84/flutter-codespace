@@ -53,4 +53,7 @@ class RouteNames {
   static const String trialBalance  = '/finance/trial-balance';
   static const String profitLoss    = '/finance/profit-loss';
   static const String balanceSheet  = '/finance/balance-sheet';
+
+  // Offline sync — shown once after online login when pending docs exist
+  static const String sync = '/sync';
 }

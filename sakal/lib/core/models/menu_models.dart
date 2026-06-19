@@ -29,6 +29,17 @@ class MenuFeature {
         copyAllowed:        j['copy_allowed'] as bool? ?? false,
         excelUploadAllowed: j['excel_upload_allowed'] as bool? ?? false,
       );
+
+  Map<String, dynamic> toJson() => {
+    'feature_code':         featureCode,
+    'feature_name':         featureName,
+    'screen_name':          screenName,
+    'serial_no':            serialNo,
+    'edit_allowed':         editAllowed,
+    'approve_allowed':      approveAllowed,
+    'copy_allowed':         copyAllowed,
+    'excel_upload_allowed': excelUploadAllowed,
+  };
 }
 
 class MenuGroup {
@@ -52,6 +63,13 @@ class MenuGroup {
             .map((f) => MenuFeature.fromJson(f as Map<String, dynamic>))
             .toList(),
       );
+
+  Map<String, dynamic> toJson() => {
+    'group_code': groupCode,
+    'group_name': groupName,
+    'serial_no':  serialNo,
+    'features':   features.map((f) => f.toJson()).toList(),
+  };
 }
 
 class MenuModule {
@@ -75,4 +93,11 @@ class MenuModule {
             .map((g) => MenuGroup.fromJson(g as Map<String, dynamic>))
             .toList(),
       );
+
+  Map<String, dynamic> toJson() => {
+    'module_code': moduleCode,
+    'module_name': moduleName,
+    'serial_no':   serialNo,
+    'groups':      groups.map((g) => g.toJson()).toList(),
+  };
 }

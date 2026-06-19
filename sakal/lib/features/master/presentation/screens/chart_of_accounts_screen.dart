@@ -2,8 +2,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/responsive.dart';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -106,33 +108,28 @@ class _ChartOfAccountsScreenState
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
-      final results = await Future.wait([
-        DioClient.instance.get('/rim_accounts', queryParameters: {
-          'client_id':  'eq.${session.clientId}',
-          'company_id': 'eq.${session.companyId}',
-          'is_deleted': 'eq.false',
-          'select':     '*',
-          'order':      'account_code.asc',
-        }),
-        DioClient.instance.get('/rim_currencies', queryParameters: {
-          'client_id':  'eq.${session.clientId}',
-          'company_id': 'eq.${session.companyId}',
-          'is_active':  'eq.true',
-          'select':     'id,currency_id,currency_name',
-          'order':      'currency_id.asc',
-        }),
-        DioClient.instance.get('/rim_countries', queryParameters: {
-          'client_id':  'eq.${session.clientId}',
-          'company_id': 'eq.${session.companyId}',
-          'select':     'id,country_name,country_code',
-          'order':      'country_name.asc',
-        }),
-      ]);
+      // Accounts are screen-specific; currencies + countries come from the
+      // shared session-scoped cache (fetched once, reused across all screens).
+      final accountsFuture   = DioClient.instance.get('/rim_accounts', queryParameters: {
+        'client_id':  'eq.${session.clientId}',
+        'company_id': 'eq.${session.companyId}',
+        'is_deleted': 'eq.false',
+        'select':     '*',
+        'order':      'account_code.asc',
+        'limit':      '500',
+      });
+      final currenciesFuture = ref.read(currenciesProvider.future);
+      final countriesFuture  = ref.read(countriesProvider.future);
+
+      final accountsRes = await accountsFuture;
+      final currencies  = await currenciesFuture;
+      final countries   = await countriesFuture;
+
       if (mounted) {
         setState(() {
-          _accounts   = List<Map<String, dynamic>>.from(results[0].data as List);
-          _currencies = List<Map<String, dynamic>>.from(results[1].data as List);
-          _countries  = List<Map<String, dynamic>>.from(results[2].data as List);
+          _accounts   = List<Map<String, dynamic>>.from(accountsRes.data as List);
+          _currencies = currencies;
+          _countries  = countries;
           _loading    = false;
         });
         _buildTree();
@@ -407,9 +404,15 @@ class _ChartOfAccountsScreenState
     if (_error != null) return Center(
         child: Text(_error!, style: const TextStyle(color: AppColors.negative)));
 
+    if (Responsive.isMobile(context)) {
+      // On mobile: list OR form, never side by side
+      if (_panelMode == 'add' || _panelMode == 'edit') return _rightPanel();
+      return _leftPanel();
+    }
+
     return Row(children: [
       SizedBox(width: _leftWidth, child: _leftPanel()),
-      // Draggable resize handle
+      // Draggable resize handle (tablet/desktop only)
       GestureDetector(
         onHorizontalDragUpdate: (d) => setState(() {
           _leftWidth = (_leftWidth + d.delta.dx)
@@ -431,6 +434,7 @@ class _ChartOfAccountsScreenState
 
   Widget _leftPanel() {
     final visible = _visibleNodes();
+    final mobile  = Responsive.isMobile(context);
     return Column(children: [
       Container(
         color: AppColors.surface,
@@ -450,11 +454,12 @@ class _ChartOfAccountsScreenState
           itemBuilder: (_, i) {
             final item = visible[i];
             return _NodeRow(
-              node:        item.node,
-              depth:       item.depth,
-              expanded:    _expanded.contains(item.node['id'] as String),
-              hasChildren: (_childMap[item.node['id'] as String]?.isNotEmpty ?? false),
-              isSelected:  (_panelMode == 'edit' && _editNode?['id'] == item.node['id']),
+              node:             item.node,
+              depth:            item.depth,
+              expanded:         _expanded.contains(item.node['id'] as String),
+              hasChildren:      (_childMap[item.node['id'] as String]?.isNotEmpty ?? false),
+              isSelected:       (_panelMode == 'edit' && _editNode?['id'] == item.node['id']),
+              alwaysShowActions: mobile,
               onToggle: () => setState(() {
                 final id = item.node['id'] as String;
                 if (_expanded.contains(id)) _expanded.remove(id);
@@ -653,42 +658,64 @@ class _ChartOfAccountsScreenState
             // ── Nature + Currency (Ledger only) ────────────────────────────
             if (_postingAllowed) ...[
               const SizedBox(height: 16),
-              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+              Builder(builder: (ctx) {
+                final mobile = Responsive.isMobile(ctx);
+                final natureField = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _Label('Nature *'),
+                    const SizedBox(height: 6),
+                    _addParent?['account_nature'] != null &&
+                            _addParent!['account_nature'] != 'General'
+                        ? _ReadOnlyField(_nature)
+                        : DropdownButtonFormField<String>(
+                            value: _nature,
+                            decoration: const InputDecoration(isDense: true),
+                            items: _natures.map((n) => DropdownMenuItem(
+                                value: n, child: Text(n))).toList(),
+                            onChanged: isFixed
+                                ? null
+                                : (v) => setState(() => _nature = v!),
+                          ),
+                  ],
+                );
+                final currencyField = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _Label('Currency'),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      value: _currencyId,
+                      decoration: const InputDecoration(
+                          isDense: true, hintText: 'Select…'),
+                      items: _currencies.map((c) => DropdownMenuItem(
+                        value: c['id'] as String,
+                        child: Text('${c['currency_id']} — ${c['currency_name']}',
+                            overflow: TextOverflow.ellipsis),
+                      )).toList(),
+                      onChanged: (v) => setState(() => _currencyId = v),
+                    ),
+                  ],
+                );
+                if (mobile) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                  const _Label('Nature *'),
-                  const SizedBox(height: 6),
-                  _addParent?['account_nature'] != null &&
-                          _addParent!['account_nature'] != 'General'
-                      ? _ReadOnlyField(_nature)
-                      : DropdownButtonFormField<String>(
-                          value: _nature,
-                          decoration: const InputDecoration(isDense: true),
-                          items: _natures.map((n) => DropdownMenuItem(
-                              value: n, child: Text(n))).toList(),
-                          onChanged: isFixed
-                              ? null
-                              : (v) => setState(() => _nature = v!),
-                        ),
-                ])),
-                const SizedBox(width: 16),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  const _Label('Currency'),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<String>(
-                    value: _currencyId,
-                    decoration: const InputDecoration(
-                        isDense: true, hintText: 'Select…'),
-                    items: _currencies.map((c) => DropdownMenuItem(
-                      value: c['id'] as String,
-                      child: Text('${c['currency_id']} — ${c['currency_name']}',
-                          overflow: TextOverflow.ellipsis),
-                    )).toList(),
-                    onChanged: (v) => setState(() => _currencyId = v),
-                  ),
-                ])),
-              ]),
+                      natureField,
+                      const SizedBox(height: 14),
+                      currencyField,
+                    ],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: natureField),
+                    const SizedBox(width: 16),
+                    Expanded(child: currencyField),
+                  ],
+                );
+              }),
             ],
 
             // ── Party Details (Customer / Supplier Ledger only) ────────────
@@ -844,38 +871,61 @@ class _ChartOfAccountsScreenState
                   const SizedBox(height: 14),
 
                   // Category + Credit Days + Credit Limit
-                  Row(children: [
-                    Expanded(child: Column(
+                  Builder(builder: (ctx) {
+                    final mobile = Responsive.isMobile(ctx);
+                    final catField = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _Label('Category'),
+                        const SizedBox(height: 6),
+                        TextField(controller: _catCtrl,
+                            decoration: const InputDecoration(
+                                isDense: true, hintText: 'e.g. Wholesale')),
+                      ],
+                    );
+                    final daysField = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _Label('Credit Days'),
+                        const SizedBox(height: 6),
+                        TextField(controller: _daysCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(isDense: true)),
+                      ],
+                    );
+                    final limitField = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _Label('Credit Limit'),
+                        const SizedBox(height: 6),
+                        TextField(controller: _limitCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                                isDense: true, hintText: '0.00')),
+                      ],
+                    );
+                    if (mobile) {
+                      return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                      const _Label('Category'),
-                      const SizedBox(height: 6),
-                      TextField(controller: _catCtrl,
-                          decoration: const InputDecoration(
-                              isDense: true, hintText: 'e.g. Wholesale')),
-                    ])),
-                    const SizedBox(width: 12),
-                    SizedBox(width: 90, child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      const _Label('Credit Days'),
-                      const SizedBox(height: 6),
-                      TextField(controller: _daysCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(isDense: true)),
-                    ])),
-                    const SizedBox(width: 12),
-                    Expanded(child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      const _Label('Credit Limit'),
-                      const SizedBox(height: 6),
-                      TextField(controller: _limitCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                              isDense: true, hintText: '0.00')),
-                    ])),
-                  ]),
+                          catField,
+                          const SizedBox(height: 14),
+                          Row(children: [
+                            Expanded(child: daysField),
+                            const SizedBox(width: 12),
+                            Expanded(child: limitField),
+                          ]),
+                        ],
+                      );
+                    }
+                    return Row(children: [
+                      Expanded(child: catField),
+                      const SizedBox(width: 12),
+                      SizedBox(width: 90, child: daysField),
+                      const SizedBox(width: 12),
+                      Expanded(child: limitField),
+                    ]);
+                  }),
                   const SizedBox(height: 14),
 
                   // Credit Blocked
@@ -941,6 +991,7 @@ class _NodeRow extends StatefulWidget {
   final bool         expanded;
   final bool         hasChildren;
   final bool         isSelected;
+  final bool         alwaysShowActions;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
   final VoidCallback onAdd;
@@ -951,6 +1002,7 @@ class _NodeRow extends StatefulWidget {
     required this.expanded,
     required this.hasChildren,
     required this.isSelected,
+    required this.alwaysShowActions,
     required this.onToggle,
     required this.onEdit,
     required this.onAdd,
@@ -971,13 +1023,16 @@ class _NodeRowState extends State<_NodeRow> {
     final nature      = node['account_nature']   as String? ?? 'General';
     final natureColor = _natureColors[nature];
 
+    final showActions = _hovered || widget.alwaysShowActions;
+    final rowHeight   = widget.alwaysShowActions ? 48.0 : 36.0;
+
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit:  (_) => setState(() => _hovered = false),
       child: InkWell(
         onTap: widget.onEdit,
         child: Container(
-          height: 36,
+          height: rowHeight,
           color: widget.isSelected
               ? const Color(0xFFEAF0FB)
               : _hovered ? AppColors.surfaceVariant : null,
@@ -1044,12 +1099,12 @@ class _NodeRowState extends State<_NodeRow> {
                 child: Icon(Icons.lock_outline, size: 13,
                     color: AppColors.textDisabled),
               ),
-            if (_hovered) ...[
+            if (showActions) ...[
               IconButton(
                 icon: const Icon(Icons.edit_outlined, size: 15),
                 tooltip: 'Edit',
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 onPressed: widget.onEdit,
               ),
               if (!isLeaf)
@@ -1057,7 +1112,7 @@ class _NodeRowState extends State<_NodeRow> {
                   icon: const Icon(Icons.add, size: 15),
                   tooltip: 'Add account under this group',
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   onPressed: widget.onAdd,
                 ),
             ],

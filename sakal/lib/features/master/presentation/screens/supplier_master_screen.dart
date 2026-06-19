@@ -2,8 +2,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/responsive.dart';
 
 const _partyTypes = ['Individual', 'Company', 'Partnership', 'Government'];
 
@@ -49,6 +51,10 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
   bool    _creditBlocked = false;
   bool    _partyExpanded = true;
 
+  static const int _pageSize = 25;
+  int  _totalCount = 0;
+  bool _showAll    = false;
+
   @override
   void initState() {
     super.initState();
@@ -70,8 +76,9 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
-      final results = await Future.wait([
-        DioClient.instance.get('/rim_accounts', queryParameters: {
+      final accountsFuture = DioClient.instance.get(
+        '/rim_accounts',
+        queryParameters: {
           'client_id':      'eq.${session.clientId}',
           'company_id':     'eq.${session.companyId}',
           'account_nature': 'eq.Supplier',
@@ -79,44 +86,48 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
           'is_deleted':     'eq.false',
           'select':         '*',
           'order':          'account_name.asc',
-        }),
-        DioClient.instance.get('/rim_accounts', queryParameters: {
-          'client_id':      'eq.${session.clientId}',
-          'company_id':     'eq.${session.companyId}',
-          'account_nature': 'eq.Supplier',
-          'posting_allowed':'eq.false',
-          'is_deleted':     'eq.false',
-          'select':         'id',
-          'limit':          '1',
-        }),
-        DioClient.instance.get('/rim_currencies', queryParameters: {
-          'client_id':  'eq.${session.clientId}',
-          'company_id': 'eq.${session.companyId}',
-          'is_active':  'eq.true',
-          'select':     'id,currency_id,currency_name',
-          'order':      'currency_id.asc',
-        }),
-        DioClient.instance.get('/rim_countries', queryParameters: {
-          'client_id':  'eq.${session.clientId}',
-          'company_id': 'eq.${session.companyId}',
-          'select':     'id,country_name',
-          'order':      'country_name.asc',
-        }),
-      ]);
+          if (!_showAll) 'limit': '$_pageSize',
+        },
+        options: Options(headers: {'Prefer': 'count=exact'}),
+      );
+      final groupFuture = DioClient.instance.get('/rim_accounts', queryParameters: {
+        'client_id':      'eq.${session.clientId}',
+        'company_id':     'eq.${session.companyId}',
+        'account_nature': 'eq.Supplier',
+        'posting_allowed':'eq.false',
+        'is_deleted':     'eq.false',
+        'select':         'id',
+        'limit':          '1',
+      });
+      final currenciesFuture = ref.read(currenciesProvider.future);
+      final countriesFuture  = ref.read(countriesProvider.future);
+
+      final accountsRes = await accountsFuture;
+      final groupRes    = await groupFuture;
+      final currencies  = await currenciesFuture;
+      final countries   = await countriesFuture;
+
       if (mounted) {
-        final groups = List<Map<String, dynamic>>.from(results[1].data as List);
+        final groups = List<Map<String, dynamic>>.from(groupRes.data as List);
         setState(() {
-          _suppliers      = List<Map<String, dynamic>>.from(results[0].data as List);
+          _suppliers       = List<Map<String, dynamic>>.from(accountsRes.data as List);
           _supplierGroupId = groups.isEmpty ? null : groups.first['id'] as String;
-          _currencies     = List<Map<String, dynamic>>.from(results[2].data as List);
-          _countries      = List<Map<String, dynamic>>.from(results[3].data as List);
-          _loading        = false;
+          _currencies      = currencies;
+          _countries       = countries;
+          _totalCount      = _parseTotal(accountsRes) ?? _suppliers.length;
+          _loading         = false;
         });
         _applyFilter();
       }
     } on DioException {
       if (mounted) setState(() { _loading = false; _error = 'Could not load suppliers.'; });
     }
+  }
+
+  int? _parseTotal(Response res) {
+    final raw = res.headers.value('content-range');
+    if (raw == null) return null;
+    return int.tryParse(raw.split('/').last.trim());
   }
 
   Future<void> _loadCities(String countryId) async {
@@ -147,6 +158,11 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
 
   void _applyFilter() {
     final q = _searchCtrl.text.toLowerCase();
+    if (q.isNotEmpty && !_showAll) {
+      setState(() => _showAll = true);
+      _load();
+      return;
+    }
     setState(() {
       _filtered = q.isEmpty
           ? List.from(_suppliers)
@@ -301,6 +317,13 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
         child: Text(_error!, style: const TextStyle(color: AppColors.negative)));
 
     final showPanel = _isAdd || _selected != null;
+
+    if (Responsive.isMobile(context)) {
+      // On mobile: list OR form, never side by side
+      if (showPanel) return _formPanel();
+      return _listPanel();
+    }
+
     return Row(children: [
       SizedBox(width: 320, child: _listPanel()),
       if (showPanel) ...[
@@ -387,7 +410,32 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
               },
             ),
     ),
+    if (!_showAll && _totalCount > _pageSize) _paginationFooter(),
   ]);
+
+  Widget _paginationFooter() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    decoration: const BoxDecoration(
+      color: AppColors.surface,
+      border: Border(top: BorderSide(color: AppColors.border)),
+    ),
+    child: Row(children: [
+      Text(
+        'Showing $_pageSize of $_totalCount',
+        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+      ),
+      const Spacer(),
+      TextButton(
+        onPressed: () { setState(() => _showAll = true); _load(); },
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        child: const Text('Show All', style: TextStyle(fontSize: 12)),
+      ),
+    ]),
+  );
 
   Widget _formPanel() {
     final isAdd = _isAdd;
@@ -466,23 +514,40 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
                   onChanged: (v) => setState(() => _partyType = v),
                 ),
                 const SizedBox(height: 14),
-                Row(children: [
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    const _Label('Contact Person'),
-                    const SizedBox(height: 6),
-                    TextField(controller: _contactCtrl,
-                        decoration: const InputDecoration(isDense: true)),
-                  ])),
-                  const SizedBox(width: 16),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    const _Label('Phone'),
-                    const SizedBox(height: 6),
-                    TextField(controller: _phoneCtrl,
-                        decoration: const InputDecoration(isDense: true)),
-                  ])),
-                ]),
+                Builder(builder: (ctx) {
+                  final mobile = Responsive.isMobile(ctx);
+                  if (mobile) return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _Label('Contact Person'),
+                      const SizedBox(height: 6),
+                      TextField(controller: _contactCtrl,
+                          decoration: const InputDecoration(isDense: true)),
+                      const SizedBox(height: 14),
+                      const _Label('Phone'),
+                      const SizedBox(height: 6),
+                      TextField(controller: _phoneCtrl,
+                          decoration: const InputDecoration(isDense: true)),
+                    ],
+                  );
+                  return Row(children: [
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      const _Label('Contact Person'),
+                      const SizedBox(height: 6),
+                      TextField(controller: _contactCtrl,
+                          decoration: const InputDecoration(isDense: true)),
+                    ])),
+                    const SizedBox(width: 16),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      const _Label('Phone'),
+                      const SizedBox(height: 6),
+                      TextField(controller: _phoneCtrl,
+                          decoration: const InputDecoration(isDense: true)),
+                    ])),
+                  ]);
+                }),
                 const SizedBox(height: 14),
                 const _Label('Email'),
                 const SizedBox(height: 6),
@@ -498,74 +563,141 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
                     decoration: const InputDecoration(isDense: true,
                         hintText: 'Address Line 2')),
                 const SizedBox(height: 14),
-                Row(children: [
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    const _Label('Country'),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<String>(
-                      value: _countryId,
-                      decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
-                      items: _countries.map((c) => DropdownMenuItem(
-                          value: c['id'] as String,
-                          child: Text(c['country_name'] as String,
-                              overflow: TextOverflow.ellipsis))).toList(),
-                      onChanged: (v) {
-                        setState(() { _countryId = v; _cityId = null; _cities = []; });
-                        if (v != null) _loadCities(v);
-                      },
-                    ),
-                  ])),
-                  const SizedBox(width: 16),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    const _Label('City'),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<String>(
-                      value: _cityId,
-                      decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
-                      items: _cities.map((c) => DropdownMenuItem(
-                          value: c['id'] as String,
-                          child: Text(c['city_name'] as String,
-                              overflow: TextOverflow.ellipsis))).toList(),
-                      onChanged: (v) => setState(() => _cityId = v),
-                    ),
-                  ])),
-                ]),
+                Builder(builder: (ctx) {
+                  final mobile = Responsive.isMobile(ctx);
+                  if (mobile) return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _Label('Country'),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String>(
+                        value: _countryId,
+                        decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
+                        items: _countries.map((c) => DropdownMenuItem(
+                            value: c['id'] as String,
+                            child: Text(c['country_name'] as String,
+                                overflow: TextOverflow.ellipsis))).toList(),
+                        onChanged: (v) {
+                          setState(() { _countryId = v; _cityId = null; _cities = []; });
+                          if (v != null) _loadCities(v);
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      const _Label('City'),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String>(
+                        value: _cityId,
+                        decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
+                        items: _cities.map((c) => DropdownMenuItem(
+                            value: c['id'] as String,
+                            child: Text(c['city_name'] as String,
+                                overflow: TextOverflow.ellipsis))).toList(),
+                        onChanged: (v) => setState(() => _cityId = v),
+                      ),
+                    ],
+                  );
+                  return Row(children: [
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      const _Label('Country'),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String>(
+                        value: _countryId,
+                        decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
+                        items: _countries.map((c) => DropdownMenuItem(
+                            value: c['id'] as String,
+                            child: Text(c['country_name'] as String,
+                                overflow: TextOverflow.ellipsis))).toList(),
+                        onChanged: (v) {
+                          setState(() { _countryId = v; _cityId = null; _cities = []; });
+                          if (v != null) _loadCities(v);
+                        },
+                      ),
+                    ])),
+                    const SizedBox(width: 16),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      const _Label('City'),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String>(
+                        value: _cityId,
+                        decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
+                        items: _cities.map((c) => DropdownMenuItem(
+                            value: c['id'] as String,
+                            child: Text(c['city_name'] as String,
+                                overflow: TextOverflow.ellipsis))).toList(),
+                        onChanged: (v) => setState(() => _cityId = v),
+                      ),
+                    ])),
+                  ]);
+                }),
                 const SizedBox(height: 14),
                 const _Label('Tax ID (TVA / TIN)'),
                 const SizedBox(height: 6),
                 TextField(controller: _taxIdCtrl,
                     decoration: const InputDecoration(isDense: true)),
                 const SizedBox(height: 14),
-                Row(children: [
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    const _Label('Category'),
-                    const SizedBox(height: 6),
-                    TextField(controller: _catCtrl,
-                        decoration: const InputDecoration(isDense: true,
-                            hintText: 'e.g. Local / Imported')),
-                  ])),
-                  const SizedBox(width: 12),
-                  SizedBox(width: 90, child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const _Label('Credit Days'),
-                    const SizedBox(height: 6),
-                    TextField(controller: _daysCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(isDense: true)),
-                  ])),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    const _Label('Credit Limit'),
-                    const SizedBox(height: 6),
-                    TextField(controller: _limitCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(isDense: true, hintText: '0.00')),
-                  ])),
-                ]),
+                Builder(builder: (ctx) {
+                  final mobile = Responsive.isMobile(ctx);
+                  if (mobile) return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _Label('Category'),
+                      const SizedBox(height: 6),
+                      TextField(controller: _catCtrl,
+                          decoration: const InputDecoration(isDense: true,
+                              hintText: 'e.g. Local / Imported')),
+                      const SizedBox(height: 14),
+                      Row(children: [
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                          const _Label('Credit Days'),
+                          const SizedBox(height: 6),
+                          TextField(controller: _daysCtrl,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(isDense: true)),
+                        ])),
+                        const SizedBox(width: 12),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                          const _Label('Credit Limit'),
+                          const SizedBox(height: 6),
+                          TextField(controller: _limitCtrl,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(isDense: true, hintText: '0.00')),
+                        ])),
+                      ]),
+                    ],
+                  );
+                  return Row(children: [
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      const _Label('Category'),
+                      const SizedBox(height: 6),
+                      TextField(controller: _catCtrl,
+                          decoration: const InputDecoration(isDense: true,
+                              hintText: 'e.g. Local / Imported')),
+                    ])),
+                    const SizedBox(width: 12),
+                    SizedBox(width: 90, child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const _Label('Credit Days'),
+                      const SizedBox(height: 6),
+                      TextField(controller: _daysCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(isDense: true)),
+                    ])),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      const _Label('Credit Limit'),
+                      const SizedBox(height: 6),
+                      TextField(controller: _limitCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(isDense: true, hintText: '0.00')),
+                    ])),
+                  ]);
+                }),
               ],
             ),
             if (_saveError != null) ...[

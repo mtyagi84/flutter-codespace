@@ -224,7 +224,10 @@ class _SidebarState extends ConsumerState<Sidebar> {
       children: [
         // Group header — clickable → group landing page
         InkWell(
-          onTap: () => context.go(groupPath),
+          onTap: () {
+            Scaffold.of(context).closeDrawer();
+            context.go(groupPath);
+          },
           child: Container(
             height: 34,
             padding: const EdgeInsets.only(left: 28, right: 12),
@@ -276,7 +279,10 @@ class _SidebarState extends ConsumerState<Sidebar> {
         path == feature.screenName || path.startsWith('${feature.screenName}/');
 
     return InkWell(
-      onTap: () => context.go(feature.screenName),
+      onTap: () {
+        Scaffold.of(context).closeDrawer();
+        context.go(feature.screenName);
+      },
       child: Container(
         height: 32,
         padding: const EdgeInsets.only(left: 48, right: 16),

@@ -10,6 +10,7 @@ class UserSession {
   final String? locationId;
   final String fullName;
   final String username;
+  final bool   offlineMode;
 
   const UserSession({
     required this.userId,
@@ -20,6 +21,7 @@ class UserSession {
     this.locationId,
     required this.fullName,
     required this.username,
+    this.offlineMode = false,
   });
 
   UserSession copyWith({
@@ -35,6 +37,7 @@ class UserSession {
         locationId:  locationId,
         fullName:    fullName,
         username:    username,
+        offlineMode: offlineMode,
       );
 }
 
