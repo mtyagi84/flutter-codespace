@@ -48,12 +48,14 @@ class RouteNames {
   static const String supplierMaster   = '/master/suppliers';
 
   // Finance
-  static const String exchangeRates = '/finance/exchange-rates';
-  static const String journalEntry  = '/finance/journal';
-  static const String cashBook      = '/finance/cashbook';
-  static const String trialBalance  = '/finance/trial-balance';
-  static const String profitLoss    = '/finance/profit-loss';
-  static const String balanceSheet  = '/finance/balance-sheet';
+  static const String exchangeRates  = '/finance/exchange-rates';
+  static const String paymentReceipt = '/finance/payment-receipt';
+  static const String voucherList    = '/finance/voucher-list';
+  static const String journalEntry   = '/finance/journal';
+  static const String cashBook       = '/finance/cashbook';
+  static const String trialBalance   = '/finance/trial-balance';
+  static const String profitLoss     = '/finance/profit-loss';
+  static const String balanceSheet   = '/finance/balance-sheet';
 
   // Offline sync — shown once after online login when pending docs exist
   static const String sync = '/sync';
