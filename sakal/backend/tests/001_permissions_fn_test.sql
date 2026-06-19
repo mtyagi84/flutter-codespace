@@ -17,24 +17,34 @@ BEGIN;
 SELECT plan(18);   -- update this number if you add more tests
 
 -- ── Fixtures ─────────────────────────────────────────────────────────────────
+-- FK chain: ric_clients → ric_companies → ric_system_modules → ric_master_menus
+-- created_by is nullable (no rim_users FK required in tests).
 
 DO $$
 DECLARE
   v_client_id  uuid := '00000000-0000-0000-0000-000000000001';
   v_company_id uuid := '00000000-0000-0000-0000-000000000002';
-  v_user_id    uuid := '00000000-0000-0000-0000-000000000003';
   v_module_id  uuid := '00000000-0000-0000-0000-000000000004';
 BEGIN
-  -- Insert minimal fixture data needed for the functions to return rows.
-  -- Adjust table names / columns if your schema differs slightly.
+  -- 1. Root tenant
+  INSERT INTO ric_clients (id, client_name, is_active, is_deleted, created_at)
+  VALUES (v_client_id, 'TEST CLIENT', true, false, now())
+  ON CONFLICT (id) DO NOTHING;
 
-  INSERT INTO ric_system_modules (id, client_id, company_id, module_code, module_name, serial_no, is_active, is_deleted, created_at, created_by)
-  VALUES (v_module_id, v_client_id, v_company_id, 'TEST_MOD', 'Test Module', 1, true, false, now(), v_user_id)
-  ON CONFLICT DO NOTHING;
+  -- 2. Company under that client
+  INSERT INTO ric_companies (id, client_id, company_name, is_active, is_deleted, created_at)
+  VALUES (v_company_id, v_client_id, 'TEST COMPANY', true, false, now())
+  ON CONFLICT (id) DO NOTHING;
 
-  INSERT INTO ric_master_menus (client_id, company_id, module_id, feature_code, feature_name, screen_name, group_code, group_name, group_serial_no, serial_no, approve_allowed, copy_allowed, excel_upload_allowed, is_active, is_deleted, created_at, created_by)
-  VALUES (v_client_id, v_company_id, v_module_id, 'TEST_FEAT', 'Test Feature', 'testScreen', 'GRP1', 'Group 1', 1, 1, true, true, true, true, false, now(), v_user_id)
-  ON CONFLICT DO NOTHING;
+  -- 3. Module (created_by = NULL — FK to rim_users is nullable)
+  INSERT INTO ric_system_modules (id, client_id, company_id, module_code, module_name, serial_no, is_active, is_deleted, created_at)
+  VALUES (v_module_id, v_client_id, v_company_id, 'TEST_MOD', 'Test Module', 1, true, false, now())
+  ON CONFLICT (client_id, company_id, module_code) DO NOTHING;
+
+  -- 4. Menu feature
+  INSERT INTO ric_master_menus (client_id, company_id, module_id, feature_code, feature_name, screen_name, group_code, group_name, group_serial_no, serial_no, approve_allowed, copy_allowed, excel_upload_allowed, is_active, is_deleted, created_at)
+  VALUES (v_client_id, v_company_id, v_module_id, 'TEST_FEAT', 'Test Feature', 'testScreen', 'GRP1', 'Group 1', 1, 1, true, true, true, true, false, now())
+  ON CONFLICT (client_id, company_id, feature_code) DO NOTHING;
 END;
 $$;
 
