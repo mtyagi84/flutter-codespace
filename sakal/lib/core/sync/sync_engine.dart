@@ -51,12 +51,12 @@ class SyncEngine {
         );
         await (_db.update(_db.pendingSyncQueue)
               ..where((t) => t.id.equals(doc.id)))
-            .write(const SyncQueueEntryCompanion(synced: Value(true)));
+            .write(PendingSyncQueueCompanion(synced: Value(true)));
         synced++;
       } catch (_) {
         await (_db.update(_db.pendingSyncQueue)
               ..where((t) => t.id.equals(doc.id)))
-            .write(SyncQueueEntryCompanion(
+            .write(PendingSyncQueueCompanion(
                 retryCount: Value(doc.retryCount + 1)));
         errors.add('${doc.documentType} ${doc.documentId}');
       }
@@ -73,7 +73,7 @@ class SyncEngine {
     required String endpoint,
     required Map<String, dynamic> payload,
   }) async {
-    await _db.into(_db.pendingSyncQueue).insert(SyncQueueEntryCompanion.insert(
+    await _db.into(_db.pendingSyncQueue).insert(PendingSyncQueueCompanion.insert(
       documentType: documentType,
       documentId:   documentId,
       endpoint:     endpoint,
