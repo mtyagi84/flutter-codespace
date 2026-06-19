@@ -9,6 +9,8 @@
 -- Returns all active features for a company with the user's current permissions.
 -- Uses LEFT JOIN so features with no ric_user_menus row appear as all-false.
 -- Ordered by module serial_no → group serial_no → feature serial_no.
+-- SECURITY DEFINER: bypasses RLS so production row-level policies don't block
+-- the read; security is enforced by the p_client_id / p_company_id parameters.
 -- Call via PostgREST: POST /rpc/fn_get_user_permissions
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION fn_get_user_permissions(
@@ -38,6 +40,7 @@ RETURNS TABLE (
 )
 LANGUAGE sql
 STABLE
+SECURITY DEFINER
 AS $$
     SELECT
         mm.feature_code,
