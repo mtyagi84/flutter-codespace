@@ -7,13 +7,14 @@ class SakalApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SelectionArea(
-      child: MaterialApp.router(
-        title: 'SAKAL ERP',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        routerConfig: appRouter,
-      ),
+    return MaterialApp.router(
+      title: 'SAKAL ERP',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
+      routerConfig: appRouter,
+      // SelectionArea must be inside MaterialApp so MaterialLocalizations exists.
+      builder: (context, child) =>
+          SelectionArea(child: child ?? const SizedBox.shrink()),
     );
   }
 }
