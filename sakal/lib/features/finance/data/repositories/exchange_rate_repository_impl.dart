@@ -4,14 +4,14 @@ import '../datasources/exchange_rate_remote_ds.dart';
 import '../models/exchange_rate_model.dart';
 
 class ExchangeRateRepositoryImpl implements ExchangeRateRepository {
-  final ExchangeRateRemoteDs _remote;
-  final ExchangeRateLocalDs  _local;
-  final bool                 _offlineMode;
+  final ExchangeRateRemoteDs  _remote;
+  final ExchangeRateLocalDs?  _local;   // null on web (no SQLite WASM)
+  final bool                  _offlineMode;
 
   ExchangeRateRepositoryImpl({
-    required ExchangeRateRemoteDs remote,
-    required ExchangeRateLocalDs  local,
-    required bool                 offlineMode,
+    required ExchangeRateRemoteDs  remote,
+    required ExchangeRateLocalDs?  local,
+    required bool                  offlineMode,
   })  : _remote      = remote,
         _local       = local,
         _offlineMode = offlineMode;
@@ -24,7 +24,7 @@ class ExchangeRateRepositoryImpl implements ExchangeRateRepository {
     required String rateDate,
   }) async {
     if (_offlineMode) {
-      return _local.getRates(
+      return _local!.getRates(
         clientId:   clientId,
         companyId:  companyId,
         locationId: locationId,
@@ -37,8 +37,7 @@ class ExchangeRateRepositoryImpl implements ExchangeRateRepository {
       locationId: locationId,
       rateDate:   rateDate,
     );
-    // Silently skip caching: web has no SQLite; mobile/desktop will cache for offline use.
-    try { await _local.upsertRates(rates); } catch (_) {}
+    try { await _local?.upsertRates(rates); } catch (_) {}
     return rates;
   }
 
