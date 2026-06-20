@@ -15,11 +15,25 @@
 --                                store trans_date in every line row
 --   6. fn_post_finance_voucher — add p_trans_date param,
 --                                use composite key in all WHERE clauses
+--
+-- NOTE on order: child FK constraints that reference the parent unique index
+-- must be DROPPED before that index can be dropped. So child FKs come first.
+--
+-- Run this entire script as one paste in the Supabase SQL editor — it wraps
+-- the execution in its own transaction automatically.
 -- ============================================================
 
-BEGIN;
+-- ── Step 1: Drop child FK constraints that hold the parent unique index ───────
+--   Must happen before we can drop/recreate uq_rih_finance_headers.
 
--- ── 1. rih_finance_headers ────────────────────────────────────────────────────
+ALTER TABLE rid_finance_lines
+    DROP CONSTRAINT rid_finance_lines_header_fk;
+
+ALTER TABLE rid_cheque_register
+    DROP CONSTRAINT rid_cheque_register_header_fk;
+
+
+-- ── Step 2: Widen the header unique constraint ────────────────────────────────
 
 ALTER TABLE rih_finance_headers
     DROP CONSTRAINT uq_rih_finance_headers;
@@ -29,12 +43,13 @@ ALTER TABLE rih_finance_headers
         UNIQUE (client_id, company_id, location_id, trans_no, trans_date);
 
 
--- ── 2. rid_finance_lines ──────────────────────────────────────────────────────
+-- ── Step 3: rid_finance_lines — add trans_date, update FK + unique key ─────────
 
 ALTER TABLE rid_finance_lines
     ADD COLUMN trans_date date;
 
--- Back-fill from the header (safe: old constraint guaranteed trans_no was unique per tenant)
+-- Back-fill from the header (safe: old constraint guaranteed trans_no was
+-- unique per tenant, so the join is 1-to-1)
 UPDATE rid_finance_lines l
 SET    trans_date = h.trans_date
 FROM   rih_finance_headers h
@@ -47,7 +62,6 @@ ALTER TABLE rid_finance_lines
     ALTER COLUMN trans_date SET NOT NULL;
 
 ALTER TABLE rid_finance_lines
-    DROP CONSTRAINT rid_finance_lines_header_fk,
     DROP CONSTRAINT uq_rid_finance_lines;
 
 ALTER TABLE rid_finance_lines
@@ -58,7 +72,7 @@ ALTER TABLE rid_finance_lines
         UNIQUE (client_id, company_id, location_id, trans_no, trans_date, serial_no);
 
 
--- ── 3. rid_cheque_register ────────────────────────────────────────────────────
+-- ── Step 4: rid_cheque_register — add trans_date, update FK ──────────────────
 
 ALTER TABLE rid_cheque_register
     ADD COLUMN trans_date date;
@@ -75,15 +89,12 @@ ALTER TABLE rid_cheque_register
     ALTER COLUMN trans_date SET NOT NULL;
 
 ALTER TABLE rid_cheque_register
-    DROP CONSTRAINT rid_cheque_register_header_fk;
-
-ALTER TABLE rid_cheque_register
     ADD CONSTRAINT rid_cheque_register_header_fk
         FOREIGN KEY (client_id, company_id, location_id, trans_no, trans_date)
         REFERENCES  rih_finance_headers (client_id, company_id, location_id, trans_no, trans_date);
 
 
--- ── 4. v_pending_bills ────────────────────────────────────────────────────────
+-- ── Step 5: v_pending_bills ───────────────────────────────────────────────────
 -- Re-create with trans_date added to the header JOIN condition.
 
 CREATE OR REPLACE VIEW v_pending_bills AS
@@ -129,12 +140,12 @@ WHERE l.inv_bill_no   IS NOT NULL
 GRANT SELECT ON v_pending_bills TO anon, authenticated, service_role;
 
 
--- ── 5. fn_save_finance_voucher ────────────────────────────────────────────────
+-- ── Step 6: fn_save_finance_voucher ──────────────────────────────────────────
 -- The old UPSERT (ON CONFLICT on trans_no) cannot handle date changes safely
 -- once trans_date is part of the unique key.
 -- New pattern:
 --   NEW voucher  → INSERT header, then INSERT lines
---   EDIT draft   → DELETE lines first (avoids FK hold), UPDATE header, INSERT lines
+--   EDIT draft   → DELETE lines first (releases FK hold), UPDATE header, INSERT lines
 -- trans_date is now explicitly stored in every rid_finance_lines row.
 
 CREATE OR REPLACE FUNCTION fn_save_finance_voucher(
@@ -182,7 +193,7 @@ BEGIN
     END IF;
 
     -- Delete existing draft lines first so header trans_date can change freely
-    -- (lines hold the FK; deleting them removes the constraint hold before UPDATE)
+    -- (lines hold the FK; deleting them releases the constraint before UPDATE)
     DELETE FROM rid_finance_lines
     WHERE client_id   = v_client_id
       AND company_id  = v_company_id
@@ -269,10 +280,10 @@ END;
 $$;
 
 
--- ── 6. fn_post_finance_voucher ────────────────────────────────────────────────
+-- ── Step 7: fn_post_finance_voucher ──────────────────────────────────────────
 -- Added p_trans_date parameter so the caller identifies the voucher unambiguously.
 -- All WHERE clauses that previously used only trans_no now use (trans_no, trans_date).
--- The settlement origin lookup also uses (inv_bill_no, inv_bill_date) as composite
+-- The settlement origin lookup uses (inv_bill_no, inv_bill_date) as composite
 -- key into rid_finance_lines to find the correct original invoice line.
 
 CREATE OR REPLACE FUNCTION fn_post_finance_voucher(
@@ -371,7 +382,7 @@ BEGIN
               AND inv_bill_no IS NOT NULL
         LOOP
             -- Original invoice line: inv_bill_no = invoice trans_no,
-            --                        inv_bill_date = invoice trans_date (composite key)
+            --                        inv_bill_date = invoice trans_date
             SELECT coalesce(party_amount - settled_amount, 0)
             INTO v_was_balance
             FROM rid_finance_lines
