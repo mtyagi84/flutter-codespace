@@ -37,7 +37,8 @@ class ExchangeRateRepositoryImpl implements ExchangeRateRepository {
       locationId: locationId,
       rateDate:   rateDate,
     );
-    await _local.upsertRates(rates); // cache for next offline session
+    // Silently skip caching: web has no SQLite; mobile/desktop will cache for offline use.
+    try { await _local.upsertRates(rates); } catch (_) {}
     return rates;
   }
 
