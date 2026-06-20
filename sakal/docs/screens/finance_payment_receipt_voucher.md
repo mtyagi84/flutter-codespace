@@ -3,223 +3,360 @@
 
 **Scope:** CPV (Cash Payment), BPV (Bank Payment), CRV (Cash Receipt), BRV (Bank Receipt)
 **Module:** Finance
-**Status:** Design agreed — SQL + Flutter pending
+**Status:** ✅ Flutter screen + SQL migrations DONE — running in Codespace
 
 ---
 
-## Voucher Types in scope for this screen
+## Voucher Types in scope
 
-| Code | Description | Cash/Bank DR/CR |
+| Code | Description | Line 1 (Cash/Bank) Nature |
 |---|---|---|
 | CRV | Cash Receipt Voucher | DR Cash |
 | BRV | Bank Receipt Voucher | DR Bank |
 | CPV | Cash Payment Voucher | CR Cash |
 | BPV | Bank Payment Voucher | CR Bank |
 
-Other voucher types (JV, SDN, SCN, CDN, CCN, SIV) have separate screens.
+Other voucher types (JV, SIV, SDN, SCN, CDN, CCN) have separate screens.
+
+---
+
+## Composite Transaction Key — Critical Design Rule
+
+`trans_no` **alone is not unique** because the sequence resets monthly or yearly.
+The same number can legitimately reappear in a later period.
+
+**The correct identity for every transaction is `(trans_no, trans_date)` — they must always travel together.**
+
+This applies to **all transaction header tables across all ERP modules** (Finance, Sales, Purchase, Inventory):
+- `rih_finance_headers` unique key: `(client_id, company_id, location_id, trans_no, trans_date)`
+- `rid_finance_lines` FK + unique key: includes `trans_date`
+- `rid_cheque_register` FK: includes `trans_date`
+- All future Sales/Purchase/Inventory header tables must follow the same pattern
 
 ---
 
 ## Business Rules
 
 ### Document Numbering
-- Trans No assigned at **DRAFT save time** (not at post).
-- Format is **parameterized per voucher type** using a template string stored in `rim_voucher_types.trans_no_format`.
+- Trans No assigned at **Draft save time** (not at Post).
+- Format is parameterized per voucher type: template in `rim_voucher_types.trans_no_format`.
 - Tokens: `{TYPE}` `{LOC}` `{YYYY}` `{MM}` `{DD}` `{SEQ5}` `{SEQ4}` `{SEQ6}`
 - Sequence resets based on `reset_frequency`: DAILY | MONTHLY | YEARLY | NEVER
-- Sequence tracked in `rih_trans_no_seq (company_id, location_id, voucher_type)`.
-- Example format `{TYPE}/{LOC}/{YYYY}/{SEQ5}` → `CRV/KIN/2026/00001`
+- Example: `{TYPE}/{LOC}/{YYYY}/{SEQ5}` → `BRV/HO/2026/00001`
+- Sequence tracked in `rih_trans_no_seq`.
 
 ### Draft vs Posted
 - **Save Draft** → `is_posted = false`. Fully editable. Appears in Drafts list.
 - **Post Voucher** → `is_posted = true`. Locked permanently. Never editable again.
 - Only users with `approve_allowed` on this feature can Post.
-- Posted vouchers can only be corrected via a **Reversal** (new opposite voucher linked via `reversal_of_trans_no`).
+- Posted vouchers corrected via **Reversal** only (new opposite voucher linked via `reversal_of_trans_no`).
 
-### On Account vs Against Invoice
-- **Against Invoice** (`is_on_account = false`): Single customer/supplier only. `inv_bill_no` and `inv_bill_date` populated on the party line. Settlement table updated on posting.
-- **On Account** (`is_on_account = true`): Multiple customers/suppliers/accounts allowed. `inv_bill_no = NULL`. Settlement done later via a separate allocation screen.
+### Against Bill vs On Account
+| | Against Bill (`is_on_account = false`) | On Account (`is_on_account = true`) |
+|---|---|---|
+| Party | Single customer/supplier | Multiple accounts (any type) |
+| Bills table | Shows pending bills from `v_pending_bills` | Not shown |
+| `inv_bill_no` on line | Populated (bill reference) | NULL |
+| Settlement | Instant on Post — updates `rid_invoice_bill_settlement` | Deferred to a separate Allocation screen |
+| Entry UX | Party dropdown → bill table → enter pay amounts | Table of account lines (Account / Amount / Remarks) |
 
-### Line Rules
+### Line 1 — Cash / Bank (always)
 - **Line 1 is always the Cash or Bank account** — enforced in UI and DB.
-- Line 1 `trans_nature` is auto-set from `rim_voucher_types.cash_bank_side` (DR for receipts, CR for payments). User cannot change it.
-- All subsequent lines are the opposite nature — auto-set, user cannot change.
-- `line_remarks` is editable **only on party lines (line 2+)**. For On Account with multiple parties, each party has their own remark.
-- `header.remarks` = overall voucher remark (for voucher header/footer).
+- `trans_nature` is auto-set from voucher type (DR for receipts, CR for payments). Not editable by user.
+- All subsequent lines are the opposite nature — auto-set.
+- Currency of the voucher = currency of the Cash/Bank account (locked when account is selected).
 
-### Multi-Currency
-- Transaction currency = currency of the Cash/Bank account selected on line 1 (locked when account is chosen).
-- User enters `trans_amount`. System auto-calculates `base_amount` and `local_amount` using exchange rates.
-- `party_amount` / `party_currency` / `party_rate` stored on **every line** (not just party lines) — needed for ledger printing of any account without joining other tables.
-- User can override the exchange rate if needed (stored in `party_rate` / `base_rate` / `local_rate`).
+### Party Currency (per line)
+- `party_currency` / `party_amount` / `party_rate` stored on **every line** — needed for ledger printing without joins.
+- **Line 1 (Cash/Bank):** party_currency = bank account's own currency (same as trans_currency).
+- **Against Bill lines:** party_currency = customer/supplier ledger currency; party_rate = 1 BASE = X party_currency.
+- **On Account lines:** party_currency = that specific account's ledger currency (each line independently).
+- Formula: `party_amount = base_amount × party_rate = (trans_amount / trans_rate) × party_rate`
+
+### Rate Formulas
+```
+base_rate   = 1 BASE = X trans_currency    (e.g. 1 USD = 2825 CDF)
+party_rate  = 1 BASE = X party_currency    (e.g. 1 USD = 1 USD = 1)
+
+balance_trans = balance_party × base_rate / party_rate   (party → trans)
+pay_party     = pay_trans     × party_rate / base_rate   (trans → party)
+```
 
 ### Cheque Payments
-- If `payment_mode = CHEQUE`, header shows `cheque_no` and `cheque_date`.
-- A row is inserted into `rih_cheque_register` on posting.
-- Cheque status: ISSUED → CLEARED | BOUNCED | CANCELLED (managed from a separate Cheque Register screen).
+- Payment Mode: **locked to CASH** for CRV/CPV; **editable** for BRV/BPV.
+- If `payment_mode = CHEQUE`: header shows Cheque No + Cheque Date fields.
+- **Cheque No is required** when payment mode = CHEQUE (validated before save).
+- A row is inserted into `rid_cheque_register` on posting. `cheque_date` falls back to `trans_date` if not entered.
+- Cheque status: ISSUED → CLEARED | BOUNCED | CANCELLED (managed on a separate Cheque Register screen).
 
 ---
 
-## Tables
-
-### `rim_voucher_types` (master)
-| Column | Type | Notes |
-|---|---|---|
-| voucher_type_code | text PK | CRV, CPV, BPV, BRV, JV... |
-| type_description | text | |
-| voucher_nature | text | RECEIPT / PAYMENT / JOURNAL / DEBIT_NOTE / CREDIT_NOTE / STOCK |
-| cash_bank_side | text | DR / CR / NULL |
-| reset_frequency | text | DAILY / MONTHLY / YEARLY / NEVER |
-| trans_no_format | text | e.g. `{TYPE}/{LOC}/{YYYY}/{SEQ5}` |
-| is_system | boolean | SAKAL-shipped vs client-defined |
-| standard tenant + audit columns | | |
-
-### `rim_payment_modes` (master)
-| Column | Type | Notes |
-|---|---|---|
-| payment_mode_code | text | CASH, CHEQUE, NEFT, RTGS, WIRE, DD |
-| payment_mode_name | text | |
-| is_active | boolean | |
-| standard tenant + audit columns | | |
-
-### `rih_trans_no_seq` (sequence tracker)
-| Column | Type | Notes |
-|---|---|---|
-| client_id, company_id, location_id | uuid | |
-| voucher_type_code | text | |
-| current_seq | integer | incremented atomically |
-| last_reset_date | date | compared to reset_frequency |
+## Tables (as of Migration 021)
 
 ### `rih_finance_headers`
 | Column | Type | Notes |
 |---|---|---|
-| trans_no | text | generated on first save |
-| trans_date | date | |
-| voucher_type_code | text FK | rim_voucher_types |
-| payment_mode_code | text FK | rim_payment_modes |
-| is_on_account | boolean | On Account = true, Against Invoice = false |
-| reference_no | text | external ref |
+| client_id, company_id, location_id | uuid | Tenant key |
+| **trans_no** | text | Generated on first save by `fn_next_trans_no` |
+| **trans_date** | date | Together with trans_no forms the unique identity |
+| voucher_type_code | text FK | CRV / BRV / CPV / BPV |
+| payment_mode_code | text FK | CASH / CHEQUE / NEFT etc. |
+| is_on_account | boolean | false = Against Bill, true = On Account |
+| reference_no | text | External ref |
 | reference_date | date | |
-| cheque_no | text | only when payment_mode = CHEQUE |
-| cheque_date | date | |
-| remarks | text | overall voucher remark |
+| cheque_no | text | Only when payment_mode = CHEQUE |
+| cheque_date | date | COALESCE to trans_date in post function |
+| remarks | text | Overall voucher remark |
 | is_posted | boolean DEFAULT false | |
-| posted_at | timestamptz | |
-| posted_by | uuid FK rim_users | |
-| reversal_of_trans_no | text FK self | for reversal link |
-| standard tenant + audit columns | | |
+| posted_at, posted_by | | Set on Post |
+| reversal_of_trans_no | text FK self | For reversal link |
+| **Unique key** | | `(client_id, company_id, location_id, trans_no, trans_date)` |
 
-### `rih_finance_lines`
+### `rid_finance_lines`
 | Column | Type | Notes |
 |---|---|---|
-| trans_no | text FK | rih_finance_headers |
-| serial_no | integer | 1 = Cash/Bank, 2+ = others |
+| client_id, company_id, location_id | uuid | |
+| trans_no | text | Composite FK with trans_date |
+| **trans_date** | date | Added in migration 021 — backfilled from header |
+| serial_no | integer | 1 = Cash/Bank, 2+ = counterpart accounts |
 | account_id | uuid FK | rim_accounts |
 | trans_nature | text | DR / CR |
-| trans_amount | numeric(18,4) | in transaction currency |
-| trans_currency | text | locked from line 1 account |
-| base_amount | numeric(18,4) | in company base currency |
-| base_rate | numeric(18,8) | exchange rate applied |
-| local_amount | numeric(18,4) | in local/regional currency |
-| local_rate | numeric(18,8) | exchange rate applied |
-| party_amount | numeric(18,4) | in party/ledger currency — ALL lines |
-| party_currency | text | ALL lines (for ledger report) |
-| party_rate | numeric(18,8) | ALL lines |
-| inv_bill_no | text | party lines only, NULL elsewhere |
-| inv_bill_date | date | party lines only |
-| settled_amount | numeric(18,4) DEFAULT 0 | updated as invoices settled |
-| line_remarks | text | party lines only (editable in UI) |
-| standard tenant + audit columns | | |
+| trans_amount | numeric(18,4) | In transaction currency |
+| trans_currency | text | Locked from line 1 account |
+| base_amount | numeric(18,4) | In company base currency |
+| base_rate | numeric(18,8) | 1 BASE = X trans_currency |
+| local_amount | numeric(18,4) | In local/regional currency |
+| local_rate | numeric(18,8) | 1 BASE = X local_currency |
+| party_amount | numeric(18,4) | In account's ledger currency — ALL lines |
+| party_currency | text | Account's own currency — ALL lines |
+| party_rate | numeric(18,8) | 1 BASE = X party_currency — ALL lines |
+| inv_bill_no | text | Invoice reference (self-ref on invoice, payment-ref on receipt) |
+| inv_bill_date | date | Paired with inv_bill_no — composite invoice key |
+| settled_amount | numeric(18,4) DEFAULT 0 | Running total of payments received |
+| line_remarks | text | Editable on party/On Account lines |
+| **Unique key** | | `(client_id, company_id, location_id, trans_no, trans_date, serial_no)` |
+| **FK** | | `(client_id, company_id, location_id, trans_no, trans_date)` → rih_finance_headers |
 
-### `rih_invoice_bill_settlement`
+### `rid_cheque_register`
 | Column | Type | Notes |
 |---|---|---|
-| trans_no | text FK | the payment/receipt transaction |
-| trans_date | date | |
-| voucher_type_code | text | |
-| account_id | uuid FK | customer or supplier account |
-| inv_bill_no | text | invoice/bill being settled |
-| inv_bill_date | date | |
-| settlement_no | integer | 1st, 2nd, 3rd... payment against this bill |
-| was_balance | numeric(18,4) | outstanding before this payment (party currency) |
-| paid_amount | numeric(18,4) | amount applied (party currency) |
-| paid_amount_trans | numeric(18,4) | same in transaction currency |
-| standard tenant + audit columns | | |
-
-### `rih_cheque_register`
-| Column | Type | Notes |
-|---|---|---|
-| trans_no | text FK | rih_finance_headers |
-| cheque_no | text | |
-| cheque_date | date | date written on cheque |
-| bank_name | text | |
-| branch | text | |
+| trans_no | text | Composite FK with trans_date |
+| **trans_date** | date | Added in migration 021 |
+| cheque_no | text NOT NULL | |
+| cheque_date | date NOT NULL | Falls back to trans_date in fn_post |
+| bank_name, branch | text | |
 | cheque_status | text DEFAULT 'ISSUED' | ISSUED / CLEARED / BOUNCED / CANCELLED |
-| cleared_date | date | |
-| bounced_date | date | |
+| cleared_date, bounced_date | date | |
 | cancellation_reason | text | |
-| standard tenant + audit columns | | |
+| **FK** | | `(client_id, company_id, location_id, trans_no, trans_date)` → rih_finance_headers |
 
----
+### `v_pending_bills` (VIEW — migration 020 + updated in 021)
+Shows invoice lines that still have an outstanding balance — used by Against Bill mode.
 
-## Screen Layout
+| Column | Source | Notes |
+|---|---|---|
+| client_id, company_id, location_id, account_id | rid_finance_lines | |
+| trans_no, trans_date | rih_finance_headers | Original invoice header |
+| inv_bill_no, inv_bill_date | rid_finance_lines | The invoice number (self-referencing) |
+| bill_amount | l.party_amount | Original invoice amount in party currency |
+| party_currency | | |
+| settled_amount | SUM(paid_amount) from rid_invoice_bill_settlement | |
+| balance_amount | bill_amount − settled_amount | Only rows > 0.001 shown |
 
-### Entry Screen (for CRV/BRV/CPV/BPV)
+**Filter conditions:** `inv_bill_no IS NOT NULL`, `is_posted = TRUE`, `is_deleted = FALSE`, `balance > 0.001`
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  Voucher Type: [CRV - Cash Receipt ▼]     Date: [2026-06-21]    │
-│  Trans No:  CRV/KIN/2026/00001 (auto)     Mode: [CHEQUE ▼]      │
-│  Ref No: [_______________]  Ref Date: [_______]                  │
-│  Against Invoice ●   On Account ○                                │
-│  Remarks: [__________________________________________________]   │
-├──────┬───────────────────────────┬──────────────┬────────────────┤
-│  No  │ Account                   │ DR Amount    │ CR Amount      │
-├──────┼───────────────────────────┼──────────────┼────────────────┤
-│  1   │ [Cash Account ▼] (locked) │ 1,000.00     │                │  ← DR auto for CRV
-│  2   │ [Customer A/c ▼]          │              │ 1,000.00       │  ← CR auto for CRV
-│      │ Bill: INV-2026-001        │              │ Bal: 1,200     │
-│      │ Remarks: [__________]     │              │                │
-│  [+ Add Line]                   │              │                │
-├──────┴───────────────────────────┴──────────────┴────────────────┤
-│  Currency: CDF  Base Rate: 2800  Local Rate: 1.00               │
-│  Base (USD): 357.14    Local (CDF): 1,000.00                    │
-├──────────────────────────────────────────────────────────────────┤
-│              [Save Draft]              [Post Voucher]            │
-└──────────────────────────────────────────────────────────────────┘
-```
+**JOIN fix (migration 021):** Header JOIN now uses `h.trans_no = l.trans_no AND h.trans_date = l.trans_date` (composite key, not just trans_no).
 
-### Voucher List / Drafts Screen (separate screen)
-
-- Filter by: Voucher Type | Date Range | Status (Draft / Posted / All) | Account
-- Columns: Trans No | Date | Voucher Type | Amount | Mode | Status | Actions
-- **Edit button** enabled only for Draft vouchers
-- **Post button** available to users with `approve_allowed`
-- **Reverse button** available on Posted vouchers (to authorized users)
-
----
-
-## PG Functions needed
-
-| Function | Purpose |
+### `rid_invoice_bill_settlement`
+| Column | Notes |
 |---|---|
-| `fn_next_trans_no(voucher_type, client_id, company_id, location_id)` | Generate next document number atomically, handle reset |
-| `fn_save_finance_voucher(header JSON, lines JSON[])` | Upsert header + lines in one atomic call |
-| `fn_post_finance_voucher(trans_no, posted_by)` | Set is_posted=true, insert settlement rows, insert cheque register row |
-| `fn_reverse_finance_voucher(trans_no, reversed_by, reason)` | Create mirror-image voucher, link via reversal_of_trans_no |
+| trans_no, trans_date | Payment voucher's header composite key |
+| voucher_type_code | |
+| account_id | Customer or supplier account |
+| inv_bill_no, inv_bill_date | Original invoice's composite key |
+| settlement_no | 1st, 2nd, 3rd... partial payment |
+| was_balance | Outstanding before this payment (party currency) |
+| paid_amount | Amount applied (party currency) |
+| paid_amount_trans | Same in transaction currency |
+
+---
+
+## PG Functions
+
+### `fn_next_trans_no(client_id, company_id, location_id, voucher_type_code)`
+Returns next document number atomically; handles sequence reset by frequency.
+
+### `fn_save_finance_voucher(p_header jsonb, p_lines jsonb, p_user_id uuid) → text`
+Returns the saved `trans_no`.
+
+**New voucher** (trans_no blank):
+1. Call `fn_next_trans_no` to get trans_no
+2. INSERT header
+3. INSERT all lines with trans_date copied from header
+
+**Edit draft** (trans_no provided):
+1. Validate voucher exists and is NOT posted
+2. DELETE existing lines (releases FK hold so trans_date can change)
+3. UPDATE header (trans_date may change freely now)
+4. INSERT lines with current trans_date
+
+> ⚠️ Cannot use simple UPSERT `ON CONFLICT (trans_no) DO UPDATE SET trans_date = ...` because changing trans_date on a draft would insert a NEW row (different composite key). Must split into explicit DELETE → UPDATE → INSERT.
+
+### `fn_post_finance_voucher(p_client_id, p_company_id, p_location_id, p_trans_no, p_trans_date, p_posted_by)`
+1. Lock header row using composite key `(trans_no, trans_date)` — `FOR UPDATE`
+2. Validate not already posted
+3. Validate DR = CR (tolerance 0.01)
+4. Mark `is_posted = true`
+5. If `cheque_no IS NOT NULL`: insert into `rid_cheque_register` (cheque_date = `COALESCE(cheque_date, trans_date)`)
+6. If `is_on_account = false`: for each line with `inv_bill_no IS NOT NULL`:
+   - Look up original invoice line using `(trans_no=inv_bill_no, trans_date=inv_bill_date)` composite key
+   - Get current `was_balance`
+   - Insert settlement row into `rid_invoice_bill_settlement`
+   - Update `settled_amount` on the original invoice line
+
+### `fn_reverse_finance_voucher(trans_no, trans_date, reversed_by, reason)` *(not yet built)*
+Creates mirror-image voucher, links via `reversal_of_trans_no`.
+
+---
+
+## Flutter Screen — Actual Implementation
+
+**File:** `lib/features/finance/presentation/screens/finance_voucher_entry_screen.dart`
+
+### Header Card (5 rows)
+
+All fields are `SizedBox(height: 56)` — **explicit height on every field**, not IntrinsicHeight. This is the only reliable way to get identical field heights across all rows because `DropdownButtonFormField` reports a larger intrinsic height than `TextFormField`. A shared `const dec` (`InputDecoration`) and `field()` helper remove boilerplate.
+
+| Row | Fields |
+|---|---|
+| Row 1 | Voucher Type (dropdown) \| Voucher No (read-only display) \| Date (date picker) |
+| Row 2 | Cash/Bank Account (dropdown) \| Currency (display chip) \| Rate (editable, hidden when same as base) |
+| Row 3 | Payment Mode (locked for cash types) \| Ref No \| Ref Date \| Remarks |
+| Row 4 (conditional) | Cheque No \| Cheque Date — shown only when payment_mode = CHEQUE |
+| Row 5 | Against Bill ◉ / On Account ○ radio toggle |
+
+### Account Query (PostgREST embedded join)
+```
+GET /rim_accounts?select=id,account_name,account_nature,
+    rim_currencies!account_currency_id(currency_id)
+```
+Currency extracted via:
+```dart
+String _extractCurrency(Map<String, dynamic> account) {
+  final rel = account['rim_currencies'];
+  if (rel is Map) return rel['currency_id'] as String? ?? _baseCurrency;
+  return _baseCurrency;
+}
+```
+
+### Against Bill Section
+1. Customer/Supplier dropdown (filters to `account_nature IN (Customer, Supplier)`)
+2. On party selection: fetch party rate from `fn_get_exchange_rate` if party currency ≠ base
+3. Horizontally scrollable pending bills table from `v_pending_bills`:
+
+| Column | Width | Notes |
+|---|---|---|
+| Bill No | 130 | Left-aligned |
+| Bill Date | 95 | Left-aligned |
+| Bill Amt (party curr) | 110 | Right-aligned |
+| Paid (party curr) | 100 | Right-aligned |
+| Balance (party curr) | 100 | Right-aligned, red |
+| Balance (trans curr) | 105 | Right-aligned, converted |
+| Pay (trans curr) | 125 | **Editable** text field |
+| Pay (party curr) | 110 | Right-aligned, calculated, green |
+
+### On Account Section
+- Column headers shown **once at top** (Account | Amount (currency) | Remarks) — not repeated per row.
+- Each data row: account dropdown (no label), amount field, remarks field, remove button.
+- When an account's currency differs from trans currency, currency code shown as `suffixText` on the amount field.
+- `+ Add Line` button top-right.
+- Duplicate accounts greyed out in dropdown.
+
+### Data Models
+```dart
+class _BillRow {
+  final String transNo, transDate, invBillNo;
+  final String? invBillDate;
+  final double billAmount, settledAmount, balanceAmount;
+  final String partyCurrency;
+  final TextEditingController payTransCtrl;
+}
+
+class _AccountLine {
+  String? accountId, accountName;
+  String accountCurrency;   // ledger currency of this account (per-line)
+  final TextEditingController amountCtrl, remarksCtrl;
+}
+```
+
+### Validations (before Save Draft)
+- Voucher type must be selected
+- Cash/Bank account must be selected
+- Against Bill mode: party must be selected
+- Payment mode = CHEQUE: cheque_no must be non-empty
+- Total amount > 0
+- At least one payment line (bills with pay > 0, or On Account lines with amount > 0)
+
+### Known Dart Quirk
+`.firstOrNull?['key'] as String?` inside a ternary expression causes a parse error — Dart consumes the `?` as the ternary operator instead of the null-aware index operator. Fix: split into two statements.
+```dart
+// Wrong — Dart parse error inside ternary:
+final name = id != null ? list.where(...).firstOrNull?['name'] as String? : null;
+
+// Correct:
+final acc  = id != null ? list.where(...).firstOrNull : null;
+final name = acc?['name'] as String?;
+```
+
+### Text Selection (app-wide)
+`SelectionArea` wraps `MaterialApp.router` in `lib/app.dart`. Flutter Web renders text on canvas by default — not browser-selectable. `SelectionArea` makes all `Text` widgets selectable app-wide. Form fields opt out automatically.
+
+---
+
+## Migrations Applied
+
+| Migration | What it does |
+|---|---|
+| 019_finance_vouchers.sql | rih_finance_headers, rid_finance_lines, rid_cheque_register, rid_invoice_bill_settlement, fn_save/post/reverse_finance_voucher, fn_next_trans_no |
+| 020_pending_bills_view.sql | CREATE VIEW v_pending_bills |
+| 021_composite_trans_key.sql | Widen unique key to (trans_no, trans_date) on all 3 tables; add trans_date to lines + cheque_register; update v_pending_bills JOIN; rewrite fn_save + fn_post with composite key |
+
+**DDL order in migration 021 (critical):**
+Child FK constraints must be dropped BEFORE the parent unique index can be dropped.
+1. DROP rid_finance_lines_header_fk
+2. DROP rid_cheque_register_header_fk
+3. DROP uq_rih_finance_headers
+4. ADD new uq_rih_finance_headers (with trans_date)
+5. ADD trans_date to child tables, backfill, NOT NULL
+6. ADD new child FKs (composite)
+
+---
+
+## Seed Data
+
+**File:** `backend/seeds/seed_dummy_invoices.sql`
+
+Inserts 5 posted SIV (Sales Invoice Voucher) headers + lines so the Against Bill mode has bills to display. Auto-discovers customer and revenue accounts for the given company. Invoice 4 includes a partial settlement (2000 paid, 6000 outstanding) to test the balance column.
+
+Fill in `p_client_id`, `p_company_id`, `p_location_id` at the top of the DO block before running.
 
 ---
 
 ## What is NOT in this screen
 
 - Journal Voucher (JV) — separate screen
-- Debit/Credit Notes — separate screens
+- Debit/Credit Notes (SDN/SCN/CDN/CCN) — separate screens
+- Sales Invoice Voucher (SIV) — separate Sales module screen
 - Cheque Register management — separate screen
-- Invoice/Bill allocation (On Account → Against Invoice) — separate allocation screen
+- On Account → Against Bill allocation — separate Allocation screen
 - Bank Reconciliation — separate screen
+- Reversal flow — `fn_reverse_finance_voucher` not yet built
 
 ---
 
 *Design agreed: 2026-06-21*
-*Trans No: assigned at Draft time*
+*Screen built: 2026-06-25 (commit ff2ac9a)*
+*Composite key + cheque register + party currency fixes: 2026-06-26 (commits 74939f1, 6203a66, aaa8fb6, 6714097)*
+*Text selection (SelectionArea): 2026-06-26 (commit 750220d)*
+*Trans No: assigned at Draft save time*
 *No delete — correction by Reversal only*
