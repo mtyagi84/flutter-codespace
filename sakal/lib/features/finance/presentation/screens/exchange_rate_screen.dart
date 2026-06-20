@@ -1,13 +1,26 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/network/dio_client.dart';
+import '../../../../core/models/menu_models.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
+import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../data/models/exchange_rate_model.dart';
+import '../providers/exchange_rate_providers.dart';
+
+MenuFeature? _findFeature(List<MenuModule> modules, String screenPath) {
+  for (final mod in modules) {
+    for (final grp in mod.groups) {
+      for (final feat in grp.features) {
+        if (feat.screenName == screenPath) return feat;
+      }
+    }
+  }
+  return null;
+}
 
 // ── Rate row ──────────────────────────────────────────────────────────────────
 
@@ -76,43 +89,25 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
     super.dispose();
   }
 
-  // ── Init: load locations + company base currency ──────────────────────────
+  // ── Init: load locations + company base currency via shared providers ──────
 
   Future<void> _init() async {
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
-      final locFuture = DioClient.instance.get('/ric_locations', queryParameters: {
-        'client_id':  'eq.${session.clientId}',
-        'company_id': 'eq.${session.companyId}',
-        'is_active':  'eq.true',
-        'is_deleted': 'eq.false',
-        'select':     'id,location_name,location_short',
-        'order':      'location_name.asc',
-      });
-      final coFuture = DioClient.instance.get('/ric_companies', queryParameters: {
-        'id':     'eq.${session.companyId}',
-        'select': 'base_currency',
-        'limit':  '1',
-      });
-
-      final locRes = await locFuture;
-      final coRes  = await coFuture;
-
-      final locations = List<Map<String, dynamic>>.from(locRes.data as List);
-      final coList    = List<Map<String, dynamic>>.from(coRes.data as List);
+      final locations    = await ref.read(locationsProvider.future);
+      final baseCurrency = await ref.read(baseCurrencyProvider.future);
 
       if (!mounted) return;
       setState(() {
         _locations    = locations;
-        _baseCurrency = coList.isNotEmpty
-            ? (coList.first['base_currency'] as String? ?? '') : '';
+        _baseCurrency = baseCurrency;
         _locationId   = session.locationId ??
             (locations.isNotEmpty ? locations.first['id'] as String : null);
       });
 
       await _loadRates();
-    } on DioException {
+    } catch (_) {
       if (mounted) setState(() { _loading = false; _error = 'Could not load setup data.'; });
     }
   }
@@ -127,22 +122,16 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
-      final curFuture  = ref.read(currenciesProvider.future);
-      final rateFuture = DioClient.instance.get('/rim_exchange_rates', queryParameters: {
-        'client_id':   'eq.${session.clientId}',
-        'company_id':  'eq.${session.companyId}',
-        'location_id': 'eq.$_locationId',
-        'rate_date':   'eq.${_fmt(_rateDate)}',
-        'is_deleted':  'eq.false',
-        'select':      'to_currency,buying_rate,selling_rate',
-      });
+      final currencies = await ref.read(currenciesProvider.future);
+      final rates      = await ref.read(exchangeRateRepositoryProvider).getRates(
+        clientId:   session.clientId,
+        companyId:  session.companyId,
+        locationId: _locationId!,
+        rateDate:   _fmt(_rateDate),
+      );
 
-      final currencies = await curFuture;
-      final rateRes    = await rateFuture;
-      final rates      = List<Map<String, dynamic>>.from(rateRes.data as List);
-
-      final rateMap = <String, Map<String, dynamic>>{};
-      for (final r in rates) rateMap[r['to_currency'] as String] = r;
+      final rateMap = <String, ExchangeRateModel>{};
+      for (final r in rates) rateMap[r.toCurrency] = r;
 
       for (final r in _rows) r.dispose();
 
@@ -154,15 +143,13 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
         rows.add(_RateRow(
           currencyCode: code,
           currencyName: c['currency_name'] as String? ?? code,
-          buying:  existing != null
-              ? (existing['buying_rate']  as num).toStringAsFixed(4) : '',
-          selling: existing != null
-              ? (existing['selling_rate'] as num).toStringAsFixed(4) : '',
+          buying:  existing != null ? _fmtRate(existing.buyingRate) : '',
+          selling: existing != null ? _fmtRate(existing.sellingRate) : '',
         ));
       }
 
       if (mounted) setState(() { _rows = rows; _loading = false; });
-    } on DioException {
+    } catch (_) {
       if (mounted) setState(() { _loading = false; _error = 'Could not load rates.'; });
     }
   }
@@ -174,26 +161,15 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
-      final res = await DioClient.instance.get('/rim_exchange_rates', queryParameters: {
-        'client_id':   'eq.${session.clientId}',
-        'company_id':  'eq.${session.companyId}',
-        'location_id': 'eq.$_locationId',
-        'rate_date':   'lt.${_fmt(_rateDate)}',
-        'is_deleted':  'eq.false',
-        'select':      'to_currency,buying_rate,selling_rate,rate_date',
-        'order':       'rate_date.desc',
-        'limit':       '200',
-      });
-
-      final all = List<Map<String, dynamic>>.from(res.data as List);
-      final latest = <String, Map<String, dynamic>>{};
-      for (final r in all) {
-        final code = r['to_currency'] as String;
-        if (!latest.containsKey(code)) latest[code] = r;
-      }
+      final all = await ref.read(exchangeRateRepositoryProvider).getPreviousRates(
+        clientId:   session.clientId,
+        companyId:  session.companyId,
+        locationId: _locationId!,
+        beforeDate: _fmt(_rateDate),
+      );
 
       if (!mounted) return;
-      if (latest.isEmpty) {
+      if (all.isEmpty) {
         setState(() => _loading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('No previous rates found for this location.')),
@@ -201,15 +177,21 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
         return;
       }
 
+      // List is ordered rate_date desc from remote DS; pick first per currency
+      final latest = <String, ExchangeRateModel>{};
+      for (final r in all) {
+        if (!latest.containsKey(r.toCurrency)) latest[r.toCurrency] = r;
+      }
+
       for (final row in _rows) {
         final prev = latest[row.currencyCode];
         if (prev != null) {
-          row.buyingCtrl.text  = (prev['buying_rate']  as num).toStringAsFixed(4);
-          row.sellingCtrl.text = (prev['selling_rate'] as num).toStringAsFixed(4);
+          row.buyingCtrl.text  = _fmtRate(prev.buyingRate);
+          row.sellingCtrl.text = _fmtRate(prev.sellingRate);
         }
       }
       setState(() => _loading = false);
-    } on DioException {
+    } catch (_) {
       if (mounted) setState(() { _loading = false; _error = 'Could not load previous rates.'; });
     }
   }
@@ -244,11 +226,7 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
         'updated_by':    session.userId,
       }).toList();
 
-      await DioClient.instance.post(
-        '/rim_exchange_rates',
-        data: payload,
-        options: Options(headers: {'Prefer': 'resolution=merge-duplicates'}),
-      );
+      await ref.read(exchangeRateRepositoryProvider).saveRates(payload);
 
       if (mounted) {
         setState(() => _saving = false);
@@ -257,10 +235,10 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
           backgroundColor: AppColors.positive,
         ));
       }
-    } on DioException catch (e) {
+    } catch (e) {
       if (mounted) setState(() {
         _saving    = false;
-        _saveError = 'Save failed: ${e.response?.data ?? e.message}';
+        _saveError = 'Save failed: $e';
       });
     }
   }
@@ -293,17 +271,13 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
 
     setState(() { _replicating = true; _saveError = null; });
     try {
-      final res = await DioClient.instance.post(
-        '/rpc/fn_replicate_exchange_rates',
-        data: {
-          'p_client_id':     session.clientId,
-          'p_company_id':    session.companyId,
-          'p_from_location': _locationId,
-          'p_rate_date':     _fmt(_rateDate),
-          'p_replicated_by': session.userId,
-        },
+      final count = await ref.read(exchangeRateRepositoryProvider).replicateToAllLocations(
+        clientId:       session.clientId,
+        companyId:      session.companyId,
+        fromLocationId: _locationId!,
+        rateDate:       _fmt(_rateDate),
+        userId:         session.userId,
       );
-      final count = res.data as int? ?? 0;
       if (mounted) {
         setState(() => _replicating = false);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -311,10 +285,10 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
           backgroundColor: AppColors.positive,
         ));
       }
-    } on DioException catch (e) {
+    } catch (e) {
       if (mounted) setState(() {
         _replicating = false;
-        _saveError   = 'Replication failed: ${e.response?.data ?? e.message}';
+        _saveError   = 'Replication failed: $e';
       });
     }
   }
@@ -339,11 +313,17 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
   String _fmt(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+  // Smart precision: matches DB storage (numeric 18,8) while avoiding
+  // unnecessary trailing zeros for large rates.
+  String _fmtRate(double rate) {
+    if (rate >= 1000) return rate.toStringAsFixed(2);
+    if (rate >= 1)    return rate.toStringAsFixed(4);
+    return rate.toStringAsFixed(8); // sub-1 rates need full 8 places
+  }
+
   String _midLabel(double? mid) {
     if (mid == null) return '—';
-    if (mid >= 1000) return mid.toStringAsFixed(2);
-    if (mid >= 1)    return mid.toStringAsFixed(4);
-    return mid.toStringAsFixed(8);
+    return _fmtRate(mid);
   }
 
   String _monthAbbr(int m) => const [
@@ -358,6 +338,27 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
     final session   = ref.watch(sessionProvider);
     final isOffline = session?.offlineMode ?? false;
     final isMobile  = Responsive.isMobile(context);
+
+    final menus   = ref.watch(menuProvider);
+    final feature = _findFeature(menus, RouteNames.exchangeRates);
+
+    if (feature == null) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.lock_outline, size: 48, color: Color(0xFFADB5BD)),
+            SizedBox(height: 12),
+            Text('You do not have access to this screen.',
+                style: TextStyle(color: Color(0xFF6B7280))),
+          ],
+        ),
+      );
+    }
+
+    final canSave = feature.addAllowed || feature.editAllowed;
+    final canCopy = feature.addAllowed || feature.editAllowed;
+    final canBulk = feature.approveAllowed;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -444,16 +445,17 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
         const SizedBox(height: 12),
 
         // ── Action buttons ───────────────────────────────────────────────────
-        if (!isOffline)
+        if (!isOffline && (canCopy || canBulk))
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Wrap(spacing: 8, runSpacing: 8, children: [
-              OutlinedButton.icon(
-                icon: const Icon(Icons.content_copy_outlined, size: 15),
-                label: const Text('Copy from Previous Date'),
-                onPressed: _loading ? null : _copyFromPrevious,
-              ),
-              if (_locations.length > 1)
+              if (canCopy)
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.content_copy_outlined, size: 15),
+                  label: const Text('Copy from Previous Date'),
+                  onPressed: _loading ? null : _copyFromPrevious,
+                ),
+              if (canBulk && _locations.length > 1)
                 OutlinedButton.icon(
                   icon: _replicating
                       ? const SizedBox(width: 14, height: 14,
@@ -517,7 +519,7 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
         ),
 
         // ── Save button ──────────────────────────────────────────────────────
-        if (!isOffline && !_loading && _rows.isNotEmpty)
+        if (!isOffline && !_loading && _rows.isNotEmpty && canSave)
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
             child: FilledButton.icon(
@@ -543,7 +545,6 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
       child: Column(children: [
-        // Header row
         Container(
           decoration: const BoxDecoration(
             color: AppColors.primary,
@@ -556,8 +557,6 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
             _colHdr('Mid (auto)',  flex: 2),
           ]),
         ),
-
-        // Data rows
         Container(
           decoration: BoxDecoration(
             border: Border.all(color: Colors.grey.shade200),
@@ -591,7 +590,6 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
         return Container(
           color: Colors.white,
           child: Row(children: [
-            // Currency label
             Expanded(
               flex: 3,
               child: Padding(
@@ -604,7 +602,6 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
                 ]),
               ),
             ),
-            // Buying
             Expanded(
               flex: 2,
               child: Padding(
@@ -612,7 +609,6 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
                 child: _rateField(row.buyingCtrl, () => setRowState(() {})),
               ),
             ),
-            // Selling
             Expanded(
               flex: 2,
               child: Padding(
@@ -620,7 +616,6 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
                 child: _rateField(row.sellingCtrl, () => setRowState(() {})),
               ),
             ),
-            // Mid (auto-calculated)
             Expanded(
               flex: 2,
               child: Padding(
