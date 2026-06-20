@@ -826,6 +826,20 @@ class _FinanceVoucherEntryScreenState
     final isCash = _voucherType != null && isCashVoucher(_voucherType!);
     final showRateField = _transCurrency.isNotEmpty && _transCurrency != _baseCurrency;
 
+    // Every field in every row is constrained to exactly this height.
+    // This is the only reliable cross-platform way to guarantee uniformity:
+    // IntrinsicHeight equalises within a row but not between rows, because
+    // DropdownButtonFormField reports a larger intrinsic height than TextFormField.
+    const fh = 56.0;
+
+    const dec = InputDecoration(
+      border: OutlineInputBorder(),
+      isDense: true,
+      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+    );
+
+    Widget field(Widget child) => SizedBox(height: fh, child: child);
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -837,16 +851,11 @@ class _FinanceVoucherEntryScreenState
         child: Column(children: [
 
           // Row 1: Voucher Type | Voucher No | Date
-          IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
             Expanded(
               flex: 4,
-              child: DropdownButtonFormField<String>(
-                decoration: const InputDecoration(
-                    labelText: 'Voucher Type *',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+              child: field(DropdownButtonFormField<String>(
+                decoration: dec.copyWith(labelText: 'Voucher Type *'),
                 value: _voucherType,
                 isExpanded: true,
                 items: _supportedTypes.map((t) => DropdownMenuItem(
@@ -857,18 +866,13 @@ class _FinanceVoucherEntryScreenState
                 )).toList(),
                 onChanged:
                     locked ? null : (v) { if (v != null) _applyVoucherType(v); },
-              ),
+              )),
             ),
             const SizedBox(width: 12),
             Expanded(
               flex: 3,
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                    labelText: 'Voucher No',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+              child: field(InputDecorator(
+                decoration: dec.copyWith(labelText: 'Voucher No'),
                 child: Text(
                   _voucherNo ?? '(auto on save)',
                   style: TextStyle(
@@ -877,23 +881,19 @@ class _FinanceVoucherEntryScreenState
                           ? AppColors.textPrimary
                           : AppColors.textDisabled),
                 ),
-              ),
+              )),
             ),
             const SizedBox(width: 12),
             Expanded(
               flex: 3,
-              child: InkWell(
+              child: field(InkWell(
                 onTap: locked
                     ? null
                     : () => _pickDate(
                         _transDate, (d) => setState(() => _transDate = d)),
                 child: InputDecorator(
-                  decoration: InputDecoration(
+                  decoration: dec.copyWith(
                     labelText: 'Date *',
-                    border: const OutlineInputBorder(),
-                    isDense: true,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                     suffixIcon: Icon(Icons.calendar_today_outlined,
                         size: 15,
                         color: locked
@@ -903,23 +903,19 @@ class _FinanceVoucherEntryScreenState
                   child: Text(_displayDate(_transDate),
                       style: const TextStyle(fontSize: 13)),
                 ),
-              ),
+              )),
             ),
-          ])),
+          ]),
 
           const SizedBox(height: 12),
 
           // Row 2: Cash/Bank Account | Currency | Rate (1 base = X trans)
-          IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
             Expanded(
               flex: 5,
-              child: DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                    labelText: isCash ? 'Cash Account *' : 'Bank Account *',
-                    border: const OutlineInputBorder(),
-                    isDense: true,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+              child: field(DropdownButtonFormField<String>(
+                decoration: dec.copyWith(
+                    labelText: isCash ? 'Cash Account *' : 'Bank Account *'),
                 value: _cashBankId,
                 isExpanded: true,
                 items: _cashBankList.map((a) => DropdownMenuItem(
@@ -936,18 +932,14 @@ class _FinanceVoucherEntryScreenState
                             _cashBankList.where((a) => a['id'] == v).firstOrNull;
                         if (acc != null) _onCashBankSelected(acc);
                       },
-              ),
+              )),
             ),
             const SizedBox(width: 12),
             SizedBox(
               width: 80,
+              height: fh,
               child: InputDecorator(
-                decoration: const InputDecoration(
-                    labelText: 'Currency',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+                decoration: dec.copyWith(labelText: 'Currency'),
                 child: Text(
                   _transCurrency.isEmpty ? '—' : _transCurrency,
                   style: const TextStyle(
@@ -958,17 +950,11 @@ class _FinanceVoucherEntryScreenState
             const SizedBox(width: 12),
             Expanded(
               flex: 2,
-              child: TextFormField(
+              child: field(TextFormField(
                 controller: _rateCtrl,
                 enabled: !locked && showRateField,
-                decoration: InputDecoration(
-                  labelText: showRateField
-                      ? '1 $_baseCurrency = '
-                      : 'Rate',
-                  border: const OutlineInputBorder(),
-                  isDense: true,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                decoration: dec.copyWith(
+                  labelText: showRateField ? '1 $_baseCurrency = ' : 'Rate',
                   hintText: '1.0',
                 ),
                 style: const TextStyle(fontSize: 13),
@@ -978,23 +964,18 @@ class _FinanceVoucherEntryScreenState
                   FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))
                 ],
                 onChanged: (_) => setState(() {}),
-              ),
+              )),
             ),
-          ])),
+          ]),
 
           const SizedBox(height: 12),
 
           // Row 3: Payment Mode | Ref No | Ref Date | Remarks
-          IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
             Expanded(
               flex: 2,
-              child: DropdownButtonFormField<String>(
-                decoration: const InputDecoration(
-                    labelText: 'Payment Mode',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+              child: field(DropdownButtonFormField<String>(
+                decoration: dec.copyWith(labelText: 'Payment Mode'),
                 value: _paymentMode,
                 isExpanded: true,
                 items: _paymentModes.map((m) => DropdownMenuItem(
@@ -1002,42 +983,32 @@ class _FinanceVoucherEntryScreenState
                   child: Text(m['payment_mode_name'] as String,
                       style: const TextStyle(fontSize: 13)),
                 )).toList(),
-                // Lock to CASH for cash vouchers; editable for bank vouchers
                 onChanged: (locked || isCash)
                     ? null
                     : (v) => setState(() => _paymentMode = v),
-              ),
+              )),
             ),
             const SizedBox(width: 12),
             Expanded(
               flex: 2,
-              child: TextFormField(
+              child: field(TextFormField(
                 controller: _refNoCtrl,
                 enabled: !locked,
-                decoration: const InputDecoration(
-                    labelText: 'Ref No',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+                decoration: dec.copyWith(labelText: 'Ref No'),
                 style: const TextStyle(fontSize: 13),
-              ),
+              )),
             ),
             const SizedBox(width: 12),
             Expanded(
               flex: 2,
-              child: InkWell(
+              child: field(InkWell(
                 onTap: locked
                     ? null
                     : () => _pickDate(
                         _refDate, (d) => setState(() => _refDate = d)),
                 child: InputDecorator(
-                  decoration: InputDecoration(
+                  decoration: dec.copyWith(
                     labelText: 'Ref Date',
-                    border: const OutlineInputBorder(),
-                    isDense: true,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                     suffixIcon: Icon(Icons.calendar_today_outlined,
                         size: 15,
                         color: locked
@@ -1053,57 +1024,43 @@ class _FinanceVoucherEntryScreenState
                             : AppColors.textDisabled),
                   ),
                 ),
-              ),
+              )),
             ),
             const SizedBox(width: 12),
             Expanded(
               flex: 3,
-              child: TextFormField(
+              child: field(TextFormField(
                 controller: _remarksCtrl,
                 enabled: !locked,
-                decoration: const InputDecoration(
-                    labelText: 'Remarks',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+                decoration: dec.copyWith(labelText: 'Remarks'),
                 style: const TextStyle(fontSize: 13),
-              ),
+              )),
             ),
-          ])),
+          ]),
 
           // Cheque row — only for CHEQUE payment mode
           if (_paymentMode == 'CHEQUE') ...[
             const SizedBox(height: 12),
-            IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
               Expanded(
-                child: TextFormField(
+                child: field(TextFormField(
                   controller: _chequeNoCtrl,
                   enabled: !locked,
-                  decoration: const InputDecoration(
-                      labelText: 'Cheque No',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+                  decoration: dec.copyWith(labelText: 'Cheque No'),
                   style: const TextStyle(fontSize: 13),
-                ),
+                )),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: InkWell(
+                child: field(InkWell(
                   onTap: locked
                       ? null
                       : () => _pickDate(
                           _chequeDate ?? _transDate,
                           (d) => setState(() => _chequeDate = d)),
                   child: InputDecorator(
-                    decoration: InputDecoration(
+                    decoration: dec.copyWith(
                       labelText: 'Cheque Date',
-                      border: const OutlineInputBorder(),
-                      isDense: true,
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                       suffixIcon: Icon(Icons.calendar_today_outlined,
                           size: 15,
                           color: locked
@@ -1119,9 +1076,9 @@ class _FinanceVoucherEntryScreenState
                               : AppColors.textDisabled),
                     ),
                   ),
-                ),
+                )),
               ),
-            ])),
+            ]),
           ],
 
           const SizedBox(height: 12),
