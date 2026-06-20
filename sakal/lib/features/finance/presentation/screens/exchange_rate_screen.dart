@@ -149,8 +149,8 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
       }
 
       if (mounted) setState(() { _rows = rows; _loading = false; });
-    } catch (_) {
-      if (mounted) setState(() { _loading = false; _error = 'Could not load rates.'; });
+    } catch (e) {
+      if (mounted) setState(() { _loading = false; _error = 'Could not load rates: $e'; });
     }
   }
 
