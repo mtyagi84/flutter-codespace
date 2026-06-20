@@ -8,45 +8,58 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/voucher_logic.dart';
 import '../../../../core/widgets/offline_banner.dart';
 
-// ── Line model ────────────────────────────────────────────────────────────────
+// ── Data models ───────────────────────────────────────────────────────────────
 
-class _VLine {
+class _BillRow {
+  final String  transNo;
+  final String  transDate;
+  final String  invBillNo;
+  final String? invBillDate;
+  final double  billAmount;
+  final double  settledAmount;
+  final double  balanceAmount;
+  final String  partyCurrency;
+  final TextEditingController payTransCtrl;
+
+  _BillRow({
+    required this.transNo,
+    required this.transDate,
+    required this.invBillNo,
+    this.invBillDate,
+    required this.billAmount,
+    required this.settledAmount,
+    required this.balanceAmount,
+    required this.partyCurrency,
+    double initialPay = 0,
+  }) : payTransCtrl = TextEditingController(
+           text: initialPay > 0 ? initialPay.toStringAsFixed(2) : '');
+
+  double get payTrans => double.tryParse(payTransCtrl.text) ?? 0;
+  void dispose() => payTransCtrl.dispose();
+}
+
+class _AccountLine {
   String? accountId;
   String? accountName;
-  String? accountCurrency;
-  final String transNature;       // DR / CR — set by voucher type, not user-changeable
-  final bool   isCashBank;        // true = line 1
   final TextEditingController amountCtrl;
   final TextEditingController remarksCtrl;
-  String? invBillNo;
 
-  _VLine({
-    required this.transNature,
-    this.isCashBank = false,
+  _AccountLine({
     this.accountId,
     this.accountName,
-    this.accountCurrency,
     String amount  = '',
     String remarks = '',
-    this.invBillNo,
   })  : amountCtrl  = TextEditingController(text: amount),
         remarksCtrl = TextEditingController(text: remarks);
 
   double get amount => double.tryParse(amountCtrl.text) ?? 0;
-
-  void dispose() {
-    amountCtrl.dispose();
-    remarksCtrl.dispose();
-  }
+  void dispose() { amountCtrl.dispose(); remarksCtrl.dispose(); }
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 class FinanceVoucherEntryScreen extends ConsumerStatefulWidget {
-  /// Pre-select voucher type for a new voucher (from menu shortcut).
   final String? initialVoucherType;
-
-  /// Load an existing voucher for view/edit.
   final String? editTransNo;
 
   const FinanceVoucherEntryScreen({
@@ -63,44 +76,55 @@ class FinanceVoucherEntryScreen extends ConsumerStatefulWidget {
 class _FinanceVoucherEntryScreenState
     extends ConsumerState<FinanceVoucherEntryScreen> {
 
-  // ── Header state ──────────────────────────────────────────────────────────
-
+  // ── Header ────────────────────────────────────────────────────────────────
   String?   _voucherType;
-  String?   _transNo;
-  DateTime  _transDate    = DateTime.now();
+  String?   _voucherNo;
+  DateTime  _transDate  = DateTime.now();
+  bool      _isOnAccount = false;
+  bool      _isPosted    = false;
+
+  // ── Cash / Bank (header level) ────────────────────────────────────────────
+  String?   _cashBankId;
+  String?   _cashBankName;
+  String    _transCurrency = '';
+  final     _rateCtrl = TextEditingController(text: '1');
+  double get _rate => double.tryParse(_rateCtrl.text) ?? 1.0;
+
+  // ── Payment details ───────────────────────────────────────────────────────
   String?   _paymentMode;
-  bool      _isOnAccount  = false;
-  String?   _refNo;
-  String?   _chequeNo;
+  final     _refNoCtrl    = TextEditingController();
+  DateTime? _refDate;
+  final     _remarksCtrl  = TextEditingController();
+  final     _chequeNoCtrl = TextEditingController();
   DateTime? _chequeDate;
-  final _remarksCtrl = TextEditingController();
-  bool _isPosted = false;
 
-  // ── Lines ─────────────────────────────────────────────────────────────────
+  // ── Against Bill ──────────────────────────────────────────────────────────
+  String?   _partyId;
+  String?   _partyName;
+  String    _partyCurrency = '';
+  double    _partyRate     = 1.0;
+  List<_BillRow> _bills        = [];
+  bool           _loadingBills = false;
 
-  List<_VLine> _lines = [];
+  // ── On Account ────────────────────────────────────────────────────────────
+  List<_AccountLine> _accountLines = [_AccountLine()];
 
   // ── Master data ───────────────────────────────────────────────────────────
-
-  List<Map<String, dynamic>> _cashAccounts = [];
-  List<Map<String, dynamic>> _bankAccounts = [];
-  List<Map<String, dynamic>> _allAccounts  = [];
-  List<Map<String, dynamic>> _paymentModes = [];
-  String _baseCurrency   = '';
-  String _localCurrency  = '';
-  String _transCurrency  = '';
-  double _baseRate       = 1.0;
-  double _localRate      = 1.0;
+  List<Map<String, dynamic>> _cashAccounts  = [];
+  List<Map<String, dynamic>> _bankAccounts  = [];
+  List<Map<String, dynamic>> _partyAccounts = [];
+  List<Map<String, dynamic>> _otherAccounts = [];
+  List<Map<String, dynamic>> _paymentModes  = [];
+  String _baseCurrency  = '';
+  String _localCurrency = '';
+  double _localRate     = 1.0;
 
   // ── UI state ──────────────────────────────────────────────────────────────
-
-  bool    _loading   = true;
+  bool    _loading     = true;
   String? _error;
-  bool    _saving    = false;
-  bool    _posting   = false;
+  bool    _saving      = false;
+  bool    _posting     = false;
   String? _actionError;
-
-  // ── Voucher type metadata ─────────────────────────────────────────────────
 
   static const _supportedTypes = ['CRV', 'BRV', 'CPV', 'BPV'];
   static const _typeLabels = {
@@ -118,8 +142,12 @@ class _FinanceVoucherEntryScreenState
 
   @override
   void dispose() {
+    _rateCtrl.dispose();
+    _refNoCtrl.dispose();
     _remarksCtrl.dispose();
-    for (final l in _lines) l.dispose();
+    _chequeNoCtrl.dispose();
+    for (final b in _bills) b.dispose();
+    for (final l in _accountLines) l.dispose();
     super.dispose();
   }
 
@@ -131,19 +159,23 @@ class _FinanceVoucherEntryScreenState
     try {
       final results = await Future.wait([
         DioClient.instance.get('/rim_accounts', queryParameters: {
-          'client_id':  'eq.${session.clientId}',
-          'company_id': 'eq.${session.companyId}',
-          'is_deleted': 'eq.false',
-          'is_active':  'eq.true',
-          'select':     'id,account_name,account_nature,currency_id',
-          'order':      'account_name.asc',
-          'limit':      '500',
+          'client_id':       'eq.${session.clientId}',
+          'company_id':      'eq.${session.companyId}',
+          'is_deleted':      'eq.false',
+          'is_active':       'eq.true',
+          'posting_allowed': 'eq.true',
+          // Embed rim_currencies via account_currency_id FK
+          'select': 'id,account_name,account_nature,'
+                    'rim_currencies!account_currency_id(currency_id)',
+          'order': 'account_name.asc',
+          'limit': '500',
         }),
         DioClient.instance.get('/rim_payment_modes', queryParameters: {
           'is_active':  'eq.true',
           'is_deleted': 'eq.false',
           'select':     'payment_mode_code,payment_mode_name',
-          'or':         '(is_system.eq.true,and(client_id.eq.${session.clientId},company_id.eq.${session.companyId}))',
+          'or':         '(is_system.eq.true,and(client_id.eq.${session.clientId},'
+                        'company_id.eq.${session.companyId}))',
           'order':      'payment_mode_name.asc',
         }),
         DioClient.instance.get('/ric_companies', queryParameters: {
@@ -159,56 +191,72 @@ class _FinanceVoucherEntryScreenState
       final co       = coList.isNotEmpty ? coList.first : <String, dynamic>{};
 
       if (!mounted) return;
+      final base  = co['base_currency']  as String? ?? '';
+      final local = co['local_currency'] as String? ?? '';
+
       setState(() {
+        _baseCurrency  = base;
+        _localCurrency = local;
         _cashAccounts  = accounts.where((a) => a['account_nature'] == 'Cash').toList();
         _bankAccounts  = accounts.where((a) => a['account_nature'] == 'Bank').toList();
-        _allAccounts   = accounts;
+        _partyAccounts = accounts.where((a) {
+          final n = a['account_nature'] as String?;
+          return n == 'Customer' || n == 'Supplier';
+        }).toList();
+        _otherAccounts = accounts.where((a) {
+          final n = a['account_nature'] as String?;
+          return n != 'Cash' && n != 'Bank';
+        }).toList();
         _paymentModes  = modes;
-        _baseCurrency  = co['base_currency']  as String? ?? '';
-        _localCurrency = co['local_currency'] as String? ?? '';
       });
 
       if (widget.editTransNo != null) {
         await _loadExisting(widget.editTransNo!);
       } else {
-        if (widget.initialVoucherType != null) _applyVoucherType(widget.initialVoucherType!);
+        if (widget.initialVoucherType != null) {
+          _applyVoucherType(widget.initialVoucherType!);
+        }
         setState(() => _loading = false);
       }
-    } on DioException {
-      if (mounted) setState(() { _loading = false; _error = 'Could not load data. Check connection.'; });
+    } on DioException catch (e) {
+      if (mounted) setState(() {
+        _loading = false;
+        _error   = 'Could not load data: ${e.response?.data ?? e.message}';
+      });
     }
   }
 
-  // ── Apply voucher type — resets lines ─────────────────────────────────────
+  // ── Apply voucher type ─────────────────────────────────────────────────────
 
   void _applyVoucherType(String type) {
-    for (final l in _lines) l.dispose();
-    final n1 = line1Nature(type);
-    final n2 = counterNature(n1);
-    // Default payment mode to CASH for cash vouchers
-    final defaultMode = isCashVoucher(type) ? 'CASH' : null;
+    for (final b in _bills) b.dispose();
+    for (final l in _accountLines) l.dispose();
     setState(() {
-      _voucherType  = type;
-      _paymentMode  = defaultMode;
+      _voucherType   = type;
+      _cashBankId    = null;
+      _cashBankName  = null;
       _transCurrency = '';
-      _baseRate     = 1.0;
-      _lines = [
-        _VLine(transNature: n1, isCashBank: true),
-        _VLine(transNature: n2),
-      ];
+      _rateCtrl.text = '1';
+      _paymentMode   = isCashVoucher(type) ? 'CASH' : null;
+      _partyId       = null;
+      _partyName     = null;
+      _partyCurrency = '';
+      _partyRate     = 1.0;
+      _bills         = [];
+      _accountLines  = [_AccountLine()];
     });
   }
 
   // ── Load existing voucher ─────────────────────────────────────────────────
 
-  Future<void> _loadExisting(String transNo) async {
+  Future<void> _loadExisting(String voucherNo) async {
     final session = ref.read(sessionProvider)!;
     try {
       final results = await Future.wait([
         DioClient.instance.get('/rih_finance_headers', queryParameters: {
           'client_id':  'eq.${session.clientId}',
           'company_id': 'eq.${session.companyId}',
-          'trans_no':   'eq.$transNo',
+          'trans_no':   'eq.$voucherNo',
           'is_deleted': 'eq.false',
           'select':     '*',
           'limit':      '1',
@@ -216,75 +264,153 @@ class _FinanceVoucherEntryScreenState
         DioClient.instance.get('/rid_finance_lines', queryParameters: {
           'client_id':  'eq.${session.clientId}',
           'company_id': 'eq.${session.companyId}',
-          'trans_no':   'eq.$transNo',
+          'trans_no':   'eq.$voucherNo',
           'is_deleted': 'eq.false',
           'select':     '*',
           'order':      'serial_no.asc',
         }),
       ]);
 
-      final headers = List<Map<String, dynamic>>.from(results[0].data as List);
+      final headers  = List<Map<String, dynamic>>.from(results[0].data as List);
       final lineRows = List<Map<String, dynamic>>.from(results[1].data as List);
-      if (headers.isEmpty || !mounted) { setState(() => _loading = false); return; }
+      if (headers.isEmpty || !mounted) {
+        setState(() => _loading = false);
+        return;
+      }
 
       final h   = headers.first;
       final vt  = h['voucher_type_code'] as String;
+      final isOA = h['is_on_account'] as bool? ?? false;
 
-      for (final l in _lines) l.dispose();
+      // Line 1 = cash / bank
+      final line1         = lineRows.isNotEmpty ? lineRows.first : null;
+      final transCurrency = line1?['trans_currency'] as String? ?? _baseCurrency;
+      final cashBankId    = line1?['account_id']     as String?;
+      final cashBankName  = cashBankId != null
+          ? (_cashAccounts + _bankAccounts)
+              .where((a) => a['id'] == cashBankId)
+              .firstOrNull?['account_name'] as String?
+          : null;
+      final baseRate = (line1?['base_rate'] as num? ?? 1).toDouble();
 
-      final loadedLines = lineRows.asMap().entries.map((e) {
-        final row = e.value;
-        final isL1 = e.key == 0;
-        final acc  = _allAccounts.where((a) => a['id'] == row['account_id']).firstOrNull;
-        return _VLine(
-          transNature:     row['trans_nature'] as String,
-          isCashBank:      isL1,
-          accountId:       row['account_id']    as String?,
-          accountName:     acc?['account_name'] as String?,
-          accountCurrency: row['trans_currency'] as String?,
-          amount:          (row['trans_amount']  as num? ?? 0).toString(),
-          remarks:         row['line_remarks']   as String? ?? '',
-          invBillNo:       row['inv_bill_no']    as String?,
-        );
-      }).toList();
+      final restLines = lineRows.length > 1 ? lineRows.sublist(1) : <Map<String, dynamic>>[];
 
-      setState(() {
-        _voucherType  = vt;
-        _transNo      = transNo;
-        _transDate    = DateTime.parse(h['trans_date'] as String);
-        _paymentMode  = h['payment_mode_code'] as String?;
-        _isOnAccount  = h['is_on_account']     as bool?   ?? false;
-        _refNo        = h['reference_no']      as String?;
-        _chequeNo     = h['cheque_no']         as String?;
-        _isPosted     = h['is_posted']         as bool?   ?? false;
-        _remarksCtrl.text = h['remarks']       as String? ?? '';
-        _lines        = loadedLines;
-        _loading      = false;
-        if (loadedLines.isNotEmpty) {
-          _transCurrency = loadedLines.first.accountCurrency ?? '';
+      // Common header restore
+      void applyHeader() {
+        _voucherType      = vt;
+        _voucherNo        = voucherNo;
+        _transDate        = DateTime.parse(h['trans_date'] as String);
+        _isPosted         = h['is_posted']         as bool?   ?? false;
+        _paymentMode      = h['payment_mode_code'] as String?;
+        _refNoCtrl.text   = h['reference_no']      as String? ?? '';
+        _chequeNoCtrl.text = h['cheque_no']        as String? ?? '';
+        _remarksCtrl.text = h['remarks']            as String? ?? '';
+        if (h['reference_date'] != null) {
+          _refDate = DateTime.tryParse(h['reference_date'] as String);
         }
+        if (h['cheque_date'] != null) {
+          _chequeDate = DateTime.tryParse(h['cheque_date'] as String);
+        }
+        _cashBankId    = cashBankId;
+        _cashBankName  = cashBankName;
+        _transCurrency = transCurrency;
+        _rateCtrl.text = _fmtRate(baseRate);
+        _isOnAccount   = isOA;
+        _loading       = false;
+      }
+
+      if (!isOA) {
+        // Against Bill — restore party + bills
+        final firstParty = restLines.isNotEmpty ? restLines.first : null;
+        final partyId    = firstParty?['account_id']    as String?;
+        final partyCurr  = firstParty?['party_currency'] as String? ?? _baseCurrency;
+        final partyRate  = (firstParty?['party_rate']   as num? ?? 1).toDouble();
+        final partyAcc   = partyId != null
+            ? _partyAccounts.where((a) => a['id'] == partyId).firstOrNull
+            : null;
+
+        // Map bill no → saved trans amount for pre-filling
+        final savedPaid = <String, double>{};
+        for (final row in restLines) {
+          final bn  = row['inv_bill_no']  as String?;
+          final amt = (row['trans_amount'] as num? ?? 0).toDouble();
+          if (bn != null && amt > 0) savedPaid[bn] = amt;
+        }
+
+        setState(() {
+          applyHeader();
+          _partyId       = partyId;
+          _partyName     = partyAcc?['account_name'] as String?;
+          _partyCurrency = partyCurr;
+          _partyRate     = partyRate;
+        });
+
+        if (partyId != null) {
+          await _loadPendingBills(savedPaid: savedPaid);
+        }
+      } else {
+        // On Account — restore account lines
+        for (final l in _accountLines) l.dispose();
+        final loaded = restLines.map((row) {
+          final accId = row['account_id'] as String?;
+          final acc   = _otherAccounts.where((a) => a['id'] == accId).firstOrNull;
+          return _AccountLine(
+            accountId:   accId,
+            accountName: acc?['account_name'] as String?,
+            amount:      (row['trans_amount'] as num? ?? 0).toString(),
+            remarks:     row['line_remarks']  as String? ?? '',
+          );
+        }).toList();
+
+        setState(() {
+          applyHeader();
+          _accountLines = loaded.isNotEmpty ? loaded : [_AccountLine()];
+        });
+      }
+    } on DioException catch (e) {
+      if (mounted) setState(() {
+        _loading = false;
+        _error   = 'Could not load voucher: ${e.response?.data ?? e.message}';
       });
-    } on DioException {
-      if (mounted) setState(() { _loading = false; _error = 'Could not load voucher.'; });
     }
   }
 
-  // ── Line 1 account selected — lock currency + fetch rate ──────────────────
+  // ── Cash / Bank account selected ──────────────────────────────────────────
 
-  Future<void> _onLine1AccountSelected(String accountId) async {
-    final acc = _allAccounts.where((a) => a['id'] == accountId).firstOrNull;
-    if (acc == null) return;
-    final currency = acc['currency_id'] as String? ?? _baseCurrency;
+  Future<void> _onCashBankSelected(Map<String, dynamic> account) async {
+    final currency = _extractCurrency(account);
     setState(() {
-      _lines[0].accountId       = accountId;
-      _lines[0].accountName     = acc['account_name'] as String?;
-      _lines[0].accountCurrency = currency;
-      _transCurrency            = currency;
+      _cashBankId    = account['id']          as String;
+      _cashBankName  = account['account_name'] as String;
+      _transCurrency = currency;
+      _rateCtrl.text = '1';
     });
-    if (currency != _baseCurrency) await _fetchBaseRate(currency);
+    if (currency.isNotEmpty && currency != _baseCurrency) {
+      await _fetchRate(currency, isParty: false);
+    }
   }
 
-  Future<void> _fetchBaseRate(String toCurrency) async {
+  // ── Party selected ────────────────────────────────────────────────────────
+
+  Future<void> _onPartySelected(Map<String, dynamic> account) async {
+    final currency = _extractCurrency(account);
+    for (final b in _bills) b.dispose();
+    setState(() {
+      _partyId       = account['id']          as String;
+      _partyName     = account['account_name'] as String;
+      _partyCurrency = currency;
+      _partyRate     = 1.0;
+      _bills         = [];
+    });
+    if (currency.isNotEmpty && currency != _baseCurrency) {
+      await _fetchRate(currency, isParty: true);
+    }
+    await _loadPendingBills();
+  }
+
+  // ── Fetch exchange rate ───────────────────────────────────────────────────
+
+  Future<void> _fetchRate(String toCurrency, {required bool isParty}) async {
     final session = ref.read(sessionProvider)!;
     if (session.locationId == null) return;
     try {
@@ -296,110 +422,197 @@ class _FinanceVoucherEntryScreenState
         'p_rate_date':     _fmtDate(_transDate),
         'p_rate_type':     'MID',
       });
-      if (mounted) setState(() => _baseRate = (res.data as num?)?.toDouble() ?? 1.0);
-    } on DioException { /* rate not found — stay at 1.0 */ }
+      final rate = (res.data as num?)?.toDouble() ?? 1.0;
+      if (!mounted) return;
+      setState(() {
+        if (isParty) {
+          _partyRate = rate;
+        } else {
+          _rateCtrl.text = _fmtRate(rate);
+        }
+      });
+    } on DioException { /* rate not found — keep default */ }
   }
 
-  // ── Amount changed on line 1 — mirror to line 2 when 2-line voucher ───────
+  // ── Load pending bills ────────────────────────────────────────────────────
 
-  void _onAmountChanged() {
-    if (_lines.length == 2) {
-      _lines[1].amountCtrl.text = _lines[0].amountCtrl.text;
+  Future<void> _loadPendingBills({Map<String, double>? savedPaid}) async {
+    if (_partyId == null) return;
+    final session = ref.read(sessionProvider)!;
+    if (session.locationId == null) return;
+    setState(() => _loadingBills = true);
+    try {
+      final res = await DioClient.instance.get('/v_pending_bills', queryParameters: {
+        'company_id':  'eq.${session.companyId}',
+        'location_id': 'eq.${session.locationId}',
+        'account_id':  'eq.$_partyId',
+        'select': 'trans_no,trans_date,inv_bill_no,inv_bill_date,'
+                  'bill_amount,settled_amount,balance_amount,party_currency',
+        'order': 'trans_date.asc',
+      });
+      final rows = List<Map<String, dynamic>>.from(res.data as List);
+      for (final b in _bills) b.dispose();
+      setState(() {
+        _bills = rows.map((r) {
+          final bn = r['inv_bill_no'] as String? ?? '';
+          return _BillRow(
+            transNo:       r['trans_no']        as String? ?? '',
+            transDate:     r['trans_date']      as String? ?? '',
+            invBillNo:     bn,
+            invBillDate:   r['inv_bill_date']   as String?,
+            billAmount:    (r['bill_amount']    as num? ?? 0).toDouble(),
+            settledAmount: (r['settled_amount'] as num? ?? 0).toDouble(),
+            balanceAmount: (r['balance_amount'] as num? ?? 0).toDouble(),
+            partyCurrency: r['party_currency']  as String? ?? _partyCurrency,
+            initialPay:    savedPaid?[bn] ?? 0,
+          );
+        }).toList();
+        _loadingBills = false;
+      });
+    } catch (_) {
+      setState(() => _loadingBills = false);
     }
-    setState(() {});
-  }
-
-  // ── Add / remove counterpart lines (On Account only) ──────────────────────
-
-  void _addLine() {
-    if (_voucherType == null) return;
-    setState(() => _lines.add(_VLine(
-      transNature: counterNature(line1Nature(_voucherType!)),
-    )));
-  }
-
-  void _removeLine(int index) {
-    if (index <= 1) return; // keep line 1 and at least line 2
-    final removed = _lines.removeAt(index);
-    removed.dispose();
-    setState(() {});
   }
 
   // ── Computed totals ───────────────────────────────────────────────────────
 
-  double get _drTotal => _lines
-      .where((l) => l.transNature == 'DR')
-      .fold(0.0, (s, l) => s + l.amount);
+  double get _totalTransAmount {
+    if (!_isOnAccount) {
+      return _bills.fold(0.0, (s, b) => s + b.payTrans);
+    }
+    return _accountLines.fold(0.0, (s, l) => s + l.amount);
+  }
 
-  double get _crTotal => _lines
-      .where((l) => l.transNature == 'CR')
-      .fold(0.0, (s, l) => s + l.amount);
+  // balance_party → balance in trans currency
+  double _balanceTrans(double balanceParty) {
+    if (_partyRate <= 0 || _rate <= 0) return balanceParty;
+    return balanceParty * _rate / _partyRate;
+  }
 
-  bool get _isBalanced => isVoucherBalanced(_drTotal, _crTotal);
+  // payTrans → pay in party currency
+  double _payParty(double payTrans) {
+    if (_rate <= 0) return payTrans;
+    return payTrans * _partyRate / _rate;
+  }
 
   // ── Save draft ────────────────────────────────────────────────────────────
 
   Future<bool> _saveDraft() async {
     final session = ref.read(sessionProvider)!;
-    if (_voucherType == null) {
-      _showSnack('Select a voucher type first.');
+    if (_voucherType == null) { _showSnack('Select a voucher type first.'); return false; }
+    if (_cashBankId == null)  { _showSnack('Select a cash / bank account.'); return false; }
+    if (!_isOnAccount && _partyId == null) {
+      _showSnack('Select a customer or supplier for Against Bill mode.');
       return false;
     }
-    if (_lines.any((l) => l.accountId == null)) {
-      _showSnack('All lines must have an account selected.');
-      return false;
-    }
+    if (_totalTransAmount <= 0) { _showSnack('Enter at least one payment amount.'); return false; }
+
     setState(() { _saving = true; _actionError = null; });
     try {
+      final tc    = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
+      final rate  = _rate;
+      final n1    = line1Nature(_voucherType!);
+      final n2    = counterNature(n1);
+      final total = _totalTransAmount;
+
       final header = {
         'client_id':         session.clientId,
         'company_id':        session.companyId,
         'location_id':       session.locationId,
-        'trans_no':          _transNo ?? '',
+        'trans_no':          _voucherNo ?? '',
         'trans_date':        _fmtDate(_transDate),
         'voucher_type_code': _voucherType,
         'payment_mode_code': _paymentMode ?? '',
         'is_on_account':     _isOnAccount,
-        'reference_no':      _refNo ?? '',
-        'cheque_no':         _chequeNo ?? '',
+        'reference_no':      _refNoCtrl.text,
+        'reference_date':    _refDate != null ? _fmtDate(_refDate!) : '',
+        'cheque_no':         _chequeNoCtrl.text,
         'cheque_date':       _chequeDate != null ? _fmtDate(_chequeDate!) : '',
         'remarks':           _remarksCtrl.text,
       };
 
-      final lines = _lines.asMap().entries.map((e) {
-        final idx = e.key;
-        final l   = e.value;
-        final amt = l.amount;
-        final tc  = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
-        final baseAmt  = toBaseAmount(amt, _baseRate, tc, _baseCurrency);
-        final localAmt = toLocalAmount(amt, _baseRate, _localRate, tc, _localCurrency);
-        return {
-          'serial_no':     idx + 1,
-          'account_id':    l.accountId,
-          'trans_nature':  l.transNature,
-          'trans_amount':  amt,
-          'trans_currency': tc,
-          'base_amount':   baseAmt,
-          'base_rate':     _baseRate,
-          'local_amount':  localAmt,
-          'local_rate':    _localRate,
-          'party_amount':  amt,
-          'party_currency': tc,
-          'party_rate':    1.0,
-          'inv_bill_no':   l.invBillNo ?? '',
-          'inv_bill_date': '',
-          'line_remarks':  l.remarksCtrl.text,
-        };
-      }).toList();
+      final lines = <Map<String, dynamic>>[];
+
+      // Line 1 — cash / bank
+      lines.add({
+        'serial_no':      1,
+        'account_id':     _cashBankId,
+        'trans_nature':   n1,
+        'trans_amount':   total,
+        'trans_currency': tc,
+        'base_amount':    toBaseAmount(total, rate, tc, _baseCurrency),
+        'base_rate':      rate,
+        'local_amount':   toLocalAmount(total, rate, _localRate, tc, _localCurrency),
+        'local_rate':     _localRate,
+        'party_amount':   total,
+        'party_currency': tc,
+        'party_rate':     rate,
+        'inv_bill_no':    '',
+        'inv_bill_date':  '',
+        'line_remarks':   '',
+      });
+
+      // Lines 2+ — bills or on-account
+      var serial = 2;
+      if (!_isOnAccount) {
+        for (final bill in _bills) {
+          if (bill.payTrans <= 0) continue;
+          final payTrans = bill.payTrans;
+          final payParty = _payParty(payTrans);
+          lines.add({
+            'serial_no':      serial++,
+            'account_id':     _partyId,
+            'trans_nature':   n2,
+            'trans_amount':   payTrans,
+            'trans_currency': tc,
+            'base_amount':    toBaseAmount(payTrans, rate, tc, _baseCurrency),
+            'base_rate':      rate,
+            'local_amount':   toLocalAmount(payTrans, rate, _localRate, tc, _localCurrency),
+            'local_rate':     _localRate,
+            'party_amount':   payParty,
+            'party_currency': _partyCurrency.isEmpty ? tc : _partyCurrency,
+            'party_rate':     _partyRate,
+            'inv_bill_no':    bill.invBillNo,
+            'inv_bill_date':  bill.invBillDate ?? '',
+            'line_remarks':   '',
+          });
+        }
+      } else {
+        for (final line in _accountLines) {
+          if (line.accountId == null || line.amount <= 0) continue;
+          lines.add({
+            'serial_no':      serial++,
+            'account_id':     line.accountId,
+            'trans_nature':   n2,
+            'trans_amount':   line.amount,
+            'trans_currency': tc,
+            'base_amount':    toBaseAmount(line.amount, rate, tc, _baseCurrency),
+            'base_rate':      rate,
+            'local_amount':   toLocalAmount(line.amount, rate, _localRate, tc, _localCurrency),
+            'local_rate':     _localRate,
+            'party_amount':   line.amount,
+            'party_currency': tc,
+            'party_rate':     rate,
+            'inv_bill_no':    '',
+            'inv_bill_date':  '',
+            'line_remarks':   line.remarksCtrl.text,
+          });
+        }
+      }
+
+      if (lines.length < 2) {
+        _showSnack('Add at least one payment line.');
+        setState(() => _saving = false);
+        return false;
+      }
 
       final res = await DioClient.instance.post(
         '/rpc/fn_save_finance_voucher',
         data: {'p_header': header, 'p_lines': lines, 'p_user_id': session.userId},
       );
-
       if (mounted) {
-        setState(() { _transNo = res.data as String?; _saving = false; });
-        _showSnack('Draft saved — $_transNo', color: AppColors.positive);
+        setState(() { _voucherNo = res.data as String?; _saving = false; });
+        _showSnack('Draft saved — $_voucherNo', color: AppColors.positive);
         return true;
       }
     } on DioException catch (e) {
@@ -414,13 +627,12 @@ class _FinanceVoucherEntryScreenState
   // ── Post voucher ──────────────────────────────────────────────────────────
 
   Future<void> _postVoucher() async {
-    if (!_isBalanced) { _showSnack('Voucher is not balanced — DR must equal CR.'); return; }
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Post Voucher'),
-        content: const Text('Once posted this voucher is locked permanently. Continue?'),
+        content: const Text(
+            'Once posted this voucher is locked permanently. Continue?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context, rootNavigator: true).pop(false),
@@ -436,7 +648,7 @@ class _FinanceVoucherEntryScreenState
     );
     if (confirmed != true) return;
 
-    if (_transNo == null) {
+    if (_voucherNo == null) {
       final saved = await _saveDraft();
       if (!saved) return;
     }
@@ -448,12 +660,12 @@ class _FinanceVoucherEntryScreenState
         'p_client_id':   session.clientId,
         'p_company_id':  session.companyId,
         'p_location_id': session.locationId,
-        'p_trans_no':    _transNo,
+        'p_trans_no':    _voucherNo,
         'p_posted_by':   session.userId,
       });
       if (mounted) {
         setState(() { _isPosted = true; _posting = false; });
-        _showSnack('$_transNo posted successfully.', color: AppColors.positive);
+        _showSnack('$_voucherNo posted successfully.', color: AppColors.positive);
       }
     } on DioException catch (e) {
       if (mounted) setState(() {
@@ -463,37 +675,49 @@ class _FinanceVoucherEntryScreenState
     }
   }
 
-  // ── Date picker ───────────────────────────────────────────────────────────
-
-  Future<void> _pickDate(DateTime current, ValueChanged<DateTime> onPicked) async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: current,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2099),
-    );
-    if (d != null) onPicked(d);
-  }
-
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  String _fmtDate(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')}';
-
-  String _displayDate(DateTime d) {
-    const m = ['','Jan','Feb','Mar','Apr','May','Jun',
-        'Jul','Aug','Sep','Oct','Nov','Dec'];
-    return '${d.day.toString().padLeft(2,'0')} ${m[d.month]} ${d.year}';
+  String _extractCurrency(Map<String, dynamic> account) {
+    final rel = account['rim_currencies'];
+    if (rel is Map) return rel['currency_id'] as String? ?? _baseCurrency;
+    return _baseCurrency;
   }
+
+  String _fmtDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  String _displayDate(DateTime? d) {
+    if (d == null) return 'Select date';
+    const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${d.day.toString().padLeft(2, '0')} ${m[d.month]} ${d.year}';
+  }
+
+  String _fmtRate(double r) {
+    if (r >= 1000) return r.toStringAsFixed(2);
+    if (r >= 1)    return r.toStringAsFixed(4);
+    return r.toStringAsFixed(8);
+  }
+
+  String _fmtAmt(double a) => a.toStringAsFixed(2);
 
   void _showSnack(String msg, {Color? color}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: color),
-    );
+        SnackBar(content: Text(msg), backgroundColor: color));
   }
 
-  List<Map<String, dynamic>> get _line1Accounts =>
+  Future<void> _pickDate(DateTime? current, ValueChanged<DateTime> onPicked) async {
+    final d = await showDatePicker(
+      context: context,
+      initialDate: current ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate:  DateTime(2099),
+    );
+    if (d != null) onPicked(d);
+  }
+
+  List<Map<String, dynamic>> get _cashBankList =>
       _voucherType == null ? [] :
       isCashVoucher(_voucherType!) ? _cashAccounts : _bankAccounts;
 
@@ -505,53 +729,46 @@ class _FinanceVoucherEntryScreenState
     final isOffline = session?.offlineMode ?? false;
     final locked    = _isPosted || isOffline;
 
+    String title;
+    if (_voucherNo != null) {
+      title = '${_typeLabels[_voucherType] ?? 'Voucher'}  ·  $_voucherNo';
+    } else if (_voucherType != null) {
+      title = 'New ${_typeLabels[_voucherType] ?? 'Voucher'}';
+    } else {
+      title = 'New Finance Voucher';
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
 
-        // ── Page header ──────────────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: Row(children: [
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title,
+                style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary)),
+            const SizedBox(height: 2),
+            if (_isPosted)
+              _statusChip('POSTED — read only', AppColors.positive)
+            else
               Text(
-                _transNo != null
-                    ? '${_typeLabels[_voucherType] ?? 'Voucher'}  ·  $_transNo'
-                    : _voucherType != null
-                        ? 'New ${_typeLabels[_voucherType] ?? 'Voucher'}'
-                        : 'New Finance Voucher',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700,
-                    color: AppColors.primary),
+                _voucherNo != null ? 'Draft' : 'Unsaved draft',
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
-              const SizedBox(height: 2),
-              if (_isPosted)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.positive.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: AppColors.positive.withOpacity(0.4)),
-                  ),
-                  child: const Text('POSTED — read only',
-                      style: TextStyle(fontSize: 11, color: AppColors.positive,
-                          fontWeight: FontWeight.w600)),
-                )
-              else
-                Text(_transNo != null ? 'Draft' : 'Unsaved draft',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            ])),
           ]),
         ),
 
         const Divider(height: 20),
 
-        // ── Body ─────────────────────────────────────────────────────────────
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -561,7 +778,8 @@ class _FinanceVoucherEntryScreenState
                       ],
                       _buildHeaderCard(locked),
                       const SizedBox(height: 20),
-                      _buildLinesSection(locked),
+                      if (!_isOnAccount) _buildAgainstBillSection(locked),
+                      if (_isOnAccount)  _buildOnAccountSection(locked),
                       const SizedBox(height: 12),
                       _buildTotalsBar(),
                       if (_actionError != null) ...[
@@ -570,7 +788,7 @@ class _FinanceVoucherEntryScreenState
                       ],
                       if (!locked) ...[
                         const SizedBox(height: 20),
-                        _buildButtons(),
+                        _buildActionButtons(),
                       ],
                     ],
                   ),
@@ -583,6 +801,9 @@ class _FinanceVoucherEntryScreenState
   // ── Header card ───────────────────────────────────────────────────────────
 
   Widget _buildHeaderCard(bool locked) {
+    final isCash = _voucherType != null && isCashVoucher(_voucherType!);
+    final showRateField = _transCurrency.isNotEmpty && _transCurrency != _baseCurrency;
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -593,14 +814,17 @@ class _FinanceVoucherEntryScreenState
         padding: const EdgeInsets.all(16),
         child: Column(children: [
 
-          // Row 1: Voucher Type | Trans No | Date
+          // Row 1: Voucher Type | Voucher No | Date
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Expanded(
-              flex: 3,
+              flex: 4,
               child: DropdownButtonFormField<String>(
-                decoration: const InputDecoration(labelText: 'Voucher Type *',
-                    border: OutlineInputBorder(), isDense: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+                decoration: const InputDecoration(
+                    labelText: 'Voucher Type *',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
                 value: _voucherType,
                 isExpanded: true,
                 items: _supportedTypes.map((t) => DropdownMenuItem(
@@ -609,108 +833,268 @@ class _FinanceVoucherEntryScreenState
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 13)),
                 )).toList(),
-                onChanged: locked ? null : (v) { if (v != null) _applyVoucherType(v); },
+                onChanged:
+                    locked ? null : (v) { if (v != null) _applyVoucherType(v); },
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 3,
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                    labelText: 'Voucher No',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+                child: Text(
+                  _voucherNo ?? '(auto on save)',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: _voucherNo != null
+                          ? AppColors.textPrimary
+                          : AppColors.textDisabled),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 3,
+              child: InkWell(
+                onTap: locked
+                    ? null
+                    : () => _pickDate(
+                        _transDate, (d) => setState(() => _transDate = d)),
+                child: InputDecorator(
+                  decoration: InputDecoration(
+                    labelText: 'Date *',
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    suffixIcon: Icon(Icons.calendar_today_outlined,
+                        size: 15,
+                        color: locked
+                            ? AppColors.textDisabled
+                            : AppColors.primary),
+                  ),
+                  child: Text(_displayDate(_transDate),
+                      style: const TextStyle(fontSize: 13)),
+                ),
+              ),
+            ),
+          ]),
+
+          const SizedBox(height: 12),
+
+          // Row 2: Cash/Bank Account | Currency | Rate (1 base = X trans)
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(
+              flex: 5,
+              child: DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                    labelText: isCash ? 'Cash Account *' : 'Bank Account *',
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+                value: _cashBankId,
+                isExpanded: true,
+                items: _cashBankList.map((a) => DropdownMenuItem(
+                  value: a['id'] as String,
+                  child: Text(a['account_name'] as String,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13)),
+                )).toList(),
+                onChanged: locked
+                    ? null
+                    : (v) {
+                        if (v == null) return;
+                        final acc =
+                            _cashBankList.where((a) => a['id'] == v).firstOrNull;
+                        if (acc != null) _onCashBankSelected(acc);
+                      },
+              ),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 80,
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                    labelText: 'Currency',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+                child: Text(
+                  _transCurrency.isEmpty ? '—' : _transCurrency,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600),
+                ),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               flex: 2,
-              child: InputDecorator(
-                decoration: const InputDecoration(labelText: 'Trans No',
-                    border: OutlineInputBorder(), isDense: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
-                child: Text(
-                  _transNo ?? '(auto on save)',
-                  style: TextStyle(fontSize: 13,
-                      color: _transNo != null ? AppColors.textPrimary : AppColors.textDisabled),
+              child: TextFormField(
+                controller: _rateCtrl,
+                enabled: !locked && showRateField,
+                decoration: InputDecoration(
+                  labelText: showRateField
+                      ? '1 $_baseCurrency = '
+                      : 'Rate',
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  hintText: '1.0',
                 ),
+                style: const TextStyle(fontSize: 13),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))
+                ],
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+          ]),
+
+          const SizedBox(height: 12),
+
+          // Row 3: Payment Mode | Ref No | Ref Date | Remarks
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(
+              flex: 2,
+              child: DropdownButtonFormField<String>(
+                decoration: const InputDecoration(
+                    labelText: 'Payment Mode',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+                value: _paymentMode,
+                isExpanded: true,
+                items: _paymentModes.map((m) => DropdownMenuItem(
+                  value: m['payment_mode_code'] as String,
+                  child: Text(m['payment_mode_name'] as String,
+                      style: const TextStyle(fontSize: 13)),
+                )).toList(),
+                // Lock to CASH for cash vouchers; editable for bank vouchers
+                onChanged: (locked || isCash)
+                    ? null
+                    : (v) => setState(() => _paymentMode = v),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: TextFormField(
+                controller: _refNoCtrl,
+                enabled: !locked,
+                decoration: const InputDecoration(
+                    labelText: 'Ref No',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+                style: const TextStyle(fontSize: 13),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               flex: 2,
               child: InkWell(
-                onTap: locked ? null
-                    : () => _pickDate(_transDate, (d) => setState(() => _transDate = d)),
+                onTap: locked
+                    ? null
+                    : () => _pickDate(
+                        _refDate, (d) => setState(() => _refDate = d)),
                 child: InputDecorator(
                   decoration: InputDecoration(
-                    labelText: 'Date *',
-                    border: const OutlineInputBorder(), isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                    suffixIcon: Icon(Icons.calendar_today_outlined, size: 15,
-                        color: locked ? AppColors.textDisabled : AppColors.primary),
+                    labelText: 'Ref Date',
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    suffixIcon: Icon(Icons.calendar_today_outlined,
+                        size: 15,
+                        color: locked
+                            ? AppColors.textDisabled
+                            : AppColors.primary),
                   ),
-                  child: Text(_displayDate(_transDate), style: const TextStyle(fontSize: 13)),
+                  child: Text(
+                    _displayDate(_refDate),
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: _refDate != null
+                            ? AppColors.textPrimary
+                            : AppColors.textDisabled),
+                  ),
                 ),
               ),
             ),
-          ]),
-
-          const SizedBox(height: 12),
-
-          // Row 2: Payment Mode | On Account / Against Invoice
-          Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            const SizedBox(width: 12),
             Expanded(
-              flex: 2,
-              child: DropdownButtonFormField<String>(
-                decoration: const InputDecoration(labelText: 'Payment Mode',
-                    border: OutlineInputBorder(), isDense: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
-                value: _paymentMode,
-                items: _paymentModes.map((m) => DropdownMenuItem(
-                  value: m['payment_mode_code'] as String,
-                  child: Text(m['payment_mode_name'] as String,
-                      style: const TextStyle(fontSize: 13)),
-                )).toList(),
-                onChanged: locked ? null : (v) => setState(() => _paymentMode = v),
+              flex: 3,
+              child: TextFormField(
+                controller: _remarksCtrl,
+                enabled: !locked,
+                decoration: const InputDecoration(
+                    labelText: 'Remarks',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+                style: const TextStyle(fontSize: 13),
               ),
             ),
-            const SizedBox(width: 24),
-            Row(children: [
-              Radio<bool>(value: false, groupValue: _isOnAccount,
-                  onChanged: locked ? null : (_) => setState(() => _isOnAccount = false)),
-              const Text('Against Invoice', style: TextStyle(fontSize: 13)),
-              const SizedBox(width: 16),
-              Radio<bool>(value: true, groupValue: _isOnAccount,
-                  onChanged: locked ? null : (_) => setState(() => _isOnAccount = true)),
-              const Text('On Account', style: TextStyle(fontSize: 13)),
-            ]),
           ]),
 
-          // Cheque fields — only when CHEQUE mode
+          // Cheque row — only for CHEQUE payment mode
           if (_paymentMode == 'CHEQUE') ...[
             const SizedBox(height: 12),
             Row(children: [
               Expanded(
                 child: TextFormField(
+                  controller: _chequeNoCtrl,
                   enabled: !locked,
-                  initialValue: _chequeNo,
-                  decoration: const InputDecoration(labelText: 'Cheque No',
-                      border: OutlineInputBorder(), isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+                  decoration: const InputDecoration(
+                      labelText: 'Cheque No',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
                   style: const TextStyle(fontSize: 13),
-                  onChanged: (v) => _chequeNo = v.isEmpty ? null : v,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: InkWell(
-                  onTap: locked ? null
-                      : () => _pickDate(_chequeDate ?? _transDate,
-                              (d) => setState(() => _chequeDate = d)),
+                  onTap: locked
+                      ? null
+                      : () => _pickDate(
+                          _chequeDate ?? _transDate,
+                          (d) => setState(() => _chequeDate = d)),
                   child: InputDecorator(
                     decoration: InputDecoration(
                       labelText: 'Cheque Date',
-                      border: const OutlineInputBorder(), isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                      suffixIcon: Icon(Icons.calendar_today_outlined, size: 15,
-                          color: locked ? AppColors.textDisabled : AppColors.primary),
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                      suffixIcon: Icon(Icons.calendar_today_outlined,
+                          size: 15,
+                          color: locked
+                              ? AppColors.textDisabled
+                              : AppColors.primary),
                     ),
                     child: Text(
-                      _chequeDate != null ? _displayDate(_chequeDate!) : 'Select date',
-                      style: TextStyle(fontSize: 13,
+                      _displayDate(_chequeDate),
+                      style: TextStyle(
+                          fontSize: 13,
                           color: _chequeDate != null
-                              ? AppColors.textPrimary : AppColors.textDisabled),
+                              ? AppColors.textPrimary
+                              : AppColors.textDisabled),
                     ),
                   ),
                 ),
@@ -720,339 +1104,477 @@ class _FinanceVoucherEntryScreenState
 
           const SizedBox(height: 12),
 
-          // Row 3: Ref No | Remarks
+          // Row 4: Against Bill | On Account toggle
           Row(children: [
-            Expanded(
-              child: TextFormField(
-                enabled: !locked,
-                initialValue: _refNo,
-                decoration: const InputDecoration(labelText: 'Reference No',
-                    border: OutlineInputBorder(), isDense: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
-                style: const TextStyle(fontSize: 13),
-                onChanged: (v) => _refNo = v.isEmpty ? null : v,
-              ),
+            Radio<bool>(
+              value: false,
+              groupValue: _isOnAccount,
+              onChanged: locked ? null : (_) => setState(() => _isOnAccount = false),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: TextFormField(
-                enabled: !locked,
-                controller: _remarksCtrl,
-                decoration: const InputDecoration(labelText: 'Remarks',
-                    border: OutlineInputBorder(), isDense: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
-                style: const TextStyle(fontSize: 13),
-              ),
+            const Text('Against Bill', style: TextStyle(fontSize: 13)),
+            const SizedBox(width: 20),
+            Radio<bool>(
+              value: true,
+              groupValue: _isOnAccount,
+              onChanged: locked ? null : (_) => setState(() => _isOnAccount = true),
             ),
+            const Text('On Account', style: TextStyle(fontSize: 13)),
           ]),
         ]),
       ),
     );
   }
 
-  // ── Lines section ─────────────────────────────────────────────────────────
+  // ── Against Bill section ──────────────────────────────────────────────────
 
-  Widget _buildLinesSection(bool locked) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        const Text('Journal Lines',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
-                color: AppColors.primary)),
-        const Spacer(),
-        if (!locked && _isOnAccount && _voucherType != null)
-          TextButton.icon(
-            icon: const Icon(Icons.add, size: 16),
-            label: const Text('Add Line'),
-            onPressed: _addLine,
+  Widget _buildAgainstBillSection(bool locked) {
+    final transCurr = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
+    final partyCurr = _partyCurrency.isEmpty ? transCurr : _partyCurrency;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DropdownButtonFormField<String>(
+          decoration: const InputDecoration(
+              labelText: 'Customer / Supplier *',
+              border: OutlineInputBorder(),
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+          value: _partyId,
+          isExpanded: true,
+          items: _partyAccounts.map((a) => DropdownMenuItem(
+            value: a['id'] as String,
+            child: Text(a['account_name'] as String,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13)),
+          )).toList(),
+          onChanged: locked
+              ? null
+              : (v) {
+                  if (v == null) return;
+                  final acc =
+                      _partyAccounts.where((a) => a['id'] == v).firstOrNull;
+                  if (acc != null) _onPartySelected(acc);
+                },
+        ),
+
+        if (_partyCurrency.isNotEmpty && _partyCurrency != transCurr) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Party currency: $_partyCurrency  ·  '
+            'Rate: 1 $_baseCurrency = ${_fmtRate(_partyRate)} $_partyCurrency',
+            style: const TextStyle(
+                fontSize: 11, color: AppColors.textSecondary),
           ),
-      ]),
-      const SizedBox(height: 6),
+        ],
 
-      // Table header
-      Container(
-        decoration: const BoxDecoration(
-          color: AppColors.primary,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
-        ),
-        child: Row(children: [
-          _th('#',         width: 36),
-          _th('Account',   flex: 3),
-          _th('DR',        flex: 2, align: TextAlign.right),
-          _th('CR',        flex: 2, align: TextAlign.right),
-          _th('Remarks',   flex: 2),
-          if (!locked) const SizedBox(width: 36),
-        ]),
-      ),
+        const SizedBox(height: 16),
 
-      // Lines
-      Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.border),
-          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(8)),
-        ),
-        child: Column(
-          children: [
-            for (int i = 0; i < _lines.length; i++) ...[
-              if (i > 0) Divider(height: 1, color: AppColors.border),
-              _buildLineRow(i, locked),
-            ],
-          ],
-        ),
-      ),
-    ]);
-  }
-
-  Widget _th(String t, {double? width, int flex = 1, TextAlign align = TextAlign.left}) {
-    final child = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      child: Text(t, textAlign: align,
-          style: const TextStyle(color: Colors.white,
-              fontWeight: FontWeight.w600, fontSize: 12)),
+        if (_partyId == null)
+          const Text(
+            'Select a customer or supplier to see pending bills.',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          )
+        else if (_loadingBills)
+          const Center(
+              child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: CircularProgressIndicator()))
+        else if (_bills.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: const Text('No pending bills found for this party.',
+                style: TextStyle(
+                    fontSize: 13, color: AppColors.textSecondary)),
+          )
+        else ...[
+          const Text('Pending Bills',
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary)),
+          const SizedBox(height: 8),
+          _buildBillsTable(locked, transCurr, partyCurr),
+        ],
+      ],
     );
-    if (width != null) return SizedBox(width: width, child: child);
-    return Expanded(flex: flex, child: child);
   }
 
-  Widget _buildLineRow(int idx, bool locked) {
-    final line   = _lines[idx];
-    final isLine1 = idx == 0;
-    final accounts = isLine1 ? _line1Accounts : _allAccounts;
+  Widget _buildBillsTable(bool locked, String transCurr, String partyCurr) {
+    const w1 = 130.0; // Bill No
+    const w2 = 95.0;  // Bill Date
+    const w3 = 110.0; // Bill Amt (party)
+    const w4 = 100.0; // Paid (party)
+    const w5 = 100.0; // Balance (party)
+    const w6 = 105.0; // Balance (trans)
+    const w7 = 125.0; // Pay (trans) — editable
+    const w8 = 110.0; // Pay (party) — calculated
 
-    return StatefulBuilder(
-      builder: (_, setRow) => Container(
-        color: isLine1 ? AppColors.primary.withOpacity(0.04) : Colors.white,
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Widget hdr(String label, double w) => SizedBox(
+      width: w,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        child: Text(label,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.white)),
+      ),
+    );
 
-          // # serial
-          SizedBox(
-            width: 36,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 14, left: 8),
-              child: Text('${idx + 1}',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
-                      color: isLine1 ? AppColors.primary : AppColors.textSecondary)),
+    Widget hdrLeft(String label, double w) => SizedBox(
+      width: w,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        child: Text(label,
+            style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.white)),
+      ),
+    );
+
+    Widget cell(String value, double w, {Color? color}) => SizedBox(
+      width: w,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: Text(value,
+            textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                fontSize: 12,
+                color: color ?? AppColors.textPrimary)),
+      ),
+    );
+
+    Widget cellLeft(String value, double w) => SizedBox(
+      width: w,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: Text(value,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12)),
+      ),
+    );
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Container(
+            decoration: const BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(6)),
+            ),
+            child: Row(children: [
+              hdrLeft('Bill No', w1),
+              hdrLeft('Bill Date', w2),
+              hdr('Bill Amt\n($partyCurr)', w3),
+              hdr('Paid\n($partyCurr)', w4),
+              hdr('Balance\n($partyCurr)', w5),
+              hdr('Balance\n($transCurr)', w6),
+              hdr('Pay\n($transCurr)', w7),
+              hdr('Pay\n($partyCurr)', w8),
+            ]),
+          ),
+
+          // Data rows
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.border),
+              borderRadius:
+                  const BorderRadius.vertical(bottom: Radius.circular(6)),
+            ),
+            child: Column(
+              children: _bills.asMap().entries.map((e) {
+                final i    = e.key;
+                final bill = e.value;
+                final balTrans = _balanceTrans(bill.balanceAmount);
+                final payParty = _payParty(bill.payTrans);
+                final dateStr  = bill.transDate.length >= 10
+                    ? bill.transDate.substring(0, 10)
+                    : bill.transDate;
+
+                return Container(
+                  color: i.isOdd ? Colors.grey.shade50 : Colors.white,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      cellLeft(bill.invBillNo, w1),
+                      cellLeft(dateStr, w2),
+                      cell(_fmtAmt(bill.billAmount), w3),
+                      cell(_fmtAmt(bill.settledAmount), w4),
+                      cell(_fmtAmt(bill.balanceAmount), w5,
+                          color: AppColors.negative),
+                      cell(_fmtAmt(balTrans), w6),
+                      // Pay (trans) — editable
+                      SizedBox(
+                        width: w7,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 4),
+                          child: TextFormField(
+                            controller: bill.payTransCtrl,
+                            enabled: !locked,
+                            textAlign: TextAlign.right,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 6),
+                            ),
+                            style: const TextStyle(fontSize: 12),
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                  RegExp(r'[\d.]'))
+                            ],
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ),
+                      ),
+                      cell(_fmtAmt(payParty), w8,
+                          color: AppColors.positive),
+                    ],
+                  ),
+                );
+              }).toList(),
             ),
           ),
+        ],
+      ),
+    );
+  }
 
-          // Account + invoice field
-          Expanded(
-            flex: 3,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                DropdownButtonFormField<String>(
-                  decoration: InputDecoration(
-                    border: const OutlineInputBorder(), isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    hintText: isLine1 ? 'Select Cash/Bank account' : 'Select account',
-                    hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled),
-                  ),
+  // ── On Account section ────────────────────────────────────────────────────
+
+  Widget _buildOnAccountSection(bool locked) {
+    final n2   = _voucherType != null
+        ? counterNature(line1Nature(_voucherType!))
+        : '—';
+    final verb = n2 == 'DR' ? 'Debit' : 'Credit';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Text('$verb Accounts',
+              style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary)),
+          const Spacer(),
+          if (!locked)
+            TextButton.icon(
+              onPressed: () =>
+                  setState(() => _accountLines.add(_AccountLine())),
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Add Line',
+                  style: TextStyle(fontSize: 13)),
+            ),
+        ]),
+        const SizedBox(height: 8),
+
+        ..._accountLines.asMap().entries.map((e) {
+          final i    = e.key;
+          final line = e.value;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              Expanded(
+                flex: 4,
+                child: DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(
+                      labelText: 'Account',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
                   value: line.accountId,
                   isExpanded: true,
-                  items: accounts.map((a) => DropdownMenuItem(
-                    value: a['id'] as String,
-                    child: Text(a['account_name'] as String,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13)),
-                  )).toList(),
-                  onChanged: locked ? null : (v) async {
-                    if (v == null) return;
-                    if (isLine1) {
-                      await _onLine1AccountSelected(v);
-                      setRow(() {});
-                    } else {
-                      final acc = _allAccounts
-                          .where((a) => a['id'] == v).firstOrNull;
-                      setState(() {
-                        line.accountId   = v;
-                        line.accountName = acc?['account_name'] as String?;
-                      });
-                    }
-                  },
+                  items: _otherAccounts.map((a) {
+                    final id = a['id'] as String;
+                    // Disable accounts already used in another line
+                    final used = _accountLines
+                        .where((l) => l != line && l.accountId == id)
+                        .isNotEmpty;
+                    return DropdownMenuItem(
+                      value: id,
+                      enabled: !used,
+                      child: Text(a['account_name'] as String,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: used
+                                  ? AppColors.textDisabled
+                                  : null)),
+                    );
+                  }).toList(),
+                  onChanged: locked
+                      ? null
+                      : (v) {
+                          if (v == null) return;
+                          final acc = _otherAccounts
+                              .where((a) => a['id'] == v)
+                              .firstOrNull;
+                          setState(() {
+                            line.accountId   = v;
+                            line.accountName = acc?['account_name'] as String?;
+                          });
+                        },
                 ),
-                // Invoice No field — Against Invoice + non-line-1
-                if (!_isOnAccount && !isLine1) ...[
-                  const SizedBox(height: 4),
-                  TextFormField(
-                    enabled: !locked,
-                    initialValue: line.invBillNo,
-                    style: const TextStyle(fontSize: 12),
-                    decoration: const InputDecoration(
-                      hintText: 'Invoice / Bill No',
-                      border: OutlineInputBorder(), isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                      hintStyle: TextStyle(fontSize: 11, color: AppColors.textDisabled),
-                      prefixIcon: Icon(Icons.receipt_outlined, size: 14),
-                    ),
-                    onChanged: (v) => line.invBillNo = v.isEmpty ? null : v,
-                  ),
-                ],
-              ]),
-            ),
-          ),
-
-          // DR column
-          Expanded(
-            flex: 2,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-              child: line.transNature == 'DR'
-                  ? _amountField(line.amountCtrl, locked, onChange: (_) {
-                      setRow(() {});
-                      if (isLine1) _onAmountChanged();
-                    })
-                  : _blankCell(),
-            ),
-          ),
-
-          // CR column
-          Expanded(
-            flex: 2,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-              child: line.transNature == 'CR'
-                  ? _amountField(line.amountCtrl, locked, onChange: (_) {
-                      setRow(() {});
-                      if (isLine1) _onAmountChanged();
-                    })
-                  : _blankCell(),
-            ),
-          ),
-
-          // Remarks — party lines only
-          Expanded(
-            flex: 2,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-              child: !isLine1
-                  ? TextFormField(
-                      enabled: !locked,
-                      controller: line.remarksCtrl,
-                      style: const TextStyle(fontSize: 12),
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(), isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                        hintText: 'Remark',
-                        hintStyle: TextStyle(fontSize: 11),
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ),
-
-          // Remove button (line 3+ only)
-          if (!locked)
-            SizedBox(
-              width: 36,
-              child: idx > 1
-                  ? IconButton(
-                      icon: const Icon(Icons.remove_circle_outline, size: 18),
-                      color: AppColors.negative,
-                      onPressed: () => _removeLine(idx),
-                      padding: const EdgeInsets.all(8),
-                      tooltip: 'Remove line',
-                    )
-                  : const SizedBox.shrink(),
-            ),
-        ]),
-      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: TextFormField(
+                  controller: line.amountCtrl,
+                  enabled: !locked,
+                  textAlign: TextAlign.right,
+                  decoration: const InputDecoration(
+                      labelText: 'Amount',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+                  style: const TextStyle(fontSize: 13),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))
+                  ],
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 3,
+                child: TextFormField(
+                  controller: line.remarksCtrl,
+                  enabled: !locked,
+                  decoration: const InputDecoration(
+                      labelText: 'Remarks',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+              if (!locked && _accountLines.length > 1) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: () {
+                    final removed = _accountLines.removeAt(i);
+                    removed.dispose();
+                    setState(() {});
+                  },
+                  icon: const Icon(Icons.remove_circle_outline,
+                      size: 18, color: AppColors.negative),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ]),
+          );
+        }),
+      ],
     );
   }
-
-  Widget _amountField(TextEditingController ctrl, bool locked,
-      {required ValueChanged<String> onChange}) {
-    return TextFormField(
-      controller: ctrl,
-      enabled: !locked,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-      onChanged: onChange,
-      textAlign: TextAlign.right,
-      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-      decoration: const InputDecoration(
-        border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      ),
-    );
-  }
-
-  Widget _blankCell() => Container(
-    height: 36,
-    decoration: BoxDecoration(
-      color: AppColors.surfaceVariant,
-      borderRadius: BorderRadius.circular(4),
-      border: Border.all(color: AppColors.border),
-    ),
-    alignment: Alignment.center,
-    child: const Text('—', style: TextStyle(color: AppColors.textDisabled)),
-  );
 
   // ── Totals bar ────────────────────────────────────────────────────────────
 
   Widget _buildTotalsBar() {
-    final balanced = _isBalanced;
+    final total     = _totalTransAmount;
+    final curr      = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
+    final partyCurr = _partyCurrency.isEmpty ? curr : _partyCurrency;
+    final hasAmount = total > 0;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: balanced
+        color: hasAmount
             ? AppColors.positive.withOpacity(0.06)
-            : AppColors.negative.withOpacity(0.06),
+            : Colors.grey.shade50,
         border: Border.all(
-          color: balanced
+          color: hasAmount
               ? AppColors.positive.withOpacity(0.3)
-              : AppColors.negative.withOpacity(0.3),
+              : AppColors.border,
         ),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(children: [
-        Text('DR: ${_drTotal.toStringAsFixed(2)}',
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-        const SizedBox(width: 24),
-        Text('CR: ${_crTotal.toStringAsFixed(2)}',
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-        if (_transCurrency.isNotEmpty) ...[
+        const Text('Total: ',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+        Text('${_fmtAmt(total)} $curr',
+            style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary)),
+        // In Against Bill mode show party total when party currency differs
+        if (!_isOnAccount &&
+            partyCurr.isNotEmpty &&
+            partyCurr != curr &&
+            total > 0) ...[
           const SizedBox(width: 8),
-          Text('($_transCurrency)',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          Text('= ${_fmtAmt(_payParty(total))} $partyCurr',
+              style: const TextStyle(
+                  fontSize: 13, color: AppColors.textSecondary)),
         ],
         const Spacer(),
-        Icon(
-          balanced ? Icons.check_circle_outline : Icons.warning_amber_outlined,
-          size: 18,
-          color: balanced ? AppColors.positive : AppColors.negative,
-        ),
-        const SizedBox(width: 6),
-        Text(
-          balanced ? 'Balanced' : 'Not balanced',
-          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13,
-              color: balanced ? AppColors.positive : AppColors.negative),
-        ),
+        if (hasAmount) ...[
+          const Icon(Icons.check_circle_outline,
+              size: 16, color: AppColors.positive),
+          const SizedBox(width: 4),
+          const Text('Balanced',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.positive)),
+        ] else
+          const Text('Enter amounts',
+              style: TextStyle(
+                  fontSize: 13, color: AppColors.textSecondary)),
       ]),
     );
   }
 
   // ── Action buttons ────────────────────────────────────────────────────────
 
-  Widget _buildButtons() {
+  Widget _buildActionButtons() {
     return Row(children: [
       OutlinedButton.icon(
+        onPressed: (_saving || _posting) ? null : _saveDraft,
         icon: _saving
-            ? const SizedBox(width: 14, height: 14,
+            ? const SizedBox(
+                width: 14,
+                height: 14,
                 child: CircularProgressIndicator(strokeWidth: 2))
             : const Icon(Icons.save_outlined, size: 16),
         label: Text(_saving ? 'Saving…' : 'Save Draft'),
-        onPressed: (_saving || _posting) ? null : _saveDraft,
-        style: OutlinedButton.styleFrom(minimumSize: const Size(140, 44)),
+        style: OutlinedButton.styleFrom(
+            minimumSize: const Size(140, 44)),
       ),
       const SizedBox(width: 12),
       FilledButton.icon(
+        onPressed: (_saving || _posting) ? null : _postVoucher,
         icon: _posting
-            ? const SizedBox(width: 14, height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            ? const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white))
             : const Icon(Icons.check_circle_outline, size: 16),
         label: Text(_posting ? 'Posting…' : 'Post Voucher'),
-        onPressed: (_saving || _posting) ? null : _postVoucher,
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.secondary,
           minimumSize: const Size(140, 44),
@@ -1061,7 +1583,7 @@ class _FinanceVoucherEntryScreenState
     ]);
   }
 
-  // ── Error banner ──────────────────────────────────────────────────────────
+  // ── Utility widgets ───────────────────────────────────────────────────────
 
   Widget _errorBanner(String msg) => Container(
     width: double.infinity,
@@ -1074,8 +1596,24 @@ class _FinanceVoucherEntryScreenState
     child: Row(children: [
       const Icon(Icons.error_outline, color: AppColors.negative, size: 16),
       const SizedBox(width: 8),
-      Expanded(child: Text(msg,
-          style: const TextStyle(color: AppColors.negative, fontSize: 13))),
+      Expanded(
+          child: Text(msg,
+              style: const TextStyle(
+                  color: AppColors.negative, fontSize: 13))),
     ]),
+  );
+
+  Widget _statusChip(String label, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(4),
+      border: Border.all(color: color.withOpacity(0.4)),
+    ),
+    child: Text(label,
+        style: TextStyle(
+            fontSize: 11,
+            color: color,
+            fontWeight: FontWeight.w600)),
   );
 }
