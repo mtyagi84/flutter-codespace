@@ -26,7 +26,7 @@ class ExchangeRateLocalDs {
   Future<void> upsertRates(List<ExchangeRateModel> rates) async {
     await _db.batch((batch) {
       for (final r in rates) {
-        batch.insertOnConflictUpdate(
+        batch.insert(
           _db.exchangeRateCache,
           ExchangeRateCacheEntry(
             id:           r.id,
@@ -42,6 +42,7 @@ class ExchangeRateLocalDs {
             isDeleted:    r.isDeleted,
             syncedAt:     DateTime.now(),
           ),
+          mode: InsertMode.insertOrReplace,
         );
       }
     });
