@@ -7,13 +7,11 @@ class SakalApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SelectionContainer.disabled(
-      child: MaterialApp.router(
-        title: 'SAKAL ERP',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        routerConfig: appRouter,
-      ),
+    return MaterialApp.router(
+      title: 'SAKAL ERP',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
+      routerConfig: appRouter,
     );
   }
 }
