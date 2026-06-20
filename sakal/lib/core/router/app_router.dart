@@ -42,6 +42,13 @@ final appRouter = GoRouter(
     return null;
   },
   routes: [
+    // Outer shell — only purpose is SelectionArea for app-wide text selection.
+    // Must be inside a route (i.e., inside the Navigator) so that the Overlay
+    // ancestor required by SelectionArea already exists.
+    ShellRoute(
+      builder: (context, state, child) => SelectionArea(child: child),
+      routes: [
+
     // Public routes
     GoRoute(path: RouteNames.landing,  builder: (c, s) => const LandingScreen()),
     GoRoute(path: RouteNames.login,    builder: (c, s) => const LoginScreen()),
@@ -121,6 +128,8 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.balanceSheet, builder: (c, s) => const _Placeholder('Balance Sheet')),
       ],
     ),
+
+      ]), // outer SelectionArea ShellRoute
   ],
 );
 
