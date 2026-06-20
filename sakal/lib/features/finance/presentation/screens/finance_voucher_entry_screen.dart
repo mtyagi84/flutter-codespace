@@ -41,12 +41,14 @@ class _BillRow {
 class _AccountLine {
   String? accountId;
   String? accountName;
+  String  accountCurrency; // ledger currency of this account
   final TextEditingController amountCtrl;
   final TextEditingController remarksCtrl;
 
   _AccountLine({
     this.accountId,
     this.accountName,
+    this.accountCurrency = '',
     String amount  = '',
     String remarks = '',
   })  : amountCtrl  = TextEditingController(text: amount),
@@ -355,10 +357,11 @@ class _FinanceVoucherEntryScreenState
           final accId = row['account_id'] as String?;
           final acc   = _otherAccounts.where((a) => a['id'] == accId).firstOrNull;
           return _AccountLine(
-            accountId:   accId,
-            accountName: acc?['account_name'] as String?,
-            amount:      (row['trans_amount'] as num? ?? 0).toString(),
-            remarks:     row['line_remarks']  as String? ?? '',
+            accountId:       accId,
+            accountName:     acc?['account_name'] as String?,
+            accountCurrency: acc != null ? _extractCurrency(acc) : '',
+            amount:          (row['trans_amount'] as num? ?? 0).toString(),
+            remarks:         row['line_remarks']  as String? ?? '',
           );
         }).toList();
 
@@ -505,6 +508,10 @@ class _FinanceVoucherEntryScreenState
       _showSnack('Select a customer or supplier for Against Bill mode.');
       return false;
     }
+    if (_paymentMode == 'CHEQUE' && _chequeNoCtrl.text.trim().isEmpty) {
+      _showSnack('Enter a cheque number for Cheque payment mode.');
+      return false;
+    }
     if (_totalTransAmount <= 0) { _showSnack('Enter at least one payment amount.'); return false; }
 
     setState(() { _saving = true; _actionError = null; });
@@ -580,19 +587,33 @@ class _FinanceVoucherEntryScreenState
       } else {
         for (final line in _accountLines) {
           if (line.accountId == null || line.amount <= 0) continue;
+          // Party fields reflect the account's own ledger currency.
+          // party_rate = 1 BASE = X party_currency (same convention as header rate).
+          // party_amount = base_amount * party_rate
+          //             = (trans_amount / rate) * party_rate
+          final lineCurr  = line.accountCurrency.isEmpty ? _baseCurrency : line.accountCurrency;
+          final baseAmt   = toBaseAmount(line.amount, rate, tc, _baseCurrency);
+          // party_rate: 1 BASE = X party_currency
+          // If party_currency == base → rate = 1; if == trans → rate = _rate; else default to 1
+          final partyRate = lineCurr == _baseCurrency
+              ? 1.0
+              : (lineCurr == tc ? rate : 1.0);
+          final partyAmt  = lineCurr == _baseCurrency
+              ? baseAmt
+              : (lineCurr == tc ? line.amount : baseAmt);
           lines.add({
             'serial_no':      serial++,
             'account_id':     line.accountId,
             'trans_nature':   n2,
             'trans_amount':   line.amount,
             'trans_currency': tc,
-            'base_amount':    toBaseAmount(line.amount, rate, tc, _baseCurrency),
+            'base_amount':    baseAmt,
             'base_rate':      rate,
             'local_amount':   toLocalAmount(line.amount, rate, _localRate, tc, _localCurrency),
             'local_rate':     _localRate,
-            'party_amount':   line.amount,
-            'party_currency': tc,
-            'party_rate':     rate,
+            'party_amount':   partyAmt,
+            'party_currency': lineCurr,
+            'party_rate':     partyRate,
             'inv_bill_no':    '',
             'inv_bill_date':  '',
             'line_remarks':   line.remarksCtrl.text,
@@ -816,7 +837,7 @@ class _FinanceVoucherEntryScreenState
         child: Column(children: [
 
           // Row 1: Voucher Type | Voucher No | Date
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Expanded(
               flex: 4,
               child: DropdownButtonFormField<String>(
@@ -884,12 +905,12 @@ class _FinanceVoucherEntryScreenState
                 ),
               ),
             ),
-          ]),
+          ])),
 
           const SizedBox(height: 12),
 
           // Row 2: Cash/Bank Account | Currency | Rate (1 base = X trans)
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Expanded(
               flex: 5,
               child: DropdownButtonFormField<String>(
@@ -959,12 +980,12 @@ class _FinanceVoucherEntryScreenState
                 onChanged: (_) => setState(() {}),
               ),
             ),
-          ]),
+          ])),
 
           const SizedBox(height: 12),
 
           // Row 3: Payment Mode | Ref No | Ref Date | Remarks
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Expanded(
               flex: 2,
               child: DropdownButtonFormField<String>(
@@ -1049,12 +1070,12 @@ class _FinanceVoucherEntryScreenState
                 style: const TextStyle(fontSize: 13),
               ),
             ),
-          ]),
+          ])),
 
           // Cheque row — only for CHEQUE payment mode
           if (_paymentMode == 'CHEQUE') ...[
             const SizedBox(height: 12),
-            Row(children: [
+            IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Expanded(
                 child: TextFormField(
                   controller: _chequeNoCtrl,
@@ -1100,7 +1121,7 @@ class _FinanceVoucherEntryScreenState
                   ),
                 ),
               ),
-            ]),
+            ])),
           ],
 
           const SizedBox(height: 12),
@@ -1363,10 +1384,24 @@ class _FinanceVoucherEntryScreenState
         ? counterNature(line1Nature(_voucherType!))
         : '—';
     final verb = n2 == 'DR' ? 'Debit' : 'Credit';
+    final tc   = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
+    const btnW = 32.0;
+
+    Widget colHeader(String label, {TextAlign align = TextAlign.left}) =>
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4, left: 2),
+          child: Text(label,
+              textAlign: align,
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary)),
+        );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Title row + Add Line button
         Row(children: [
           Text('$verb Accounts',
               style: const TextStyle(
@@ -1383,109 +1418,141 @@ class _FinanceVoucherEntryScreenState
                   style: TextStyle(fontSize: 13)),
             ),
         ]),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
 
+        // Column headers (shown once above the data rows)
+        Row(children: [
+          Expanded(flex: 4, child: colHeader('Account')),
+          const SizedBox(width: 12),
+          Expanded(flex: 2, child: colHeader('Amount ($tc)', align: TextAlign.right)),
+          const SizedBox(width: 12),
+          Expanded(flex: 3, child: colHeader('Remarks')),
+          if (!locked) SizedBox(width: btnW + 8),
+        ]),
+
+        // Data rows — no floating labels, compact inputs
         ..._accountLines.asMap().entries.map((e) {
           final i    = e.key;
           final line = e.value;
+          final lineCurr = line.accountCurrency.isEmpty ? _baseCurrency : line.accountCurrency;
+          final showCurrChip = lineCurr.isNotEmpty && lineCurr != tc;
+
           return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-              Expanded(
-                flex: 4,
-                child: DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(
-                      labelText: 'Account',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
-                  value: line.accountId,
-                  isExpanded: true,
-                  items: _otherAccounts.map((a) {
-                    final id = a['id'] as String;
-                    // Disable accounts already used in another line
-                    final used = _accountLines
-                        .where((l) => l != line && l.accountId == id)
-                        .isNotEmpty;
-                    return DropdownMenuItem(
-                      value: id,
-                      enabled: !used,
-                      child: Text(a['account_name'] as String,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: 13,
-                              color: used
-                                  ? AppColors.textDisabled
-                                  : null)),
-                    );
-                  }).toList(),
-                  onChanged: locked
-                      ? null
-                      : (v) {
-                          if (v == null) return;
-                          final acc = _otherAccounts
-                              .where((a) => a['id'] == v)
-                              .firstOrNull;
-                          setState(() {
-                            line.accountId   = v;
-                            line.accountName = acc?['account_name'] as String?;
-                          });
-                        },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: TextFormField(
-                  controller: line.amountCtrl,
-                  enabled: !locked,
-                  textAlign: TextAlign.right,
-                  decoration: const InputDecoration(
-                      labelText: 'Amount',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
-                  style: const TextStyle(fontSize: 13),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))
+            padding: const EdgeInsets.only(bottom: 6),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    flex: 4,
+                    child: DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                          contentPadding:
+                              EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          hintText: 'Select account'),
+                      value: line.accountId,
+                      isExpanded: true,
+                      items: _otherAccounts.map((a) {
+                        final id   = a['id'] as String;
+                        final used = _accountLines
+                            .where((l) => l != line && l.accountId == id)
+                            .isNotEmpty;
+                        return DropdownMenuItem(
+                          value: id,
+                          enabled: !used,
+                          child: Text(a['account_name'] as String,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color: used ? AppColors.textDisabled : null)),
+                        );
+                      }).toList(),
+                      onChanged: locked
+                          ? null
+                          : (v) {
+                              if (v == null) return;
+                              final acc = _otherAccounts
+                                  .where((a) => a['id'] == v)
+                                  .firstOrNull;
+                              setState(() {
+                                line.accountId       = v;
+                                line.accountName     = acc?['account_name'] as String?;
+                                line.accountCurrency =
+                                    acc != null ? _extractCurrency(acc) : '';
+                              });
+                            },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Amount column — shows currency chip when account currency ≠ trans currency
+                  Expanded(
+                    flex: 2,
+                    child: Row(children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: line.amountCtrl,
+                          enabled: !locked,
+                          textAlign: TextAlign.right,
+                          decoration: InputDecoration(
+                              border: const OutlineInputBorder(),
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 10),
+                              suffixText: showCurrChip ? lineCurr : null,
+                              suffixStyle: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.secondary)),
+                          style: const TextStyle(fontSize: 13),
+                          keyboardType:
+                              const TextInputType.numberWithOptions(decimal: true),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))
+                          ],
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 3,
+                    child: TextFormField(
+                      controller: line.remarksCtrl,
+                      enabled: !locked,
+                      decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                          contentPadding:
+                              EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          hintText: 'Remarks'),
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                  if (!locked) ...[
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: btnW,
+                      child: _accountLines.length > 1
+                          ? IconButton(
+                              onPressed: () {
+                                final removed = _accountLines.removeAt(i);
+                                removed.dispose();
+                                setState(() {});
+                              },
+                              icon: const Icon(Icons.remove_circle_outline,
+                                  size: 18, color: AppColors.negative),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
                   ],
-                  onChanged: (_) => setState(() {}),
-                ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 3,
-                child: TextFormField(
-                  controller: line.remarksCtrl,
-                  enabled: !locked,
-                  decoration: const InputDecoration(
-                      labelText: 'Remarks',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
-                  style: const TextStyle(fontSize: 13),
-                ),
-              ),
-              if (!locked && _accountLines.length > 1) ...[
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: () {
-                    final removed = _accountLines.removeAt(i);
-                    removed.dispose();
-                    setState(() {});
-                  },
-                  icon: const Icon(Icons.remove_circle_outline,
-                      size: 18, color: AppColors.negative),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ],
-            ]),
+            ),
           );
         }),
       ],

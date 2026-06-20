@@ -363,7 +363,9 @@ BEGIN
         ) VALUES (
             p_client_id, p_company_id, p_location_id,
             p_trans_no, p_trans_date,
-            v_header.cheque_no, v_header.cheque_date,
+            v_header.cheque_no,
+            -- cheque_date NOT NULL in schema; fall back to trans_date if user omitted it
+            COALESCE(v_header.cheque_date, v_header.trans_date),
             'ISSUED', p_posted_by, p_posted_by
         )
         ON CONFLICT DO NOTHING;
