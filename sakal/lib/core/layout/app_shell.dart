@@ -37,6 +37,9 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
 
     final offline = session.offlineMode;
+    // SelectionArea must live inside Scaffold (which is inside Navigator → Overlay).
+    // Wrapping here covers every page rendered through AppShell on both layouts.
+    final pageContent = SelectionArea(child: widget.child);
 
     if (Responsive.isMobile(context)) {
       return Scaffold(
@@ -47,7 +50,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         body: Column(
           children: [
             if (offline) const OfflineBanner(),
-            Expanded(child: widget.child),
+            Expanded(child: pageContent),
           ],
         ),
       );
@@ -76,7 +79,7 @@ class _AppShellState extends ConsumerState<AppShell> {
             child: Column(
               children: [
                 if (offline) const OfflineBanner(),
-                Expanded(child: widget.child),
+                Expanded(child: pageContent),
               ],
             ),
           ),

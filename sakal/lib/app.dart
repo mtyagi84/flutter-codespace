@@ -12,9 +12,6 @@ class SakalApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       routerConfig: appRouter,
-      // SelectionArea must be inside MaterialApp so MaterialLocalizations exists.
-      builder: (context, child) =>
-          SelectionArea(child: child ?? const SizedBox.shrink()),
     );
   }
 }
