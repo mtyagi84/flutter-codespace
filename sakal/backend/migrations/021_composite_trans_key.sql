@@ -438,5 +438,3 @@ BEGIN
     END IF;
 END;
 $$;
-
-COMMIT;

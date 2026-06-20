@@ -286,11 +286,11 @@ class _FinanceVoucherEntryScreenState
       final line1         = lineRows.isNotEmpty ? lineRows.first : null;
       final transCurrency = line1?['trans_currency'] as String? ?? _baseCurrency;
       final cashBankId    = line1?['account_id']     as String?;
-      final cashBankName  = cashBankId != null
-          ? (_cashAccounts + _bankAccounts)
-              .where((a) => a['id'] == cashBankId)
-              .firstOrNull?['account_name'] as String?
+      // Split out of the ternary to avoid Dart parsing ?[ as ternary operator
+      final cashBankAcc  = cashBankId != null
+          ? (_cashAccounts + _bankAccounts).where((a) => a['id'] == cashBankId).firstOrNull
           : null;
+      final cashBankName = cashBankAcc?['account_name'] as String?;
       final baseRate = (line1?['base_rate'] as num? ?? 1).toDouble();
 
       final restLines = lineRows.length > 1 ? lineRows.sublist(1) : <Map<String, dynamic>>[];
