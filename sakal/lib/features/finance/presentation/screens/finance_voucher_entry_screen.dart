@@ -1396,13 +1396,14 @@ class _FinanceVoucherEntryScreenState
 
           return Padding(
             padding: const EdgeInsets.only(bottom: 6),
-            child: IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
                   Expanded(
                     flex: 4,
-                    child: DropdownButtonFormField<String>(
+                    child: SizedBox(
+                      height: 44,
+                      child: DropdownButtonFormField<String>(
                       decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           isDense: true,
@@ -1441,51 +1442,53 @@ class _FinanceVoucherEntryScreenState
                               });
                             },
                     ),
-                  ),
+                  )),  // SizedBox + Expanded
                   const SizedBox(width: 12),
                   // Amount column — shows currency chip when account currency ≠ trans currency
                   Expanded(
                     flex: 2,
-                    child: Row(children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: line.amountCtrl,
-                          enabled: !locked,
-                          textAlign: TextAlign.right,
-                          decoration: InputDecoration(
-                              border: const OutlineInputBorder(),
-                              isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 10),
-                              suffixText: showCurrChip ? lineCurr : null,
-                              suffixStyle: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.secondary)),
-                          style: const TextStyle(fontSize: 13),
-                          keyboardType:
-                              const TextInputType.numberWithOptions(decimal: true),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))
-                          ],
-                          onChanged: (_) => setState(() {}),
-                        ),
+                    child: SizedBox(
+                      height: 44,
+                      child: TextFormField(
+                        controller: line.amountCtrl,
+                        enabled: !locked,
+                        textAlign: TextAlign.right,
+                        decoration: InputDecoration(
+                            border: const OutlineInputBorder(),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 10),
+                            suffixText: showCurrChip ? lineCurr : null,
+                            suffixStyle: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.secondary)),
+                        style: const TextStyle(fontSize: 13),
+                        keyboardType:
+                            const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))
+                        ],
+                        onChanged: (_) => setState(() {}),
                       ),
-                    ]),
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     flex: 3,
-                    child: TextFormField(
-                      controller: line.remarksCtrl,
-                      enabled: !locked,
-                      decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                          contentPadding:
-                              EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                          hintText: 'Remarks'),
-                      style: const TextStyle(fontSize: 13),
+                    child: SizedBox(
+                      height: 44,
+                      child: TextFormField(
+                        controller: line.remarksCtrl,
+                        enabled: !locked,
+                        decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                            contentPadding:
+                                EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            hintText: 'Remarks'),
+                        style: const TextStyle(fontSize: 13),
+                      ),
                     ),
                   ),
                   if (!locked) ...[
@@ -1509,7 +1512,6 @@ class _FinanceVoucherEntryScreenState
                   ],
                 ],
               ),
-            ),
           );
         }),
       ],

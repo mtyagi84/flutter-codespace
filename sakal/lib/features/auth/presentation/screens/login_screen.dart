@@ -178,7 +178,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return SelectionArea(
+      child: Scaffold(
       backgroundColor: AppColors.primary,
       body: Center(
         child: SingleChildScrollView(
@@ -202,7 +203,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ),
       ),
-    );
+    ));  // Scaffold + SelectionArea
   }
 
   Widget _buildCard() {
