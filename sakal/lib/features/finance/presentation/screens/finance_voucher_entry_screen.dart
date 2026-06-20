@@ -661,6 +661,7 @@ class _FinanceVoucherEntryScreenState
         'p_company_id':  session.companyId,
         'p_location_id': session.locationId,
         'p_trans_no':    _voucherNo,
+        'p_trans_date':  _fmtDate(_transDate),
         'p_posted_by':   session.userId,
       });
       if (mounted) {
