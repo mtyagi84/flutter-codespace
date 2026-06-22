@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1266,21 +1267,17 @@ class _FinanceVoucherEntryScreenState
           const SizedBox(height: 12),
 
           // Row 4: Against Bill | On Account toggle
-          Row(children: [
-            Radio<bool>(
-              value: false,
-              groupValue: _isOnAccount,
-              onChanged: locked ? null : (_) => setState(() => _isOnAccount = false),
-            ),
-            const Text('Against Bill', style: TextStyle(fontSize: 13)),
-            const SizedBox(width: 20),
-            Radio<bool>(
-              value: true,
-              groupValue: _isOnAccount,
-              onChanged: locked ? null : (_) => setState(() => _isOnAccount = true),
-            ),
-            const Text('On Account', style: TextStyle(fontSize: 13)),
-          ]),
+          RadioGroup<bool>(
+            groupValue: _isOnAccount,
+            onChanged: locked ? null : (v) => setState(() => _isOnAccount = v!),
+            child: Row(children: [
+              const Radio<bool>(value: false),
+              const Text('Against Bill', style: TextStyle(fontSize: 13)),
+              const SizedBox(width: 20),
+              const Radio<bool>(value: true),
+              const Text('On Account', style: TextStyle(fontSize: 13)),
+            ]),
+          ),
         ]),
       ),
     );
@@ -1564,6 +1561,7 @@ class _FinanceVoucherEntryScreenState
           Expanded(flex: 2, child: colHeader('Amount ($tc)', align: TextAlign.right)),
           const SizedBox(width: 12),
           Expanded(flex: 3, child: colHeader('Remarks')),
+          // ignore: prefer_const_constructors — btnW is runtime, cannot be const
           if (!locked) SizedBox(width: btnW + 8),
         ]),
 
