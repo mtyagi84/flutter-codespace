@@ -921,7 +921,7 @@ class _FinanceVoucherEntryScreenState
       );
     }
 
-    final canSave    = !_isPosted && !isOffline &&
+    final canSave    = !_isPosted &&
         (_voucherNo == null ? feature.addAllowed : feature.editAllowed);
     final canApprove = !_isPosted && !isOffline && feature.approveAllowed;
     final locked     = !canSave;

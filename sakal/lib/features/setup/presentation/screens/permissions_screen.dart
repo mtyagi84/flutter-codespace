@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/models/menu_models.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -85,6 +87,24 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
     }
   }
 
+  // ── Menu refresh (when editing own permissions) ───────────────────────────
+
+  Future<void> _refreshMenuIfSelf() async {
+    final session = ref.read(sessionProvider)!;
+    if (_selectedUserId != session.userId) return;
+    try {
+      final res = await DioClient.instance.post('/rpc/fn_get_user_menu', data: {
+        'p_user_id':    session.userId,
+        'p_client_id':  session.clientId,
+        'p_company_id': session.companyId,
+      });
+      final menuList = (res.data as List<dynamic>)
+          .map((e) => MenuModule.fromJson(e as Map<String, dynamic>))
+          .toList();
+      if (mounted) ref.read(menuProvider.notifier).state = menuList;
+    } catch (_) {}
+  }
+
   // ── Permission toggle (auto-save) ─────────────────────────────────────────
 
   Future<void> _toggle(String featureCode, String field) async {
@@ -122,6 +142,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
         'p_excel_upload_allowed': updated['excel_upload_allowed'],
         'p_updated_by':           session.userId,
       });
+      unawaited(_refreshMenuIfSelf());
     } on DioException {
       if (mounted) {
         setState(() => _features[featureCode] = row); // revert
@@ -170,6 +191,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
           'p_updated_by':           session.userId,
         });
       }
+      unawaited(_refreshMenuIfSelf());
     } on DioException {
       if (mounted) _loadPermissions(_selectedUserId!);
     } finally {
@@ -213,6 +235,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
           'p_updated_by':           session.userId,
         });
       }
+      unawaited(_refreshMenuIfSelf());
     } on DioException {
       if (mounted) _loadPermissions(_selectedUserId!);
     } finally {
@@ -235,6 +258,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
         'p_copied_by':    session.userId,
       });
       await _loadPermissions(_selectedUserId!);
+      unawaited(_refreshMenuIfSelf());
     } on DioException {
       if (mounted) {
         setState(() { _loadingPerms = false; });
