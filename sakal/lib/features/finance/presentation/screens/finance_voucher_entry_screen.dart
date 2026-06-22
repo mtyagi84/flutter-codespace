@@ -107,7 +107,6 @@ class _FinanceVoucherEntryScreenState
 
   // ── Cash / Bank (header level) ────────────────────────────────────────────
   String?   _cashBankId;
-  String?   _cashBankName;
   String    _transCurrency = '';
   final     _rateCtrl = TextEditingController(text: '1');
   double get _rate => double.tryParse(_rateCtrl.text) ?? 1.0;
@@ -249,10 +248,12 @@ class _FinanceVoucherEntryScreenState
         setState(() => _loading = false);
       }
     } catch (e) {
-      if (mounted) setState(() {
-        _loading = false;
-        _error   = 'Could not load data: $e';
-      });
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error   = 'Could not load data: $e';
+        });
+      }
     }
   }
 
@@ -289,7 +290,6 @@ class _FinanceVoucherEntryScreenState
     setState(() {
       _voucherType   = type;
       _cashBankId    = null;
-      _cashBankName  = null;
       _transCurrency = '';
       _rateCtrl.text = '1';
       _paymentMode   = isCashVoucher(type) ? 'CASH' : null;
@@ -328,10 +328,6 @@ class _FinanceVoucherEntryScreenState
       final line1         = lineObjs.isNotEmpty ? lineObjs.first : null;
       final transCurrency = line1?.transCurrency ?? _baseCurrency;
       final cashBankId    = line1?.accountId.isEmpty == true ? null : line1?.accountId;
-      final cashBankAcc   = cashBankId != null
-          ? (_cashAccounts + _bankAccounts).where((a) => a['id'] == cashBankId).firstOrNull
-          : null;
-      final cashBankName = cashBankAcc?['account_name'] as String?;
       final baseRate     = line1?.baseRate ?? 1.0;
 
       final restObjs = lineObjs.length > 1 ? lineObjs.sublist(1) : <FinanceVoucherLine>[];
@@ -352,7 +348,6 @@ class _FinanceVoucherEntryScreenState
           _chequeDate = DateTime.tryParse(header.chequeDate);
         }
         _cashBankId    = cashBankId;
-        _cashBankName  = cashBankName;
         _transCurrency = transCurrency;
         _rateCtrl.text = _fmtRate(baseRate);
         _isOnAccount   = isOA;
@@ -408,10 +403,12 @@ class _FinanceVoucherEntryScreenState
         });
       }
     } catch (e) {
-      if (mounted) setState(() {
-        _loading = false;
-        _error   = 'Could not load voucher: $e';
-      });
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error   = 'Could not load voucher: $e';
+        });
+      }
     }
   }
 
@@ -420,8 +417,7 @@ class _FinanceVoucherEntryScreenState
   Future<void> _onCashBankSelected(Map<String, dynamic> account) async {
     final currency = _extractCurrency(account);
     setState(() {
-      _cashBankId    = account['id']          as String;
-      _cashBankName  = account['account_name'] as String;
+      _cashBankId    = account['id'] as String;
       _transCurrency = currency;
       _rateCtrl.text = '1';
     });
@@ -687,10 +683,12 @@ class _FinanceVoucherEntryScreenState
         }
       }
     } catch (e) {
-      if (mounted) setState(() {
-        _saving      = false;
-        _actionError = 'Save failed: $e';
-      });
+      if (mounted) {
+        setState(() {
+          _saving      = false;
+          _actionError = 'Save failed: $e';
+        });
+      }
     }
     return false;
   }
@@ -748,10 +746,12 @@ class _FinanceVoucherEntryScreenState
         _showSnack('$_voucherNo posted successfully.', color: AppColors.positive);
       }
     } catch (e) {
-      if (mounted) setState(() {
-        _posting     = false;
-        _actionError = 'Post failed: $e';
-      });
+      if (mounted) {
+        setState(() {
+          _posting     = false;
+          _actionError = 'Post failed: $e';
+        });
+      }
     }
   }
 
@@ -1099,7 +1099,6 @@ class _FinanceVoucherEntryScreenState
               onSelected: _onCashBankSelected,
               onCleared: () => setState(() {
                 _cashBankId    = null;
-                _cashBankName  = null;
                 _transCurrency = '';
                 _rateCtrl.text = '1';
               }),
@@ -1269,7 +1268,7 @@ class _FinanceVoucherEntryScreenState
           // Row 4: Against Bill | On Account toggle
           RadioGroup<bool>(
             groupValue: _isOnAccount,
-            onChanged: locked ? null : (v) => setState(() => _isOnAccount = v!),
+            onChanged: (v) { if (!locked && v != null) setState(() => _isOnAccount = v); },
             child: Row(children: [
               const Radio<bool>(value: false),
               const Text('Against Bill', style: TextStyle(fontSize: 13)),
