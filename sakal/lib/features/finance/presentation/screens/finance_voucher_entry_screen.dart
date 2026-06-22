@@ -1,12 +1,31 @@
-import 'package:dio/dio.dart';
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/network/dio_client.dart';
+import '../../../../core/database/app_database.dart';
 import '../../../../core/providers/session_provider.dart';
+import '../../../../core/sync/sync_engine.dart';
+import '../../data/models/finance_voucher_model.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/voucher_logic.dart';
+import '../../../../core/models/menu_models.dart';
+import '../../../../core/providers/master_cache_providers.dart';
+import '../../../../core/router/route_names.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../providers/finance_voucher_providers.dart';
+
+MenuFeature? _findFeature(List<MenuModule> modules, String screenPath) {
+  for (final mod in modules) {
+    for (final grp in mod.groups) {
+      for (final feat in grp.features) {
+        if (feat.screenName == screenPath) return feat;
+      }
+    }
+  }
+  return null;
+}
 
 // ── Data models ───────────────────────────────────────────────────────────────
 
@@ -156,45 +175,53 @@ class _FinanceVoucherEntryScreenState
   // ── Init ──────────────────────────────────────────────────────────────────
 
   Future<void> _init() async {
-    final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
+    final session = ref.read(sessionProvider)!;
     try {
-      final results = await Future.wait([
-        DioClient.instance.get('/rim_accounts', queryParameters: {
-          'client_id':       'eq.${session.clientId}',
-          'company_id':      'eq.${session.companyId}',
-          'is_deleted':      'eq.false',
-          'is_active':       'eq.true',
-          'posting_allowed': 'eq.true',
-          // Embed rim_currencies via account_currency_id FK
-          'select': 'id,account_name,account_nature,'
-                    'rim_currencies!account_currency_id(currency_id)',
-          'order': 'account_name.asc',
-          'limit': '500',
-        }),
-        DioClient.instance.get('/rim_payment_modes', queryParameters: {
-          'is_active':  'eq.true',
-          'is_deleted': 'eq.false',
-          'select':     'payment_mode_code,payment_mode_name',
-          'or':         '(is_system.eq.true,and(client_id.eq.${session.clientId},'
-                        'company_id.eq.${session.companyId}))',
-          'order':      'payment_mode_name.asc',
-        }),
-        DioClient.instance.get('/ric_companies', queryParameters: {
-          'id':     'eq.${session.companyId}',
-          'select': 'base_currency,local_currency',
-          'limit':  '1',
-        }),
-      ]);
+      List<Map<String, dynamic>> accounts;
+      List<Map<String, dynamic>> modes;
+      String base;
+      String local;
 
-      final accounts = List<Map<String, dynamic>>.from(results[0].data as List);
-      final modes    = List<Map<String, dynamic>>.from(results[1].data as List);
-      final coList   = List<Map<String, dynamic>>.from(results[2].data as List);
-      final co       = coList.isNotEmpty ? coList.first : <String, dynamic>{};
+      if (session.offlineMode) {
+        // Serve accounts from local Drift cache; payment modes and currencies
+        // are pre-synced during online login via SyncScreen.
+        final db   = ref.read(appDatabaseProvider);
+        final rows = await (db.select(db.accountsCache)
+              ..where((t) => t.clientId.equals(session.clientId) &
+                             t.companyId.equals(session.companyId) &
+                             t.isActive.equals(true)))
+            .get();
+        accounts = rows.map((r) => {
+          'id':             r.id,
+          'account_code':   r.accountCode,
+          'account_name':   r.accountName,
+          'account_nature': r.accountNature,
+          'parent':         {'account_name': r.parentName},
+          'rim_currencies': {'currency_id':  r.accountCurrency},
+        }).toList();
+        // Offline: base/local currency cached in session (set during sync login).
+        // Payment modes are not needed offline (vouchers stay PENDING).
+        modes = [];
+        base  = '';
+        local = '';
+      } else {
+        final futures = await Future.wait<dynamic>([
+          ref.read(accountsProvider.future),
+          ref.read(paymentModesProvider.future),
+          ref.read(baseCurrencyProvider.future),
+          ref.read(localCurrencyProvider.future),
+        ]);
+        accounts = futures[0] as List<Map<String, dynamic>>;
+        modes    = futures[1] as List<Map<String, dynamic>>;
+        base     = futures[2] as String;
+        local    = futures[3] as String;
+
+        // Populate AccountsCache so the data is available on next offline login.
+        unawaited(_cacheAccountsLocally(accounts, session));
+      }
 
       if (!mounted) return;
-      final base  = co['base_currency']  as String? ?? '';
-      final local = co['local_currency'] as String? ?? '';
 
       setState(() {
         _baseCurrency  = base;
@@ -220,11 +247,36 @@ class _FinanceVoucherEntryScreenState
         }
         setState(() => _loading = false);
       }
-    } on DioException catch (e) {
+    } catch (e) {
       if (mounted) setState(() {
         _loading = false;
-        _error   = 'Could not load data: ${e.response?.data ?? e.message}';
+        _error   = 'Could not load data: $e';
       });
+    }
+  }
+
+  Future<void> _cacheAccountsLocally(
+    List<Map<String, dynamic>> accounts,
+    UserSession session,
+  ) async {
+    final db  = ref.read(appDatabaseProvider);
+    final now = DateTime.now();
+    for (final a in accounts) {
+      final parentRel = a['parent'];
+      final currRel   = a['rim_currencies'];
+      await db.into(db.accountsCache).insertOnConflictUpdate(AccountsCacheCompanion.insert(
+        id:              a['id'] as String,
+        clientId:        session.clientId,
+        companyId:       session.companyId,
+        accountCode:     a['account_code']   as String? ?? '',
+        accountName:     a['account_name']   as String? ?? '',
+        accountNature:   a['account_nature'] as String? ?? '',
+        parentName:      Value(parentRel is Map
+            ? (parentRel['account_name'] as String? ?? '') : ''),
+        accountCurrency: Value(currRel is Map
+            ? (currRel['currency_id'] as String? ?? '') : ''),
+        cachedAt:        Value(now),
+      ));
     }
   }
 
@@ -252,66 +304,51 @@ class _FinanceVoucherEntryScreenState
   // ── Load existing voucher ─────────────────────────────────────────────────
 
   Future<void> _loadExisting(String voucherNo) async {
-    final session = ref.read(sessionProvider)!;
+    final session  = ref.read(sessionProvider)!;
+    final repo     = ref.read(financeVoucherRepositoryProvider);
     try {
       final results = await Future.wait([
-        DioClient.instance.get('/rih_finance_headers', queryParameters: {
-          'client_id':  'eq.${session.clientId}',
-          'company_id': 'eq.${session.companyId}',
-          'trans_no':   'eq.$voucherNo',
-          'is_deleted': 'eq.false',
-          'select':     '*',
-          'limit':      '1',
-        }),
-        DioClient.instance.get('/rid_finance_lines', queryParameters: {
-          'client_id':  'eq.${session.clientId}',
-          'company_id': 'eq.${session.companyId}',
-          'trans_no':   'eq.$voucherNo',
-          'is_deleted': 'eq.false',
-          'select':     '*',
-          'order':      'serial_no.asc',
-        }),
+        repo.getHeader(clientId: session.clientId, companyId: session.companyId, transNo: voucherNo),
+        repo.getLines(clientId: session.clientId, companyId: session.companyId, transNo: voucherNo),
       ]);
 
-      final headers  = List<Map<String, dynamic>>.from(results[0].data as List);
-      final lineRows = List<Map<String, dynamic>>.from(results[1].data as List);
-      if (headers.isEmpty || !mounted) {
+      final header   = results[0] as FinanceVoucherHeader?;
+      final lineObjs = results[1] as List<FinanceVoucherLine>;
+
+      if (header == null || !mounted) {
         setState(() => _loading = false);
         return;
       }
 
-      final h   = headers.first;
-      final vt  = h['voucher_type_code'] as String;
-      final isOA = h['is_on_account'] as bool? ?? false;
+      final vt   = header.voucherTypeCode;
+      final isOA = header.isOnAccount;
 
-      // Line 1 = cash / bank
-      final line1         = lineRows.isNotEmpty ? lineRows.first : null;
-      final transCurrency = line1?['trans_currency'] as String? ?? _baseCurrency;
-      final cashBankId    = line1?['account_id']     as String?;
-      // Split out of the ternary to avoid Dart parsing ?[ as ternary operator
-      final cashBankAcc  = cashBankId != null
+      // Line 1 = cash / bank entry
+      final line1         = lineObjs.isNotEmpty ? lineObjs.first : null;
+      final transCurrency = line1?.transCurrency ?? _baseCurrency;
+      final cashBankId    = line1?.accountId.isEmpty == true ? null : line1?.accountId;
+      final cashBankAcc   = cashBankId != null
           ? (_cashAccounts + _bankAccounts).where((a) => a['id'] == cashBankId).firstOrNull
           : null;
       final cashBankName = cashBankAcc?['account_name'] as String?;
-      final baseRate = (line1?['base_rate'] as num? ?? 1).toDouble();
+      final baseRate     = line1?.baseRate ?? 1.0;
 
-      final restLines = lineRows.length > 1 ? lineRows.sublist(1) : <Map<String, dynamic>>[];
+      final restObjs = lineObjs.length > 1 ? lineObjs.sublist(1) : <FinanceVoucherLine>[];
 
-      // Common header restore
       void applyHeader() {
-        _voucherType      = vt;
-        _voucherNo        = voucherNo;
-        _transDate        = DateTime.parse(h['trans_date'] as String);
-        _isPosted         = h['is_posted']         as bool?   ?? false;
-        _paymentMode      = h['payment_mode_code'] as String?;
-        _refNoCtrl.text   = h['reference_no']      as String? ?? '';
-        _chequeNoCtrl.text = h['cheque_no']        as String? ?? '';
-        _remarksCtrl.text = h['remarks']            as String? ?? '';
-        if (h['reference_date'] != null) {
-          _refDate = DateTime.tryParse(h['reference_date'] as String);
+        _voucherType       = vt;
+        _voucherNo         = voucherNo;
+        _transDate         = DateTime.parse(header.transDate);
+        _isPosted          = header.isPosted;
+        _paymentMode       = header.paymentModeCode.isEmpty ? null : header.paymentModeCode;
+        _refNoCtrl.text    = header.referenceNo;
+        _chequeNoCtrl.text = header.chequeNo;
+        _remarksCtrl.text  = header.remarks;
+        if (header.referenceDate.isNotEmpty) {
+          _refDate = DateTime.tryParse(header.referenceDate);
         }
-        if (h['cheque_date'] != null) {
-          _chequeDate = DateTime.tryParse(h['cheque_date'] as String);
+        if (header.chequeDate.isNotEmpty) {
+          _chequeDate = DateTime.tryParse(header.chequeDate);
         }
         _cashBankId    = cashBankId;
         _cashBankName  = cashBankName;
@@ -323,20 +360,19 @@ class _FinanceVoucherEntryScreenState
 
       if (!isOA) {
         // Against Bill — restore party + bills
-        final firstParty = restLines.isNotEmpty ? restLines.first : null;
-        final partyId    = firstParty?['account_id']    as String?;
-        final partyCurr  = firstParty?['party_currency'] as String? ?? _baseCurrency;
-        final partyRate  = (firstParty?['party_rate']   as num? ?? 1).toDouble();
+        final firstParty = restObjs.isNotEmpty ? restObjs.first : null;
+        final partyId    = firstParty?.accountId.isEmpty == true ? null : firstParty?.accountId;
+        final partyCurr  = firstParty?.partyCurrency ?? _baseCurrency;
+        final partyRate  = firstParty?.partyRate ?? 1.0;
         final partyAcc   = partyId != null
             ? _partyAccounts.where((a) => a['id'] == partyId).firstOrNull
             : null;
 
-        // Map bill no → saved trans amount for pre-filling
         final savedPaid = <String, double>{};
-        for (final row in restLines) {
-          final bn  = row['inv_bill_no']  as String?;
-          final amt = (row['trans_amount'] as num? ?? 0).toDouble();
-          if (bn != null && amt > 0) savedPaid[bn] = amt;
+        for (final row in restObjs) {
+          if (row.invBillNo.isNotEmpty && row.transAmount > 0) {
+            savedPaid[row.invBillNo] = row.transAmount;
+          }
         }
 
         setState(() {
@@ -353,15 +389,15 @@ class _FinanceVoucherEntryScreenState
       } else {
         // On Account — restore account lines
         for (final l in _accountLines) l.dispose();
-        final loaded = restLines.map((row) {
-          final accId = row['account_id'] as String?;
+        final loaded = restObjs.map((row) {
+          final accId = row.accountId.isEmpty ? null : row.accountId;
           final acc   = _otherAccounts.where((a) => a['id'] == accId).firstOrNull;
           return _AccountLine(
             accountId:       accId,
             accountName:     acc?['account_name'] as String?,
             accountCurrency: acc != null ? _extractCurrency(acc) : '',
-            amount:          (row['trans_amount'] as num? ?? 0).toString(),
-            remarks:         row['line_remarks']  as String? ?? '',
+            amount:          row.transAmount.toString(),
+            remarks:         row.lineRemarks,
           );
         }).toList();
 
@@ -370,10 +406,10 @@ class _FinanceVoucherEntryScreenState
           _accountLines = loaded.isNotEmpty ? loaded : [_AccountLine()];
         });
       }
-    } on DioException catch (e) {
+    } catch (e) {
       if (mounted) setState(() {
         _loading = false;
-        _error   = 'Could not load voucher: ${e.response?.data ?? e.message}';
+        _error   = 'Could not load voucher: $e';
       });
     }
   }
@@ -417,16 +453,14 @@ class _FinanceVoucherEntryScreenState
     final session = ref.read(sessionProvider)!;
     if (session.locationId == null) return;
     try {
-      final res = await DioClient.instance.post('/rpc/fn_get_exchange_rate', data: {
-        'p_company_id':    session.companyId,
-        'p_location_id':   session.locationId,
-        'p_from_currency': _baseCurrency,
-        'p_to_currency':   toCurrency,
-        'p_rate_date':     _fmtDate(_transDate),
-        'p_rate_type':     'MID',
-      });
-      final rate = (res.data as num?)?.toDouble() ?? 1.0;
-      if (!mounted) return;
+      final rate = await ref.read(financeVoucherRepositoryProvider).fetchExchangeRate(
+        companyId:    session.companyId,
+        locationId:   session.locationId!,
+        fromCurrency: _baseCurrency,
+        toCurrency:   toCurrency,
+        rateDate:     _fmtDate(_transDate),
+      );
+      if (!mounted || rate == null) return;
       setState(() {
         if (isParty) {
           _partyRate = rate;
@@ -434,7 +468,7 @@ class _FinanceVoucherEntryScreenState
           _rateCtrl.text = _fmtRate(rate);
         }
       });
-    } on DioException { /* rate not found — keep default */ }
+    } catch (_) { /* rate not found — keep default */ }
   }
 
   // ── Load pending bills ────────────────────────────────────────────────────
@@ -445,15 +479,11 @@ class _FinanceVoucherEntryScreenState
     if (session.locationId == null) return;
     setState(() => _loadingBills = true);
     try {
-      final res = await DioClient.instance.get('/v_pending_bills', queryParameters: {
-        'company_id':  'eq.${session.companyId}',
-        'location_id': 'eq.${session.locationId}',
-        'account_id':  'eq.$_partyId',
-        'select': 'trans_no,trans_date,inv_bill_no,inv_bill_date,'
-                  'bill_amount,settled_amount,balance_amount,party_currency',
-        'order': 'trans_date.asc',
-      });
-      final rows = List<Map<String, dynamic>>.from(res.data as List);
+      final rows = await ref.read(financeVoucherRepositoryProvider).getPendingBills(
+        companyId:  session.companyId,
+        locationId: session.locationId!,
+        accountId:  _partyId!,
+      );
       for (final b in _bills) b.dispose();
       setState(() {
         _bills = rows.map((r) {
@@ -501,7 +531,8 @@ class _FinanceVoucherEntryScreenState
   // ── Save draft ────────────────────────────────────────────────────────────
 
   Future<bool> _saveDraft() async {
-    final session = ref.read(sessionProvider)!;
+    final session  = ref.read(sessionProvider)!;
+    final isOffline = session.offlineMode;
     if (_voucherType == null) { _showSnack('Select a voucher type first.'); return false; }
     if (_cashBankId == null)  { _showSnack('Select a cash / bank account.'); return false; }
     if (!_isOnAccount && _partyId == null) {
@@ -627,22 +658,48 @@ class _FinanceVoucherEntryScreenState
         return false;
       }
 
-      final res = await DioClient.instance.post(
-        '/rpc/fn_save_finance_voucher',
-        data: {'p_header': header, 'p_lines': lines, 'p_user_id': session.userId},
-      );
-      if (mounted) {
-        setState(() { _voucherNo = res.data as String?; _saving = false; });
-        _showSnack('Draft saved — $_voucherNo', color: AppColors.positive);
-        return true;
+      if (isOffline) {
+        // Offline: enqueue for later sync; use a local UUID as document ID.
+        final localId = _generateLocalId();
+        await ref.read(syncEngineProvider).enqueue(
+          documentType: 'FINANCE_VOUCHER',
+          documentId:   localId,
+          endpoint:     '/rpc/fn_save_finance_voucher',
+          payload:      {'p_header': header, 'p_lines': lines, 'p_user_id': session.userId},
+        );
+        if (mounted) {
+          setState(() { _voucherNo = localId; _saving = false; });
+          _showSnack('Saved offline — will sync when online.',
+              color: AppColors.secondary);
+          return true;
+        }
+      } else {
+        final transNo = await ref.read(financeVoucherRepositoryProvider).save(
+          header: header,
+          lines:  lines,
+          userId: session.userId,
+        );
+        if (mounted) {
+          setState(() { _voucherNo = transNo; _saving = false; });
+          _showSnack('Draft saved — $transNo', color: AppColors.positive);
+          return true;
+        }
       }
-    } on DioException catch (e) {
+    } catch (e) {
       if (mounted) setState(() {
         _saving      = false;
-        _actionError = 'Save failed: ${e.response?.data ?? e.message}';
+        _actionError = 'Save failed: $e';
       });
     }
     return false;
+  }
+
+  String _generateLocalId() {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    final rng   = Random.secure();
+    final ts    = DateTime.now().millisecondsSinceEpoch.toString();
+    final rand  = List.generate(6, (_) => chars[rng.nextInt(chars.length)]).join();
+    return 'LOCAL-$ts-$rand';
   }
 
   // ── Post voucher ──────────────────────────────────────────────────────────
@@ -677,22 +734,22 @@ class _FinanceVoucherEntryScreenState
     final session = ref.read(sessionProvider)!;
     setState(() { _posting = true; _actionError = null; });
     try {
-      await DioClient.instance.post('/rpc/fn_post_finance_voucher', data: {
-        'p_client_id':   session.clientId,
-        'p_company_id':  session.companyId,
-        'p_location_id': session.locationId,
-        'p_trans_no':    _voucherNo,
-        'p_trans_date':  _fmtDate(_transDate),
-        'p_posted_by':   session.userId,
-      });
+      await ref.read(financeVoucherRepositoryProvider).post(
+        clientId:   session.clientId,
+        companyId:  session.companyId,
+        locationId: session.locationId ?? '',
+        transNo:    _voucherNo!,
+        transDate:  _fmtDate(_transDate),
+        postedBy:   session.userId,
+      );
       if (mounted) {
         setState(() { _isPosted = true; _posting = false; });
         _showSnack('$_voucherNo posted successfully.', color: AppColors.positive);
       }
-    } on DioException catch (e) {
+    } catch (e) {
       if (mounted) setState(() {
         _posting     = false;
-        _actionError = 'Post failed: ${e.response?.data ?? e.message}';
+        _actionError = 'Post failed: $e';
       });
     }
   }
@@ -703,6 +760,102 @@ class _FinanceVoucherEntryScreenState
     final rel = account['rim_currencies'];
     if (rel is Map) return rel['currency_id'] as String? ?? _baseCurrency;
     return _baseCurrency;
+  }
+
+  String _extractParentName(Map<String, dynamic> account) {
+    final rel = account['parent'];
+    if (rel is Map) return rel['account_name'] as String? ?? '';
+    return '';
+  }
+
+  String _displayAccount(Map<String, dynamic> a) =>
+      '[${a['account_code']}] ${a['account_name']}';
+
+  String _findAccountDisplay(List<Map<String, dynamic>> list, String id) {
+    final acc = list.where((a) => a['id'] == id).firstOrNull;
+    return acc != null ? _displayAccount(acc) : '';
+  }
+
+  Widget _buildAccountSearch({
+    required List<Map<String, dynamic>> accounts,
+    required String? selectedId,
+    required bool locked,
+    required InputDecoration decoration,
+    required void Function(Map<String, dynamic>) onSelected,
+    required VoidCallback onCleared,
+    double height = 56.0,
+    String? keyValue,
+  }) {
+    return SizedBox(
+      height: height,
+      child: Autocomplete<Map<String, dynamic>>(
+        key: ValueKey(keyValue ?? selectedId ?? 'none'),
+        initialValue: TextEditingValue(
+          text: selectedId != null
+              ? _findAccountDisplay(accounts, selectedId)
+              : '',
+        ),
+        optionsBuilder: (textEditingValue) {
+          final q = textEditingValue.text.toLowerCase().trim();
+          final filtered = q.isEmpty
+              ? accounts
+              : accounts.where((a) =>
+                  (a['account_code'] as String? ?? '').toLowerCase().contains(q) ||
+                  (a['account_name']  as String? ?? '').toLowerCase().contains(q));
+          return filtered.take(50);
+        },
+        displayStringForOption: _displayAccount,
+        fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) =>
+            TextFormField(
+              controller: textCtrl,
+              focusNode: focusNode,
+              enabled: !locked,
+              onChanged: (v) { if (v.isEmpty) onCleared(); },
+              decoration: decoration,
+              style: const TextStyle(fontSize: 13),
+            ),
+        optionsViewBuilder: (context, onSel, options) => Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(4),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 260),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (context, idx) {
+                  final a          = options.elementAt(idx);
+                  final parentName = _extractParentName(a);
+                  return InkWell(
+                    onTap: () => onSel(a),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_displayAccount(a),
+                              style: const TextStyle(fontSize: 13)),
+                          if (parentName.isNotEmpty)
+                            Text(parentName,
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textSecondary)),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+        onSelected: (a) { if (!locked) onSelected(a); },
+      ),
+    );
   }
 
   String _fmtDate(DateTime d) =>
@@ -749,7 +902,28 @@ class _FinanceVoucherEntryScreenState
   Widget build(BuildContext context) {
     final session   = ref.watch(sessionProvider);
     final isOffline = session?.offlineMode ?? false;
-    final locked    = _isPosted || isOffline;
+    final isMobile  = Responsive.isMobile(context);
+    final menus     = ref.watch(menuProvider);
+    final feature   = _findFeature(menus, RouteNames.paymentReceipt);
+
+    if (feature == null) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.lock_outline, size: 48, color: Color(0xFFADB5BD)),
+            SizedBox(height: 12),
+            Text('You do not have access to this screen.',
+                style: TextStyle(color: Color(0xFF6B7280))),
+          ],
+        ),
+      );
+    }
+
+    final canSave    = !_isPosted && !isOffline &&
+        (_voucherNo == null ? feature.addAllowed : feature.editAllowed);
+    final canApprove = !_isPosted && !isOffline && feature.approveAllowed;
+    final locked     = !canSave;
 
     String title;
     if (_voucherNo != null) {
@@ -795,10 +969,10 @@ class _FinanceVoucherEntryScreenState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (_error != null) ...[
-                        _errorBanner(_error!),
+                        _errorBanner(_error!, onRetry: _init),
                         const SizedBox(height: 16),
                       ],
-                      _buildHeaderCard(locked),
+                      _buildHeaderCard(locked, isMobile),
                       const SizedBox(height: 20),
                       if (!_isOnAccount) _buildAgainstBillSection(locked),
                       if (_isOnAccount)  _buildOnAccountSection(locked),
@@ -808,9 +982,9 @@ class _FinanceVoucherEntryScreenState
                         const SizedBox(height: 12),
                         _errorBanner(_actionError!),
                       ],
-                      if (!locked) ...[
+                      if (canSave || canApprove) ...[
                         const SizedBox(height: 20),
-                        _buildActionButtons(),
+                        _buildActionButtons(canSave: canSave, canApprove: canApprove),
                       ],
                     ],
                   ),
@@ -822,7 +996,7 @@ class _FinanceVoucherEntryScreenState
 
   // ── Header card ───────────────────────────────────────────────────────────
 
-  Widget _buildHeaderCard(bool locked) {
+  Widget _buildHeaderCard(bool locked, bool isMobile) {
     final isCash = _voucherType != null && isCashVoucher(_voucherType!);
     final showRateField = _transCurrency.isNotEmpty && _transCurrency != _baseCurrency;
 
@@ -851,192 +1025,200 @@ class _FinanceVoucherEntryScreenState
         child: Column(children: [
 
           // Row 1: Voucher Type | Voucher No | Date
-          Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            Expanded(
-              flex: 4,
-              child: field(DropdownButtonFormField<String>(
-                decoration: dec.copyWith(labelText: 'Voucher Type *'),
-                value: _voucherType,
-                isExpanded: true,
-                items: _supportedTypes.map((t) => DropdownMenuItem(
-                  value: t,
-                  child: Text('$t — ${_typeLabels[t]}',
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13)),
-                )).toList(),
-                onChanged:
-                    locked ? null : (v) { if (v != null) _applyVoucherType(v); },
-              )),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 3,
-              child: field(InputDecorator(
-                decoration: dec.copyWith(labelText: 'Voucher No'),
-                child: Text(
-                  _voucherNo ?? '(auto on save)',
-                  style: TextStyle(
-                      fontSize: 13,
-                      color: _voucherNo != null
-                          ? AppColors.textPrimary
-                          : AppColors.textDisabled),
+          Builder(builder: (_) {
+            final f1 = field(DropdownButtonFormField<String>(
+              decoration: dec.copyWith(labelText: 'Voucher Type *'),
+              value: _voucherType,
+              isExpanded: true,
+              items: _supportedTypes.map((t) => DropdownMenuItem(
+                value: t,
+                child: Text('$t — ${_typeLabels[t]}',
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13)),
+              )).toList(),
+              onChanged: locked ? null : (v) { if (v != null) _applyVoucherType(v); },
+            ));
+            final f2 = field(InputDecorator(
+              decoration: dec.copyWith(labelText: 'Voucher No'),
+              child: Text(
+                _voucherNo ?? '(auto on save)',
+                style: TextStyle(
+                    fontSize: 13,
+                    color: _voucherNo != null
+                        ? AppColors.textPrimary
+                        : AppColors.textDisabled),
+              ),
+            ));
+            final f3 = field(InkWell(
+              onTap: locked
+                  ? null
+                  : () => _pickDate(_transDate, (d) => setState(() => _transDate = d)),
+              child: InputDecorator(
+                decoration: dec.copyWith(
+                  labelText: 'Date *',
+                  suffixIcon: Icon(Icons.calendar_today_outlined,
+                      size: 15,
+                      color: locked ? AppColors.textDisabled : AppColors.primary),
                 ),
-              )),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 3,
-              child: field(InkWell(
-                onTap: locked
-                    ? null
-                    : () => _pickDate(
-                        _transDate, (d) => setState(() => _transDate = d)),
-                child: InputDecorator(
-                  decoration: dec.copyWith(
-                    labelText: 'Date *',
-                    suffixIcon: Icon(Icons.calendar_today_outlined,
-                        size: 15,
-                        color: locked
-                            ? AppColors.textDisabled
-                            : AppColors.primary),
-                  ),
-                  child: Text(_displayDate(_transDate),
-                      style: const TextStyle(fontSize: 13)),
-                ),
-              )),
-            ),
-          ]),
+                child: Text(_displayDate(_transDate),
+                    style: const TextStyle(fontSize: 13)),
+              ),
+            ));
+            if (isMobile) {
+              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                SizedBox(width: double.infinity, child: f1),
+                const SizedBox(height: 8),
+                Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                  Expanded(child: f2),
+                  const SizedBox(width: 12),
+                  Expanded(child: f3),
+                ]),
+              ]);
+            }
+            return Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              Expanded(flex: 4, child: f1),
+              const SizedBox(width: 12),
+              Expanded(flex: 3, child: f2),
+              const SizedBox(width: 12),
+              Expanded(flex: 3, child: f3),
+            ]);
+          }),
 
           const SizedBox(height: 12),
 
           // Row 2: Cash/Bank Account | Currency | Rate (1 base = X trans)
-          Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            Expanded(
-              flex: 5,
-              child: field(DropdownButtonFormField<String>(
-                decoration: dec.copyWith(
-                    labelText: isCash ? 'Cash Account *' : 'Bank Account *'),
-                value: _cashBankId,
-                isExpanded: true,
-                items: _cashBankList.map((a) => DropdownMenuItem(
-                  value: a['id'] as String,
-                  child: Text(a['account_name'] as String,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13)),
-                )).toList(),
-                onChanged: locked
-                    ? null
-                    : (v) {
-                        if (v == null) return;
-                        final acc =
-                            _cashBankList.where((a) => a['id'] == v).firstOrNull;
-                        if (acc != null) _onCashBankSelected(acc);
-                      },
-              )),
-            ),
-            const SizedBox(width: 12),
-            SizedBox(
+          Builder(builder: (_) {
+            final f1 = _buildAccountSearch(
+              accounts: _cashBankList,
+              selectedId: _cashBankId,
+              locked: locked,
+              height: fh,
+              decoration: dec.copyWith(
+                  labelText: isCash ? 'Cash Account *' : 'Bank Account *'),
+              onSelected: _onCashBankSelected,
+              onCleared: () => setState(() {
+                _cashBankId    = null;
+                _cashBankName  = null;
+                _transCurrency = '';
+                _rateCtrl.text = '1';
+              }),
+            );
+            final currChip = SizedBox(
               width: 80,
               height: fh,
               child: InputDecorator(
                 decoration: dec.copyWith(labelText: 'Currency'),
                 child: Text(
                   _transCurrency.isEmpty ? '—' : _transCurrency,
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: field(TextFormField(
-                controller: _rateCtrl,
-                enabled: !locked && showRateField,
-                decoration: dec.copyWith(
-                  labelText: showRateField ? '1 $_baseCurrency = ' : 'Rate',
-                  hintText: '1.0',
-                ),
-                style: const TextStyle(fontSize: 13),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))
-                ],
-                onChanged: (_) => setState(() {}),
-              )),
-            ),
-          ]),
+            );
+            final rateField = field(TextFormField(
+              controller: _rateCtrl,
+              enabled: !locked && showRateField,
+              decoration: dec.copyWith(
+                labelText: showRateField ? '1 $_baseCurrency = ' : 'Rate',
+                hintText: '1.0',
+              ),
+              style: const TextStyle(fontSize: 13),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
+              onChanged: (_) => setState(() {}),
+            ));
+            if (isMobile) {
+              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                SizedBox(width: double.infinity, child: f1),
+                const SizedBox(height: 8),
+                Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                  currChip,
+                  const SizedBox(width: 12),
+                  Expanded(child: rateField),
+                ]),
+              ]);
+            }
+            return Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              Expanded(flex: 5, child: f1),
+              const SizedBox(width: 12),
+              currChip,
+              const SizedBox(width: 12),
+              Expanded(flex: 2, child: rateField),
+            ]);
+          }),
 
           const SizedBox(height: 12),
 
           // Row 3: Payment Mode | Ref No | Ref Date | Remarks
-          Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            Expanded(
-              flex: 2,
-              child: field(DropdownButtonFormField<String>(
-                decoration: dec.copyWith(labelText: 'Payment Mode'),
-                value: _paymentMode,
-                isExpanded: true,
-                items: _paymentModes.map((m) => DropdownMenuItem(
-                  value: m['payment_mode_code'] as String,
-                  child: Text(m['payment_mode_name'] as String,
-                      style: const TextStyle(fontSize: 13)),
-                )).toList(),
-                onChanged: (locked || isCash)
-                    ? null
-                    : (v) => setState(() => _paymentMode = v),
-              )),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: field(TextFormField(
-                controller: _refNoCtrl,
-                enabled: !locked,
-                decoration: dec.copyWith(labelText: 'Ref No'),
-                style: const TextStyle(fontSize: 13),
-              )),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: field(InkWell(
-                onTap: locked
-                    ? null
-                    : () => _pickDate(
-                        _refDate, (d) => setState(() => _refDate = d)),
-                child: InputDecorator(
-                  decoration: dec.copyWith(
-                    labelText: 'Ref Date',
-                    suffixIcon: Icon(Icons.calendar_today_outlined,
-                        size: 15,
-                        color: locked
-                            ? AppColors.textDisabled
-                            : AppColors.primary),
-                  ),
-                  child: Text(
-                    _displayDate(_refDate),
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: _refDate != null
-                            ? AppColors.textPrimary
-                            : AppColors.textDisabled),
-                  ),
+          Builder(builder: (_) {
+            final f1 = field(DropdownButtonFormField<String>(
+              decoration: dec.copyWith(labelText: 'Payment Mode'),
+              value: _paymentMode,
+              isExpanded: true,
+              items: _paymentModes.map((m) => DropdownMenuItem(
+                value: m['payment_mode_code'] as String,
+                child: Text(m['payment_mode_name'] as String,
+                    style: const TextStyle(fontSize: 13)),
+              )).toList(),
+              onChanged: (locked || isCash)
+                  ? null
+                  : (v) => setState(() => _paymentMode = v),
+            ));
+            final f2 = field(TextFormField(
+              controller: _refNoCtrl,
+              enabled: !locked,
+              decoration: dec.copyWith(labelText: 'Ref No'),
+              style: const TextStyle(fontSize: 13),
+            ));
+            final f3 = field(InkWell(
+              onTap: locked
+                  ? null
+                  : () => _pickDate(_refDate, (d) => setState(() => _refDate = d)),
+              child: InputDecorator(
+                decoration: dec.copyWith(
+                  labelText: 'Ref Date',
+                  suffixIcon: Icon(Icons.calendar_today_outlined,
+                      size: 15,
+                      color: locked ? AppColors.textDisabled : AppColors.primary),
                 ),
-              )),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 3,
-              child: field(TextFormField(
-                controller: _remarksCtrl,
-                enabled: !locked,
-                decoration: dec.copyWith(labelText: 'Remarks'),
-                style: const TextStyle(fontSize: 13),
-              )),
-            ),
-          ]),
+                child: Text(
+                  _displayDate(_refDate),
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: _refDate != null
+                          ? AppColors.textPrimary
+                          : AppColors.textDisabled),
+                ),
+              ),
+            ));
+            final f4 = field(TextFormField(
+              controller: _remarksCtrl,
+              enabled: !locked,
+              decoration: dec.copyWith(labelText: 'Remarks'),
+              style: const TextStyle(fontSize: 13),
+            ));
+            if (isMobile) {
+              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                SizedBox(width: double.infinity, child: f1),
+                const SizedBox(height: 8),
+                Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                  Expanded(child: f2),
+                  const SizedBox(width: 12),
+                  Expanded(child: f3),
+                ]),
+                const SizedBox(height: 8),
+                SizedBox(width: double.infinity, child: f4),
+              ]);
+            }
+            return Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              Expanded(flex: 2, child: f1),
+              const SizedBox(width: 12),
+              Expanded(flex: 2, child: f2),
+              const SizedBox(width: 12),
+              Expanded(flex: 2, child: f3),
+              const SizedBox(width: 12),
+              Expanded(flex: 3, child: f4),
+            ]);
+          }),
 
           // Cheque row — only for CHEQUE payment mode
           if (_paymentMode == 'CHEQUE') ...[
@@ -1113,28 +1295,26 @@ class _FinanceVoucherEntryScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        DropdownButtonFormField<String>(
+        _buildAccountSearch(
+          accounts: _partyAccounts,
+          selectedId: _partyId,
+          locked: locked,
           decoration: const InputDecoration(
               labelText: 'Customer / Supplier *',
               border: OutlineInputBorder(),
               isDense: true,
               contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
-          value: _partyId,
-          isExpanded: true,
-          items: _partyAccounts.map((a) => DropdownMenuItem(
-            value: a['id'] as String,
-            child: Text(a['account_name'] as String,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13)),
-          )).toList(),
-          onChanged: locked
-              ? null
-              : (v) {
-                  if (v == null) return;
-                  final acc =
-                      _partyAccounts.where((a) => a['id'] == v).firstOrNull;
-                  if (acc != null) _onPartySelected(acc);
-                },
+          onSelected: _onPartySelected,
+          onCleared: () {
+            for (final b in _bills) b.dispose();
+            setState(() {
+              _partyId       = null;
+              _partyName     = null;
+              _partyCurrency = '';
+              _partyRate     = 1.0;
+              _bills         = [];
+            });
+          },
         ),
 
         if (_partyCurrency.isNotEmpty && _partyCurrency != transCurr) ...[
@@ -1401,48 +1581,34 @@ class _FinanceVoucherEntryScreenState
               children: [
                   Expanded(
                     flex: 4,
-                    child: SizedBox(
+                    child: _buildAccountSearch(
+                      accounts: _otherAccounts
+                          .where((a) => !_accountLines
+                              .where((l) => l != line)
+                              .any((l) => l.accountId == a['id'] as String))
+                          .toList(),
+                      selectedId: line.accountId,
+                      locked: locked,
                       height: 44,
-                      child: DropdownButtonFormField<String>(
+                      keyValue: '${i}_${line.accountId ?? 'none'}',
                       decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           isDense: true,
                           contentPadding:
                               EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                          hintText: 'Select account'),
-                      value: line.accountId,
-                      isExpanded: true,
-                      items: _otherAccounts.map((a) {
-                        final id   = a['id'] as String;
-                        final used = _accountLines
-                            .where((l) => l != line && l.accountId == id)
-                            .isNotEmpty;
-                        return DropdownMenuItem(
-                          value: id,
-                          enabled: !used,
-                          child: Text(a['account_name'] as String,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  color: used ? AppColors.textDisabled : null)),
-                        );
-                      }).toList(),
-                      onChanged: locked
-                          ? null
-                          : (v) {
-                              if (v == null) return;
-                              final acc = _otherAccounts
-                                  .where((a) => a['id'] == v)
-                                  .firstOrNull;
-                              setState(() {
-                                line.accountId       = v;
-                                line.accountName     = acc?['account_name'] as String?;
-                                line.accountCurrency =
-                                    acc != null ? _extractCurrency(acc) : '';
-                              });
-                            },
+                          hintText: 'Search account'),
+                      onSelected: (a) => setState(() {
+                        line.accountId       = a['id'] as String;
+                        line.accountName     = a['account_name'] as String?;
+                        line.accountCurrency = _extractCurrency(a);
+                      }),
+                      onCleared: () => setState(() {
+                        line.accountId       = null;
+                        line.accountName     = null;
+                        line.accountCurrency = '';
+                      }),
                     ),
-                  )),  // SizedBox + Expanded
+                  ),
                   const SizedBox(width: 12),
                   // Amount column — shows currency chip when account currency ≠ trans currency
                   Expanded(
@@ -1577,42 +1743,46 @@ class _FinanceVoucherEntryScreenState
 
   // ── Action buttons ────────────────────────────────────────────────────────
 
-  Widget _buildActionButtons() {
+  Widget _buildActionButtons({
+    required bool canSave,
+    required bool canApprove,
+  }) {
     return Row(children: [
-      OutlinedButton.icon(
-        onPressed: (_saving || _posting) ? null : _saveDraft,
-        icon: _saving
-            ? const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2))
-            : const Icon(Icons.save_outlined, size: 16),
-        label: Text(_saving ? 'Saving…' : 'Save Draft'),
-        style: OutlinedButton.styleFrom(
-            minimumSize: const Size(140, 44)),
-      ),
-      const SizedBox(width: 12),
-      FilledButton.icon(
-        onPressed: (_saving || _posting) ? null : _postVoucher,
-        icon: _posting
-            ? const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white))
-            : const Icon(Icons.check_circle_outline, size: 16),
-        label: Text(_posting ? 'Posting…' : 'Post Voucher'),
-        style: FilledButton.styleFrom(
-          backgroundColor: AppColors.secondary,
-          minimumSize: const Size(140, 44),
+      if (canSave)
+        OutlinedButton.icon(
+          onPressed: (_saving || _posting) ? null : _saveDraft,
+          icon: _saving
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.save_outlined, size: 16),
+          label: Text(_saving ? 'Saving…' : 'Save Draft'),
+          style: OutlinedButton.styleFrom(minimumSize: const Size(140, 48)),
         ),
-      ),
+      if (canSave && canApprove) const SizedBox(width: 12),
+      if (canApprove)
+        FilledButton.icon(
+          onPressed: (_saving || _posting) ? null : _postVoucher,
+          icon: _posting
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white))
+              : const Icon(Icons.check_circle_outline, size: 16),
+          label: Text(_posting ? 'Posting…' : 'Post Voucher'),
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.secondary,
+            minimumSize: const Size(140, 48),
+          ),
+        ),
     ]);
   }
 
   // ── Utility widgets ───────────────────────────────────────────────────────
 
-  Widget _errorBanner(String msg) => Container(
+  Widget _errorBanner(String msg, {VoidCallback? onRetry}) => Container(
     width: double.infinity,
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     decoration: BoxDecoration(
@@ -1625,8 +1795,21 @@ class _FinanceVoucherEntryScreenState
       const SizedBox(width: 8),
       Expanded(
           child: Text(msg,
-              style: const TextStyle(
-                  color: AppColors.negative, fontSize: 13))),
+              style: const TextStyle(color: AppColors.negative, fontSize: 13))),
+      if (onRetry != null) ...[
+        const SizedBox(width: 8),
+        TextButton(
+          onPressed: onRetry,
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.negative,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: const Text('Retry',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+        ),
+      ],
     ]),
   );
 

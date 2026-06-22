@@ -82,8 +82,6 @@ class SyncEngine {
   }
 }
 
-final appDatabaseProvider = Provider<AppDatabase>((_) => AppDatabase());
-
 final syncEngineProvider = Provider<SyncEngine>(
   (ref) => SyncEngine(ref.watch(appDatabaseProvider)),
 );
