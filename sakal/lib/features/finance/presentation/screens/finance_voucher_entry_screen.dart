@@ -926,6 +926,17 @@ class _FinanceVoucherEntryScreenState
     final canApprove = !_isPosted && !isOffline && feature.approveAllowed;
     final locked     = !canSave;
 
+    // TODO: remove after debugging
+    debugPrint('--- VOUCHER LOCK DEBUG ---');
+    debugPrint('  isOffline    : $isOffline');
+    debugPrint('  _isPosted    : $_isPosted');
+    debugPrint('  _voucherNo   : $_voucherNo');
+    debugPrint('  addAllowed   : ${feature.addAllowed}');
+    debugPrint('  editAllowed  : ${feature.editAllowed}');
+    debugPrint('  screenName   : ${feature.screenName}');
+    debugPrint('  canSave      : $canSave   →  locked=$locked');
+    debugPrint('--------------------------');
+
     String title;
     if (_voucherNo != null) {
       title = '${_typeLabels[_voucherType] ?? 'Voucher'}  ·  $_voucherNo';
