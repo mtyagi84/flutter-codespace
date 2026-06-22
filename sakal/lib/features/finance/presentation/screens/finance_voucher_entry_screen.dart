@@ -188,9 +188,9 @@ class _FinanceVoucherEntryScreenState
         // are pre-synced during online login via SyncScreen.
         final db   = ref.read(appDatabaseProvider);
         final rows = await (db.select(db.accountsCache)
-              ..where((t) => t.clientId.equals(session.clientId) &
-                             t.companyId.equals(session.companyId) &
-                             t.isActive.equals(true)))
+              ..where((t) => t.clientId.equals(session.clientId))
+              ..where((t) => t.companyId.equals(session.companyId))
+              ..where((t) => t.isActive.equals(true)))
             .get();
         accounts = rows.map((r) => {
           'id':             r.id,
