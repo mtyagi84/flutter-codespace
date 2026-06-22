@@ -85,6 +85,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         'p_client_id':  d['client_id'],
         'p_company_id': d['company_id'],
       });
+      // TODO: remove after debugging
+      debugPrint('=== RAW fn_get_user_menu response ===');
+      debugPrint(menuRes.data.toString());
+      debugPrint('=====================================');
       final menuList = (menuRes.data as List<dynamic>)
           .map((e) => MenuModule.fromJson(e as Map<String, dynamic>))
           .toList();

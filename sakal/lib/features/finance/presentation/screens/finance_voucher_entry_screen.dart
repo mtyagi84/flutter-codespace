@@ -907,6 +907,17 @@ class _FinanceVoucherEntryScreenState
     final menus     = ref.watch(menuProvider);
     final feature   = _findFeature(menus, RouteNames.paymentReceipt);
 
+    // TODO: remove after debugging
+    debugPrint('=== MENU RAW DUMP ===');
+    for (final mod in menus) {
+      for (final grp in mod.groups) {
+        for (final feat in grp.features) {
+          debugPrint('  ${feat.featureCode} | ${feat.screenName} | add=${feat.addAllowed} edit=${feat.editAllowed}');
+        }
+      }
+    }
+    debugPrint('=====================');
+
     if (feature == null) {
       return const Center(
         child: Column(
