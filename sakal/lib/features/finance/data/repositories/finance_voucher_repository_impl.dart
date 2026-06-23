@@ -1,10 +1,15 @@
+import 'dart:async';
 import '../../domain/repositories/finance_voucher_repository.dart';
 import '../datasources/finance_voucher_remote_ds.dart';
+import '../datasources/finance_voucher_local_ds.dart';
 import '../models/finance_voucher_model.dart';
 
 class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
   final FinanceVoucherRemoteDs _remote;
-  FinanceVoucherRepositoryImpl(this._remote);
+  final FinanceVoucherLocalDs  _local;
+  final bool                   _isOffline;
+
+  FinanceVoucherRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
   Future<FinanceVoucherHeader?> getHeader({
@@ -12,12 +17,24 @@ class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
     required String companyId,
     required String transNo,
     String? transDate,
-  }) => _remote.getHeader(
+  }) async {
+    if (_isOffline) {
+      return _local.getHeader(
         clientId:  clientId,
         companyId: companyId,
         transNo:   transNo,
         transDate: transDate,
       );
+    }
+    final header = await _remote.getHeader(
+      clientId:  clientId,
+      companyId: companyId,
+      transNo:   transNo,
+      transDate: transDate,
+    );
+    if (header != null) unawaited(_local.cacheHeader(header));
+    return header;
+  }
 
   @override
   Future<List<FinanceVoucherLine>> getLines({
@@ -25,12 +42,24 @@ class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
     required String companyId,
     required String transNo,
     required String transDate,
-  }) => _remote.getLines(
+  }) async {
+    if (_isOffline) {
+      return _local.getLines(
         clientId:  clientId,
         companyId: companyId,
         transNo:   transNo,
         transDate: transDate,
       );
+    }
+    final lines = await _remote.getLines(
+      clientId:  clientId,
+      companyId: companyId,
+      transNo:   transNo,
+      transDate: transDate,
+    );
+    unawaited(_local.cacheLines(clientId, companyId, transNo, transDate, lines));
+    return lines;
+  }
 
   @override
   Future<String> save({
@@ -38,6 +67,13 @@ class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
     required List<Map<String, dynamic>> lines,
     required String userId,
   }) => _remote.save(header: header, lines: lines, userId: userId);
+
+  @override
+  Future<void> cacheVoucherLocally({
+    required String effectiveTransNo,
+    required Map<String, dynamic> header,
+    required List<Map<String, dynamic>> lines,
+  }) => _local.cacheFromMaps(effectiveTransNo, header, lines);
 
   @override
   Future<void> post({

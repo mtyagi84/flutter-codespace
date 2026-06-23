@@ -686,6 +686,12 @@ class _FinanceVoucherEntryScreenState
           endpoint:     '/rpc/fn_save_finance_voucher',
           payload:      {'p_header': header, 'p_lines': lines, 'p_user_id': session.userId},
         );
+        // Cache locally so the voucher is readable in the entry screen while still offline.
+        await ref.read(financeVoucherRepositoryProvider).cacheVoucherLocally(
+          effectiveTransNo: localId,
+          header: header,
+          lines:  lines,
+        );
         if (mounted) {
           setState(() { _voucherNo = localId; _saving = false; });
           _showSnack('Saved offline — will sync when online.',
@@ -698,6 +704,12 @@ class _FinanceVoucherEntryScreenState
           lines:  lines,
           userId: session.userId,
         );
+        // Cache for offline access in subsequent sessions.
+        unawaited(ref.read(financeVoucherRepositoryProvider).cacheVoucherLocally(
+          effectiveTransNo: transNo,
+          header: header,
+          lines:  lines,
+        ));
         if (mounted) {
           setState(() { _voucherNo = transNo; _saving = false; });
           _showSnack('Draft saved — $transNo', color: AppColors.positive);

@@ -21,6 +21,14 @@ abstract class FinanceVoucherRepository {
     required String userId,
   });
 
+  // Cache a voucher locally for offline read-back.
+  // Called after every online save and on every offline save (before enqueue).
+  Future<void> cacheVoucherLocally({
+    required String effectiveTransNo,
+    required Map<String, dynamic> header,
+    required List<Map<String, dynamic>> lines,
+  });
+
   Future<void> post({
     required String clientId,
     required String companyId,
