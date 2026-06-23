@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:drift/drift.dart' show Value;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -223,7 +224,8 @@ class _FinanceVoucherEntryScreenState
         local    = futures[3] as String;
 
         // Populate AccountsCache so the data is available on next offline login.
-        unawaited(_cacheAccountsLocally(accounts, session));
+        // Drift is not available on Flutter Web.
+        if (!kIsWeb) unawaited(_cacheAccountsLocally(accounts, session));
       }
 
       if (!mounted) return;
