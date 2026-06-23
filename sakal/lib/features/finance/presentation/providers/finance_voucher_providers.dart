@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/providers/session_provider.dart';
@@ -10,8 +11,10 @@ final _remoteDsProvider = Provider<FinanceVoucherRemoteDs>(
   (_) => FinanceVoucherRemoteDs(),
 );
 
-final _localDsProvider = Provider<FinanceVoucherLocalDs>(
-  (ref) => FinanceVoucherLocalDs(ref.watch(appDatabaseProvider)),
+// Drift is not available on Flutter Web (requires web-worker setup).
+// Web sessions are always online so local caching is not needed there.
+final _localDsProvider = Provider<FinanceVoucherLocalDs?>(
+  (ref) => kIsWeb ? null : FinanceVoucherLocalDs(ref.watch(appDatabaseProvider)),
 );
 
 final financeVoucherRepositoryProvider = Provider<FinanceVoucherRepository>((ref) {

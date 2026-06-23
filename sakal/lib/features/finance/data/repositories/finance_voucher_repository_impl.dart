@@ -5,9 +5,9 @@ import '../datasources/finance_voucher_local_ds.dart';
 import '../models/finance_voucher_model.dart';
 
 class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
-  final FinanceVoucherRemoteDs _remote;
-  final FinanceVoucherLocalDs  _local;
-  final bool                   _isOffline;
+  final FinanceVoucherRemoteDs  _remote;
+  final FinanceVoucherLocalDs?  _local;   // null on Flutter Web (no Drift)
+  final bool                    _isOffline;
 
   FinanceVoucherRepositoryImpl(this._remote, this._local, this._isOffline);
 
@@ -18,7 +18,7 @@ class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
     required String transNo,
     String? transDate,
   }) async {
-    if (_isOffline) {
+    if (_isOffline && _local != null) {
       return _local.getHeader(
         clientId:  clientId,
         companyId: companyId,
@@ -32,7 +32,7 @@ class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
       transNo:   transNo,
       transDate: transDate,
     );
-    if (header != null) unawaited(_local.cacheHeader(header));
+    if (header != null && _local != null) unawaited(_local.cacheHeader(header));
     return header;
   }
 
@@ -43,7 +43,7 @@ class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
     required String transNo,
     required String transDate,
   }) async {
-    if (_isOffline) {
+    if (_isOffline && _local != null) {
       return _local.getLines(
         clientId:  clientId,
         companyId: companyId,
@@ -57,7 +57,7 @@ class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
       transNo:   transNo,
       transDate: transDate,
     );
-    unawaited(_local.cacheLines(clientId, companyId, transNo, transDate, lines));
+    if (_local != null) unawaited(_local.cacheLines(clientId, companyId, transNo, transDate, lines));
     return lines;
   }
 
@@ -73,7 +73,7 @@ class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
     required String effectiveTransNo,
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,
-  }) => _local.cacheFromMaps(effectiveTransNo, header, lines);
+  }) => _local?.cacheFromMaps(effectiveTransNo, header, lines) ?? Future.value();
 
   @override
   Future<void> post({
