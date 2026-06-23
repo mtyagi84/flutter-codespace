@@ -29,21 +29,12 @@ double crTotal(List<({String nature, double amount})> lines) =>
 /// Voucher is balanced when |DR − CR| < 0.01.
 bool isVoucherBalanced(double dr, double cr) => (dr - cr).abs() < 0.01;
 
-/// Convert transaction amount to base currency.
-/// [rate] = units of transCurrency per 1 unit of baseCurrency.
-/// If same currency, returns amount unchanged.
-double toBaseAmount(double amount, double rate, String transCurrency, String baseCurrency) {
-  if (transCurrency == baseCurrency || rate <= 0) return amount;
-  return amount / rate;
-}
+/// Convert transaction amount using a stored rate.
+/// [baseRate] = fn_get_exchange_rate(trans → base).
+/// Always multiply: base_amount = trans_amount × base_rate.
+double toBaseAmount(double transAmount, double baseRate) => transAmount * baseRate;
 
-/// Convert transaction amount to local currency.
-/// [rate] = units of localCurrency per 1 unit of baseCurrency.
-double toLocalAmount(double amount, double baseRate, double localRate,
-    String transCurrency, String localCurrency) {
-  if (transCurrency == localCurrency) return amount;
-  if (baseRate <= 0 || localRate <= 0) return amount;
-  // trans → base → local
-  final inBase = amount / baseRate;
-  return inBase * localRate;
-}
+/// Convert transaction amount to local currency using a stored rate.
+/// [localRate] = fn_get_exchange_rate(trans → local).
+/// Always multiply: local_amount = trans_amount × local_rate.
+double toLocalAmount(double transAmount, double localRate) => transAmount * localRate;

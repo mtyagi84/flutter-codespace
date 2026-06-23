@@ -62,6 +62,7 @@ class _AccountLine {
   String? accountId;
   String? accountName;
   String  accountCurrency; // ledger currency of this account
+  double  partyRate;       // fn_get_rate(trans → accountCurrency)
   final TextEditingController amountCtrl;
   final TextEditingController remarksCtrl;
 
@@ -69,6 +70,7 @@ class _AccountLine {
     this.accountId,
     this.accountName,
     this.accountCurrency = '',
+    this.partyRate       = 1.0,
     String amount  = '',
     String remarks = '',
   })  : amountCtrl  = TextEditingController(text: amount),
@@ -292,6 +294,7 @@ class _FinanceVoucherEntryScreenState
       _cashBankId    = null;
       _transCurrency = '';
       _rateCtrl.text = '1';
+      _localRate     = 1.0;
       _paymentMode   = isCashVoucher(type) ? 'CASH' : null;
       _partyId       = null;
       _partyName     = null;
@@ -308,27 +311,38 @@ class _FinanceVoucherEntryScreenState
     final session  = ref.read(sessionProvider)!;
     final repo     = ref.read(financeVoucherRepositoryProvider);
     try {
-      final results = await Future.wait([
-        repo.getHeader(clientId: session.clientId, companyId: session.companyId, transNo: voucherNo),
-        repo.getLines(clientId: session.clientId, companyId: session.companyId, transNo: voucherNo),
-      ]);
-
-      final header   = results[0] as FinanceVoucherHeader?;
-      final lineObjs = results[1] as List<FinanceVoucherLine>;
-
+      // Sequential: get header first to obtain trans_date, then fetch lines
+      // by the composite key (trans_no, trans_date) — trans_no alone is not
+      // unique after period resets (migration 021).
+      final header = await repo.getHeader(
+        clientId:  session.clientId,
+        companyId: session.companyId,
+        transNo:   voucherNo,
+      );
       if (header == null || !mounted) {
         setState(() => _loading = false);
         return;
       }
+      final lineObjs = await repo.getLines(
+        clientId:  session.clientId,
+        companyId: session.companyId,
+        transNo:   voucherNo,
+        transDate: header.transDate,
+      );
 
       final vt   = header.voucherTypeCode;
       final isOA = header.isOnAccount;
 
       // Line 1 = cash / bank entry
-      final line1         = lineObjs.isNotEmpty ? lineObjs.first : null;
-      final transCurrency = line1?.transCurrency ?? _baseCurrency;
-      final cashBankId    = line1?.accountId.isEmpty == true ? null : line1?.accountId;
-      final baseRate     = line1?.baseRate ?? 1.0;
+      final line1           = lineObjs.isNotEmpty ? lineObjs.first : null;
+      final transCurrency   = line1?.transCurrency ?? _baseCurrency;
+      final cashBankId      = line1?.accountId.isEmpty == true ? null : line1?.accountId;
+      final storedBaseRate  = line1?.baseRate ?? 1.0;
+      final restoredLocalRate = line1?.localRate ?? 1.0;
+      // Display rate "1 base = X trans" = 1 / storedBaseRate (when trans ≠ base)
+      final displayRate = (storedBaseRate > 0 && transCurrency != _baseCurrency)
+          ? 1.0 / storedBaseRate
+          : 1.0;
 
       final restObjs = lineObjs.length > 1 ? lineObjs.sublist(1) : <FinanceVoucherLine>[];
 
@@ -349,7 +363,8 @@ class _FinanceVoucherEntryScreenState
         }
         _cashBankId    = cashBankId;
         _transCurrency = transCurrency;
-        _rateCtrl.text = _fmtRate(baseRate);
+        _rateCtrl.text = _fmtRate(displayRate);
+        _localRate     = restoredLocalRate;
         _isOnAccount   = isOA;
         _loading       = false;
       }
@@ -392,6 +407,7 @@ class _FinanceVoucherEntryScreenState
             accountId:       accId,
             accountName:     acc?['account_name'] as String?,
             accountCurrency: acc != null ? _extractCurrency(acc) : '',
+            partyRate:       row.partyRate,
             amount:          row.transAmount.toString(),
             remarks:         row.lineRemarks,
           );
@@ -420,10 +436,9 @@ class _FinanceVoucherEntryScreenState
       _cashBankId    = account['id'] as String;
       _transCurrency = currency;
       _rateCtrl.text = '1';
+      _localRate     = 1.0;
     });
-    if (currency.isNotEmpty && currency != _baseCurrency) {
-      await _fetchRate(currency, isParty: false);
-    }
+    await _fetchRatesForTrans(currency);
   }
 
   // ── Party selected ────────────────────────────────────────────────────────
@@ -438,34 +453,44 @@ class _FinanceVoucherEntryScreenState
       _partyRate     = 1.0;
       _bills         = [];
     });
-    if (currency.isNotEmpty && currency != _baseCurrency) {
-      await _fetchRate(currency, isParty: true);
-    }
+    final trans = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
+    final rate = await _fetchCrossRate(trans, currency);
+    if (mounted && rate != null) setState(() => _partyRate = rate);
     await _loadPendingBills();
   }
 
-  // ── Fetch exchange rate ───────────────────────────────────────────────────
+  // ── Exchange rate helpers ─────────────────────────────────────────────────
 
-  Future<void> _fetchRate(String toCurrency, {required bool isParty}) async {
+  // Calls fn_get_exchange_rate(from → to) — handles same, reverse, cross.
+  Future<double?> _fetchCrossRate(String from, String to) async {
+    if (from.isEmpty || to.isEmpty || from == to) return 1.0;
     final session = ref.read(sessionProvider)!;
-    if (session.locationId == null) return;
+    if (session.locationId == null) return null;
     try {
-      final rate = await ref.read(financeVoucherRepositoryProvider).fetchExchangeRate(
+      return await ref.read(financeVoucherRepositoryProvider).fetchExchangeRate(
         companyId:    session.companyId,
         locationId:   session.locationId!,
-        fromCurrency: _baseCurrency,
-        toCurrency:   toCurrency,
+        fromCurrency: from,
+        toCurrency:   to,
         rateDate:     _fmtDate(_transDate),
       );
-      if (!mounted || rate == null) return;
-      setState(() {
-        if (isParty) {
-          _partyRate = rate;
-        } else {
-          _rateCtrl.text = _fmtRate(rate);
-        }
-      });
-    } catch (_) { /* rate not found — keep default */ }
+    } catch (_) { return null; }
+  }
+
+  // Fetches the display rate ("1 base = X trans") and the local rate
+  // whenever the transaction currency changes.
+  Future<void> _fetchRatesForTrans(String transCurrency) async {
+    if (transCurrency.isEmpty) return;
+    // Display rate: "1 base = X trans" — only show / fetch when trans ≠ base
+    if (transCurrency != _baseCurrency && _baseCurrency.isNotEmpty) {
+      final dr = await _fetchCrossRate(_baseCurrency, transCurrency);
+      if (mounted && dr != null) setState(() => _rateCtrl.text = _fmtRate(dr));
+    }
+    // Local rate: fn_get_rate(trans → local) — always fetch
+    if (_localCurrency.isNotEmpty) {
+      final lr = await _fetchCrossRate(transCurrency, _localCurrency);
+      if (mounted && lr != null) setState(() => _localRate = lr);
+    }
   }
 
   // ── Load pending bills ────────────────────────────────────────────────────
@@ -513,17 +538,16 @@ class _FinanceVoucherEntryScreenState
     return _accountLines.fold(0.0, (s, l) => s + l.amount);
   }
 
-  // balance_party → balance in trans currency
+  // balance in party currency → balance in trans currency
+  // partyRate = fn_get_rate(trans → party), so trans = party / partyRate
   double _balanceTrans(double balanceParty) {
-    if (_partyRate <= 0 || _rate <= 0) return balanceParty;
-    return balanceParty * _rate / _partyRate;
+    if (_partyRate <= 0) return balanceParty;
+    return balanceParty / _partyRate;
   }
 
-  // payTrans → pay in party currency
-  double _payParty(double payTrans) {
-    if (_rate <= 0) return payTrans;
-    return payTrans * _partyRate / _rate;
-  }
+  // trans amount → party currency amount
+  // party_amount = trans_amount × partyRate
+  double _payParty(double payTrans) => payTrans * _partyRate;
 
   // ── Save draft ────────────────────────────────────────────────────────────
 
@@ -544,11 +568,13 @@ class _FinanceVoucherEntryScreenState
 
     setState(() { _saving = true; _actionError = null; });
     try {
-      final tc    = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
-      final rate  = _rate;
-      final n1    = line1Nature(_voucherType!);
-      final n2    = counterNature(n1);
-      final total = _totalTransAmount;
+      final tc        = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
+      final displayRate = _rate; // "1 base = X trans" (UI display value)
+      // base_rate = fn_get_rate(trans → base) = 1/displayRate; always multiply formula
+      final baseRate  = (tc == _baseCurrency || displayRate <= 0) ? 1.0 : 1.0 / displayRate;
+      final n1        = line1Nature(_voucherType!);
+      final n2        = counterNature(n1);
+      final total     = _totalTransAmount;
 
       final header = {
         'client_id':         session.clientId,
@@ -568,20 +594,20 @@ class _FinanceVoucherEntryScreenState
 
       final lines = <Map<String, dynamic>>[];
 
-      // Line 1 — cash / bank
+      // Line 1 — cash / bank (always in trans_currency, so party = trans)
       lines.add({
         'serial_no':      1,
         'account_id':     _cashBankId,
         'trans_nature':   n1,
         'trans_amount':   total,
         'trans_currency': tc,
-        'base_amount':    toBaseAmount(total, rate, tc, _baseCurrency),
-        'base_rate':      rate,
-        'local_amount':   toLocalAmount(total, rate, _localRate, tc, _localCurrency),
+        'base_amount':    toBaseAmount(total, baseRate),
+        'base_rate':      baseRate,
+        'local_amount':   toLocalAmount(total, _localRate),
         'local_rate':     _localRate,
         'party_amount':   total,
         'party_currency': tc,
-        'party_rate':     rate,
+        'party_rate':     1.0,
         'inv_bill_no':    '',
         'inv_bill_date':  '',
         'line_remarks':   '',
@@ -593,18 +619,17 @@ class _FinanceVoucherEntryScreenState
         for (final bill in _bills) {
           if (bill.payTrans <= 0) continue;
           final payTrans = bill.payTrans;
-          final payParty = _payParty(payTrans);
           lines.add({
             'serial_no':      serial++,
             'account_id':     _partyId,
             'trans_nature':   n2,
             'trans_amount':   payTrans,
             'trans_currency': tc,
-            'base_amount':    toBaseAmount(payTrans, rate, tc, _baseCurrency),
-            'base_rate':      rate,
-            'local_amount':   toLocalAmount(payTrans, rate, _localRate, tc, _localCurrency),
+            'base_amount':    toBaseAmount(payTrans, baseRate),
+            'base_rate':      baseRate,
+            'local_amount':   toLocalAmount(payTrans, _localRate),
             'local_rate':     _localRate,
-            'party_amount':   payParty,
+            'party_amount':   _payParty(payTrans),  // trans × partyRate
             'party_currency': _partyCurrency.isEmpty ? tc : _partyCurrency,
             'party_rate':     _partyRate,
             'inv_bill_no':    bill.invBillNo,
@@ -615,33 +640,20 @@ class _FinanceVoucherEntryScreenState
       } else {
         for (final line in _accountLines) {
           if (line.accountId == null || line.amount <= 0) continue;
-          // Party fields reflect the account's own ledger currency.
-          // party_rate = 1 BASE = X party_currency (same convention as header rate).
-          // party_amount = base_amount * party_rate
-          //             = (trans_amount / rate) * party_rate
-          final lineCurr  = line.accountCurrency.isEmpty ? _baseCurrency : line.accountCurrency;
-          final baseAmt   = toBaseAmount(line.amount, rate, tc, _baseCurrency);
-          // party_rate: 1 BASE = X party_currency
-          // If party_currency == base → rate = 1; if == trans → rate = _rate; else default to 1
-          final partyRate = lineCurr == _baseCurrency
-              ? 1.0
-              : (lineCurr == tc ? rate : 1.0);
-          final partyAmt  = lineCurr == _baseCurrency
-              ? baseAmt
-              : (lineCurr == tc ? line.amount : baseAmt);
+          final lineCurr = line.accountCurrency.isEmpty ? _baseCurrency : line.accountCurrency;
           lines.add({
             'serial_no':      serial++,
             'account_id':     line.accountId,
             'trans_nature':   n2,
             'trans_amount':   line.amount,
             'trans_currency': tc,
-            'base_amount':    baseAmt,
-            'base_rate':      rate,
-            'local_amount':   toLocalAmount(line.amount, rate, _localRate, tc, _localCurrency),
+            'base_amount':    toBaseAmount(line.amount, baseRate),
+            'base_rate':      baseRate,
+            'local_amount':   toLocalAmount(line.amount, _localRate),
             'local_rate':     _localRate,
-            'party_amount':   partyAmt,
+            'party_amount':   line.amount * line.partyRate,
             'party_currency': lineCurr,
-            'party_rate':     partyRate,
+            'party_rate':     line.partyRate,
             'inv_bill_no':    '',
             'inv_bill_date':  '',
             'line_remarks':   line.remarksCtrl.text,
@@ -907,17 +919,6 @@ class _FinanceVoucherEntryScreenState
     final menus     = ref.watch(menuProvider);
     final feature   = _findFeature(menus, RouteNames.paymentReceipt);
 
-    // TODO: remove after debugging
-    debugPrint('=== MENU RAW DUMP ===');
-    for (final mod in menus) {
-      for (final grp in mod.groups) {
-        for (final feat in grp.features) {
-          debugPrint('  ${feat.featureCode} | ${feat.screenName} | add=${feat.addAllowed} edit=${feat.editAllowed}');
-        }
-      }
-    }
-    debugPrint('=====================');
-
     if (feature == null) {
       return const Center(
         child: Column(
@@ -936,17 +937,6 @@ class _FinanceVoucherEntryScreenState
         (_voucherNo == null ? feature.addAllowed : feature.editAllowed);
     final canApprove = !_isPosted && !isOffline && feature.approveAllowed;
     final locked     = !canSave;
-
-    // TODO: remove after debugging
-    debugPrint('--- VOUCHER LOCK DEBUG ---');
-    debugPrint('  isOffline    : $isOffline');
-    debugPrint('  _isPosted    : $_isPosted');
-    debugPrint('  _voucherNo   : $_voucherNo');
-    debugPrint('  addAllowed   : ${feature.addAllowed}');
-    debugPrint('  editAllowed  : ${feature.editAllowed}');
-    debugPrint('  screenName   : ${feature.screenName}');
-    debugPrint('  canSave      : $canSave   →  locked=$locked');
-    debugPrint('--------------------------');
 
     String title;
     if (_voucherNo != null) {
@@ -1339,7 +1329,7 @@ class _FinanceVoucherEntryScreenState
           const SizedBox(height: 6),
           Text(
             'Party currency: $_partyCurrency  ·  '
-            'Rate: 1 $_baseCurrency = ${_fmtRate(_partyRate)} $_partyCurrency',
+            '1 $transCurr = ${_fmtRate(_partyRate)} $_partyCurrency',
             style: const TextStyle(
                 fontSize: 11, color: AppColors.textSecondary),
           ),
@@ -1616,11 +1606,21 @@ class _FinanceVoucherEntryScreenState
                           contentPadding:
                               EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                           hintText: 'Search account'),
-                      onSelected: (a) => setState(() {
-                        line.accountId       = a['id'] as String;
-                        line.accountName     = a['account_name'] as String?;
-                        line.accountCurrency = _extractCurrency(a);
-                      }),
+                      onSelected: (a) {
+                        final acCurr = _extractCurrency(a);
+                        final trans  = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
+                        setState(() {
+                          line.accountId       = a['id'] as String;
+                          line.accountName     = a['account_name'] as String?;
+                          line.accountCurrency = acCurr;
+                          line.partyRate       = acCurr == trans ? 1.0 : 1.0;
+                        });
+                        if (acCurr.isNotEmpty && acCurr != trans) {
+                          unawaited(_fetchCrossRate(trans, acCurr).then((r) {
+                            if (mounted && r != null) setState(() => line.partyRate = r);
+                          }));
+                        }
+                      },
                       onCleared: () => setState(() {
                         line.accountId       = null;
                         line.accountName     = null;

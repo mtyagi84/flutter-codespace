@@ -11,10 +11,12 @@ class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
     required String clientId,
     required String companyId,
     required String transNo,
+    String? transDate,
   }) => _remote.getHeader(
-        clientId: clientId,
+        clientId:  clientId,
         companyId: companyId,
-        transNo: transNo,
+        transNo:   transNo,
+        transDate: transDate,
       );
 
   @override
@@ -22,10 +24,12 @@ class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
     required String clientId,
     required String companyId,
     required String transNo,
+    required String transDate,
   }) => _remote.getLines(
-        clientId: clientId,
+        clientId:  clientId,
         companyId: companyId,
-        transNo: transNo,
+        transNo:   transNo,
+        transDate: transDate,
       );
 
   @override

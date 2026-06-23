@@ -57,16 +57,97 @@ create or replace function fn_get_exchange_rate(
     p_from_currency text,
     p_to_currency   text,
     p_rate_date     date,
-    p_rate_type     text
+    p_rate_type     text default 'MID'
 )
 returns numeric
 language plpgsql stable
 as $$
 declare
-    v_rate numeric;
+    v_base_currency text;
+    v_rate_from     numeric;
+    v_rate_to       numeric;
 begin
+    -- Same currency → always 1
     if p_from_currency = p_to_currency then
         return 1;
+    end if;
+
+    -- Base currency for this company (all rates in table are base → other)
+    select base_currency into v_base_currency
+    from ric_companies
+    where id = p_company_id;
+
+    -- CASE 1: from = base → direct lookup
+    if p_from_currency = v_base_currency then
+        select case p_rate_type
+            when 'BUYING'  then buying_rate
+            when 'SELLING' then selling_rate
+            else mid_rate
+        end
+        into v_rate_to
+        from rim_exchange_rates
+        where company_id    = p_company_id
+          and location_id   = p_location_id
+          and from_currency = p_from_currency
+          and to_currency   = p_to_currency
+          and rate_date    <= p_rate_date
+          and is_deleted    = false
+        order by rate_date desc
+        limit 1;
+
+        if v_rate_to is null then
+            raise exception 'No exchange rate found for % → % on or before %. Please enter rate first.',
+                p_from_currency, p_to_currency, p_rate_date;
+        end if;
+        return v_rate_to;
+    end if;
+
+    -- CASE 2: to = base → reciprocal of lookup(base → from)
+    if p_to_currency = v_base_currency then
+        select case p_rate_type
+            when 'BUYING'  then buying_rate
+            when 'SELLING' then selling_rate
+            else mid_rate
+        end
+        into v_rate_from
+        from rim_exchange_rates
+        where company_id    = p_company_id
+          and location_id   = p_location_id
+          and from_currency = v_base_currency
+          and to_currency   = p_from_currency
+          and rate_date    <= p_rate_date
+          and is_deleted    = false
+        order by rate_date desc
+        limit 1;
+
+        if v_rate_from is null then
+            raise exception 'No exchange rate found for % → % on or before %. Please enter rate first.',
+                v_base_currency, p_from_currency, p_rate_date;
+        end if;
+        return 1.0 / v_rate_from;
+    end if;
+
+    -- CASE 3: cross-rate — neither from nor to is base
+    -- rate(from → to) = lookup(base → to) / lookup(base → from)
+    select case p_rate_type
+        when 'BUYING'  then buying_rate
+        when 'SELLING' then selling_rate
+        else mid_rate
+    end
+    into v_rate_from
+    from rim_exchange_rates
+    where company_id    = p_company_id
+      and location_id   = p_location_id
+      and from_currency = v_base_currency
+      and to_currency   = p_from_currency
+      and rate_date    <= p_rate_date
+      and is_deleted    = false
+    order by rate_date desc
+    limit 1;
+
+    if v_rate_from is null then
+        raise exception 'No exchange rate found for % → % on or before % (needed for cross-rate). Please enter rate first.',
+            v_base_currency, p_from_currency, p_rate_date;
     end if;
 
     select case p_rate_type
@@ -74,24 +155,23 @@ begin
         when 'SELLING' then selling_rate
         else mid_rate
     end
-    into v_rate
+    into v_rate_to
     from rim_exchange_rates
     where company_id    = p_company_id
       and location_id   = p_location_id
-      and from_currency = p_from_currency
+      and from_currency = v_base_currency
       and to_currency   = p_to_currency
       and rate_date    <= p_rate_date
       and is_deleted    = false
     order by rate_date desc
     limit 1;
 
-    if v_rate is null then
-        raise exception
-            'No exchange rate found for % → % on or before %. Please enter rate first.',
-            p_from_currency, p_to_currency, p_rate_date;
+    if v_rate_to is null then
+        raise exception 'No exchange rate found for % → % on or before % (needed for cross-rate). Please enter rate first.',
+            v_base_currency, p_to_currency, p_rate_date;
     end if;
 
-    return v_rate;
+    return v_rate_to / v_rate_from;
 end;
 $$;
 

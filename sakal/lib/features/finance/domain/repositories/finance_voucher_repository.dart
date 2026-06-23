@@ -5,12 +5,14 @@ abstract class FinanceVoucherRepository {
     required String clientId,
     required String companyId,
     required String transNo,
+    String? transDate,
   });
 
   Future<List<FinanceVoucherLine>> getLines({
     required String clientId,
     required String companyId,
     required String transNo,
+    required String transDate,
   });
 
   Future<String> save({

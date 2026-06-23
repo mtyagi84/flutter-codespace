@@ -118,47 +118,48 @@ void main() {
   });
 
   // ── toBaseAmount ───────────────────────────────────────────────────────────
+  // baseRate = fn_get_exchange_rate(trans → base); formula: base = trans × baseRate
 
   group('toBaseAmount()', () {
-    test('same currency — returns amount unchanged', () {
-      expect(toBaseAmount(2800.0, 2800.0, 'CDF', 'CDF'), equals(2800.0));
+    test('rate=1 (same currency) — returns amount unchanged', () {
+      expect(toBaseAmount(2800.0, 1.0), equals(2800.0));
     });
 
-    test('converts CDF to USD at rate 2800', () {
-      expect(toBaseAmount(2800.0, 2800.0, 'CDF', 'USD'), closeTo(1.0, 0.0001));
+    test('2800 CDF × (1/2800) = 1 USD', () {
+      expect(toBaseAmount(2800.0, 1.0 / 2800.0), closeTo(1.0, 0.0001));
     });
 
-    test('converts large CDF amount', () {
-      expect(toBaseAmount(28000.0, 2800.0, 'CDF', 'USD'), closeTo(10.0, 0.0001));
+    test('28000 CDF × (1/2800) = 10 USD', () {
+      expect(toBaseAmount(28000.0, 1.0 / 2800.0), closeTo(10.0, 0.0001));
     });
 
-    test('rate <= 0 — returns amount unchanged (guard)', () {
-      expect(toBaseAmount(1000.0, 0.0, 'CDF', 'USD'), equals(1000.0));
+    test('rate=0.5 halves the amount', () {
+      expect(toBaseAmount(100.0, 0.5), equals(50.0));
     });
 
-    test('rate of 1 leaves amount unchanged', () {
-      expect(toBaseAmount(500.0, 1.0, 'USD', 'USD'), equals(500.0));
+    test('USD → USD: 500 × 1 = 500', () {
+      expect(toBaseAmount(500.0, 1.0), equals(500.0));
     });
   });
 
   // ── toLocalAmount ──────────────────────────────────────────────────────────
+  // localRate = fn_get_exchange_rate(trans → local); formula: local = trans × localRate
 
   group('toLocalAmount()', () {
-    test('same currency as local — returns amount unchanged', () {
-      expect(toLocalAmount(1000.0, 2800.0, 1.0, 'CDF', 'CDF'), equals(1000.0));
+    test('rate=1 (same currency) — returns amount unchanged', () {
+      expect(toLocalAmount(1000.0, 1.0), equals(1000.0));
     });
 
-    test('converts USD → CDF via base: USD→base(1.0)→CDF(2800)', () {
-      // USD amount 100, baseRate=1, localRate=2800
-      expect(toLocalAmount(100.0, 1.0, 2800.0, 'USD', 'CDF'), closeTo(280000.0, 0.01));
+    test('100 USD × 2800 = 280000 CDF', () {
+      expect(toLocalAmount(100.0, 2800.0), closeTo(280000.0, 0.01));
     });
 
-    test('baseRate <= 0 — returns amount unchanged (guard)', () {
-      expect(toLocalAmount(100.0, 0.0, 2800.0, 'USD', 'CDF'), equals(100.0));
+    test('cross-rate 1 EUR × 3111 = 3111 CDF', () {
+      expect(toLocalAmount(1.0, 3111.0), closeTo(3111.0, 0.01));
     });
 
-    test('localRate <= 0 — returns amount unchanged (guard)', () {
-      expect(toLocalAmount(100.0, 1.0, 0.0, 'USD', 'CDF'), equals(100.0));
+    test('rate=0.5 halves the amount', () {
+      expect(toLocalAmount(200.0, 0.5), equals(100.0));
     });
   });
 }

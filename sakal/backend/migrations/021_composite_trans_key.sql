@@ -157,13 +157,14 @@ RETURNS text
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    v_client_id     uuid;
-    v_company_id    uuid;
-    v_location_id   uuid;
-    v_trans_no      text;
-    v_trans_date    date;
-    v_is_new        boolean;
-    v_line          jsonb;
+    v_client_id      uuid;
+    v_company_id     uuid;
+    v_location_id    uuid;
+    v_trans_no       text;
+    v_trans_date     date;
+    v_old_trans_date date;
+    v_is_new         boolean;
+    v_line           jsonb;
 BEGIN
     v_client_id   := (p_header->>'client_id')::uuid;
     v_company_id  := (p_header->>'company_id')::uuid;
@@ -192,13 +193,26 @@ BEGIN
         END IF;
     END IF;
 
-    -- Delete existing draft lines first so header trans_date can change freely
-    -- (lines hold the FK; deleting them releases the constraint before UPDATE)
-    DELETE FROM rid_finance_lines
-    WHERE client_id   = v_client_id
-      AND company_id  = v_company_id
-      AND location_id = v_location_id
-      AND trans_no    = v_trans_no;
+    -- Delete existing draft lines using the composite (trans_no, trans_date) key.
+    -- For edits we look up the current stored date first so that if the user
+    -- changes the voucher date we still delete the correct lines (same trans_no
+    -- can legitimately exist on a different date after a period reset).
+    IF NOT v_is_new THEN
+        SELECT trans_date INTO v_old_trans_date
+        FROM rih_finance_headers
+        WHERE client_id   = v_client_id
+          AND company_id  = v_company_id
+          AND location_id = v_location_id
+          AND trans_no    = v_trans_no
+          AND is_deleted  = false;
+
+        DELETE FROM rid_finance_lines
+        WHERE client_id   = v_client_id
+          AND company_id  = v_company_id
+          AND location_id = v_location_id
+          AND trans_no    = v_trans_no
+          AND trans_date  = v_old_trans_date;
+    END IF;
 
     -- Insert or update header
     IF v_is_new THEN

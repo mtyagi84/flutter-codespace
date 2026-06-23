@@ -7,15 +7,21 @@ class FinanceVoucherRemoteDs {
     required String clientId,
     required String companyId,
     required String transNo,
+    String? transDate,            // if known, filter precisely; otherwise latest by trans_no
   }) async {
-    final res = await DioClient.instance.get('/rih_finance_headers', queryParameters: {
+    final params = <String, dynamic>{
       'client_id':  'eq.$clientId',
       'company_id': 'eq.$companyId',
       'trans_no':   'eq.$transNo',
       'is_deleted': 'eq.false',
       'select':     '*',
+      'order':      'trans_date.desc',
       'limit':      '1',
-    });
+    };
+    if (transDate != null && transDate.isNotEmpty) {
+      params['trans_date'] = 'eq.$transDate';
+    }
+    final res = await DioClient.instance.get('/rih_finance_headers', queryParameters: params);
     final list = List<Map<String, dynamic>>.from(res.data as List);
     return list.isNotEmpty ? FinanceVoucherHeader.fromJson(list.first) : null;
   }
@@ -24,11 +30,13 @@ class FinanceVoucherRemoteDs {
     required String clientId,
     required String companyId,
     required String transNo,
+    required String transDate,    // always required — composite key (trans_no, trans_date)
   }) async {
     final res = await DioClient.instance.get('/rid_finance_lines', queryParameters: {
       'client_id':  'eq.$clientId',
       'company_id': 'eq.$companyId',
       'trans_no':   'eq.$transNo',
+      'trans_date': 'eq.$transDate',
       'is_deleted': 'eq.false',
       'select':     '*',
       'order':      'serial_no.asc',
