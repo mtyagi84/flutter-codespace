@@ -140,8 +140,8 @@ class FinanceVoucherLocalDs {
             chequeNo:        Value(headerMap['cheque_no']      as String? ?? ''),
             chequeDate:      Value(headerMap['cheque_date']    as String? ?? ''),
             remarks:         Value(headerMap['remarks']        as String? ?? ''),
-            isPosted:        Value(false),
-            isDeleted:       Value(false),
+            isPosted:        const Value(false),
+            isDeleted:       const Value(false),
             cachedAt:        Value(now),
           ),
         );
