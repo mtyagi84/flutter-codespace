@@ -1,6 +1,5 @@
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 import '../../../../core/database/app_database.dart';
-import '../../../../core/database/tables/finance_voucher_cache_tables.dart';
 import '../models/finance_voucher_model.dart';
 
 class FinanceVoucherLocalDs {
