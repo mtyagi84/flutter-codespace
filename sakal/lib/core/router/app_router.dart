@@ -117,6 +117,7 @@ final appRouter = GoRouter(
             return FinanceVoucherEntryScreen(
               initialVoucherType: extra?['voucherType'] as String?,
               editTransNo:        extra?['transNo']     as String?,
+              editTransDate:      extra?['transDate']   as String?,
             );
           },
         ),

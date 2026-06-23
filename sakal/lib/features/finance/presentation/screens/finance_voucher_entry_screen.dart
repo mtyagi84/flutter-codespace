@@ -85,11 +85,13 @@ class _AccountLine {
 class FinanceVoucherEntryScreen extends ConsumerStatefulWidget {
   final String? initialVoucherType;
   final String? editTransNo;
+  final String? editTransDate;
 
   const FinanceVoucherEntryScreen({
     super.key,
     this.initialVoucherType,
     this.editTransNo,
+    this.editTransDate,
   });
 
   @override
@@ -243,7 +245,7 @@ class _FinanceVoucherEntryScreenState
       });
 
       if (widget.editTransNo != null) {
-        await _loadExisting(widget.editTransNo!);
+        await _loadExisting(widget.editTransNo!, widget.editTransDate);
       } else {
         if (widget.initialVoucherType != null) {
           _applyVoucherType(widget.initialVoucherType!);
@@ -310,7 +312,7 @@ class _FinanceVoucherEntryScreenState
 
   // ── Load existing voucher ─────────────────────────────────────────────────
 
-  Future<void> _loadExisting(String voucherNo) async {
+  Future<void> _loadExisting(String voucherNo, [String? transDate]) async {
     final session  = ref.read(sessionProvider)!;
     final repo     = ref.read(financeVoucherRepositoryProvider);
     try {
@@ -321,6 +323,7 @@ class _FinanceVoucherEntryScreenState
         clientId:  session.clientId,
         companyId: session.companyId,
         transNo:   voucherNo,
+        transDate: transDate,
       );
       if (header == null || !mounted) {
         setState(() => _loading = false);

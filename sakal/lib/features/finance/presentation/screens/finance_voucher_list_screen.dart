@@ -2,11 +2,25 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/models/menu_models.dart';
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/offline_banner.dart';
+
+MenuFeature? _findFeature(List<MenuModule> modules, String screenPath) {
+  for (final mod in modules) {
+    for (final grp in mod.groups) {
+      for (final feat in grp.features) {
+        if (feat.screenName == screenPath) return feat;
+      }
+    }
+  }
+  return null;
+}
 
 class FinanceVoucherListScreen extends ConsumerStatefulWidget {
   const FinanceVoucherListScreen({super.key});
@@ -20,14 +34,16 @@ class _FinanceVoucherListScreenState
     extends ConsumerState<FinanceVoucherListScreen> {
 
   List<Map<String, dynamic>> _vouchers = [];
-  bool    _loading      = true;
+  bool    _loading = true;
   String? _error;
 
   // Filters
-  String? _filterType;   // null = all
-  bool?   _filterPosted; // null = all, true = posted, false = drafts
+  String? _filterType;
+  bool?   _filterPosted;
   DateTime _fromDate = DateTime.now().subtract(const Duration(days: 30));
   DateTime _toDate   = DateTime.now();
+  final _searchCtrl  = TextEditingController();
+  String _searchText = '';
 
   static const _types = ['CRV', 'BRV', 'CPV', 'BPV'];
   static const _typeLabels = {
@@ -40,7 +56,14 @@ class _FinanceVoucherListScreenState
   @override
   void initState() {
     super.initState();
+    _searchCtrl.addListener(() => setState(() => _searchText = _searchCtrl.text.trim().toLowerCase()));
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -52,31 +75,33 @@ class _FinanceVoucherListScreenState
         'company_id': 'eq.${session.companyId}',
         'location_id':'eq.${session.locationId}',
         'is_deleted': 'eq.false',
-        'trans_date': 'gte.${_fmtDate(_fromDate)}',
-        'select':     'trans_no,trans_date,voucher_type_code,payment_mode_code,is_posted,remarks',
-        'order':      'trans_date.desc,created_at.desc',
-        'limit':      '200',
+        // Pass both gte and lte on trans_date — Dio sends them as two params
+        // PostgREST interprets: trans_date=gte.X&trans_date=lte.Y
+        'trans_date': ['gte.${_fmtDate(_fromDate)}', 'lte.${_fmtDate(_toDate)}'],
+        'select':     'trans_no,trans_date,voucher_type_code,payment_mode_code,is_on_account,is_posted,remarks',
+        'order':      'trans_date.desc,trans_no.desc',
+        'limit':      '500',
       };
-      // trans_date to (lte)
-      params['trans_date'] = 'gte.${_fmtDate(_fromDate)}';
-      // Also add lte filter — PostgREST allows multiple same-key params via list
-      if (_filterType != null) params['voucher_type_code'] = 'eq.$_filterType';
-      if (_filterPosted != null) params['is_posted'] = 'eq.$_filterPosted';
+      if (_filterType   != null) params['voucher_type_code'] = 'eq.$_filterType';
+      if (_filterPosted != null) params['is_posted']         = 'eq.$_filterPosted';
 
       final res = await DioClient.instance.get('/rih_finance_headers',
           queryParameters: params);
 
       final all = List<Map<String, dynamic>>.from(res.data as List);
-      // Client-side date filter for "to" date
-      final filtered = all.where((v) {
-        final d = DateTime.tryParse(v['trans_date'] as String? ?? '');
-        return d != null && !d.isAfter(_toDate);
-      }).toList();
-
-      if (mounted) setState(() { _vouchers = filtered; _loading = false; });
+      if (mounted) setState(() { _vouchers = all; _loading = false; });
     } on DioException {
       if (mounted) setState(() { _loading = false; _error = 'Could not load vouchers.'; });
     }
+  }
+
+  List<Map<String, dynamic>> get _filtered {
+    if (_searchText.isEmpty) return _vouchers;
+    return _vouchers.where((v) {
+      final no      = (v['trans_no'] as String? ?? '').toLowerCase();
+      final remarks = (v['remarks'] as String? ?? '').toLowerCase();
+      return no.contains(_searchText) || remarks.contains(_searchText);
+    }).toList();
   }
 
   Future<void> _pickDate(DateTime current, ValueChanged<DateTime> onPicked) async {
@@ -89,38 +114,52 @@ class _FinanceVoucherListScreenState
     if (d != null) { onPicked(d); _load(); }
   }
 
-  void _openNew(String voucherType) {
-    context.push(RouteNames.paymentReceipt,
-        extra: {'voucherType': voucherType});
-  }
+  void _openNew(String voucherType) =>
+      context.push(RouteNames.paymentReceipt, extra: {'voucherType': voucherType});
 
-  void _openEdit(String transNo) {
-    context.push(RouteNames.paymentReceipt,
-        extra: {'transNo': transNo});
-  }
+  void _openEdit(String transNo, String transDate) =>
+      context.push(RouteNames.paymentReceipt,
+          extra: {'transNo': transNo, 'transDate': transDate});
 
   String _fmtDate(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')}';
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   String _displayDate(String iso) {
     final d = DateTime.tryParse(iso);
     if (d == null) return iso;
     const m = ['','Jan','Feb','Mar','Apr','May','Jun',
         'Jul','Aug','Sep','Oct','Nov','Dec'];
-    return '${d.day.toString().padLeft(2,'0')} ${m[d.month]} ${d.year}';
+    return '${d.day.toString().padLeft(2, '0')} ${m[d.month]} ${d.year}';
   }
 
   @override
   Widget build(BuildContext context) {
     final session   = ref.watch(sessionProvider);
     final isOffline = session?.offlineMode ?? false;
+    final isMobile  = Responsive.isMobile(context);
+    final menus     = ref.watch(menuProvider);
+    final feature   = _findFeature(menus, RouteNames.voucherList);
+
+    if (feature == null) {
+      return const Center(
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(Icons.lock_outline, size: 48, color: AppColors.textDisabled),
+          SizedBox(height: 12),
+          Text('You do not have access to this screen.',
+              style: TextStyle(color: AppColors.textSecondary)),
+        ]),
+      );
+    }
+
+    final canAdd = !isOffline && feature.addAllowed;
+    final rows   = _filtered;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
 
-        // ── Page header ──────────────────────────────────────────────────────
+        // ── Page header ───────────────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
           child: Row(children: [
@@ -129,83 +168,103 @@ class _FinanceVoucherListScreenState
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700,
                       color: AppColors.primary)),
             ),
-            if (!isOffline) ...[
-              // New voucher shortcuts
-              for (final t in _types) ...[
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                  icon: const Icon(Icons.add, size: 14),
-                  label: Text(_typeLabels[t]!, style: const TextStyle(fontSize: 12)),
-                  onPressed: () => _openNew(t),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: t.startsWith('C')
-                        ? AppColors.primary : AppColors.primaryLight,
-                    minimumSize: const Size(0, 36),
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                  ),
-                ),
-              ],
+            if (canAdd) ...[
+              const SizedBox(width: 8),
+              _NewVoucherButton(isMobile: isMobile, onSelect: _openNew),
             ],
           ]),
         ),
 
         const Divider(height: 20),
 
-        // ── Filters ──────────────────────────────────────────────────────────
+        // ── Filter bar ────────────────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-          child: Row(children: [
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
 
-            // From date
-            InkWell(
-              onTap: () => _pickDate(_fromDate, (d) => setState(() => _fromDate = d)),
-              child: _filterChip('From: ${_displayDate(_fmtDate(_fromDate))}'),
-            ),
-            const SizedBox(width: 8),
-            InkWell(
-              onTap: () => _pickDate(_toDate, (d) => setState(() => _toDate = d)),
-              child: _filterChip('To: ${_displayDate(_fmtDate(_toDate))}'),
-            ),
-            const SizedBox(width: 12),
+              // Date range
+              InkWell(
+                onTap: () => _pickDate(_fromDate, (d) => setState(() => _fromDate = d)),
+                borderRadius: BorderRadius.circular(20),
+                child: _chip('From: ${_displayDate(_fmtDate(_fromDate))}'),
+              ),
+              InkWell(
+                onTap: () => _pickDate(_toDate, (d) => setState(() => _toDate = d)),
+                borderRadius: BorderRadius.circular(20),
+                child: _chip('To: ${_displayDate(_fmtDate(_toDate))}'),
+              ),
 
-            // Type filter
-            DropdownButton<String?>(
-              value: _filterType,
-              hint: const Text('All Types', style: TextStyle(fontSize: 13)),
-              isDense: true,
-              underline: const SizedBox.shrink(),
-              items: [
-                const DropdownMenuItem(value: null, child: Text('All Types', style: TextStyle(fontSize: 13))),
-                ..._types.map((t) => DropdownMenuItem(
-                  value: t,
-                  child: Text('$t — ${_typeLabels[t]}', style: const TextStyle(fontSize: 13)),
-                )),
-              ],
-              onChanged: (v) { setState(() => _filterType = v); _load(); },
-            ),
-            const SizedBox(width: 12),
+              // Type filter
+              DropdownButton<String?>(
+                value: _filterType,
+                hint: const Text('All Types', style: TextStyle(fontSize: 13)),
+                isDense: true,
+                underline: const SizedBox.shrink(),
+                items: [
+                  const DropdownMenuItem(value: null,
+                      child: Text('All Types', style: TextStyle(fontSize: 13))),
+                  ..._types.map((t) => DropdownMenuItem(
+                    value: t,
+                    child: Text('$t — ${_typeLabels[t]}',
+                        style: const TextStyle(fontSize: 13)),
+                  )),
+                ],
+                onChanged: (v) { setState(() => _filterType = v); _load(); },
+              ),
 
-            // Status filter
-            DropdownButton<bool?>(
-              value: _filterPosted,
-              hint: const Text('All Status', style: TextStyle(fontSize: 13)),
-              isDense: true,
-              underline: const SizedBox.shrink(),
-              items: const [
-                DropdownMenuItem(value: null,  child: Text('All Status', style: TextStyle(fontSize: 13))),
-                DropdownMenuItem(value: false, child: Text('Drafts',     style: TextStyle(fontSize: 13))),
-                DropdownMenuItem(value: true,  child: Text('Posted',     style: TextStyle(fontSize: 13))),
-              ],
-              onChanged: (v) { setState(() => _filterPosted = v); _load(); },
-            ),
-            const Spacer(),
-            IconButton(
-              icon: const Icon(Icons.refresh, size: 20),
-              onPressed: _load,
-              tooltip: 'Refresh',
-              color: AppColors.primary,
-            ),
-          ]),
+              // Status filter
+              DropdownButton<bool?>(
+                value: _filterPosted,
+                hint: const Text('All Status', style: TextStyle(fontSize: 13)),
+                isDense: true,
+                underline: const SizedBox.shrink(),
+                items: const [
+                  DropdownMenuItem(value: null,
+                      child: Text('All Status', style: TextStyle(fontSize: 13))),
+                  DropdownMenuItem(value: false,
+                      child: Text('Drafts',     style: TextStyle(fontSize: 13))),
+                  DropdownMenuItem(value: true,
+                      child: Text('Posted',     style: TextStyle(fontSize: 13))),
+                ],
+                onChanged: (v) { setState(() => _filterPosted = v); _load(); },
+              ),
+
+              // Search
+              SizedBox(
+                width: 220,
+                height: 36,
+                child: TextField(
+                  controller: _searchCtrl,
+                  style: const TextStyle(fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'Search trans no / remarks…',
+                    hintStyle: const TextStyle(fontSize: 12),
+                    prefixIcon: const Icon(Icons.search, size: 16),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20)),
+                    suffixIcon: _searchText.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 14),
+                            onPressed: _searchCtrl.clear)
+                        : null,
+                  ),
+                ),
+              ),
+
+              IconButton(
+                icon: const Icon(Icons.refresh, size: 20),
+                onPressed: _load,
+                tooltip: 'Refresh',
+                color: AppColors.primary,
+              ),
+            ],
+          ),
         ),
 
         // ── Table ─────────────────────────────────────────────────────────────
@@ -215,51 +274,58 @@ class _FinanceVoucherListScreenState
               : _error != null
                   ? Center(child: Text(_error!,
                         style: const TextStyle(color: AppColors.negative)))
-                  : _vouchers.isEmpty
+                  : rows.isEmpty
                       ? _emptyState()
                       : Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
                           child: Column(children: [
-                            // Table header
+                            // Header
                             Container(
                               decoration: const BoxDecoration(
                                 color: AppColors.primary,
-                                borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+                                borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(8)),
                               ),
                               child: Row(children: [
-                                _th('Trans No',      flex: 3),
-                                _th('Date',          flex: 2),
-                                _th('Type',          flex: 2),
-                                _th('Mode',          flex: 2),
-                                _th('Status',        flex: 1),
-                                _th('Remarks',       flex: 3),
-                                _th('',              flex: 1),
+                                _th('Trans No',   flex: 3),
+                                _th('Date',       flex: 2),
+                                _th('Type',       flex: 2),
+                                _th('Mode',       flex: 2),
+                                _th('Settlement', flex: 2),
+                                _th('Status',     flex: 1),
+                                _th('Remarks',    flex: 3),
+                                _th('',           flex: 1),
                               ]),
                             ),
                             Expanded(
                               child: ListView.separated(
-                                itemCount: _vouchers.length,
+                                itemCount: rows.length,
                                 separatorBuilder: (_, __) =>
                                     Divider(height: 1, color: AppColors.border),
-                                itemBuilder: (_, i) => _buildRow(i),
+                                itemBuilder: (_, i) => _buildRow(rows[i], i),
                               ),
                             ),
                           ]),
                         ),
         ),
 
-        // ── Footer count ──────────────────────────────────────────────────────
+        // ── Footer ────────────────────────────────────────────────────────────
         if (!_loading)
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-            child: Text('${_vouchers.length} voucher(s)',
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            padding: const EdgeInsets.fromLTRB(24, 6, 24, 12),
+            child: Text(
+              _searchText.isNotEmpty
+                  ? '${rows.length} of ${_vouchers.length} voucher(s)'
+                  : '${rows.length} voucher(s)',
+              style: const TextStyle(fontSize: 12,
+                  color: AppColors.textSecondary),
+            ),
           ),
       ],
     );
   }
 
-  Widget _filterChip(String label) => Container(
+  Widget _chip(String label) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     decoration: BoxDecoration(
       border: Border.all(color: AppColors.border),
@@ -267,29 +333,32 @@ class _FinanceVoucherListScreenState
       color: AppColors.surfaceVariant,
     ),
     child: Row(mainAxisSize: MainAxisSize.min, children: [
-      const Icon(Icons.calendar_today_outlined, size: 13, color: AppColors.primary),
+      const Icon(Icons.calendar_today_outlined, size: 13,
+          color: AppColors.primary),
       const SizedBox(width: 4),
       Text(label, style: const TextStyle(fontSize: 12)),
     ]),
   );
 
-  Widget _th(String t, {int flex = 1}) => Expanded(
+  Widget _th(String label, {int flex = 1}) => Expanded(
     flex: flex,
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Text(t, style: const TextStyle(color: Colors.white,
-          fontWeight: FontWeight.w600, fontSize: 12)),
+      child: Text(label,
+          style: const TextStyle(color: Colors.white,
+              fontWeight: FontWeight.w600, fontSize: 12)),
     ),
   );
 
-  Widget _buildRow(int index) {
-    final v       = _vouchers[index];
-    final isPosted = v['is_posted'] as bool? ?? false;
-    final transNo  = v['trans_no'] as String;
-    final vtype    = v['voucher_type_code'] as String? ?? '';
+  Widget _buildRow(Map<String, dynamic> v, int index) {
+    final isPosted  = v['is_posted']      as bool?   ?? false;
+    final isOnAcct  = v['is_on_account']  as bool?   ?? false;
+    final transNo   = (v['trans_no']       as String?) ?? '';
+    final transDate = v['trans_date']     as String? ?? '';
+    final vtype     = v['voucher_type_code'] as String? ?? '';
 
     return InkWell(
-      onTap: () => _openEdit(transNo),
+      onTap: () => _openEdit(transNo, transDate),
       child: Container(
         color: index.isEven ? Colors.white : AppColors.background,
         child: Row(children: [
@@ -306,10 +375,8 @@ class _FinanceVoucherListScreenState
             flex: 2,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                _displayDate(v['trans_date'] as String? ?? ''),
-                style: const TextStyle(fontSize: 13),
-              ),
+              child: Text(_displayDate(transDate),
+                  style: const TextStyle(fontSize: 13)),
             ),
           ),
           Expanded(
@@ -317,7 +384,8 @@ class _FinanceVoucherListScreenState
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Text(_typeLabels[vtype] ?? vtype,
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  style: const TextStyle(fontSize: 12,
+                      color: AppColors.textSecondary)),
             ),
           ),
           Expanded(
@@ -326,6 +394,15 @@ class _FinanceVoucherListScreenState
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Text(v['payment_mode_code'] as String? ?? '—',
                   style: const TextStyle(fontSize: 12)),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(isOnAcct ? 'On Account' : 'Against Bill',
+                  style: TextStyle(fontSize: 11,
+                      color: isOnAcct ? AppColors.info : AppColors.secondary)),
             ),
           ),
           Expanded(
@@ -341,7 +418,8 @@ class _FinanceVoucherListScreenState
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Text(v['remarks'] as String? ?? '',
                   maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  style: const TextStyle(fontSize: 12,
+                      color: AppColors.textSecondary)),
             ),
           ),
           Expanded(
@@ -351,7 +429,7 @@ class _FinanceVoucherListScreenState
               child: IconButton(
                 icon: const Icon(Icons.arrow_forward_ios, size: 14),
                 color: AppColors.primary,
-                onPressed: () => _openEdit(transNo),
+                onPressed: () => _openEdit(transNo, transDate),
                 tooltip: 'Open',
                 padding: EdgeInsets.zero,
               ),
@@ -362,34 +440,30 @@ class _FinanceVoucherListScreenState
     );
   }
 
-  Widget _statusBadge(bool posted) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: posted
-            ? AppColors.positive.withOpacity(0.1)
-            : AppColors.badgeDraft.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: posted
-              ? AppColors.positive.withOpacity(0.4)
-              : AppColors.badgeDraft.withOpacity(0.4),
-        ),
+  Widget _statusBadge(bool posted) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(
+      color: (posted ? AppColors.positive : AppColors.badgeDraft)
+          .withOpacity(0.1),
+      borderRadius: BorderRadius.circular(4),
+      border: Border.all(
+          color: (posted ? AppColors.positive : AppColors.badgeDraft)
+              .withOpacity(0.4)),
+    ),
+    child: Text(
+      posted ? 'Posted' : 'Draft',
+      style: TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.w600,
+        color: posted ? AppColors.positive : AppColors.badgeDraft,
       ),
-      child: Text(
-        posted ? 'Posted' : 'Draft',
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: posted ? AppColors.positive : AppColors.badgeDraft,
-        ),
-      ),
-    );
-  }
+    ),
+  );
 
   Widget _emptyState() => Center(
     child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      const Icon(Icons.receipt_long_outlined, size: 48, color: AppColors.textDisabled),
+      const Icon(Icons.receipt_long_outlined, size: 48,
+          color: AppColors.textDisabled),
       const SizedBox(height: 16),
       const Text('No vouchers found',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600,
@@ -399,4 +473,54 @@ class _FinanceVoucherListScreenState
           style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
     ]),
   );
+}
+
+// ── New Voucher dropdown button ────────────────────────────────────────────────
+
+class _NewVoucherButton extends StatelessWidget {
+  final bool isMobile;
+  final void Function(String) onSelect;
+
+  const _NewVoucherButton({required this.isMobile, required this.onSelect});
+
+  static const _types = ['CRV', 'BRV', 'CPV', 'BPV'];
+  static const _labels = {
+    'CRV': 'Cash Receipt',
+    'BRV': 'Bank Receipt',
+    'CPV': 'Cash Payment',
+    'BPV': 'Bank Payment',
+  };
+  static const _icons = {
+    'CRV': Icons.arrow_downward,
+    'BRV': Icons.arrow_downward,
+    'CPV': Icons.arrow_upward,
+    'BPV': Icons.arrow_upward,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return MenuAnchor(
+      menuChildren: _types.map((t) => MenuItemButton(
+        leadingIcon: Icon(_icons[t], size: 16,
+            color: t[1] == 'R' ? AppColors.positive : AppColors.secondary),
+        onPressed: () => onSelect(t),
+        child: Text(_labels[t]!),
+      )).toList(),
+      builder: (_, controller, __) => FilledButton.icon(
+        icon: const Icon(Icons.add, size: 16),
+        label: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Text('New Voucher'),
+          const SizedBox(width: 4),
+          const Icon(Icons.arrow_drop_down, size: 18),
+        ]),
+        onPressed: () =>
+            controller.isOpen ? controller.close() : controller.open(),
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          minimumSize: const Size(0, 36),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+        ),
+      ),
+    );
+  }
 }
