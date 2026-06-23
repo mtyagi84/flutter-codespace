@@ -1682,6 +1682,8 @@ class _FinanceVoucherEntryScreenState
           const SizedBox(width: 12),
           Expanded(flex: 2, child: colHeader('Amount ($tc)', align: TextAlign.right)),
           const SizedBox(width: 12),
+          Expanded(flex: 2, child: colHeader('Party Amt', align: TextAlign.right)),
+          const SizedBox(width: 12),
           Expanded(flex: 3, child: colHeader('Remarks')),
           // ignore: prefer_const_constructors — btnW is runtime, cannot be const
           if (!locked) SizedBox(width: btnW + 8),
@@ -1691,8 +1693,9 @@ class _FinanceVoucherEntryScreenState
         ..._accountLines.asMap().entries.map((e) {
           final i    = e.key;
           final line = e.value;
-          final lineCurr = line.accountCurrency.isEmpty ? _baseCurrency : line.accountCurrency;
-          final showCurrChip = lineCurr.isNotEmpty && lineCurr != tc;
+          final lineCurr     = line.accountCurrency.isEmpty ? _baseCurrency : line.accountCurrency;
+          final isCrossCurr  = line.accountId != null && lineCurr != tc;
+          final partyAmt     = line.amount * line.partyRate;
 
           return Padding(
             padding: const EdgeInsets.only(bottom: 6),
@@ -1740,7 +1743,7 @@ class _FinanceVoucherEntryScreenState
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Amount column — shows currency chip when account currency ≠ trans currency
+                  // Amount — always in transaction currency, no suffix badge
                   Expanded(
                     flex: 2,
                     child: SizedBox(
@@ -1749,16 +1752,11 @@ class _FinanceVoucherEntryScreenState
                         controller: line.amountCtrl,
                         enabled: !locked,
                         textAlign: TextAlign.right,
-                        decoration: InputDecoration(
-                            border: const OutlineInputBorder(),
+                        decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
                             isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 10),
-                            suffixText: showCurrChip ? lineCurr : null,
-                            suffixStyle: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.secondary)),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 10)),
                         style: const TextStyle(fontSize: 13),
                         keyboardType:
                             const TextInputType.numberWithOptions(decimal: true),
@@ -1766,6 +1764,46 @@ class _FinanceVoucherEntryScreenState
                           FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))
                         ],
                         onChanged: (_) => setState(() {}),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Party Amount — read-only, shows converted amount in account's currency
+                  Expanded(
+                    flex: 2,
+                    child: SizedBox(
+                      height: 44,
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: isCrossCurr
+                            ? RichText(
+                                textAlign: TextAlign.right,
+                                text: TextSpan(children: [
+                                  TextSpan(
+                                    text: partyAmt > 0
+                                        ? partyAmt.toStringAsFixed(2)
+                                        : '—',
+                                    style: const TextStyle(
+                                        fontSize: 13,
+                                        color: AppColors.textPrimary),
+                                  ),
+                                  if (partyAmt > 0) ...[
+                                    const TextSpan(text: ' '),
+                                    TextSpan(
+                                      text: lineCurr,
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.secondary),
+                                    ),
+                                  ],
+                                ]),
+                              )
+                            : const Text('—',
+                                textAlign: TextAlign.right,
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.textDisabled)),
                       ),
                     ),
                   ),
