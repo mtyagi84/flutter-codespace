@@ -432,6 +432,23 @@ class _FinanceVoucherEntryScreenState
     }
   }
 
+  // ── Copy voucher ─────────────────────────────────────────────────────────
+
+  void _applyCopy() {
+    setState(() {
+      _voucherNo    = null;           // becomes a new unsaved draft
+      _transDate    = DateTime.now(); // default to today
+      _isPosted     = false;
+      _refNoCtrl.clear();
+      _refDate      = null;
+      _chequeNoCtrl.clear();
+      _chequeDate   = null;
+      // _accountLines, cash/bank, type, currency, rate, remarks: kept as-is
+    });
+    _showSnack('Copied — edit as needed and save as a new draft.',
+        color: AppColors.secondary);
+  }
+
   // ── Cash / Bank account selected ──────────────────────────────────────────
 
   Future<void> _onCashBankSelected(Map<String, dynamic> account) async {
@@ -990,21 +1007,37 @@ class _FinanceVoucherEntryScreenState
 
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title,
-                style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary)),
-            const SizedBox(height: 2),
-            if (_isPosted)
-              _statusChip('POSTED — read only', AppColors.positive)
-            else
-              Text(
-                _voucherNo != null ? 'Draft' : 'Unsaved draft',
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(title,
+                      style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary)),
+                  const SizedBox(height: 2),
+                  if (_isPosted)
+                    _statusChip('POSTED — read only', AppColors.positive)
+                  else
+                    Text(
+                      _voucherNo != null ? 'Draft' : 'Unsaved draft',
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                ]),
               ),
-          ]),
+              if (_voucherNo != null && _isOnAccount && !_isPosted)
+                Tooltip(
+                  message: 'Copy to new voucher',
+                  child: IconButton(
+                    icon: const Icon(Icons.copy_outlined),
+                    color: AppColors.primary,
+                    onPressed: _applyCopy,
+                  ),
+                ),
+            ],
+          ),
         ),
 
         const Divider(height: 20),
