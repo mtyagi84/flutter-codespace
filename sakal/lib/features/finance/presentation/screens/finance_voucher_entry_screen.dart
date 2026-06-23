@@ -115,6 +115,9 @@ class _FinanceVoucherEntryScreenState
   String    _transCurrency = '';
   final     _rateCtrl = TextEditingController(text: '1');
   double get _rate => double.tryParse(_rateCtrl.text) ?? 1.0;
+  // Tracks the last confirmed display rate so proportional scaling is correct
+  // when the user manually overrides the header rate.
+  double    _confirmedDisplayRate = 1.0;
 
   // ── Payment details ───────────────────────────────────────────────────────
   String?   _paymentMode;
@@ -296,11 +299,12 @@ class _FinanceVoucherEntryScreenState
     for (final l in _accountLines) l.dispose();
     setState(() {
       _voucherType   = type;
-      _cashBankId    = null;
-      _transCurrency = '';
-      _rateCtrl.text = '1';
-      _localRate     = 1.0;
-      _paymentMode   = isCashVoucher(type) ? 'CASH' : null;
+      _cashBankId             = null;
+      _transCurrency          = '';
+      _rateCtrl.text          = '1';
+      _confirmedDisplayRate   = 1.0;
+      _localRate              = 1.0;
+      _paymentMode            = isCashVoucher(type) ? 'CASH' : null;
       _isOnAccount   = false;
       _partyId       = null;
       _partyName     = null;
@@ -369,10 +373,11 @@ class _FinanceVoucherEntryScreenState
         if (header.chequeDate.isNotEmpty) {
           _chequeDate = DateTime.tryParse(header.chequeDate);
         }
-        _cashBankId    = cashBankId;
-        _transCurrency = transCurrency;
-        _rateCtrl.text = _fmtRate(displayRate);
-        _localRate     = restoredLocalRate;
+        _cashBankId           = cashBankId;
+        _transCurrency        = transCurrency;
+        _rateCtrl.text        = _fmtRate(displayRate);
+        _confirmedDisplayRate = displayRate;
+        _localRate            = restoredLocalRate;
         _isOnAccount   = isOA;
         _loading       = false;
       }
@@ -454,15 +459,45 @@ class _FinanceVoucherEntryScreenState
         color: AppColors.secondary);
   }
 
+  // ── Header rate confirmed — cascade proportionally to all line party rates ─
+
+  void _onRateConfirmed() {
+    final newRate = _rate;
+    final tc = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
+    // Nothing to cascade when trans == base (no conversion in header).
+    if (newRate <= 0 || _confirmedDisplayRate <= 0 ||
+        newRate == _confirmedDisplayRate || tc == _baseCurrency) return;
+
+    // Scale factor: new_party_rate = old × (old_display / new_display)
+    // Proof: party_rate(CDF→X) = (1/display_rate) × (USD→X_constant)
+    // Changing display_rate scales all party rates by the same ratio.
+    final ratio = _confirmedDisplayRate / newRate;
+
+    setState(() {
+      // On Account lines
+      for (final line in _accountLines) {
+        final lc = line.accountCurrency.isEmpty ? _baseCurrency : line.accountCurrency;
+        if (lc.isEmpty || lc == tc) continue; // same currency — always 1.0, skip
+        line.partyRate = line.partyRate * ratio;
+      }
+      // Against Bill party rate
+      if (_partyCurrency.isNotEmpty && _partyCurrency != tc) {
+        _partyRate = _partyRate * ratio;
+      }
+      _confirmedDisplayRate = newRate;
+    });
+  }
+
   // ── Cash / Bank account selected ──────────────────────────────────────────
 
   Future<void> _onCashBankSelected(Map<String, dynamic> account) async {
     final currency = _extractCurrency(account);
     setState(() {
-      _cashBankId    = account['id'] as String;
-      _transCurrency = currency;
-      _rateCtrl.text = '1';
-      _localRate     = 1.0;
+      _cashBankId           = account['id'] as String;
+      _transCurrency        = currency;
+      _rateCtrl.text        = '1';
+      _confirmedDisplayRate = 1.0;
+      _localRate            = 1.0;
     });
     await _fetchRatesForTrans(currency);
   }
@@ -516,7 +551,10 @@ class _FinanceVoucherEntryScreenState
     // Display rate: "1 base = X trans" — only show / fetch when trans ≠ base
     if (transCurrency != _baseCurrency && _baseCurrency.isNotEmpty) {
       final dr = await _fetchCrossRate(_baseCurrency, transCurrency);
-      if (mounted && dr != null) setState(() => _rateCtrl.text = _fmtRate(dr));
+      if (mounted && dr != null) setState(() {
+        _rateCtrl.text        = _fmtRate(dr);
+        _confirmedDisplayRate = dr;
+      });
     }
     // Local rate: fn_get_rate(trans → local) — always fetch
     if (_localCurrency.isNotEmpty) {
@@ -1211,6 +1249,7 @@ class _FinanceVoucherEntryScreenState
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
               onChanged: (_) => setState(() {}),
+              onEditingComplete: _onRateConfirmed,
             ));
             if (isMobile) {
               return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1360,6 +1399,9 @@ class _FinanceVoucherEntryScreenState
                     ? 'Receipts from suppliers cannot be settled against a bill'
                     : 'Payments to customers cannot be settled against a bill')
                 : null;
+            // "On Account" is locked once bills are loaded to prevent orphaning
+            // settlement data. User must clear the party to switch modes.
+            final billsLoaded = !_isOnAccount && _bills.isNotEmpty;
             return Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
               Radio<bool>(
                 value: false,
@@ -1388,11 +1430,24 @@ class _FinanceVoucherEntryScreenState
               Radio<bool>(
                 value: true,
                 groupValue: _isOnAccount,
-                onChanged: locked
+                onChanged: (locked || billsLoaded)
                     ? null
                     : (v) { if (v != null) setState(() => _isOnAccount = v); },
               ),
-              const Text('On Account', style: TextStyle(fontSize: 13)),
+              Text('On Account',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: (locked || billsLoaded)
+                          ? AppColors.textDisabled
+                          : AppColors.textPrimary)),
+              if (billsLoaded) ...[
+                const SizedBox(width: 4),
+                const Tooltip(
+                  message: 'Bills are loaded — clear the party to switch to On Account',
+                  child: Icon(Icons.lock_outline,
+                      size: 14, color: AppColors.textSecondary),
+                ),
+              ],
             ]);
           }),
         ]),
