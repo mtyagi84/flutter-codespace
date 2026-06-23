@@ -55,6 +55,40 @@ void main() {
     test('CPV is not a bank voucher', () => expect(isBankVoucher('CPV'), isFalse));
   });
 
+  group('isReceiptVoucher()', () {
+    test('CRV is a receipt', () => expect(isReceiptVoucher('CRV'), isTrue));
+    test('BRV is a receipt', () => expect(isReceiptVoucher('BRV'), isTrue));
+    test('CPV is not a receipt', () => expect(isReceiptVoucher('CPV'), isFalse));
+    test('BPV is not a receipt', () => expect(isReceiptVoucher('BPV'), isFalse));
+  });
+
+  // ── canSettleAgainstBill ───────────────────────────────────────────────────
+  // Receipt+Customer ✓  Payment+Supplier ✓
+  // Receipt+Supplier ✗  Payment+Customer ✗
+
+  group('canSettleAgainstBill()', () {
+    test('Receipt + Customer — allowed', () {
+      expect(canSettleAgainstBill('CRV', 'Customer'), isTrue);
+      expect(canSettleAgainstBill('BRV', 'Customer'), isTrue);
+    });
+    test('Payment + Supplier — allowed', () {
+      expect(canSettleAgainstBill('CPV', 'Supplier'), isTrue);
+      expect(canSettleAgainstBill('BPV', 'Supplier'), isTrue);
+    });
+    test('Receipt + Supplier — not allowed', () {
+      expect(canSettleAgainstBill('CRV', 'Supplier'), isFalse);
+      expect(canSettleAgainstBill('BRV', 'Supplier'), isFalse);
+    });
+    test('Payment + Customer — not allowed', () {
+      expect(canSettleAgainstBill('CPV', 'Customer'), isFalse);
+      expect(canSettleAgainstBill('BPV', 'Customer'), isFalse);
+    });
+    test('no party selected yet — always allowed', () {
+      expect(canSettleAgainstBill('CRV', ''), isTrue);
+      expect(canSettleAgainstBill('CPV', ''), isTrue);
+    });
+  });
+
   // ── drTotal / crTotal ──────────────────────────────────────────────────────
 
   group('drTotal()', () {

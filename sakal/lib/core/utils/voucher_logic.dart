@@ -18,6 +18,22 @@ bool isCashVoucher(String voucherType) =>
 bool isBankVoucher(String voucherType) =>
     voucherType == 'BRV' || voucherType == 'BPV';
 
+/// Whether voucher type is a receipt (money coming IN).
+bool isReceiptVoucher(String voucherType) =>
+    voucherType == 'CRV' || voucherType == 'BRV';
+
+/// Whether "Against Bill" settlement is valid for this combination.
+/// Rule: only Receipt+Customer and Payment+Supplier are bill settlements.
+///   - Receipt from Customer → customer is paying their invoice ✓
+///   - Payment to Supplier   → we are paying our purchase bill  ✓
+///   - Receipt from Supplier → supplier refund, treated as new transaction ✗
+///   - Payment to Customer   → customer refund, treated as new transaction ✗
+bool canSettleAgainstBill(String voucherType, String partyNature) {
+  if (partyNature.isEmpty) return true; // no party selected yet
+  final receipt = isReceiptVoucher(voucherType);
+  return receipt ? partyNature == 'Customer' : partyNature == 'Supplier';
+}
+
 /// Sum of amounts on DR lines.
 double drTotal(List<({String nature, double amount})> lines) =>
     lines.where((l) => l.nature == 'DR').fold(0.0, (s, l) => s + l.amount);

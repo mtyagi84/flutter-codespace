@@ -124,6 +124,7 @@ class _FinanceVoucherEntryScreenState
   // ── Against Bill ──────────────────────────────────────────────────────────
   String?   _partyId;
   String?   _partyName;
+  String    _partyNature   = '';   // 'Customer' or 'Supplier'
   String    _partyCurrency = '';
   double    _partyRate     = 1.0;
   List<_BillRow> _bills        = [];
@@ -296,8 +297,10 @@ class _FinanceVoucherEntryScreenState
       _rateCtrl.text = '1';
       _localRate     = 1.0;
       _paymentMode   = isCashVoucher(type) ? 'CASH' : null;
+      _isOnAccount   = false;
       _partyId       = null;
       _partyName     = null;
+      _partyNature   = '';
       _partyCurrency = '';
       _partyRate     = 1.0;
       _bills         = [];
@@ -390,6 +393,7 @@ class _FinanceVoucherEntryScreenState
           applyHeader();
           _partyId       = partyId;
           _partyName     = partyAcc?['account_name'] as String?;
+          _partyNature   = partyAcc?['account_nature'] as String? ?? '';
           _partyCurrency = partyCurr;
           _partyRate     = partyRate;
         });
@@ -445,18 +449,24 @@ class _FinanceVoucherEntryScreenState
 
   Future<void> _onPartySelected(Map<String, dynamic> account) async {
     final currency = _extractCurrency(account);
+    final nature   = account['account_nature'] as String? ?? '';
+    final billOk   = _voucherType == null || canSettleAgainstBill(_voucherType!, nature);
     for (final b in _bills) b.dispose();
     setState(() {
-      _partyId       = account['id']          as String;
+      _partyId       = account['id']           as String;
       _partyName     = account['account_name'] as String;
+      _partyNature   = nature;
       _partyCurrency = currency;
       _partyRate     = 1.0;
       _bills         = [];
+      // Force On Account when this party type cannot be settled against a bill.
+      if (!billOk) _isOnAccount = true;
     });
     final trans = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
     final rate = await _fetchCrossRate(trans, currency);
     if (mounted && rate != null) setState(() => _partyRate = rate);
-    await _loadPendingBills();
+    // Only load pending bills when Against Bill mode is active.
+    if (!_isOnAccount) await _loadPendingBills();
   }
 
   // ── Exchange rate helpers ─────────────────────────────────────────────────
@@ -909,6 +919,20 @@ class _FinanceVoucherEntryScreenState
       _voucherType == null ? [] :
       isCashVoucher(_voucherType!) ? _cashAccounts : _bankAccounts;
 
+  // Whether "Against Bill" mode is valid for the current voucher type + party type.
+  bool get _canAgainstBill =>
+      _voucherType == null || canSettleAgainstBill(_voucherType!, _partyNature);
+
+  // Party accounts eligible for Against Bill for the current voucher type.
+  // Receipt → Customers only; Payment → Suppliers only.
+  List<Map<String, dynamic>> get _eligiblePartyAccounts {
+    if (_voucherType == null) return _partyAccounts;
+    final wantNature = isReceiptVoucher(_voucherType!) ? 'Customer' : 'Supplier';
+    return _partyAccounts
+        .where((a) => (a['account_nature'] as String?) == wantNature)
+        .toList();
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -1278,17 +1302,49 @@ class _FinanceVoucherEntryScreenState
           const SizedBox(height: 12),
 
           // Row 4: Against Bill | On Account toggle
-          RadioGroup<bool>(
-            groupValue: _isOnAccount,
-            onChanged: (v) { if (!locked && v != null) setState(() => _isOnAccount = v); },
-            child: Row(children: [
-              const Radio<bool>(value: false),
-              const Text('Against Bill', style: TextStyle(fontSize: 13)),
+          // Against Bill is only valid for Receipt+Customer or Payment+Supplier.
+          Builder(builder: (_) {
+            final billAllowed = _canAgainstBill;
+            final whyDisabled = _partyNature.isNotEmpty && !billAllowed
+                ? ((_voucherType == 'CRV' || _voucherType == 'BRV')
+                    ? 'Receipts from suppliers cannot be settled against a bill'
+                    : 'Payments to customers cannot be settled against a bill')
+                : null;
+            return Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              Radio<bool>(
+                value: false,
+                groupValue: _isOnAccount,
+                onChanged: (locked || !billAllowed)
+                    ? null
+                    : (v) { if (v != null) setState(() => _isOnAccount = v); },
+              ),
+              Text(
+                'Against Bill',
+                style: TextStyle(
+                    fontSize: 13,
+                    color: (locked || !billAllowed)
+                        ? AppColors.textDisabled
+                        : AppColors.textPrimary),
+              ),
+              if (whyDisabled != null) ...[
+                const SizedBox(width: 4),
+                Tooltip(
+                  message: whyDisabled,
+                  child: const Icon(Icons.info_outline,
+                      size: 14, color: AppColors.textSecondary),
+                ),
+              ],
               const SizedBox(width: 20),
-              const Radio<bool>(value: true),
+              Radio<bool>(
+                value: true,
+                groupValue: _isOnAccount,
+                onChanged: locked
+                    ? null
+                    : (v) { if (v != null) setState(() => _isOnAccount = v); },
+              ),
               const Text('On Account', style: TextStyle(fontSize: 13)),
-            ]),
-          ),
+            ]);
+          }),
         ]),
       ),
     );
@@ -1304,14 +1360,19 @@ class _FinanceVoucherEntryScreenState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildAccountSearch(
-          accounts: _partyAccounts,
+          accounts: _eligiblePartyAccounts,
           selectedId: _partyId,
           locked: locked,
-          decoration: const InputDecoration(
-              labelText: 'Customer / Supplier *',
-              border: OutlineInputBorder(),
+          decoration: InputDecoration(
+              labelText: _voucherType == null
+                  ? 'Customer / Supplier *'
+                  : isReceiptVoucher(_voucherType!)
+                      ? 'Customer *'
+                      : 'Supplier *',
+              border: const OutlineInputBorder(),
               isDense: true,
-              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
           onSelected: _onPartySelected,
           onCleared: () {
             for (final b in _bills) b.dispose();
