@@ -973,7 +973,7 @@ class _FinanceVoucherEntryScreenState
     final isOffline = session?.offlineMode ?? false;
     final isMobile  = Responsive.isMobile(context);
     final menus     = ref.watch(menuProvider);
-    final feature   = _findFeature(menus, RouteNames.paymentReceipt);
+    final feature   = _findFeature(menus, RouteNames.voucherList);
 
     if (feature == null) {
       return const Center(
