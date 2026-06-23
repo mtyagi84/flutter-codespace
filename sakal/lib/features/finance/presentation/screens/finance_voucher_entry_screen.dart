@@ -1027,7 +1027,7 @@ class _FinanceVoucherEntryScreenState
                     ),
                 ]),
               ),
-              if (_voucherNo != null && _isOnAccount && !_isPosted)
+              if (_voucherNo != null && _isOnAccount)
                 Tooltip(
                   message: 'Copy to new voucher',
                   child: IconButton(
