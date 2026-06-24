@@ -94,6 +94,23 @@ final accountsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async 
   return List<Map<String, dynamic>>.from(res.data as List);
 });
 
+// All company details needed for printing (logo, address, tax fields).
+// Fetched on demand (when Print is pressed) and cached for the session.
+final companyDetailsProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
+  final session = ref.watch(sessionProvider);
+  if (session == null) return null;
+  final res = await DioClient.instance.get('/ric_companies', queryParameters: {
+    'id':     'eq.${session.companyId}',
+    'select': 'company_name,address,landline_no,email,country,'
+              'state_name,city_name,pin_zip_code,website,logo,'
+              'tax_1_label,tax_1_value,tax_2_label,tax_2_value,'
+              'tax_3_label,tax_3_value,tax_4_label,tax_4_value',
+    'limit':  '1',
+  });
+  final list = List<Map<String, dynamic>>.from(res.data as List);
+  return list.isNotEmpty ? list.first : null;
+});
+
 // Includes country_code because ChartOfAccounts needs it for division/city lookups.
 // Customer and Supplier screens ignore the extra field — it's harmless.
 final countriesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {

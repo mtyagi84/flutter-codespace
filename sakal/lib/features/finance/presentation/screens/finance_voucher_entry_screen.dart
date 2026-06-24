@@ -12,11 +12,14 @@ import '../../data/models/finance_voucher_model.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/voucher_logic.dart';
 import '../../../../core/models/menu_models.dart';
-import '../../../../core/providers/master_cache_providers.dart';
+import '../../../../core/providers/master_cache_providers.dart'
+    show accountsProvider, baseCurrencyProvider, localCurrencyProvider,
+         paymentModesProvider, companyDetailsProvider;
 import '../../../../core/router/route_names.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../providers/finance_voucher_providers.dart';
+import '../../data/services/voucher_pdf_builder.dart';
 
 MenuFeature? _findFeature(List<MenuModule> modules, String screenPath) {
   for (final mod in modules) {
@@ -462,6 +465,87 @@ class _FinanceVoucherEntryScreenState
     });
     _showSnack('Copied — edit as needed and save as a new draft.',
         color: AppColors.secondary);
+  }
+
+  // ── Print voucher ─────────────────────────────────────────────────────────
+
+  Future<void> _printVoucher() async {
+    if (_voucherNo == null || _voucherType == null) return;
+    final company = await ref.read(companyDetailsProvider.future);
+    if (!mounted || company == null) return;
+
+    final tc = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
+
+    // Resolve cash/bank display name
+    final cashAcc = _cashBankList
+        .where((a) => a['id'] == _cashBankId)
+        .firstOrNull;
+    final cashBankDisplay = cashAcc != null
+        ? '[${cashAcc['account_code']}] ${cashAcc['account_name']}'
+        : '';
+
+    // Resolve payment mode display name
+    final modeEntry = _paymentModes
+        .where((m) => m['payment_mode_code'] == _paymentMode)
+        .firstOrNull;
+    final modeName =
+        modeEntry?['payment_mode_name'] as String? ?? _paymentMode ?? '';
+
+    // Build On Account print lines
+    final printLines = _accountLines
+        .where((l) => l.accountId != null && l.amount > 0)
+        .map((l) {
+          final lineCurr = l.accountCurrency.isEmpty ? _baseCurrency : l.accountCurrency;
+          return {
+            'account_name':      l.accountName ?? '',
+            'amount':            l.amount,
+            'party_amount':      l.amount * l.partyRate,
+            'party_currency':    lineCurr,
+            'is_cross_currency': lineCurr != tc,
+            'remarks':           l.remarksCtrl.text,
+          };
+        })
+        .toList();
+
+    // Build Against Bill print lines
+    final printBills = _bills
+        .where((b) => b.payTrans > 0)
+        .map((b) => {
+              'bill_no':        b.invBillNo,
+              'bill_date':      b.invBillDate ?? '',
+              'bill_amount':    b.billAmount,
+              'balance_amount': b.balanceAmount,
+              'pay_trans':      b.payTrans,
+              'pay_party':      b.payTrans * _partyRate,
+              'party_currency': b.partyCurrency,
+            })
+        .toList();
+
+    try {
+      await VoucherPdfBuilder.print(
+        company:         company,
+        voucherType:     _voucherType!,
+        voucherNo:       _voucherNo!,
+        transDate:       _displayDate(_transDate),
+        transCurrency:   tc,
+        baseCurrency:    _baseCurrency,
+        displayRate:     _confirmedDisplayRate,
+        cashBankAccount: cashBankDisplay,
+        paymentMode:     modeName,
+        refNo:           _refNoCtrl.text,
+        refDate:         _refDate != null ? _displayDate(_refDate!) : null,
+        remarks:         _remarksCtrl.text,
+        isOnAccount:     _isOnAccount,
+        lines:           printLines,
+        bills:           printBills,
+        partyName:       _partyName,
+        partyCurrency:   _partyCurrency.isEmpty ? null : _partyCurrency,
+        partyRate:       _partyRate,
+        totalTrans:      _totalTransAmount,
+      );
+    } catch (e) {
+      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    }
   }
 
   // ── Header rate confirmed — cascade proportionally to all line party rates ─
@@ -1083,6 +1167,15 @@ class _FinanceVoucherEntryScreenState
                     icon: const Icon(Icons.copy_outlined),
                     color: AppColors.primary,
                     onPressed: _applyCopy,
+                  ),
+                ),
+              if (_voucherNo != null)
+                Tooltip(
+                  message: 'Print / Save as PDF',
+                  child: IconButton(
+                    icon: const Icon(Icons.print_outlined),
+                    color: AppColors.primary,
+                    onPressed: _printVoucher,
                   ),
                 ),
             ],
