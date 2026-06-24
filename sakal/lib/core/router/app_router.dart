@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/screens/change_password_screen.dart';
@@ -24,21 +25,42 @@ import '../../features/finance/presentation/screens/finance_voucher_entry_screen
 import '../../features/finance/presentation/screens/finance_voucher_list_screen.dart';
 import '../layout/app_shell.dart';
 import '../layout/group_landing_screen.dart';
+import '../providers/session_provider.dart';
 import '../services/local_storage.dart';
 import 'route_names.dart';
 
+// Mirrors sessionProvider state so GoRouter can listen and re-evaluate redirects
+// whenever the user logs in, logs out, or the session is restored on page refresh.
+final sessionNotifier = ValueNotifier<UserSession?>(null);
+
 final appRouter = GoRouter(
   initialLocation: RouteNames.landing,
+  refreshListenable: sessionNotifier,
   debugLogDiagnostics: true,
   redirect: (context, state) {
     final loc       = state.matchedLocation;
     final hasClient = LocalStorage.clientNo != null;
+    final session   = sessionNotifier.value;
 
+    // Always allow registration and sync routes regardless of auth state.
     if (loc == RouteNames.register) return null;
-    if (loc == RouteNames.login)    return null;
     if (loc == RouteNames.sync)     return null;
-    if (!hasClient && loc != RouteNames.landing) return RouteNames.landing;
-    if (hasClient && loc == RouteNames.landing)  return RouteNames.login;
+
+    // Client not registered yet → must go through landing.
+    if (!hasClient) {
+      return loc == RouteNames.landing ? null : RouteNames.landing;
+    }
+
+    // Client registered but not logged in → force login.
+    if (session == null) {
+      return loc == RouteNames.login ? null : RouteNames.login;
+    }
+
+    // Logged in — don't let them land on login/landing again.
+    if (loc == RouteNames.login || loc == RouteNames.landing) {
+      return RouteNames.dashboard;
+    }
+
     return null;
   },
   routes: [

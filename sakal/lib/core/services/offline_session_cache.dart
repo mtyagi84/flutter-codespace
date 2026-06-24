@@ -10,6 +10,9 @@ class OfflineSessionCache {
   static const _kPassHash = 'off_pass_hash';
   static const _kSession  = 'off_session';
   static const _kMenu     = 'off_menu';
+  // Marks that the user is actively logged in — cleared on logout.
+  // Prevents page-refresh from restoring a session the user intentionally ended.
+  static const _kIsActive = 'session_active';
 
   /// Called after every successful online login to keep credentials fresh.
   static Future<void> save({
@@ -23,9 +26,35 @@ class OfflineSessionCache {
       _storage.write(key: _kUsername, value: username),
       _storage.write(key: _kPassHash, value: hash),
       _storage.write(key: _kSession,  value: jsonEncode(_encodeSession(session))),
-      _storage.write(key: _kMenu,
-          value: jsonEncode(menu.map((m) => m.toJson()).toList())),
+      _storage.write(key: _kMenu,     value: jsonEncode(menu.map((m) => m.toJson()).toList())),
+      _storage.write(key: _kIsActive, value: 'true'),
     ]);
+  }
+
+  /// Restores session + menu after a browser page refresh, without a password
+  /// check. Returns null if the user previously logged out (deactivate() was called).
+  static Future<({UserSession session, List<MenuModule> menu})?> tryRestoreSession() async {
+    final vals = await Future.wait([
+      _storage.read(key: _kIsActive),
+      _storage.read(key: _kSession),
+      _storage.read(key: _kMenu),
+    ]);
+    if (vals[0] != 'true' || vals[1] == null || vals[2] == null) return null;
+    try {
+      final session = _decodeSession(jsonDecode(vals[1]!) as Map<String, dynamic>);
+      final menu    = (jsonDecode(vals[2]!) as List)
+          .map((e) => MenuModule.fromJson(e as Map<String, dynamic>))
+          .toList();
+      return (session: session, menu: menu);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Clears the active flag on logout. Keeps the password hash so offline
+  /// login (on mobile) still works after the user is back online.
+  static Future<void> deactivate() async {
+    await _storage.delete(key: _kIsActive);
   }
 
   /// Verifies credentials against cached hash.

@@ -7,6 +7,7 @@ import '../network/dio_client.dart';
 import '../providers/session_provider.dart';
 import '../router/route_names.dart';
 import '../services/local_storage.dart';
+import '../services/offline_session_cache.dart';
 import '../theme/app_colors.dart';
 import '../utils/responsive.dart';
 import '../widgets/sync_status_indicator.dart';
@@ -73,6 +74,7 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
                 ref.read(sessionProvider.notifier).state = null;
                 ref.read(menuProvider.notifier).state    = [];
                 await LocalStorage.clearSession();
+                await OfflineSessionCache.deactivate();
                 if (context.mounted) context.go(RouteNames.login);
               }
             },
