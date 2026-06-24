@@ -267,7 +267,7 @@ class _FinanceVoucherListScreenState
           ),
         ),
 
-        // ── Table ─────────────────────────────────────────────────────────────
+        // ── Table (desktop/tablet) / Card list (mobile) ───────────────────────
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
@@ -276,37 +276,44 @@ class _FinanceVoucherListScreenState
                         style: const TextStyle(color: AppColors.negative)))
                   : rows.isEmpty
                       ? _emptyState()
-                      : Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
-                          child: Column(children: [
-                            // Header
-                            Container(
-                              decoration: const BoxDecoration(
-                                color: AppColors.primary,
-                                borderRadius: BorderRadius.vertical(
-                                    top: Radius.circular(8)),
-                              ),
-                              child: Row(children: [
-                                _th('Trans No',   flex: 3),
-                                _th('Date',       flex: 2),
-                                _th('Type',       flex: 2),
-                                _th('Mode',       flex: 2),
-                                _th('Settlement', flex: 2),
-                                _th('Status',     flex: 1),
-                                _th('Remarks',    flex: 3),
-                                _th('',           flex: 1),
+                      : isMobile
+                          ? ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              itemCount: rows.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (_, i) => _buildCard(rows[i]),
+                            )
+                          : Padding(
+                              padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+                              child: Column(children: [
+                                Container(
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.primary,
+                                    borderRadius: BorderRadius.vertical(
+                                        top: Radius.circular(8)),
+                                  ),
+                                  child: Row(children: [
+                                    _th('Trans No',   flex: 3),
+                                    _th('Date',       flex: 2),
+                                    _th('Type',       flex: 2),
+                                    _th('Mode',       flex: 2),
+                                    _th('Settlement', flex: 2),
+                                    _th('Status',     flex: 1),
+                                    _th('Remarks',    flex: 3),
+                                    _th('',           flex: 1),
+                                  ]),
+                                ),
+                                Expanded(
+                                  child: ListView.separated(
+                                    itemCount: rows.length,
+                                    separatorBuilder: (_, __) =>
+                                        Divider(height: 1, color: AppColors.border),
+                                    itemBuilder: (_, i) => _buildRow(rows[i], i),
+                                  ),
+                                ),
                               ]),
                             ),
-                            Expanded(
-                              child: ListView.separated(
-                                itemCount: rows.length,
-                                separatorBuilder: (_, __) =>
-                                    Divider(height: 1, color: AppColors.border),
-                                itemBuilder: (_, i) => _buildRow(rows[i], i),
-                              ),
-                            ),
-                          ]),
-                        ),
         ),
 
         // ── Footer ────────────────────────────────────────────────────────────
@@ -435,6 +442,76 @@ class _FinanceVoucherListScreenState
               ),
             ),
           ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildCard(Map<String, dynamic> v) {
+    final isPosted  = v['is_posted']         as bool?   ?? false;
+    final isOnAcct  = v['is_on_account']     as bool?   ?? false;
+    final transNo   = v['trans_no']          as String? ?? '';
+    final transDate = v['trans_date']        as String? ?? '';
+    final vtype     = v['voucher_type_code'] as String? ?? '';
+    final mode      = v['payment_mode_code'] as String? ?? '';
+    final remarks   = v['remarks']           as String? ?? '';
+
+    return InkWell(
+      onTap: () => _openEdit(transNo, transDate),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Row 1: trans no + status badge
+          Row(children: [
+            Expanded(
+              child: Text(transNo,
+                  style: const TextStyle(fontSize: 13,
+                      fontWeight: FontWeight.w600, color: AppColors.primary)),
+            ),
+            _statusBadge(isPosted),
+          ]),
+          const SizedBox(height: 6),
+          // Row 2: type label + date
+          Row(children: [
+            Text(_typeLabels[vtype] ?? vtype,
+                style: const TextStyle(fontSize: 12,
+                    color: AppColors.textSecondary)),
+            const SizedBox(width: 8),
+            const Text('·', style: TextStyle(color: AppColors.textDisabled)),
+            const SizedBox(width: 8),
+            Text(_displayDate(transDate),
+                style: const TextStyle(fontSize: 12,
+                    color: AppColors.textSecondary)),
+          ]),
+          const SizedBox(height: 4),
+          // Row 3: mode + settlement
+          Row(children: [
+            if (mode.isNotEmpty) ...[
+              Text(mode,
+                  style: const TextStyle(fontSize: 12,
+                      color: AppColors.textSecondary)),
+              const SizedBox(width: 8),
+              const Text('·', style: TextStyle(color: AppColors.textDisabled)),
+              const SizedBox(width: 8),
+            ],
+            Text(isOnAcct ? 'On Account' : 'Against Bill',
+                style: TextStyle(fontSize: 12,
+                    color: isOnAcct ? AppColors.info : AppColors.secondary,
+                    fontWeight: FontWeight.w500)),
+          ]),
+          if (remarks.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(remarks,
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11,
+                    color: AppColors.textDisabled)),
+          ],
         ]),
       ),
     );
