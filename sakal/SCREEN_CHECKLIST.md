@@ -94,6 +94,7 @@ Breakpoints used in SAKAL:
 - [ ] Tested at mobile width (600 px or narrower)
 - [ ] Tested at tablet width (800 px)
 - [ ] Tested at desktop width (1280 px)
+- [ ] **List screens use `SakalAdaptiveList` (or the card/table split pattern)** — card layout on mobile (`isMobile`), full table on desktop. Never a raw table at all breakpoints. See `finance_voucher_list_screen.dart` as the template. When `SakalAdaptiveList` widget exists in `core/widgets/`, use it instead of writing card+table code inline per screen.
 - [ ] List+Detail screens: stacked on mobile, split panel on desktop
 - [ ] All touch targets ≥ 48 × 48 px (buttons, checkboxes, list tiles)
 - [ ] No horizontal overflow at any breakpoint
@@ -140,6 +141,6 @@ Breakpoints used in SAKAL:
 
 ---
 
-*Last updated: 2026-06-20*
+*Last updated: 2026-07-01*
 *Permission model: view / add / edit / approve / copy / excel_upload — no delete (reversals only, OHADA compliance)*
 *Testing: Option A — unit tests + pgTAP written per screen in the same session*
