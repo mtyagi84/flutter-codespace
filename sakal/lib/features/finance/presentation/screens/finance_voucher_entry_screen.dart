@@ -162,6 +162,7 @@ class _FinanceVoucherEntryScreenState
   String? _error;
   bool    _saving      = false;
   bool    _posting     = false;
+  bool    _printing    = false;
   String? _actionError;
 
   static const _supportedTypes = ['CRV', 'BRV', 'CPV', 'BPV'];
@@ -477,8 +478,10 @@ class _FinanceVoucherEntryScreenState
 
   Future<void> _printVoucher() async {
     if (_voucherNo == null || _voucherType == null) return;
+    setState(() => _printing = true);
+    try {
     final company = await ref.read(companyDetailsProvider.future);
-    if (!mounted || company == null) return;
+    if (!mounted || company == null) { setState(() => _printing = false); return; }
 
     final tc = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
 
@@ -527,7 +530,6 @@ class _FinanceVoucherEntryScreenState
             })
         .toList();
 
-    try {
       await VoucherPdfBuilder.print(
         company:         company,
         voucherType:     _voucherType!,
@@ -553,6 +555,8 @@ class _FinanceVoucherEntryScreenState
       );
     } catch (e) {
       if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } finally {
+      if (mounted) setState(() => _printing = false);
     }
   }
 
@@ -1188,11 +1192,17 @@ class _FinanceVoucherEntryScreenState
                 ),
               if (_voucherNo != null)
                 Tooltip(
-                  message: 'Print / Save as PDF',
+                  message: _printing ? 'Preparing PDF…' : 'Print / Save as PDF',
                   child: IconButton(
-                    icon: const Icon(Icons.print_outlined),
+                    icon: _printing
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2))
+                        : const Icon(Icons.print_outlined),
                     color: AppColors.primary,
-                    onPressed: _printVoucher,
+                    onPressed: _printing ? null : _printVoucher,
                   ),
                 ),
             ],
