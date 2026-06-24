@@ -43,6 +43,7 @@ class VoucherPdfBuilder {
     required String? partyCurrency,
     required double partyRate,
     required double totalTrans,
+    required String preparedBy,
   }) async {
     // Decode logo (base64, optional data-URI prefix)
     pw.MemoryImage? logoImage;
@@ -107,7 +108,7 @@ class VoucherPdfBuilder {
             pw.Spacer(),
             pw.Divider(color: PdfColors.grey300, thickness: 0.5),
             pw.SizedBox(height: 12),
-            _buildSignatureRow(),
+            _buildSignatureRow(preparedBy),
           ],
         ),
       ),
@@ -413,20 +414,27 @@ class VoucherPdfBuilder {
 
   // ── Signature row ──────────────────────────────────────────────────────────
 
-  static pw.Widget _buildSignatureRow() {
+  static pw.Widget _buildSignatureRow(String preparedBy) {
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
-        _sigBox('Prepared by'),
+        _sigBox('Prepared by', name: preparedBy),
         _sigBox('Checked by'),
         _sigBox('Authorised Signatory'),
       ],
     );
   }
 
-  static pw.Widget _sigBox(String label) => pw.Column(
+  // Shows the name (if any) above the signature line, label below.
+  static pw.Widget _sigBox(String label, {String name = ''}) => pw.Column(
     children: [
-      pw.SizedBox(height: 22),
+      if (name.isNotEmpty)
+        pw.Text(name,
+            style: pw.TextStyle(
+                fontSize: 9, fontWeight: pw.FontWeight.bold))
+      else
+        pw.SizedBox(height: 12),
+      pw.SizedBox(height: name.isNotEmpty ? 6 : 10),
       pw.Container(width: 110, height: 0.5, color: PdfColors.grey700),
       pw.SizedBox(height: 3),
       pw.Text(label,

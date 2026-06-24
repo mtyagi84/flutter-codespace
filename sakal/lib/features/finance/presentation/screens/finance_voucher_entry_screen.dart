@@ -473,6 +473,7 @@ class _FinanceVoucherEntryScreenState
     if (_voucherNo == null || _voucherType == null) return;
     final company = await ref.read(companyDetailsProvider.future);
     if (!mounted || company == null) return;
+    final session = ref.read(sessionProvider)!;
 
     final tc = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
 
@@ -542,6 +543,7 @@ class _FinanceVoucherEntryScreenState
         partyCurrency:   _partyCurrency.isEmpty ? null : _partyCurrency,
         partyRate:       _partyRate,
         totalTrans:      _totalTransAmount,
+        preparedBy:      session.fullName,
       );
     } catch (e) {
       if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
