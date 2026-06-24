@@ -153,6 +153,10 @@ class _FinanceVoucherEntryScreenState
   String _localCurrency = '';
   double _localRate     = 1.0;
 
+  // ── Audit names (for print) ───────────────────────────────────────────────
+  String  _preparedBy   = '';
+  String  _authorisedBy = '';
+
   // ── UI state ──────────────────────────────────────────────────────────────
   bool    _loading     = true;
   String? _error;
@@ -386,8 +390,10 @@ class _FinanceVoucherEntryScreenState
         _rateCtrl.text        = _fmtRate(displayRate);
         _confirmedDisplayRate = displayRate;
         _localRate            = restoredLocalRate;
-        _isOnAccount   = isOA;
-        _loading       = false;
+        _isOnAccount          = isOA;
+        _preparedBy           = header.createdByName;
+        _authorisedBy         = header.postedByName;
+        _loading              = false;
       }
 
       if (!isOA) {
@@ -473,7 +479,6 @@ class _FinanceVoucherEntryScreenState
     if (_voucherNo == null || _voucherType == null) return;
     final company = await ref.read(companyDetailsProvider.future);
     if (!mounted || company == null) return;
-    final session = ref.read(sessionProvider)!;
 
     final tc = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
 
@@ -543,7 +548,8 @@ class _FinanceVoucherEntryScreenState
         partyCurrency:   _partyCurrency.isEmpty ? null : _partyCurrency,
         partyRate:       _partyRate,
         totalTrans:      _totalTransAmount,
-        preparedBy:      session.fullName,
+        preparedBy:      _preparedBy,
+        authorisedBy:    _authorisedBy,
       );
     } catch (e) {
       if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
@@ -851,6 +857,7 @@ class _FinanceVoucherEntryScreenState
           return true;
         }
       } else {
+        final isNewVoucher = _voucherNo == null;
         final transNo = await ref.read(financeVoucherRepositoryProvider).save(
           header: header,
           lines:  lines,
@@ -863,7 +870,11 @@ class _FinanceVoucherEntryScreenState
           lines:  lines,
         ));
         if (mounted) {
-          setState(() { _voucherNo = transNo; _saving = false; });
+          setState(() {
+            _voucherNo  = transNo;
+            _saving     = false;
+            if (isNewVoucher) _preparedBy = session.fullName;
+          });
           _showSnack('Draft saved — $transNo', color: AppColors.positive);
           return true;
         }
@@ -928,7 +939,11 @@ class _FinanceVoucherEntryScreenState
         postedBy:   session.userId,
       );
       if (mounted) {
-        setState(() { _isPosted = true; _posting = false; });
+        setState(() {
+          _isPosted     = true;
+          _posting      = false;
+          _authorisedBy = session.fullName;
+        });
         _showSnack('$_voucherNo posted successfully.', color: AppColors.positive);
       }
     } catch (e) {

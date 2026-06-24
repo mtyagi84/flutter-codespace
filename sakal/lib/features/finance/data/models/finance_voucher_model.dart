@@ -14,6 +14,8 @@ class FinanceVoucherHeader {
   final String  remarks;
   final bool    isPosted;
   final bool    isDeleted;
+  final String  createdByName;
+  final String  postedByName;
 
   const FinanceVoucherHeader({
     required this.clientId,
@@ -31,6 +33,8 @@ class FinanceVoucherHeader {
     required this.remarks,
     required this.isPosted,
     required this.isDeleted,
+    this.createdByName = '',
+    this.postedByName  = '',
   });
 
   factory FinanceVoucherHeader.fromJson(Map<String, dynamic> j) =>
@@ -50,6 +54,8 @@ class FinanceVoucherHeader {
         remarks:         j['remarks']            as String? ?? '',
         isPosted:        j['is_posted']          as bool?   ?? false,
         isDeleted:       j['is_deleted']         as bool?   ?? false,
+        createdByName:  (j['created_by_user']   as Map?)?['full_name'] as String? ?? '',
+        postedByName:   (j['posted_by_user']    as Map?)?['full_name'] as String? ?? '',
       );
 
   Map<String, dynamic> toJson() => {

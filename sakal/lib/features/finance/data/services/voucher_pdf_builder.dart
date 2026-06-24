@@ -44,6 +44,7 @@ class VoucherPdfBuilder {
     required double partyRate,
     required double totalTrans,
     required String preparedBy,
+    required String authorisedBy,
   }) async {
     // Decode logo (base64, optional data-URI prefix)
     pw.MemoryImage? logoImage;
@@ -108,7 +109,7 @@ class VoucherPdfBuilder {
             pw.Spacer(),
             pw.Divider(color: PdfColors.grey300, thickness: 0.5),
             pw.SizedBox(height: 12),
-            _buildSignatureRow(preparedBy),
+            _buildSignatureRow(preparedBy, authorisedBy),
           ],
         ),
       ),
@@ -414,13 +415,13 @@ class VoucherPdfBuilder {
 
   // ── Signature row ──────────────────────────────────────────────────────────
 
-  static pw.Widget _buildSignatureRow(String preparedBy) {
+  static pw.Widget _buildSignatureRow(String preparedBy, String authorisedBy) {
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
-        _sigBox('Prepared by', name: preparedBy),
+        _sigBox('Prepared by',         name: preparedBy),
         _sigBox('Checked by'),
-        _sigBox('Authorised Signatory'),
+        _sigBox('Authorised Signatory', name: authorisedBy),
       ],
     );
   }

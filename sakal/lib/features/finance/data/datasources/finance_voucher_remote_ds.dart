@@ -14,7 +14,9 @@ class FinanceVoucherRemoteDs {
       'company_id': 'eq.$companyId',
       'trans_no':   'eq.$transNo',
       'is_deleted': 'eq.false',
-      'select':     '*',
+      'select':     '*,'
+                    'created_by_user:rim_users!created_by(full_name),'
+                    'posted_by_user:rim_users!posted_by(full_name)',
       'order':      'trans_date.desc',
       'limit':      '1',
     };
