@@ -114,6 +114,7 @@ class _FinanceVoucherEntryScreenState
   String?   _cashBankId;
   String    _transCurrency = '';
   final     _rateCtrl = TextEditingController(text: '1');
+  final     _rateFocusNode = FocusNode();
   double get _rate => double.tryParse(_rateCtrl.text) ?? 1.0;
   // Tracks the last confirmed display rate so proportional scaling is correct
   // when the user manually overrides the header rate.
@@ -167,12 +168,16 @@ class _FinanceVoucherEntryScreenState
   @override
   void initState() {
     super.initState();
+    _rateFocusNode.addListener(() {
+      if (!_rateFocusNode.hasFocus) _onRateConfirmed();
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _init());
   }
 
   @override
   void dispose() {
     _rateCtrl.dispose();
+    _rateFocusNode.dispose();
     _refNoCtrl.dispose();
     _remarksCtrl.dispose();
     _chequeNoCtrl.dispose();
@@ -462,6 +467,7 @@ class _FinanceVoucherEntryScreenState
   // ── Header rate confirmed — cascade proportionally to all line party rates ─
 
   void _onRateConfirmed() {
+    if (!mounted) return;
     final newRate = _rate;
     final tc = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
     // Nothing to cascade when trans == base (no conversion in header).
@@ -1240,6 +1246,7 @@ class _FinanceVoucherEntryScreenState
             );
             final rateField = field(TextFormField(
               controller: _rateCtrl,
+              focusNode: _rateFocusNode,
               enabled: !locked && showRateField,
               decoration: dec.copyWith(
                 labelText: showRateField ? '1 $_baseCurrency = ' : 'Rate',

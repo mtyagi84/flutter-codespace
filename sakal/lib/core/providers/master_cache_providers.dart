@@ -71,23 +71,25 @@ final paymentModesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) as
   return List<Map<String, dynamic>>.from(res.data as List);
 });
 
-// Loads all posting-allowed accounts with code, name, nature, parent name,
-// and ledger currency. Used by every screen with an account picker.
-// Shared so the 500-row fetch happens once per session, not per screen.
+// Loads accounts available for voucher entry: all posting-allowed accounts
+// plus all Customer and Supplier accounts (which may have posting_allowed=false
+// if created before the flag was enforced). Shared across screens.
 final accountsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final session = ref.watch(sessionProvider);
   if (session == null) return [];
   final res = await DioClient.instance.get('/rim_accounts', queryParameters: {
-    'client_id':       'eq.${session.clientId}',
-    'company_id':      'eq.${session.companyId}',
-    'is_deleted':      'eq.false',
-    'is_active':       'eq.true',
-    'posting_allowed': 'eq.true',
-    'select':          'id,account_code,account_name,account_nature,'
-                       'parent:rim_accounts!parent_id(account_name),'
-                       'rim_currencies!account_currency_id(currency_id)',
-    'order':           'account_code.asc',
-    'limit':           '500',
+    'client_id':  'eq.${session.clientId}',
+    'company_id': 'eq.${session.companyId}',
+    'is_deleted': 'eq.false',
+    'is_active':  'eq.true',
+    'or':         '(posting_allowed.eq.true,'
+                  'account_nature.eq.Customer,'
+                  'account_nature.eq.Supplier)',
+    'select':     'id,account_code,account_name,account_nature,'
+                  'parent:rim_accounts!parent_id(account_name),'
+                  'rim_currencies!account_currency_id(currency_id)',
+    'order':      'account_code.asc',
+    'limit':      '500',
   });
   return List<Map<String, dynamic>>.from(res.data as List);
 });
