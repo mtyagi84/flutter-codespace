@@ -7,9 +7,9 @@ CREATE TABLE rim_common_master_types (
   type_name  TEXT        NOT NULL,
   is_active  BOOLEAN     NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  created_by UUID        REFERENCES users(id),
+  created_by UUID        REFERENCES rim_users(id),
   updated_at TIMESTAMPTZ,
-  updated_by UUID        REFERENCES users(id)
+  updated_by UUID        REFERENCES rim_users(id)
 );
 
 -- rim_common_masters: client+company scoped lookup values per type.
@@ -25,9 +25,9 @@ CREATE TABLE rim_common_masters (
   is_active   BOOLEAN     NOT NULL DEFAULT true,
   is_deleted  BOOLEAN     NOT NULL DEFAULT false,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  created_by  UUID        REFERENCES users(id),
+  created_by  UUID        REFERENCES rim_users(id),
   updated_at  TIMESTAMPTZ,
-  updated_by  UUID        REFERENCES users(id),
+  updated_by  UUID        REFERENCES rim_users(id),
   UNIQUE (client_id, company_id, type_id, description)
 );
 
