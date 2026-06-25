@@ -47,9 +47,11 @@ final appRouter = GoRouter(
     if (loc == RouteNames.register) return null;
     if (loc == RouteNames.sync)     return null;
 
-    // Client not registered yet → must go through landing.
+    // No cached client → allow landing and login (login screen shows Client ID field).
+    // Blocks everything else until the user either registers or signs in.
     if (!hasClient) {
-      return loc == RouteNames.landing ? null : RouteNames.landing;
+      if (loc == RouteNames.landing || loc == RouteNames.login) return null;
+      return RouteNames.landing;
     }
 
     // Client registered but not logged in → force login.
