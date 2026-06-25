@@ -73,7 +73,6 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
               } else if (val == 'logout') {
                 ref.read(sessionProvider.notifier).state = null;
                 ref.read(menuProvider.notifier).state    = [];
-                await LocalStorage.clearSession();
                 await OfflineSessionCache.deactivate();
                 if (context.mounted) context.go(RouteNames.login);
               }
