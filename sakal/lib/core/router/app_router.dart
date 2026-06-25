@@ -18,6 +18,7 @@ import '../../features/setup/presentation/screens/permissions_screen.dart';
 import '../../features/setup/presentation/screens/users_screen.dart';
 import '../../features/setup/presentation/screens/accounting_setup_screen.dart';
 import '../../features/master/presentation/screens/chart_of_accounts_screen.dart';
+import '../../features/master/presentation/screens/common_masters_screen.dart';
 import '../../features/master/presentation/screens/customer_master_screen.dart';
 import '../../features/master/presentation/screens/supplier_master_screen.dart';
 import '../../features/finance/presentation/screens/exchange_rate_screen.dart';
@@ -113,6 +114,7 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.chartOfAccounts,builder: (c, s) => const ChartOfAccountsScreen()),
         GoRoute(path: RouteNames.customerMaster, builder: (c, s) => const CustomerMasterScreen()),
         GoRoute(path: RouteNames.supplierMaster, builder: (c, s) => const SupplierMasterScreen()),
+        GoRoute(path: RouteNames.commonMasters,  builder: (c, s) => const CommonMastersScreen()),
 
         // Sales
         GoRoute(path: RouteNames.salesInvoices, builder: (c, s) => const _Placeholder('Sales Invoice')),

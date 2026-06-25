@@ -46,6 +46,7 @@ class RouteNames {
   static const String chartOfAccounts  = '/master/accounts';
   static const String customerMaster   = '/master/customers';
   static const String supplierMaster   = '/master/suppliers';
+  static const String commonMasters    = '/master/common-masters';
 
   // Finance
   static const String exchangeRates  = '/finance/exchange-rates';
