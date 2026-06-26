@@ -87,6 +87,8 @@ BEGIN
     WHERE id = v_user.company_id;
 
     -- Generate JWT (8-hour expiry)
+    -- app.jwt_secret      → set in postgresql.conf on self-hosted
+    -- app.settings.jwt_secret → Supabase sets this automatically (no ALTER DATABASE needed)
     v_token := sign(
         json_build_object(
             'role',       'authenticated',
@@ -96,7 +98,10 @@ BEGIN
             'iat',        extract(epoch FROM now())::integer,
             'exp',        extract(epoch FROM (now() + interval '8 hours'))::integer
         )::json,
-        current_setting('app.jwt_secret')
+        coalesce(
+            current_setting('app.jwt_secret', true),
+            current_setting('app.settings.jwt_secret', true)
+        )
     );
 
     RETURN json_build_object(

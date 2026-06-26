@@ -1,15 +1,13 @@
 -- ============================================================
 -- Migration 023: JWT Authentication
 -- ============================================================
--- BEFORE running this migration, set the JWT secret in the DB.
--- Get your secret: Supabase Dashboard → Project Settings → API → JWT Secret
--- Then run (once, in Supabase SQL editor):
---   ALTER DATABASE postgres SET "app.jwt_secret" = 'PASTE-SECRET-HERE';
+-- Supabase: no pre-setup needed.
+--   app.settings.jwt_secret is set automatically by Supabase.
 --
--- Self-hosted: set the same value in postgresql.conf:
---   app.jwt_secret = 'same-secret'
+-- Self-hosted: add to postgresql.conf (no ALTER DATABASE needed):
+--   app.jwt_secret = 'your-secret-here'
 -- and in postgrest.conf:
---   jwt-secret = "same-secret"
+--   jwt-secret = "same-secret-here"
 -- ============================================================
 
 -- pgjwt extension (provides the sign() function for JWT generation)
@@ -99,8 +97,8 @@ BEGIN
     WHERE id = v_user.company_id;
 
     -- Generate JWT (8-hour expiry)
-    -- sign() resolved via search_path = public, extensions
-    -- app.jwt_secret must match jwt-secret in postgrest.conf
+    -- app.jwt_secret           → set in postgresql.conf on self-hosted
+    -- app.settings.jwt_secret  → Supabase sets this automatically
     v_token := sign(
         json_build_object(
             'role',       'authenticated',
@@ -110,7 +108,10 @@ BEGIN
             'iat',        extract(epoch FROM now())::integer,
             'exp',        extract(epoch FROM (now() + interval '8 hours'))::integer
         )::json,
-        current_setting('app.jwt_secret')
+        coalesce(
+            current_setting('app.jwt_secret', true),
+            current_setting('app.settings.jwt_secret', true)
+        )
     );
 
     RETURN json_build_object(
