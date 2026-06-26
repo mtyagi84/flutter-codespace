@@ -83,7 +83,7 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
       final levels    = results[0] as List<CategoryLevelModel>;
       final flagTypes = results[1] as List<ProductFlagTypeModel>;
       final cats      = results[2] as List<ItemCategoryModel>;
-      _buildTree(levels, flagTypes, cats);
+      _indexTree(levels, flagTypes, cats);
     } catch (e) {
       setState(() => _error = 'Failed to load: $e');
     } finally {
@@ -91,7 +91,7 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
     }
   }
 
-  void _buildTree(List<CategoryLevelModel> levels,
+  void _indexTree(List<CategoryLevelModel> levels,
       List<ProductFlagTypeModel> flagTypes, List<ItemCategoryModel> cats) {
     _levels    = levels;
     _flagTypes = flagTypes;
