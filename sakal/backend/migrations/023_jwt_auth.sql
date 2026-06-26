@@ -19,6 +19,14 @@
 -- pgjwt extension — already enabled in public schema on Supabase
 CREATE EXTENSION IF NOT EXISTS pgjwt;
 
+-- Bridge: pgjwt is in public schema; pgcrypto (hmac) is in extensions schema on Supabase.
+-- pgjwt's sign() calls public.hmac() which doesn't exist without this wrapper.
+-- Self-hosted: pgcrypto is typically in public, so this wrapper is a no-op (safe to keep).
+CREATE OR REPLACE FUNCTION public.hmac(message text, key text, algorithm text)
+RETURNS bytea LANGUAGE sql SECURITY DEFINER AS $$
+  SELECT extensions.hmac(message, key, algorithm);
+$$;
+
 -- ── _sakal_config: restricted key/value store for secrets ────────────────────
 -- Only SECURITY DEFINER functions (running as postgres owner) can read this.
 -- anon and authenticated roles are explicitly denied.
