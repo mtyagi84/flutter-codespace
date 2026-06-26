@@ -75,14 +75,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       });
       final d = loginRes.data as Map<String, dynamic>;
 
+      // DEBUG — remove after JWT is confirmed working
+      debugPrint('=== fn_login response keys: ${d.keys.toList()}');
+      final token = d['access_token'] as String?;
+      debugPrint('=== access_token received: ${token != null ? 'YES (${token.length} chars)' : 'NO — fn_login not updated in Supabase'}');
+
       // Store JWT immediately so all subsequent requests run as 'authenticated' role.
       // Must happen before fn_get_user_menu call.
-      final token = d['access_token'] as String?;
       if (token != null) {
         await const FlutterSecureStorage().write(
           key:   AppConstants.keyAccessToken,
           value: token,
         );
+        debugPrint('=== JWT stored in FlutterSecureStorage');
       }
 
       if (!_clientSaved) {

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/app_config.dart';
 import '../config/app_constants.dart';
@@ -30,6 +31,8 @@ class DioClient {
     dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         final token = await _storage.read(key: AppConstants.keyAccessToken);
+        // DEBUG — remove after JWT is confirmed working
+        debugPrint('=== [DioClient] ${options.method} ${options.uri.path} — token: ${token != null ? 'JWT (${token.length} chars)' : 'ANON KEY'}');
         if (token != null) {
           options.headers['Authorization'] = 'Bearer $token';
         }
