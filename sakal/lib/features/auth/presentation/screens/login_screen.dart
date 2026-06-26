@@ -2,8 +2,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/config/app_constants.dart';
 import '../../../../core/models/menu_models.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
@@ -72,6 +74,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         'p_password':  _passwordCtrl.text,
       });
       final d = loginRes.data as Map<String, dynamic>;
+
+      // Store JWT immediately so all subsequent requests run as 'authenticated' role.
+      // Must happen before fn_get_user_menu call.
+      final token = d['access_token'] as String?;
+      if (token != null) {
+        await const FlutterSecureStorage().write(
+          key:   AppConstants.keyAccessToken,
+          value: token,
+        );
+      }
 
       if (!_clientSaved) {
         await LocalStorage.saveClientSession(

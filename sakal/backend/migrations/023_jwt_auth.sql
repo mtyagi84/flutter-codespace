@@ -1,14 +1,26 @@
 -- ============================================================
--- fn_login
--- Verifies credentials using bcrypt. Handles account lockout.
--- Returns session data + signed JWT on success.
--- PostgREST: POST /rest/v1/rpc/fn_login  (callable by anon role)
+-- Migration 023: JWT Authentication
+-- ============================================================
+-- BEFORE running this migration, set the JWT secret in the DB.
+-- Get your secret: Supabase Dashboard → Project Settings → API → JWT Secret
+-- Then run (once, in Supabase SQL editor):
+--   ALTER DATABASE postgres SET "app.jwt_secret" = 'PASTE-SECRET-HERE';
 --
--- JWT is signed with app.jwt_secret (set via ALTER DATABASE).
--- SET search_path = public, extensions  resolves sign() on both
--- Supabase (extensions.sign) and self-hosted (public.sign).
+-- Self-hosted: set the same value in postgresql.conf:
+--   app.jwt_secret = 'same-secret'
+-- and in postgrest.conf:
+--   jwt-secret = "same-secret"
 -- ============================================================
 
+-- pgjwt extension (provides the sign() function for JWT generation)
+-- Supabase: creates in 'extensions' schema
+-- Self-hosted: install postgresql-{ver}-pgjwt first, then uncomment:
+--   CREATE EXTENSION IF NOT EXISTS pgjwt;
+CREATE EXTENSION IF NOT EXISTS pgjwt;
+
+-- ── Updated fn_login: returns access_token in response ───────────────────────
+-- SET search_path = public, extensions  makes sign() resolve in both
+-- Supabase (extensions.sign) and self-hosted (public.sign) without code change.
 CREATE OR REPLACE FUNCTION fn_login(
     p_client_no text,
     p_username  text,
@@ -75,7 +87,7 @@ BEGIN
         RAISE EXCEPTION 'INVALID_CREDENTIALS';
     END IF;
 
-    -- Success — reset lockout counters and record login time
+    -- Success — reset lockout and record login
     UPDATE rim_users
     SET failed_attempts = 0,
         locked_until    = null,
@@ -87,6 +99,8 @@ BEGIN
     WHERE id = v_user.company_id;
 
     -- Generate JWT (8-hour expiry)
+    -- sign() resolved via search_path = public, extensions
+    -- app.jwt_secret must match jwt-secret in postgrest.conf
     v_token := sign(
         json_build_object(
             'role',       'authenticated',
@@ -113,3 +127,40 @@ BEGIN
     );
 END;
 $$;
+
+-- anon role can call fn_login (user is not authenticated yet at this point)
+GRANT EXECUTE ON FUNCTION fn_login(text, text, text) TO anon;
+
+
+-- ── Fix rim_common_masters: proper JWT-based tenant isolation ─────────────────
+
+-- Remove the interim policies from migration 022
+DROP POLICY IF EXISTS "read_types"    ON rim_common_master_types;
+DROP POLICY IF EXISTS "read_masters"  ON rim_common_masters;
+DROP POLICY IF EXISTS "write_masters" ON rim_common_masters;
+
+-- Enable RLS (may already be enabled if 022 policies ran; IF NOT ENABLED is safe)
+ALTER TABLE rim_common_master_types ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rim_common_masters      ENABLE ROW LEVEL SECURITY;
+
+-- rim_common_master_types: system-seeded, any authenticated user can read
+CREATE POLICY "auth_read_types" ON rim_common_master_types
+    FOR SELECT TO authenticated USING (true);
+
+-- rim_common_masters: full tenant isolation via JWT claims
+CREATE POLICY "auth_rw_masters" ON rim_common_masters
+    FOR ALL TO authenticated
+    USING (
+        client_id  = (current_setting('request.jwt.claims', true)::json->>'client_id')::uuid
+        AND company_id = (current_setting('request.jwt.claims', true)::json->>'company_id')::uuid
+    )
+    WITH CHECK (
+        client_id  = (current_setting('request.jwt.claims', true)::json->>'client_id')::uuid
+        AND company_id = (current_setting('request.jwt.claims', true)::json->>'company_id')::uuid
+    );
+
+-- Strip anon from data tables — only authenticated (JWT holder) can access
+REVOKE ALL ON rim_common_master_types FROM anon;
+REVOKE ALL ON rim_common_masters       FROM anon;
+GRANT SELECT               ON rim_common_master_types TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON rim_common_masters    TO authenticated;
