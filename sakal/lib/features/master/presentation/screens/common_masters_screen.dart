@@ -384,15 +384,17 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
     return Row(
       children: [
         SizedBox(
-          width: 220,
+          width: 200,
           child: _typeDropdown(),
         ),
         const SizedBox(width: 12),
-        SizedBox(
-          width: 240,
-          child: _searchField(),
+        Flexible(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 120, maxWidth: 240),
+            child: _searchField(),
+          ),
         ),
-        const Spacer(),
+        const SizedBox(width: 12),
         if (canAdd)
           FilledButton.icon(
             icon: const Icon(Icons.add, size: 16),

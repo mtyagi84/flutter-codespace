@@ -232,7 +232,7 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
           // ── No country selected ───────────────────────────────────
           if (_selectedCountry == null)
             Container(
-              width: _tableWidth,
+              width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 48),
               decoration: BoxDecoration(
                 border: Border.all(color: AppColors.border),
@@ -281,7 +281,8 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
                           padding: EdgeInsets.symmetric(vertical: 32),
                           child: Center(
                             child: Text('No divisions found. Add a custom one.',
-                                style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                textAlign: TextAlign.center),
                           ),
                         ),
                       )

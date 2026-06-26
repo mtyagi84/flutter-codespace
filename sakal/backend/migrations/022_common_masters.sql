@@ -12,6 +12,7 @@ CREATE TABLE rim_common_master_types (
   updated_by UUID        REFERENCES rim_users(id)
 );
 
+
 -- rim_common_masters: client+company scoped lookup values per type.
 -- No location_id — these are company-wide masters, same exception as rim_accounts.
 CREATE TABLE rim_common_masters (
@@ -38,3 +39,17 @@ INSERT INTO rim_common_master_types (type_key, type_name) VALUES
   ('ITEM_SIZE', 'Item Size'),
   ('ITEM_TYPE', 'Item Type'),
   ('COLOR',     'Color');
+
+-- PostgREST access grants
+GRANT SELECT ON rim_common_master_types TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON rim_common_masters TO authenticated;
+
+-- RLS: types are global reference data — all authenticated users can read
+CREATE POLICY "read_types" ON rim_common_master_types
+  FOR SELECT TO authenticated, anon USING (true);
+
+-- RLS: masters are company-scoped — authenticated users manage their own
+CREATE POLICY "read_masters" ON rim_common_masters
+  FOR SELECT TO authenticated USING (true);
+CREATE POLICY "write_masters" ON rim_common_masters
+  FOR ALL TO authenticated USING (true);

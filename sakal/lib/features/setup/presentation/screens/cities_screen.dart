@@ -373,7 +373,7 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
           // ── No country ────────────────────────────────────────────
           if (_selectedCountry == null)
             Container(
-              width: _tableWidth,
+              width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 48),
               decoration: BoxDecoration(
                 border: Border.all(color: AppColors.border),
@@ -421,7 +421,8 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
                           padding: EdgeInsets.symmetric(vertical: 32),
                           child: Center(
                             child: Text('No cities found. Add one using the button above.',
-                                style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                textAlign: TextAlign.center),
                           ),
                         ),
                       )

@@ -295,20 +295,23 @@ class _CountriesScreenState extends ConsumerState<CountriesScreen> {
                               ),
                             ),
                           )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _TableHeader(),
-                              const Divider(height: 1),
-                              ..._filtered.asMap().entries.map((e) =>
-                                  _CountryRow(
-                                    row: e.value,
-                                    isEven: e.key.isEven,
-                                    toggling: _toggling
-                                        .contains(e.value['id'] as String?),
-                                    onToggle: () => _toggle(e.value),
-                                  )),
-                            ],
+                        : SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _TableHeader(),
+                                const Divider(height: 1),
+                                ..._filtered.asMap().entries.map((e) =>
+                                    _CountryRow(
+                                      row: e.value,
+                                      isEven: e.key.isEven,
+                                      toggling: _toggling
+                                          .contains(e.value['id'] as String?),
+                                      onToggle: () => _toggle(e.value),
+                                    )),
+                              ],
+                            ),
                           ),
               ),
               const SizedBox(height: 32),
