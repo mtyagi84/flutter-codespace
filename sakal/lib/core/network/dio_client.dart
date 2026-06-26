@@ -32,14 +32,11 @@ class DioClient {
       onRequest: (options, handler) async {
         try {
           final token = await _storage.read(key: AppConstants.keyAccessToken);
-          // DEBUG — remove after JWT is confirmed working
-          debugPrint('=== [DioClient] ${options.method} ${options.uri.path} — token: ${token != null ? 'JWT (${token.length} chars)' : 'ANON KEY'}');
           if (token != null) {
             options.headers['Authorization'] = 'Bearer $token';
           }
         } catch (_) {
-          // FlutterSecureStorage Web Crypto failure — fall back to anon key
-          debugPrint('=== [DioClient] storage read failed — using ANON KEY');
+          // FlutterSecureStorage Web Crypto failure — fall back to anon key in BaseOptions
         }
         handler.next(options);
       },

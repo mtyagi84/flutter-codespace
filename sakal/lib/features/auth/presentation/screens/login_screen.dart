@@ -75,10 +75,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       });
       final d = loginRes.data as Map<String, dynamic>;
 
-      // DEBUG — remove after JWT is confirmed working
-      debugPrint('=== fn_login response keys: ${d.keys.toList()}');
       final token = d['access_token'] as String?;
-      debugPrint('=== access_token received: ${token != null ? 'YES (${token.length} chars)' : 'NO — fn_login not updated in Supabase'}');
 
       // Store JWT immediately so all subsequent requests run as 'authenticated' role.
       // Must happen before fn_get_user_menu call.
@@ -88,9 +85,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             key:   AppConstants.keyAccessToken,
             value: token,
           );
-          debugPrint('=== JWT stored in FlutterSecureStorage');
         } catch (_) {
-          debugPrint('=== JWT storage write failed (Web Crypto issue) — token not persisted');
+          // Web Crypto failure — token not persisted; user will get 401 on next request
         }
       }
 
@@ -106,10 +102,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         'p_client_id':  d['client_id'],
         'p_company_id': d['company_id'],
       });
-      // TODO: remove after debugging
-      debugPrint('=== RAW fn_get_user_menu response ===');
-      debugPrint(menuRes.data.toString());
-      debugPrint('=====================================');
       final menuList = (menuRes.data as List<dynamic>)
           .map((e) => MenuModule.fromJson(e as Map<String, dynamic>))
           .toList();
