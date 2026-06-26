@@ -291,6 +291,7 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
                     ? const LinearProgressIndicator()
                     : DropdownButtonFormField<String>(
                         value: _selectedCountry,
+                        isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Country',
                           prefixIcon: Icon(Icons.public_outlined),
@@ -322,6 +323,7 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
                       ? const LinearProgressIndicator()
                       : DropdownButtonFormField<String>(
                           value: _selectedDivision,
+                          isExpanded: true,
                           decoration: const InputDecoration(
                             labelText: 'Division (optional)',
                             prefixIcon: Icon(Icons.layers_outlined),
