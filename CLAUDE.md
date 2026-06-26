@@ -278,6 +278,32 @@ Web = always online, Drift only on mobile/desktop.
 
 ---
 
+## Dart / Flutter Rules (never get these wrong)
+
+### Riverpod class names — exact spelling
+| Use this | Never this |
+|---|---|
+| `ConsumerStatefulWidget` | `ConsumerStatefulMixin` |
+| `ConsumerState<T>` | `ConsumerStateMixin`, raw `ConsumerState` |
+| `ConsumerWidget` | anything else |
+| `WidgetRef` | `Ref` (wrong in widget context) |
+
+### Mixin with Riverpod — always parameterize
+```dart
+// CORRECT
+mixin MyMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> { }
+class _MyState extends ConsumerState<MyWidget> with MyMixin<MyWidget> { }
+
+// WRONG — raw type causes "can't implement both" error
+mixin MyMixin on ConsumerState { }
+```
+
+### Before adding a method to an existing file — always read the file first
+Dart has no method overloading. Duplicate method names are a compile error.
+Always `Read` the full file before adding new methods or imports.
+
+---
+
 ## Route Names Reference
 
 ```dart
