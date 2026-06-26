@@ -233,6 +233,51 @@ Material 3. Sidebar navigation on Web/Desktop. Bottom navigation on Mobile.
 
 ---
 
+## Mandatory Patterns (must follow on every new screen)
+
+### Screen permissions
+Every screen uses `ScreenPermissionMixin` — never write `_findFeature()` by hand:
+
+```dart
+// lib/core/utils/screen_permission_mixin.dart
+class _MyScreenState extends ConsumerState<MyScreen>
+    with ScreenPermissionMixin {
+  @override String get screenName => 'my_screen_name'; // matches screen_name in DB
+
+  // Use canAdd / canEdit / canApprove directly — no other code needed
+}
+```
+
+`MenuGroup` field is `.features` (NOT `.items`).
+`MenuFeature` fields are `.addAllowed` / `.editAllowed` / `.approveAllowed` (NOT `.canAdd` / `.canEdit`).
+
+### Adaptive list (all list screens)
+Mobile = card layout, Desktop = table. Use `SakalAdaptiveList` widget.
+Template: `lib/features/finance/presentation/screens/finance_voucher_list_screen.dart`
+
+### PostgREST save (INSERT or UPDATE)
+- No `Prefer: return=representation` header (causes 401 with RLS)
+- PATCH uses `?id=eq.<id>` filter
+
+### Account pickers
+Every account picker shows `[code] name`, searches code OR name, shows parent group as subtitle.
+Use `Autocomplete` widget — never `DropdownButton` for accounts.
+
+### Backend security (NEVER use these — Supabase lock-in)
+- `auth.uid()` — NEVER
+- `auth.jwt()` — NEVER
+- `supabase_flutter` package auth — NEVER
+- RLS policies: always use `current_setting('request.jwt.claims', true)::json` (portable PostgREST standard)
+
+### Drift / offline guard
+```dart
+// kIsWeb guard — driftDatabase() crashes on web without web workers
+if (!kIsWeb) { ... }
+```
+Web = always online, Drift only on mobile/desktop.
+
+---
+
 ## Route Names Reference
 
 ```dart

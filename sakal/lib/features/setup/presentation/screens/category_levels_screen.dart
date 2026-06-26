@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../master/data/models/category_level_model.dart';
 import '../../../master/domain/repositories/item_categories_repository.dart';
 import '../../../master/presentation/providers/item_categories_providers.dart';
@@ -13,7 +14,9 @@ class CategoryLevelsScreen extends ConsumerStatefulWidget {
   ConsumerState<CategoryLevelsScreen> createState() => _CategoryLevelsScreenState();
 }
 
-class _CategoryLevelsScreenState extends ConsumerState<CategoryLevelsScreen> {
+class _CategoryLevelsScreenState extends ConsumerState<CategoryLevelsScreen>
+    with ScreenPermissionMixin {
+  @override String get screenName => 'category_levels';
   List<CategoryLevelModel> _levels = [];
   bool    _loading = true;
   bool    _saving  = false;
@@ -31,23 +34,8 @@ class _CategoryLevelsScreenState extends ConsumerState<CategoryLevelsScreen> {
   }
 
   // ── Permission helper (same pattern as every other screen) ─────────────────
-  Map<String, dynamic>? _findFeature() {
-    final menus = ref.read(menuProvider);
-    for (final m in menus) {
-      for (final g in m.groups) {
-        for (final item in g.features) {
-          if (item.screenName == 'category_levels') return {
-            'can_add':  item.addAllowed,
-            'can_edit': item.editAllowed,
-          };
-        }
-      }
-    }
-    return null;
-  }
-
-  bool get _canAdd  => (_findFeature()?['can_add']  as bool?) ?? true;
-  bool get _canEdit => (_findFeature()?['can_edit'] as bool?) ?? true;
+  bool get _canAdd  => canAdd;
+  bool get _canEdit => canEdit;
 
   Future<void> _load() async {
     final session = ref.read(sessionProvider)!;
