@@ -48,6 +48,7 @@ class RouteNames {
   static const String supplierMaster   = '/master/suppliers';
   static const String commonMasters    = '/master/common-masters';
   static const String categoryLevels   = '/setup/category-levels';
+  static const String productFlagTypes = '/setup/product-flag-types';
   static const String itemCategories   = '/master/item-categories';
 
   // Finance

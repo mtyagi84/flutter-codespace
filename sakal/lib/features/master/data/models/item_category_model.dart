@@ -9,6 +9,7 @@ class ItemCategoryModel {
   final int     sortOrder;
   final bool    isActive;
   final bool    isDeleted;
+  final Map<String, bool> flags;
 
   // Populated client-side when building tree
   final List<ItemCategoryModel> children;
@@ -24,22 +25,26 @@ class ItemCategoryModel {
     required this.sortOrder,
     required this.isActive,
     required this.isDeleted,
+    this.flags = const {},
     this.children = const [],
   });
 
-  factory ItemCategoryModel.fromJson(Map<String, dynamic> j) =>
-      ItemCategoryModel(
-        id:            j['id']             as String?,
-        clientId:      j['client_id']      as String,
-        companyId:     j['company_id']     as String,
-        parentId:      j['parent_id']      as String?,
-        levelNo:       j['level_no']       as int,
-        categoryName:  j['category_name']  as String,
-        categoryShort: j['category_short'] as String?,
-        sortOrder:     j['sort_order']     as int? ?? 0,
-        isActive:      j['is_active']      as bool? ?? true,
-        isDeleted:     j['is_deleted']     as bool? ?? false,
-      );
+  factory ItemCategoryModel.fromJson(Map<String, dynamic> j) {
+    final rawFlags = j['flags'] as Map<String, dynamic>? ?? {};
+    return ItemCategoryModel(
+      id:            j['id']             as String?,
+      clientId:      j['client_id']      as String,
+      companyId:     j['company_id']     as String,
+      parentId:      j['parent_id']      as String?,
+      levelNo:       j['level_no']       as int,
+      categoryName:  j['category_name']  as String,
+      categoryShort: j['category_short'] as String?,
+      sortOrder:     j['sort_order']     as int? ?? 0,
+      isActive:      j['is_active']      as bool? ?? true,
+      isDeleted:     j['is_deleted']     as bool? ?? false,
+      flags:         rawFlags.map((k, v) => MapEntry(k, v as bool? ?? false)),
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         if (id != null) 'id': id,
@@ -49,6 +54,7 @@ class ItemCategoryModel {
         'level_no':       levelNo,
         'category_name':  categoryName,
         if (categoryShort != null) 'category_short': categoryShort,
+        'flags':          flags,
         'sort_order':     sortOrder,
         'is_active':      isActive,
         'is_deleted':     isDeleted,

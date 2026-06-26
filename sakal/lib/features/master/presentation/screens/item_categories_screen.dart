@@ -5,6 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../data/models/category_level_model.dart';
 import '../../data/models/item_category_model.dart';
+import '../../data/models/product_flag_type_model.dart';
 import '../../domain/repositories/item_categories_repository.dart';
 import '../providers/item_categories_providers.dart';
 
@@ -18,6 +19,7 @@ class ItemCategoriesScreen extends ConsumerStatefulWidget {
 class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen> {
   // Data
   List<CategoryLevelModel>               _levels     = [];
+  List<ProductFlagTypeModel>             _flagTypes  = [];
   List<ItemCategoryModel>                _flat       = [];
   List<ItemCategoryModel>                _roots      = [];
   Map<String, List<ItemCategoryModel>>   _childMap   = {};
@@ -37,9 +39,10 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen> {
   final _shortCtrl = TextEditingController();
   final _sortCtrl  = TextEditingController();
   final _formKey   = GlobalKey<FormState>();
-  int?    _formLevel;
-  String? _formParentId;
-  bool    _formActive = true;
+  int?                _formLevel;
+  String?             _formParentId;
+  bool                _formActive = true;
+  Map<String, bool>   _formFlags  = {};   // flag_key → current toggle value
 
   late ItemCategoriesRepository _repo;
 
@@ -88,11 +91,13 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen> {
     try {
       final results = await Future.wait([
         _repo.getLevels(clientId: session.clientId, companyId: session.companyId),
+        _repo.getFlagTypes(clientId: session.clientId, companyId: session.companyId),
         _repo.getCategories(clientId: session.clientId, companyId: session.companyId),
       ]);
-      final levels = results[0] as List<CategoryLevelModel>;
-      final cats   = results[1] as List<ItemCategoryModel>;
-      _buildTree(levels, cats);
+      final levels    = results[0] as List<CategoryLevelModel>;
+      final flagTypes = results[1] as List<ProductFlagTypeModel>;
+      final cats      = results[2] as List<ItemCategoryModel>;
+      _buildTree(levels, flagTypes, cats);
     } catch (e) {
       setState(() => _error = 'Failed to load: $e');
     } finally {
@@ -100,9 +105,11 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen> {
     }
   }
 
-  void _buildTree(List<CategoryLevelModel> levels, List<ItemCategoryModel> cats) {
-    _levels   = levels;
-    _flat     = cats;
+  void _buildTree(List<CategoryLevelModel> levels,
+      List<ProductFlagTypeModel> flagTypes, List<ItemCategoryModel> cats) {
+    _levels    = levels;
+    _flagTypes = flagTypes;
+    _flat      = cats;
     _roots    = cats.where((c) => c.parentId == null).toList();
     _childMap = {};
     for (final cat in cats) {
@@ -120,25 +127,37 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen> {
   int get _maxLevel => _levels.isEmpty ? 4 : _levels.map((l) => l.levelNo).reduce((a,b) => a > b ? a : b);
 
   // ── Panel ───────────────────────────────────────────────────────────────────
+  // Build flags map: use parent/node flags if set, else fall back to flag type default
+  Map<String, bool> _initFlags({Map<String, bool>? inherit}) {
+    return {
+      for (final ft in _flagTypes)
+        ft.flagKey: inherit?.containsKey(ft.flagKey) == true
+            ? inherit![ft.flagKey]!
+            : ft.defaultValue,
+    };
+  }
+
   void _openAdd({ItemCategoryModel? parent}) {
-    _editNode = null;
+    _editNode     = null;
     _nameCtrl.clear();
     _shortCtrl.clear();
     _sortCtrl.text = '0';
     _formActive   = true;
     _formParentId = parent?.id;
     _formLevel    = parent == null ? 1 : (parent.levelNo + 1);
+    _formFlags    = _initFlags(inherit: parent?.flags);
     setState(() => _panelMode = 'add');
   }
 
   void _openEdit(ItemCategoryModel node) {
-    _editNode = node;
+    _editNode       = node;
     _nameCtrl.text  = node.categoryName;
     _shortCtrl.text = node.categoryShort ?? '';
     _sortCtrl.text  = node.sortOrder.toString();
-    _formActive   = node.isActive;
-    _formLevel    = node.levelNo;
-    _formParentId = node.parentId;
+    _formActive     = node.isActive;
+    _formLevel      = node.levelNo;
+    _formParentId   = node.parentId;
+    _formFlags      = _initFlags(inherit: node.flags);
     setState(() => _panelMode = 'edit');
   }
 
@@ -148,7 +167,11 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (_formLevel == null) return;
 
-    final session = ref.read(sessionProvider)!;
+    final session      = ref.read(sessionProvider)!;
+    final isEdit       = _editNode != null;
+    final oldFlags     = _editNode?.flags ?? {};
+    final flagsChanged = isEdit && !_mapsEqual(oldFlags, _formFlags);
+
     setState(() => _saving = true);
     try {
       final payload = {
@@ -159,14 +182,31 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen> {
         'level_no':      _formLevel,
         'category_name': _nameCtrl.text.trim(),
         if (_shortCtrl.text.trim().isNotEmpty) 'category_short': _shortCtrl.text.trim(),
+        'flags':         _formFlags,
         'sort_order':    int.tryParse(_sortCtrl.text) ?? 0,
         'is_active':     _formActive,
         'is_deleted':    false,
         'updated_by':    session.userId,
         'updated_at':    DateTime.now().toIso8601String(),
-        if (_editNode == null) 'created_by': session.userId,
+        if (!isEdit) 'created_by': session.userId,
       };
       await _repo.saveCategory(payload);
+
+      // Cascade flags to sub-categories if flags changed on an existing node
+      if (flagsChanged && _editNode?.id != null) {
+        final childIds = _getSubtreeIds(_editNode!.id!, excludeRoot: true);
+        if (childIds.isNotEmpty) {
+          final cascade = await _showCascadeDialog(childIds.length);
+          if (cascade == true) {
+            await _repo.cascadeFlagsToChildren(
+              childIds: childIds,
+              flags:    _formFlags,
+              userId:   session.userId,
+            );
+          }
+        }
+      }
+
       _closePanel();
       await _load();
     } catch (e) {
@@ -174,6 +214,49 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen> {
     } finally {
       setState(() => _saving = false);
     }
+  }
+
+  // Collect all descendant IDs from the in-memory tree
+  List<String> _getSubtreeIds(String rootId, {bool excludeRoot = false}) {
+    final result = <String>[];
+    final queue  = [rootId];
+    while (queue.isNotEmpty) {
+      final id  = queue.removeAt(0);
+      if (!excludeRoot || id != rootId) result.add(id);
+      queue.addAll((_childMap[id] ?? []).map((c) => c.id!));
+    }
+    return result;
+  }
+
+  bool _mapsEqual(Map<String, bool> a, Map<String, bool> b) {
+    if (a.length != b.length) return false;
+    for (final k in a.keys) {
+      if (b[k] != a[k]) return false;
+    }
+    return true;
+  }
+
+  Future<bool?> _showCascadeDialog(int count) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Apply to Sub-Categories?'),
+        content: Text(
+            'You changed the flags on this category.\n\n'
+            'Apply the same flags to all $count sub-categories underneath?\n\n'
+            'Choosing "No" only updates this category — children keep their own settings.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('No — this category only'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Yes — update all $count sub-categories'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _delete(ItemCategoryModel node) async {
@@ -610,6 +693,31 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen> {
                       value: _formActive,
                       onChanged: (v) => setState(() => _formActive = v),
                     ),
+
+                    // Dynamic flags
+                    if (_flagTypes.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      const Divider(),
+                      const SizedBox(height: 4),
+                      const Text('Transaction Flags',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary,
+                              letterSpacing: 0.5)),
+                      const SizedBox(height: 4),
+                      ..._flagTypes.where((f) => f.isActive).map((ft) =>
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: Text(ft.flagLabel,
+                              style: const TextStyle(fontSize: 13)),
+                          value: _formFlags[ft.flagKey] ?? ft.defaultValue,
+                          onChanged: (v) => setState(
+                              () => _formFlags[ft.flagKey] = v),
+                        ),
+                      ),
+                    ],
 
                     const SizedBox(height: 24),
 
