@@ -20,7 +20,9 @@ import '../../features/setup/presentation/screens/accounting_setup_screen.dart';
 import '../../features/master/presentation/screens/chart_of_accounts_screen.dart';
 import '../../features/master/presentation/screens/common_masters_screen.dart';
 import '../../features/master/presentation/screens/customer_master_screen.dart';
+import '../../features/master/presentation/screens/item_categories_screen.dart';
 import '../../features/master/presentation/screens/supplier_master_screen.dart';
+import '../../features/setup/presentation/screens/category_levels_screen.dart';
 import '../../features/finance/presentation/screens/exchange_rate_screen.dart';
 import '../../features/finance/presentation/screens/finance_voucher_entry_screen.dart';
 import '../../features/finance/presentation/screens/finance_voucher_list_screen.dart';
@@ -117,6 +119,10 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.customerMaster, builder: (c, s) => const CustomerMasterScreen()),
         GoRoute(path: RouteNames.supplierMaster, builder: (c, s) => const SupplierMasterScreen()),
         GoRoute(path: RouteNames.commonMasters,  builder: (c, s) => const CommonMastersScreen()),
+        GoRoute(path: RouteNames.itemCategories, builder: (c, s) => const ItemCategoriesScreen()),
+
+        // Setup additions
+        GoRoute(path: RouteNames.categoryLevels, builder: (c, s) => const CategoryLevelsScreen()),
 
         // Sales
         GoRoute(path: RouteNames.salesInvoices, builder: (c, s) => const _Placeholder('Sales Invoice')),

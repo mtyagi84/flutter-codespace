@@ -4,7 +4,17 @@
       "Bash(git commit -m ' *)",
       "Bash(mkdir -p \"C:\\\\Manglu\\\\SAKAL\\\\backend\\\\functions\")",
       "Bash(mkdir -p \"C:\\\\Manglu\\\\SAKAL\\\\backend\\\\migrations\")",
-      "Bash(git mv *)"
+      "Bash(git mv *)",
+      "Bash(grep \"~\\\\$\")",
+      "Bash(grep -E \"class.*Companion|class SyncQueue|class PendingSync\" /workspaces/flutter-codespace/sakal/lib/core/database/app_database.g.dart 2>/dev/null || echo \"File not found — checking path\")",
+      "Read(//workspaces/flutter-codespace/sakal/lib/core/database/**)",
+      "Bash(git commit -m 'fix: sync_engine — use PendingSyncQueueCompanion \\(table-based name\\), remove invalid const *)",
+      "Bash(git commit -m 'fix: guard Drift DB access on Flutter Web — kIsWeb skips SQLite WASM calls *)",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Manglu\\\\SAKAL\\\\sakal\\\\backend\\\\tests\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Manglu\\\\SAKAL\\\\sakal\\\\docs\\\\screens\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Manglu\\\\SAKAL\\\\sakal\\\\lib\\\\features\\\\finance\\\\presentation\\\\screens\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Manglu\\\\SAKAL\\\\sakal\\\\test\\\\features\\\\finance\")",
+      "Bash(flutter analyze *)"
     ]
   }
 }

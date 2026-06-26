@@ -4,8 +4,9 @@
 -- Returns session data + signed JWT (access_token) on success.
 -- PostgREST: POST /rest/v1/rpc/fn_login  (callable by anon role)
 --
--- JWT signed with extensions.sign() from pgjwt extension.
+-- JWT signed with sign() from pgjwt (installed in public schema).
 -- Enable pgjwt first: Supabase Dashboard → Database → Extensions → pgjwt
+-- Requires public.hmac bridge: see migration 023_jwt_auth.sql
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION fn_login(
