@@ -61,7 +61,7 @@ class CommonMastersRepositoryImpl implements CommonMastersRepository {
 
   // Always remote — write buttons are hidden when offline
   @override
-  Future<CommonMasterModel> saveMaster(Map<String, dynamic> payload) =>
+  Future<void> saveMaster(Map<String, dynamic> payload) =>
       _remote.saveMaster(payload);
 
   // Always remote — write buttons are hidden when offline

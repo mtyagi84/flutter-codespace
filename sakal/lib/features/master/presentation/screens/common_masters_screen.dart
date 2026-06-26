@@ -166,7 +166,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
     final session = ref.read(sessionProvider)!;
     setState(() { _saving = true; });
     try {
-      final saved = await ref.read(commonMastersRepositoryProvider).saveMaster({
+      await ref.read(commonMastersRepositoryProvider).saveMaster({
         'client_id':   session.clientId,
         'company_id':  session.companyId,
         'type_id':     _selectedTypeId,
@@ -179,11 +179,8 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
         'updated_by':  session.userId,
       });
       _addState!.dispose();
-      setState(() {
-        _addState = null;
-        _masters  = [saved, ..._masters];
-        _saving   = false;
-      });
+      setState(() { _addState = null; _saving = false; });
+      await _loadMasters(reset: true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Record saved.'),
@@ -207,7 +204,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
     final session = ref.read(sessionProvider)!;
     setState(() { _saving = true; });
     try {
-      final saved = await ref.read(commonMastersRepositoryProvider).saveMaster({
+      await ref.read(commonMastersRepositoryProvider).saveMaster({
         'id':          master.id,
         'client_id':   master.clientId,
         'company_id':  master.companyId,
@@ -222,12 +219,8 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
         'updated_at':  DateTime.now().toIso8601String(),
       });
       state.dispose();
-      setState(() {
-        _editStates.remove(master.id);
-        final idx = _masters.indexWhere((m) => m.id == master.id);
-        if (idx != -1) _masters[idx] = saved;
-        _saving = false;
-      });
+      setState(() { _editStates.remove(master.id); _saving = false; });
+      await _loadMasters(reset: true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Record updated.'),
@@ -322,7 +315,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700,
                     color: AppColors.primary)),
             const SizedBox(height: 2),
-            const Text('Shared lookup values used in Product and Item screens',
+            const Text('Shared lookup values used in various screens',
                 style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
           ]),
         ),

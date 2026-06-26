@@ -13,7 +13,7 @@ abstract class CommonMastersRepository {
     int offset,
   });
 
-  Future<CommonMasterModel> saveMaster(Map<String, dynamic> payload);
+  Future<void> saveMaster(Map<String, dynamic> payload);
 
   Future<void> softDelete({required String id, required String userId});
 }

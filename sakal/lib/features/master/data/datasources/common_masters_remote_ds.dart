@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import '../../../../core/network/dio_client.dart';
 import '../models/common_master_model.dart';
 import '../models/common_master_type_model.dart';
@@ -49,19 +48,17 @@ class CommonMastersRemoteDs {
         .toList();
   }
 
-  Future<CommonMasterModel> saveMaster(Map<String, dynamic> payload) async {
-    final res = await DioClient.instance.post(
-      _mastersTable,
-      data: payload,
-      queryParameters: {
-        'on_conflict': 'client_id,company_id,type_id,description',
-      },
-      options: Options(headers: {
-        'Prefer': 'resolution=merge-duplicates,return=representation',
-      }),
-    );
-    final list = res.data as List;
-    return CommonMasterModel.fromJson(list.first as Map<String, dynamic>);
+  Future<void> saveMaster(Map<String, dynamic> payload) async {
+    final id = payload['id'] as String?;
+    if (id == null) {
+      await DioClient.instance.post(_mastersTable, data: payload);
+    } else {
+      await DioClient.instance.patch(
+        _mastersTable,
+        queryParameters: {'id': 'eq.$id'},
+        data: payload..remove('id'),
+      );
+    }
   }
 
   Future<void> softDelete({
