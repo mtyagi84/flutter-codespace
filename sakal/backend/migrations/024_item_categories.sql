@@ -18,7 +18,7 @@
 -- ============================================================
 
 -- ── Level configuration ───────────────────────────────────────────────────────
-CREATE TABLE rim_category_levels (
+CREATE TABLE IF NOT EXISTS rim_category_levels (
   id           UUID      PRIMARY KEY DEFAULT gen_random_uuid(),
   client_id    UUID      NOT NULL REFERENCES ric_clients(id),
   company_id   UUID      NOT NULL REFERENCES ric_companies(id),
@@ -38,7 +38,7 @@ CREATE TABLE rim_category_levels (
 -- Each row defines one boolean flag that appears on categories + products.
 -- flag_key is the JSONB key used everywhere — keep it stable once used in code.
 -- Standard flags are loaded via "Load Defaults" button on the setup screen.
-CREATE TABLE rim_product_flag_types (
+CREATE TABLE IF NOT EXISTS rim_product_flag_types (
   id            UUID      PRIMARY KEY DEFAULT gen_random_uuid(),
   client_id     UUID      NOT NULL REFERENCES ric_clients(id),
   company_id    UUID      NOT NULL REFERENCES ric_companies(id),
@@ -58,7 +58,7 @@ CREATE TABLE rim_product_flag_types (
 -- ── Category tree ─────────────────────────────────────────────────────────────
 -- flags JSONB stores all boolean flag values e.g. {"is_saleable": true, "is_purchasable": false}
 -- No fixed boolean columns — flags are fully dynamic via rim_product_flag_types.
-CREATE TABLE rim_item_categories (
+CREATE TABLE IF NOT EXISTS rim_item_categories (
   id             UUID      PRIMARY KEY DEFAULT gen_random_uuid(),
   client_id      UUID      NOT NULL REFERENCES ric_clients(id),
   company_id     UUID      NOT NULL REFERENCES ric_companies(id),
@@ -77,9 +77,9 @@ CREATE TABLE rim_item_categories (
   UNIQUE (client_id, company_id, parent_id, category_name)
 );
 
-CREATE INDEX idx_item_categories_parent ON rim_item_categories (parent_id);
-CREATE INDEX idx_item_categories_tenant ON rim_item_categories (client_id, company_id, level_no);
-CREATE INDEX idx_item_categories_flags  ON rim_item_categories USING GIN (flags);
+CREATE INDEX IF NOT EXISTS idx_item_categories_parent ON rim_item_categories (parent_id);
+CREATE INDEX IF NOT EXISTS idx_item_categories_tenant ON rim_item_categories (client_id, company_id, level_no);
+CREATE INDEX IF NOT EXISTS idx_item_categories_flags  ON rim_item_categories USING GIN (flags);
 
 -- ── Recursive subtree expansion ──────────────────────────────────────────────
 -- Returns the given category_id PLUS all its descendants.
@@ -101,6 +101,10 @@ ALTER TABLE rim_category_levels    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rim_product_flag_types ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rim_item_categories    ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "auth_rw_category_levels"    ON rim_category_levels;
+DROP POLICY IF EXISTS "auth_rw_product_flag_types" ON rim_product_flag_types;
+DROP POLICY IF EXISTS "auth_rw_item_categories"    ON rim_item_categories;
+
 CREATE POLICY "auth_rw_category_levels" ON rim_category_levels
   FOR ALL TO authenticated
   USING     (client_id  = (current_setting('request.jwt.claims', true)::json->>'client_id')::uuid
@@ -119,7 +123,7 @@ CREATE POLICY "auth_rw_item_categories" ON rim_item_categories
   FOR ALL TO authenticated
   USING     (client_id  = (current_setting('request.jwt.claims', true)::json->>'client_id')::uuid
          AND company_id = (current_setting('request.jwt.claims', true)::json->>'company_id')::uuid)
-  WITH CHECK(client_id  = (current_setting('request.jwt.claims', true)::json->>'company_id')::uuid
+  WITH CHECK(client_id  = (current_setting('request.jwt.claims', true)::json->>'client_id')::uuid
          AND company_id = (current_setting('request.jwt.claims', true)::json->>'company_id')::uuid);
 
 REVOKE ALL ON rim_category_levels    FROM anon;
