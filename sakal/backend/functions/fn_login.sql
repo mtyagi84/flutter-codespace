@@ -1,26 +1,24 @@
 -- ============================================================
 -- fn_login
 -- Verifies credentials using bcrypt. Handles account lockout.
--- Returns session data + signed JWT on success.
+-- Returns session data + signed JWT (access_token) on success.
 -- PostgREST: POST /rest/v1/rpc/fn_login  (callable by anon role)
 --
--- JWT is signed with app.jwt_secret (set via ALTER DATABASE).
--- SET search_path = public, extensions  resolves sign() on both
--- Supabase (extensions.sign) and self-hosted (public.sign).
+-- JWT signed with extensions.sign() from pgjwt extension.
+-- Enable pgjwt first: Supabase Dashboard → Database → Extensions → pgjwt
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION fn_login(
     p_client_no text,
     p_username  text,
     p_password  text
-) RETURNS json LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = public, extensions
-AS $$
+) RETURNS json LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE
     v_client       ric_clients%rowtype;
     v_user         rim_users%rowtype;
     v_company_name text;
     v_token        text;
+    v_secret       text;
 BEGIN
     -- Find and validate client
     SELECT * INTO v_client
@@ -86,23 +84,30 @@ BEGIN
     FROM ric_companies
     WHERE id = v_user.company_id;
 
-    -- Generate JWT (8-hour expiry)
-    -- app.jwt_secret      → set in postgresql.conf on self-hosted
-    -- app.settings.jwt_secret → Supabase sets this automatically (no ALTER DATABASE needed)
-    v_token := sign(
-        json_build_object(
-            'role',       'authenticated',
-            'user_id',    v_user.id::text,
-            'client_id',  v_user.client_id::text,
-            'company_id', v_user.company_id::text,
-            'iat',        extract(epoch FROM now())::integer,
-            'exp',        extract(epoch FROM (now() + interval '8 hours'))::integer
-        )::json,
-        coalesce(
+    -- Generate JWT using pgjwt extension (extensions.sign — no SET search_path needed)
+    -- Requires pgjwt enabled: Supabase Dashboard → Database → Extensions → pgjwt
+    -- Falls back gracefully if pgjwt not yet enabled (login still works, just no JWT)
+    BEGIN
+        v_secret := coalesce(
             current_setting('app.jwt_secret', true),
             current_setting('app.settings.jwt_secret', true)
-        )
-    );
+        );
+        IF v_secret IS NOT NULL THEN
+            v_token := extensions.sign(
+                json_build_object(
+                    'role',       'authenticated',
+                    'user_id',    v_user.id::text,
+                    'client_id',  v_user.client_id::text,
+                    'company_id', v_user.company_id::text,
+                    'iat',        extract(epoch FROM now())::integer,
+                    'exp',        extract(epoch FROM (now() + interval '8 hours'))::integer
+                )::json,
+                v_secret
+            );
+        END IF;
+    EXCEPTION WHEN others THEN
+        v_token := null; -- pgjwt not enabled; login still works
+    END;
 
     RETURN json_build_object(
         'user_id',      v_user.id,
