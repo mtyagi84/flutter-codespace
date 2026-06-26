@@ -41,15 +41,16 @@ INSERT INTO rim_common_master_types (type_key, type_name) VALUES
   ('COLOR',     'Color');
 
 -- PostgREST access grants
+-- App uses a custom fn_login (not Supabase Auth), so all requests run
+-- under the anon role. Grant anon the same access as authenticated.
 GRANT SELECT ON rim_common_master_types TO anon, authenticated;
-GRANT SELECT, INSERT, UPDATE ON rim_common_masters TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON rim_common_masters TO anon, authenticated;
 
--- RLS: types are global reference data — all authenticated users can read
+-- RLS policies (only active if RLS is enabled on the table)
 CREATE POLICY "read_types" ON rim_common_master_types
-  FOR SELECT TO authenticated, anon USING (true);
+  FOR SELECT TO anon, authenticated USING (true);
 
--- RLS: masters are company-scoped — authenticated users manage their own
 CREATE POLICY "read_masters" ON rim_common_masters
-  FOR SELECT TO authenticated USING (true);
+  FOR SELECT TO anon, authenticated USING (true);
 CREATE POLICY "write_masters" ON rim_common_masters
-  FOR ALL TO authenticated USING (true);
+  FOR ALL TO anon, authenticated USING (true);
