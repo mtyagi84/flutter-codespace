@@ -433,6 +433,43 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
   }
 
   Widget _typeDropdown() {
+    if (_loadingTypes) {
+      return DropdownButtonFormField<String>(
+        decoration: const InputDecoration(
+          labelText: 'Master Type',
+          border: OutlineInputBorder(),
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          suffixIcon: Padding(
+            padding: EdgeInsets.all(12),
+            child: SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        ),
+        value: null,
+        items: null,
+        onChanged: null,
+      );
+    }
+
+    if (_types.isEmpty) {
+      return DropdownButtonFormField<String>(
+        decoration: const InputDecoration(
+          labelText: 'Master Type',
+          border: OutlineInputBorder(),
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          hintText: 'No types — run migration 022',
+        ),
+        value: null,
+        items: null,
+        onChanged: null,
+      );
+    }
+
     return DropdownButtonFormField<String>(
       decoration: const InputDecoration(
         labelText: 'Master Type',
