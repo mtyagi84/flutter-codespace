@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/session_provider.dart';
 
@@ -9,7 +10,7 @@ import '../providers/session_provider.dart';
 ///   }
 ///
 /// Then use: canAdd, canEdit, canApprove anywhere in the screen.
-mixin ScreenPermissionMixin on ConsumerStateMixin {
+mixin ScreenPermissionMixin on ConsumerState {
   String get screenName;
 
   Map<String, dynamic>? _findFeature() {
