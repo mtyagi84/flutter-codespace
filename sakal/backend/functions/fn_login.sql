@@ -85,11 +85,12 @@ BEGIN
     WHERE id = v_user.company_id;
 
     -- Generate JWT using sign() from pgjwt (public schema on Supabase).
-    -- Falls back gracefully if secret not set (login still works, JWT is null).
+    -- Secret: postgresql.conf app.jwt_secret (self-hosted) OR _sakal_config table (Supabase).
+    -- Falls back gracefully — login still works even if secret not configured.
     BEGIN
         v_secret := coalesce(
             current_setting('app.jwt_secret', true),
-            current_setting('app.settings.jwt_secret', true)
+            (SELECT value FROM _sakal_config WHERE key = 'jwt_secret')
         );
         IF v_secret IS NOT NULL THEN
             v_token := sign(
@@ -105,7 +106,8 @@ BEGIN
             );
         END IF;
     EXCEPTION WHEN others THEN
-        v_token := null; -- pgjwt not enabled; login still works
+        RAISE NOTICE 'JWT sign error (access_token will be null): %', SQLERRM;
+        v_token := null;
     END;
 
     RETURN json_build_object(

@@ -1,24 +1,34 @@
 -- ============================================================
 -- Migration 023: JWT Authentication
 -- ============================================================
--- Supabase: no pre-setup needed.
---   app.settings.jwt_secret is set automatically by Supabase.
+-- After running this migration, insert your JWT secret (Supabase):
 --
--- Self-hosted: add to postgresql.conf (no ALTER DATABASE needed):
---   app.jwt_secret = 'your-secret-here'
--- and in postgrest.conf:
---   jwt-secret = "same-secret-here"
+--   INSERT INTO _sakal_config (key, value)
+--   VALUES ('jwt_secret', 'PASTE-LEGACY-JWT-SECRET-HERE')
+--   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+--
+--   Secret is at: Supabase Dashboard → Project Settings → API
+--                 → JWT Keys tab → Legacy JWT Secret → Copy
+--
+-- Self-hosted: set in postgresql.conf instead (no table insert needed):
+--   app.jwt_secret = 'same-secret'
+-- and postgrest.conf:
+--   jwt-secret = "same-secret"
 -- ============================================================
 
--- pgjwt extension (provides the sign() function for JWT generation)
--- Supabase: creates in 'extensions' schema
--- Self-hosted: install postgresql-{ver}-pgjwt first, then uncomment:
---   CREATE EXTENSION IF NOT EXISTS pgjwt;
+-- pgjwt extension — already enabled in public schema on Supabase
 CREATE EXTENSION IF NOT EXISTS pgjwt;
 
+-- ── _sakal_config: restricted key/value store for secrets ────────────────────
+-- Only SECURITY DEFINER functions (running as postgres owner) can read this.
+-- anon and authenticated roles are explicitly denied.
+CREATE TABLE IF NOT EXISTS _sakal_config (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+REVOKE ALL ON _sakal_config FROM anon, authenticated, public;
+
 -- ── Updated fn_login: returns access_token in response ───────────────────────
--- SET search_path = public, extensions  makes sign() resolve in both
--- Supabase (extensions.sign) and self-hosted (public.sign) without code change.
 CREATE OR REPLACE FUNCTION fn_login(
     p_client_no text,
     p_username  text,
@@ -57,12 +67,11 @@ BEGIN
     UPDATE rim_users SET failed_attempts = 0, locked_until = null, last_login_at = now() WHERE id = v_user.id;
     SELECT company_name INTO v_company_name FROM ric_companies WHERE id = v_user.company_id;
 
-    -- Generate JWT using sign() from pgjwt (installed in public schema on Supabase).
-    -- Falls back gracefully if secret not set (login still works, JWT is null).
+    -- Sign JWT: reads from postgresql.conf (self-hosted) or _sakal_config table (Supabase)
     BEGIN
         v_secret := coalesce(
             current_setting('app.jwt_secret', true),
-            current_setting('app.settings.jwt_secret', true)
+            (SELECT value FROM _sakal_config WHERE key = 'jwt_secret')
         );
         IF v_secret IS NOT NULL THEN
             v_token := sign(
@@ -78,6 +87,7 @@ BEGIN
             );
         END IF;
     EXCEPTION WHEN others THEN
+        RAISE NOTICE 'JWT sign error (access_token will be null): %', SQLERRM;
         v_token := null;
     END;
 
