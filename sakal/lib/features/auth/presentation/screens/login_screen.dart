@@ -83,11 +83,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // Store JWT immediately so all subsequent requests run as 'authenticated' role.
       // Must happen before fn_get_user_menu call.
       if (token != null) {
-        await const FlutterSecureStorage().write(
-          key:   AppConstants.keyAccessToken,
-          value: token,
-        );
-        debugPrint('=== JWT stored in FlutterSecureStorage');
+        try {
+          await const FlutterSecureStorage().write(
+            key:   AppConstants.keyAccessToken,
+            value: token,
+          );
+          debugPrint('=== JWT stored in FlutterSecureStorage');
+        } catch (_) {
+          debugPrint('=== JWT storage write failed (Web Crypto issue) — token not persisted');
+        }
       }
 
       if (!_clientSaved) {
