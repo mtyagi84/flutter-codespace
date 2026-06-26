@@ -298,6 +298,15 @@ class _MyState extends ConsumerState<MyWidget> with MyMixin<MyWidget> { }
 mixin MyMixin on ConsumerState { }
 ```
 
+### PostgREST endpoint paths — never include /rest/v1/ in datasource paths
+DioClient baseUrl already ends with `/rest/v1`. All datasource paths must start with just `/table_name`:
+```dart
+// CORRECT
+_dio.get('/rim_product_flag_types', ...)
+// WRONG — produces /rest/v1/rest/v1/rim_product_flag_types → 404
+_dio.get('/rest/v1/rim_product_flag_types', ...)
+```
+
 ### Before adding a method to an existing file — always read the file first
 Dart has no method overloading. Duplicate method names are a compile error.
 Always `Read` the full file before adding new methods or imports.
