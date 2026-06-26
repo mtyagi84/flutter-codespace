@@ -135,12 +135,13 @@ GRANT EXECUTE ON FUNCTION fn_login(text, text, text) TO anon;
 
 -- ── Fix rim_common_masters: proper JWT-based tenant isolation ─────────────────
 
--- Remove the interim policies from migration 022
-DROP POLICY IF EXISTS "read_types"    ON rim_common_master_types;
-DROP POLICY IF EXISTS "read_masters"  ON rim_common_masters;
-DROP POLICY IF EXISTS "write_masters" ON rim_common_masters;
+-- Remove all old policies (022 interim + any previous 023 run)
+DROP POLICY IF EXISTS "read_types"      ON rim_common_master_types;
+DROP POLICY IF EXISTS "read_masters"    ON rim_common_masters;
+DROP POLICY IF EXISTS "write_masters"   ON rim_common_masters;
+DROP POLICY IF EXISTS "auth_read_types" ON rim_common_master_types;
+DROP POLICY IF EXISTS "auth_rw_masters" ON rim_common_masters;
 
--- Enable RLS (may already be enabled if 022 policies ran; IF NOT ENABLED is safe)
 ALTER TABLE rim_common_master_types ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rim_common_masters      ENABLE ROW LEVEL SECURITY;
 
