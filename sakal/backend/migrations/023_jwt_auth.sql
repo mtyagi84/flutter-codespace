@@ -57,16 +57,15 @@ BEGIN
     UPDATE rim_users SET failed_attempts = 0, locked_until = null, last_login_at = now() WHERE id = v_user.id;
     SELECT company_name INTO v_company_name FROM ric_companies WHERE id = v_user.company_id;
 
-    -- Generate JWT using extensions.sign() — no SET search_path needed, explicit schema reference.
-    -- Requires pgjwt: Supabase Dashboard → Database → Extensions → enable pgjwt.
-    -- Falls back gracefully if pgjwt not enabled (login still works, JWT is null).
+    -- Generate JWT using sign() from pgjwt (installed in public schema on Supabase).
+    -- Falls back gracefully if secret not set (login still works, JWT is null).
     BEGIN
         v_secret := coalesce(
             current_setting('app.jwt_secret', true),
             current_setting('app.settings.jwt_secret', true)
         );
         IF v_secret IS NOT NULL THEN
-            v_token := extensions.sign(
+            v_token := sign(
                 json_build_object(
                     'role',       'authenticated',
                     'user_id',    v_user.id::text,

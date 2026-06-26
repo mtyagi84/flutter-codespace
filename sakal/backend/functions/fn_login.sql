@@ -84,16 +84,15 @@ BEGIN
     FROM ric_companies
     WHERE id = v_user.company_id;
 
-    -- Generate JWT using pgjwt extension (extensions.sign — no SET search_path needed)
-    -- Requires pgjwt enabled: Supabase Dashboard → Database → Extensions → pgjwt
-    -- Falls back gracefully if pgjwt not yet enabled (login still works, just no JWT)
+    -- Generate JWT using sign() from pgjwt (public schema on Supabase).
+    -- Falls back gracefully if secret not set (login still works, JWT is null).
     BEGIN
         v_secret := coalesce(
             current_setting('app.jwt_secret', true),
             current_setting('app.settings.jwt_secret', true)
         );
         IF v_secret IS NOT NULL THEN
-            v_token := extensions.sign(
+            v_token := sign(
                 json_build_object(
                     'role',       'authenticated',
                     'user_id',    v_user.id::text,
