@@ -10,7 +10,7 @@ import '../providers/session_provider.dart';
 ///   }
 ///
 /// Then use: canAdd, canEdit, canApprove anywhere in the screen.
-mixin ScreenPermissionMixin on ConsumerState {
+mixin ScreenPermissionMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   String get screenName;
 
   Map<String, dynamic>? _findFeature() {

@@ -241,7 +241,7 @@ Every screen uses `ScreenPermissionMixin` — never write `_findFeature()` by ha
 ```dart
 // lib/core/utils/screen_permission_mixin.dart
 class _MyScreenState extends ConsumerState<MyScreen>
-    with ScreenPermissionMixin {
+    with ScreenPermissionMixin<MyScreen> {
   @override String get screenName => 'my_screen_name'; // matches screen_name in DB
 
   // Use canAdd / canEdit / canApprove directly — no other code needed

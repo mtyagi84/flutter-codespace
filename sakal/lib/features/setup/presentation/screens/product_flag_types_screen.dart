@@ -15,7 +15,7 @@ class ProductFlagTypesScreen extends ConsumerStatefulWidget {
 }
 
 class _ProductFlagTypesScreenState extends ConsumerState<ProductFlagTypesScreen>
-    with ScreenPermissionMixin {
+    with ScreenPermissionMixin<ProductFlagTypesScreen> {
   @override String get screenName => 'product_flag_types';
   List<ProductFlagTypeModel> _flags   = [];
   bool    _loading = true;
