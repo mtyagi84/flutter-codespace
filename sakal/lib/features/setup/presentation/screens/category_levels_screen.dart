@@ -35,12 +35,10 @@ class _CategoryLevelsScreenState extends ConsumerState<CategoryLevelsScreen> {
     final menus = ref.read(menuProvider);
     for (final m in menus) {
       for (final g in m.groups) {
-        for (final item in g.items) {
+        for (final item in g.features) {
           if (item.screenName == 'category_levels') return {
-            'can_view':    item.canView,
-            'can_add':     item.canAdd,
-            'can_edit':    item.canEdit,
-            'can_approve': item.canApprove,
+            'can_add':  item.addAllowed,
+            'can_edit': item.editAllowed,
           };
         }
       }

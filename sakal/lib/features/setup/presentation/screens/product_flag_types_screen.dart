@@ -34,10 +34,10 @@ class _ProductFlagTypesScreenState extends ConsumerState<ProductFlagTypesScreen>
     final menus = ref.read(menuProvider);
     for (final m in menus) {
       for (final g in m.groups) {
-        for (final item in g.items) {
+        for (final item in g.features) {
           if (item.screenName == 'product_flag_types') return {
-            'can_add':  item.canAdd,
-            'can_edit': item.canEdit,
+            'can_add':  item.addAllowed,
+            'can_edit': item.editAllowed,
           };
         }
       }
