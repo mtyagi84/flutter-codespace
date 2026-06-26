@@ -13,7 +13,7 @@ class ItemCategoriesRemoteDs {
     required String clientId,
     required String companyId,
   }) async {
-    final res = await _dio.get('/rest/v1/rim_category_levels', queryParameters: {
+    final res = await _dio.get('/rim_category_levels', queryParameters: {
       'client_id':  'eq.$clientId',
       'company_id': 'eq.$companyId',
       'is_active':  'eq.true',
@@ -27,15 +27,15 @@ class ItemCategoriesRemoteDs {
   Future<void> saveLevel(Map<String, dynamic> payload) async {
     final id = payload['id'] as String?;
     if (id == null) {
-      await _dio.post('/rest/v1/rim_category_levels', data: payload);
+      await _dio.post('/rim_category_levels', data: payload);
     } else {
-      await _dio.patch('/rest/v1/rim_category_levels',
+      await _dio.patch('/rim_category_levels',
           queryParameters: {'id': 'eq.$id'}, data: payload);
     }
   }
 
   Future<void> deleteLevel(String id) async {
-    await _dio.delete('/rest/v1/rim_category_levels',
+    await _dio.delete('/rim_category_levels',
         queryParameters: {'id': 'eq.$id'});
   }
 
@@ -45,7 +45,7 @@ class ItemCategoriesRemoteDs {
     required String clientId,
     required String companyId,
   }) async {
-    final res = await _dio.get('/rest/v1/rim_product_flag_types', queryParameters: {
+    final res = await _dio.get('/rim_product_flag_types', queryParameters: {
       'client_id':  'eq.$clientId',
       'company_id': 'eq.$companyId',
       'order':      'sort_order.asc,flag_label.asc',
@@ -58,15 +58,15 @@ class ItemCategoriesRemoteDs {
   Future<void> saveFlagType(Map<String, dynamic> payload) async {
     final id = payload['id'] as String?;
     if (id == null) {
-      await _dio.post('/rest/v1/rim_product_flag_types', data: payload);
+      await _dio.post('/rim_product_flag_types', data: payload);
     } else {
-      await _dio.patch('/rest/v1/rim_product_flag_types',
+      await _dio.patch('/rim_product_flag_types',
           queryParameters: {'id': 'eq.$id'}, data: payload);
     }
   }
 
   Future<void> deleteFlagType(String id) async {
-    await _dio.delete('/rest/v1/rim_product_flag_types',
+    await _dio.delete('/rim_product_flag_types',
         queryParameters: {'id': 'eq.$id'});
   }
 
@@ -77,7 +77,7 @@ class ItemCategoriesRemoteDs {
     for (final d in ProductFlagTypeModel.defaults(
         clientId: clientId, companyId: companyId)) {
       try {
-        await _dio.post('/rest/v1/rim_product_flag_types', data: d);
+        await _dio.post('/rim_product_flag_types', data: d);
       } catch (_) {
         // Skip duplicates (unique constraint on flag_key)
       }
@@ -90,7 +90,7 @@ class ItemCategoriesRemoteDs {
     required String clientId,
     required String companyId,
   }) async {
-    final res = await _dio.get('/rest/v1/rim_item_categories', queryParameters: {
+    final res = await _dio.get('/rim_item_categories', queryParameters: {
       'client_id':  'eq.$clientId',
       'company_id': 'eq.$companyId',
       'is_deleted': 'eq.false',
@@ -105,9 +105,9 @@ class ItemCategoriesRemoteDs {
   Future<void> saveCategory(Map<String, dynamic> payload) async {
     final id = payload['id'] as String?;
     if (id == null) {
-      await _dio.post('/rest/v1/rim_item_categories', data: payload);
+      await _dio.post('/rim_item_categories', data: payload);
     } else {
-      await _dio.patch('/rest/v1/rim_item_categories',
+      await _dio.patch('/rim_item_categories',
           queryParameters: {'id': 'eq.$id'}, data: payload);
     }
   }
@@ -116,7 +116,7 @@ class ItemCategoriesRemoteDs {
     required String id,
     required String userId,
   }) async {
-    await _dio.patch('/rest/v1/rim_item_categories',
+    await _dio.patch('/rim_item_categories',
         queryParameters: {'id': 'eq.$id'},
         data: {
           'is_deleted': true,
@@ -133,7 +133,7 @@ class ItemCategoriesRemoteDs {
   }) async {
     if (childIds.isEmpty) return;
     final inClause = childIds.join(',');
-    await _dio.patch('/rest/v1/rim_item_categories',
+    await _dio.patch('/rim_item_categories',
         queryParameters: {'id': 'in.($inClause)'},
         data: {
           'flags':      flags,
@@ -143,7 +143,7 @@ class ItemCategoriesRemoteDs {
   }
 
   Future<bool> hasChildren(String categoryId) async {
-    final res = await _dio.get('/rest/v1/rim_item_categories', queryParameters: {
+    final res = await _dio.get('/rim_item_categories', queryParameters: {
       'parent_id':  'eq.$categoryId',
       'is_deleted': 'eq.false',
       'select':     'id',
