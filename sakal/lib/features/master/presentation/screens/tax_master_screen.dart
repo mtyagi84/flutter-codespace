@@ -128,7 +128,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
     _codeCtrl.clear();
     _nameCtrl.clear();
     _sortCtrl.text     = '0';
-    _selTypeCode       = _taxTypes.isNotEmpty ? _taxTypes.first.taxTypeCode : 'VAT';
+    _selTypeCode       = _taxTypes.isNotEmpty ? _taxTypes.first.taxTypeCode : '';
     _selApplicable     = 'BOTH';
     _selCalcType       = 'PERCENTAGE';
     _formInclusive     = false;
@@ -551,12 +551,13 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
 
           // Tax Type
           DropdownButtonFormField<String>(
-            value: _selTypeCode,
+            value: _taxTypes.isEmpty ? null : _selTypeCode,
             decoration: const InputDecoration(labelText: 'Tax Type *'),
             items: _taxTypes.map((t) => DropdownMenuItem(
               value: t.taxTypeCode,
               child: Text(t.typeName),
             )).toList(),
+            validator: (v) => (v == null || v.isEmpty) ? 'Required — run SQL migration 025 in Supabase first' : null,
             onChanged: (v) => setState(() {
               _selTypeCode  = v!;
               // Auto-clear reverse charge if not a withholding type
