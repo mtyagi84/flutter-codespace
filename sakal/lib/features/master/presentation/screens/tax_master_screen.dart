@@ -495,7 +495,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
             },
             itemBuilder: (_) => [
               if (_canEdit) const PopupMenuItem(value: 'edit', child: Text('Edit')),
-              const PopupMenuItem(value: 'delete',
+              if (_canEdit) const PopupMenuItem(value: 'delete',
                   child: Text('Delete', style: TextStyle(color: AppColors.negative))),
             ],
           ),
