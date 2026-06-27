@@ -50,6 +50,8 @@ class RouteNames {
   static const String categoryLevels   = '/setup/category-levels';
   static const String productFlagTypes = '/setup/product-flag-types';
   static const String itemCategories   = '/master/item-categories';
+  static const String taxMaster        = '/master/tax-master';
+  static const String taxGroups        = '/master/tax-groups';
 
   // Finance
   static const String exchangeRates  = '/finance/exchange-rates';

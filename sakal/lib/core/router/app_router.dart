@@ -22,6 +22,8 @@ import '../../features/master/presentation/screens/common_masters_screen.dart';
 import '../../features/master/presentation/screens/customer_master_screen.dart';
 import '../../features/master/presentation/screens/item_categories_screen.dart';
 import '../../features/master/presentation/screens/supplier_master_screen.dart';
+import '../../features/master/presentation/screens/tax_master_screen.dart';
+import '../../features/master/presentation/screens/tax_groups_screen.dart';
 import '../../features/setup/presentation/screens/category_levels_screen.dart';
 import '../../features/setup/presentation/screens/product_flag_types_screen.dart';
 import '../../features/finance/presentation/screens/exchange_rate_screen.dart';
@@ -121,6 +123,8 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.supplierMaster, builder: (c, s) => const SupplierMasterScreen()),
         GoRoute(path: RouteNames.commonMasters,  builder: (c, s) => const CommonMastersScreen()),
         GoRoute(path: RouteNames.itemCategories, builder: (c, s) => const ItemCategoriesScreen()),
+        GoRoute(path: RouteNames.taxMaster,      builder: (c, s) => const TaxMasterScreen()),
+        GoRoute(path: RouteNames.taxGroups,      builder: (c, s) => const TaxGroupsScreen()),
 
         // Setup additions
         GoRoute(path: RouteNames.categoryLevels,   builder: (c, s) => const CategoryLevelsScreen()),
