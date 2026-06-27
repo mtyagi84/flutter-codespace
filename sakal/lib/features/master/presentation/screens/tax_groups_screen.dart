@@ -477,13 +477,12 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
               ),
             ),
             const SizedBox(width: 20),
-            SwitchListTile.adaptive(
-              dense: true,
-              title: const Text('Active'),
+            Switch.adaptive(
               value: _formActive,
               onChanged: (v) => setState(() => _formActive = v),
-              contentPadding: EdgeInsets.zero,
             ),
+            const SizedBox(width: 8),
+            const Text('Active', style: TextStyle(fontSize: 14)),
           ]),
           const SizedBox(height: 24),
 
