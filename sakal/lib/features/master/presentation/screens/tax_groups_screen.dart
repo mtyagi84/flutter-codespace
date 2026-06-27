@@ -474,9 +474,14 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
               ),
             ),
             const SizedBox(width: 20),
-            Switch.adaptive(
+            Switch(
               value: _formActive,
               onChanged: (v) => setState(() => _formActive = v),
+              thumbColor: WidgetStateProperty.resolveWith((s) =>
+                  s.contains(WidgetState.selected) ? Colors.white : Colors.grey.shade400),
+              trackColor: WidgetStateProperty.resolveWith((s) =>
+                  s.contains(WidgetState.selected) ? AppColors.primary : AppColors.surfaceVariant),
+              trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
             ),
             const SizedBox(width: 8),
             const Text('Active', style: TextStyle(fontSize: 14)),

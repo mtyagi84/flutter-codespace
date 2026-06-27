@@ -657,9 +657,14 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
               ),
             ),
             const SizedBox(width: 20),
-            Switch.adaptive(
+            Switch(
               value: _formActive,
               onChanged: (v) => setState(() => _formActive = v),
+              thumbColor: WidgetStateProperty.resolveWith((s) =>
+                  s.contains(WidgetState.selected) ? Colors.white : Colors.grey.shade400),
+              trackColor: WidgetStateProperty.resolveWith((s) =>
+                  s.contains(WidgetState.selected) ? AppColors.primary : AppColors.surfaceVariant),
+              trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
             ),
             const SizedBox(width: 8),
             const Text('Active', style: TextStyle(fontSize: 14)),
@@ -785,7 +790,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
           const SizedBox(height: 10),
           Row(children: [
             // Rate Label
-            SizedBox(width: 140,
+            SizedBox(width: 130,
               child: DropdownButtonFormField<String>(
                 value: _rateLabel,
                 isDense: true,
@@ -796,32 +801,43 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
                 onChanged: (v) => setState(() => _rateLabel = v!),
               ),
             ),
-            const SizedBox(width: 10),
-            SizedBox(width: 100,
+            const SizedBox(width: 8),
+            SizedBox(width: 90,
               child: TextFormField(
                 controller: _rateCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(labelText: 'Rate %', isDense: true),
               ),
             ),
-            const SizedBox(width: 10),
-            SizedBox(width: 130,
+            const SizedBox(width: 8),
+            SizedBox(width: 120,
               child: TextFormField(
                 controller: _rateFromCtrl,
                 decoration: const InputDecoration(labelText: 'Effective From', isDense: true,
                     hintText: 'YYYY-MM-DD'),
               ),
             ),
-            const SizedBox(width: 10),
-            SizedBox(width: 130,
+            const SizedBox(width: 8),
+            SizedBox(width: 120,
               child: TextFormField(
                 controller: _rateToCtrl,
                 decoration: const InputDecoration(labelText: 'Effective To', isDense: true,
                     hintText: 'YYYY-MM-DD'),
               ),
             ),
-            const SizedBox(width: 10),
-            Switch.adaptive(value: _rateActive, onChanged: (v) => setState(() => _rateActive = v)),
+          ]),
+          const SizedBox(height: 6),
+          Row(children: [
+            Switch(
+              value: _rateActive,
+              onChanged: (v) => setState(() => _rateActive = v),
+              thumbColor: WidgetStateProperty.resolveWith((s) =>
+                  s.contains(WidgetState.selected) ? Colors.white : Colors.grey.shade400),
+              trackColor: WidgetStateProperty.resolveWith((s) =>
+                  s.contains(WidgetState.selected) ? AppColors.primary : AppColors.surfaceVariant),
+              trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
+            ),
+            const SizedBox(width: 4),
             const Text('Active', style: TextStyle(fontSize: 12)),
           ]),
           const SizedBox(height: 10),
