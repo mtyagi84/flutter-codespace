@@ -20,7 +20,7 @@ class ItemCategoriesScreen extends ConsumerStatefulWidget {
 
 class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
     with ScreenPermissionMixin<ItemCategoriesScreen> {
-  @override String get screenName => 'item_categories';
+  @override String get screenName => '/master/item-categories';
   // Data
   List<CategoryLevelModel>               _levels     = [];
   List<ProductFlagTypeModel>             _flagTypes  = [];

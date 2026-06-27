@@ -18,7 +18,7 @@ class TaxGroupsScreen extends ConsumerStatefulWidget {
 
 class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
     with ScreenPermissionMixin<TaxGroupsScreen> {
-  @override String get screenName => 'tax_groups';
+  @override String get screenName => '/master/tax-groups';
 
   List<TaxGroupModel>  _groups  = [];
   List<TaxModel>       _allTaxes = [];
