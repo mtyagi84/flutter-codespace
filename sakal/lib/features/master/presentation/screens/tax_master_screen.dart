@@ -397,25 +397,19 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Tax Master'),
-        backgroundColor: AppColors.surface,
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
         elevation: 0,
         actions: [
           if (_loading) const Padding(
             padding: EdgeInsets.all(12),
-            child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+            child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
           ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load, tooltip: 'Refresh'),
-          if (_canAdd && !isDesktop)
+          if (_canAdd)
             IconButton(icon: const Icon(Icons.add), onPressed: _openAdd, tooltip: 'Add Tax'),
         ],
       ),
-      floatingActionButton: _canAdd && !isDesktop
-          ? null : (_canAdd ? FloatingActionButton.extended(
-              onPressed: _openAdd,
-              label: const Text('Add Tax'),
-              icon: const Icon(Icons.add),
-              backgroundColor: AppColors.primary,
-            ) : null),
       body: Column(children: [
         const OfflineBanner(),
         Expanded(child: isDesktop ? _desktopLayout() : _mobileLayout()),

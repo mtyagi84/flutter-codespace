@@ -292,20 +292,17 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Tax Groups'),
-        backgroundColor: AppColors.surface,
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
         elevation: 0,
         actions: [
           if (_loading) const Padding(padding: EdgeInsets.all(12),
-              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load, tooltip: 'Refresh'),
+          if (_canAdd)
+            IconButton(icon: const Icon(Icons.add), onPressed: _openAdd, tooltip: 'Add Group'),
         ],
       ),
-      floatingActionButton: _canAdd ? FloatingActionButton.extended(
-        onPressed: _openAdd,
-        label: const Text('Add Group'),
-        icon: const Icon(Icons.add),
-        backgroundColor: AppColors.primary,
-      ) : null,
       body: Column(children: [
         const OfflineBanner(),
         Expanded(child: isDesktop ? _desktopLayout() : _mobileLayout()),
