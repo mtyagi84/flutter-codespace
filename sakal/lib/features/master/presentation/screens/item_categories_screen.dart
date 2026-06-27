@@ -4,6 +4,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
+import '../../../../core/widgets/offline_banner.dart';
 import '../../data/models/category_level_model.dart';
 import '../../data/models/item_category_model.dart';
 import '../../data/models/product_flag_type_model.dart';
@@ -303,10 +304,29 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildHeader(),
+                  if (ref.read(sessionProvider)?.offlineMode == true)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: OfflineBanner(),
+                    ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),
-                    Text(_error!,
-                        style: const TextStyle(color: AppColors.negative, fontSize: 13)),
+                    Row(
+                      children: [
+                        const Icon(Icons.error_outline, size: 16, color: AppColors.negative),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(_error!,
+                              style: const TextStyle(color: AppColors.negative, fontSize: 13)),
+                        ),
+                        TextButton.icon(
+                          onPressed: _load,
+                          icon: const Icon(Icons.refresh, size: 14),
+                          label: const Text('Retry'),
+                          style: TextButton.styleFrom(foregroundColor: AppColors.negative),
+                        ),
+                      ],
+                    ),
                   ],
                   if (_levels.isEmpty) ...[
                     const SizedBox(height: 32),
@@ -363,7 +383,8 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
                 width: 18, height: 18,
                 child: CircularProgressIndicator(strokeWidth: 2)),
           ),
-        if (_canAdd && _levels.isNotEmpty)
+        if (_canAdd && _levels.isNotEmpty &&
+            !(ref.read(sessionProvider)?.offlineMode ?? false))
           FilledButton.icon(
             onPressed: _saving ? null : () => _openAdd(),
             icon: const Icon(Icons.add, size: 18),
@@ -401,25 +422,61 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
 
   // ── Tree ────────────────────────────────────────────────────────────────────
   Widget _buildTree() {
+    final parentIds = _childMap.keys.toSet();
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.border),
       ),
-      child: _roots.isEmpty
-          ? const Center(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: Text('No categories yet. Click "Add" to start.',
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                    textAlign: TextAlign.center),
+      child: Column(
+        children: [
+          if (parentIds.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+              child: Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: () => setState(() => _expanded.addAll(parentIds)),
+                    icon: const Icon(Icons.unfold_more, size: 14),
+                    label: const Text('Expand All', style: TextStyle(fontSize: 12)),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => setState(() => _expanded.clear()),
+                    icon: const Icon(Icons.unfold_less, size: 14),
+                    label: const Text('Collapse All', style: TextStyle(fontSize: 12)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.textSecondary,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    ),
+                  ),
+                ],
               ),
-            )
-          : ListView.builder(
-              itemCount: _roots.length,
-              itemBuilder: (_, i) => _buildNode(_roots[i], 0),
             ),
+            const Divider(height: 1, color: AppColors.border),
+          ],
+          Expanded(
+            child: _roots.isEmpty
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Text('No categories yet. Click "Add" to start.',
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                          textAlign: TextAlign.center),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: _roots.length,
+                    itemBuilder: (_, i) => _buildNode(_roots[i], 0),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -491,7 +548,8 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
                   ),
                 ),
                 // Add child button
-                if (_canAdd && canGoDeeper)
+                if (_canAdd && canGoDeeper &&
+                    !(ref.read(sessionProvider)?.offlineMode ?? false))
                   Tooltip(
                     message: 'Add ${_levelLabel(node.levelNo + 1)}',
                     child: InkWell(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
+import '../../../../core/widgets/offline_banner.dart';
 import '../../../master/data/models/product_flag_type_model.dart';
 import '../../../master/domain/repositories/item_categories_repository.dart';
 import '../../../master/presentation/providers/item_categories_providers.dart';
@@ -305,14 +306,16 @@ class _ProductFlagTypesScreenState extends ConsumerState<ProductFlagTypesScreen>
                               width: 18, height: 18,
                               child: CircularProgressIndicator(strokeWidth: 2)),
                         ),
-                      if (_flags.isEmpty && _canAdd)
+                      if (_flags.isEmpty && _canAdd &&
+                          !(ref.read(sessionProvider)?.offlineMode ?? false))
                         OutlinedButton.icon(
                           onPressed: _saving ? null : _loadDefaults,
                           icon: const Icon(Icons.download_outlined, size: 18),
                           label: const Text('Load Defaults'),
                         ),
                       if (_flags.isEmpty) const SizedBox(width: 8),
-                      if (_canAdd)
+                      if (_canAdd &&
+                          !(ref.read(sessionProvider)?.offlineMode ?? false))
                         FilledButton.icon(
                           onPressed: _saving ? null : () => _openDialog(),
                           icon: const Icon(Icons.add, size: 18),
@@ -321,9 +324,29 @@ class _ProductFlagTypesScreenState extends ConsumerState<ProductFlagTypesScreen>
                     ],
                   ),
 
+                  if (ref.read(sessionProvider)?.offlineMode == true)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: OfflineBanner(),
+                    ),
                   if (_error != null) ...[
                     const SizedBox(height: 16),
-                    Text(_error!, style: const TextStyle(color: AppColors.negative)),
+                    Row(
+                      children: [
+                        const Icon(Icons.error_outline, size: 16, color: AppColors.negative),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(_error!,
+                              style: const TextStyle(color: AppColors.negative)),
+                        ),
+                        TextButton.icon(
+                          onPressed: _load,
+                          icon: const Icon(Icons.refresh, size: 14),
+                          label: const Text('Retry'),
+                          style: TextButton.styleFrom(foregroundColor: AppColors.negative),
+                        ),
+                      ],
+                    ),
                   ],
 
                   const SizedBox(height: 20),
@@ -441,7 +464,7 @@ class _ProductFlagTypesScreenState extends ConsumerState<ProductFlagTypesScreen>
               child: const Text('Inactive',
                   style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
             ),
-          if (_canEdit)
+          if (_canEdit && !(ref.read(sessionProvider)?.offlineMode ?? false))
             IconButton(
               icon: const Icon(Icons.edit_outlined, size: 18),
               tooltip: 'Edit',
