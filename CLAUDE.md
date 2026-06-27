@@ -276,6 +276,18 @@ if (!kIsWeb) { ... }
 ```
 Web = always online, Drift only on mobile/desktop.
 
+### DioClient JWT rules — never get these wrong
+**Never inject the stored JWT into `/rpc/fn_login`.**
+`fn_login` fetches a *new* token. If the stored token is expired, injecting it causes PostgREST to reject the call with `PGRST303 JWT expired` before even checking credentials — the user cannot log back in.
+The `onRequest` interceptor in `DioClient` already guards this with `options.path == '/rpc/fn_login'`.
+
+**Always handle 401 in `onError` — never let it bubble to the screen.**
+Any 401 from a non-login endpoint means the JWT expired. The `onError` interceptor must:
+1. Delete the stored JWT from `FlutterSecureStorage`
+2. Call `DioClient.onSessionExpired?.call()` → GoRouter redirects to `/login`
+3. Call `OfflineSessionCache.deactivate()` → prevents stale session restore on page refresh
+Do NOT call `onSessionExpired` when the 401 comes from `fn_login` itself.
+
 ---
 
 ## Dart / Flutter Rules (never get these wrong)
@@ -310,6 +322,27 @@ _dio.get('/rest/v1/rim_product_flag_types', ...)
 ### Before adding a method to an existing file — always read the file first
 Dart has no method overloading. Duplicate method names are a compile error.
 Always `Read` the full file before adding new methods or imports.
+
+### pgTAP tests — hardcoded UUIDs, never temp tables
+Supabase SQL Editor auto-commits after each `DO` block. Any `CREATE TEMP TABLE ... ON COMMIT DROP` is destroyed immediately — SELECT tests that follow cannot see the IDs.
+
+**Correct pattern (always):**
+```sql
+BEGIN;
+DO $$ DECLARE
+  v_client_id uuid := '00000000-0000-0000-0000-000000000001'; -- hardcoded
+  ...
+BEGIN
+  INSERT INTO ... VALUES (v_client_id, ...) ON CONFLICT (id) DO NOTHING;
+END $$ LANGUAGE plpgsql;
+
+SELECT plan(N);
+SELECT ok(EXISTS(SELECT 1 FROM ... WHERE id = '00000000-0000-0000-0000-000000000001'), 'ok 1 — ...');
+...
+SELECT * FROM finish();
+ROLLBACK;
+```
+Reference hardcoded UUIDs directly in every `SELECT ok()` — no variable passing across statements needed.
 
 ---
 
