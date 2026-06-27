@@ -102,6 +102,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
       setState(() => _error = 'Failed to load: $e');
     } finally {
       setState(() => _loading = false);
+      logPermissions();
     }
   }
 

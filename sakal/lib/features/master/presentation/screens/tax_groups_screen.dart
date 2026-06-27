@@ -78,6 +78,7 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
       setState(() => _error = 'Failed to load: $e');
     } finally {
       setState(() => _loading = false);
+      logPermissions();
     }
   }
 
