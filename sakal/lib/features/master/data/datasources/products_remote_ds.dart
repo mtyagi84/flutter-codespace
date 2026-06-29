@@ -182,7 +182,7 @@ class ProductsRemoteDs {
       'company_id': 'eq.$companyId',
       'is_deleted': 'eq.false',
       'is_active':  'eq.true',
-      'select':     'id,type_id,description,short_name',
+      'select':     'id,client_id,company_id,type_id,description,short_name,sort_order,is_active,is_deleted',
       'order':      'sort_order.asc,description.asc',
       'limit':      '500',
     });
