@@ -11,6 +11,8 @@ class UserSession {
   final String fullName;
   final String username;
   final bool   offlineMode;
+  final bool   enableBarcode;
+  final bool   enablePartNumber;
 
   const UserSession({
     required this.userId,
@@ -21,23 +23,29 @@ class UserSession {
     this.locationId,
     required this.fullName,
     required this.username,
-    this.offlineMode = false,
+    this.offlineMode      = false,
+    this.enableBarcode    = false,
+    this.enablePartNumber = false,
   });
 
   UserSession copyWith({
     String? companyId,
     String? companyName,
+    bool?   enableBarcode,
+    bool?   enablePartNumber,
   }) =>
       UserSession(
-        userId:      userId,
-        clientId:    clientId,
-        clientNo:    clientNo,
-        companyId:   companyId   ?? this.companyId,
-        companyName: companyName ?? this.companyName,
-        locationId:  locationId,
-        fullName:    fullName,
-        username:    username,
-        offlineMode: offlineMode,
+        userId:           userId,
+        clientId:         clientId,
+        clientNo:         clientNo,
+        companyId:        companyId        ?? this.companyId,
+        companyName:      companyName      ?? this.companyName,
+        locationId:       locationId,
+        fullName:         fullName,
+        username:         username,
+        offlineMode:      offlineMode,
+        enableBarcode:    enableBarcode    ?? this.enableBarcode,
+        enablePartNumber: enablePartNumber ?? this.enablePartNumber,
       );
 }
 

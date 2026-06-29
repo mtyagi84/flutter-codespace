@@ -48,6 +48,11 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
   String? _watermarkBase64;
   String? _stampBase64;
 
+  // Product coding settings
+  bool _enableBarcode    = false;
+  bool _enablePartNumber = false;
+  bool _hasProducts      = false; // true = settings are locked
+
   bool    _loading = true;
   bool    _saving  = false;
   String? _error;
@@ -78,12 +83,15 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
   Future<void> _loadCompany() async {
     final session = ref.read(sessionProvider)!;
     try {
-      final res = await DioClient.instance.get(
-        '/ric_companies',
-        queryParameters: {'id': 'eq.${session.companyId}', 'select': '*'},
-      );
-      final list = res.data as List<dynamic>;
+      final results = await Future.wait([
+        DioClient.instance.get('/ric_companies',
+            queryParameters: {'id': 'eq.${session.companyId}', 'select': '*'}),
+        DioClient.instance.get('/rim_products',
+            queryParameters: {'is_deleted': 'eq.false', 'select': 'id', 'limit': '1'}),
+      ]);
+      final list = results[0].data as List<dynamic>;
       if (list.isNotEmpty) _populate(list.first as Map<String, dynamic>);
+      _hasProducts = (results[1].data as List).isNotEmpty;
       if (mounted) setState(() => _loading = false);
     } on DioException {
       if (mounted) {
@@ -116,6 +124,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
     _logoBase64      = d['logo']               as String?;
     _watermarkBase64 = d['company_watermark']   as String?;
     _stampBase64     = d['company_stamp']       as String?;
+    _enableBarcode    = d['enable_barcode']     as bool? ?? false;
+    _enablePartNumber = d['enable_part_number'] as bool? ?? false;
   }
 
   // ── Image picking ────────────────────────────────────────────────────────
@@ -177,18 +187,23 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
           'tax_3_value':       _tax3ValueCtrl.text.trim(),
           'tax_4_label':       _tax4LabelCtrl.text.trim(),
           'tax_4_value':       _tax4ValueCtrl.text.trim(),
-          'logo':              _logoBase64,
-          'company_watermark': _watermarkBase64,
-          'company_stamp':     _stampBase64,
-          'updated_at':        DateTime.now().toUtc().toIso8601String(),
-          'updated_by':        session.userId,
+          'logo':               _logoBase64,
+          'company_watermark':  _watermarkBase64,
+          'company_stamp':      _stampBase64,
+          if (!_hasProducts) 'enable_barcode':     _enableBarcode,
+          if (!_hasProducts) 'enable_part_number': _enablePartNumber,
+          'updated_at':         DateTime.now().toUtc().toIso8601String(),
+          'updated_by':         session.userId,
         },
         options: Options(headers: {'Prefer': 'return=minimal'}),
       );
 
-      // Reflect name change in the top bar immediately
-      ref.read(sessionProvider.notifier).state =
-          session.copyWith(companyName: _nameCtrl.text.trim());
+      // Reflect changes in the session immediately
+      ref.read(sessionProvider.notifier).state = session.copyWith(
+        companyName:      _nameCtrl.text.trim(),
+        enableBarcode:    _enableBarcode,
+        enablePartNumber: _enablePartNumber,
+      );
 
       if (mounted) {
         setState(() { _saving = false; _successMsg = 'Company information saved successfully.'; });
@@ -254,6 +269,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
                     _buildTaxInfo(),
                     const SizedBox(height: 20),
                     _buildImages(),
+                    const SizedBox(height: 20),
+                    _buildProductCoding(),
                     const SizedBox(height: 28),
 
                     // ── Save button ──────────────────────────────────
@@ -475,6 +492,123 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  // ── Section: Product Coding ───────────────────────────────────────────────
+
+  Widget _buildProductCoding() {
+    return _SectionCard(
+      title: 'Product Coding',
+      icon: Icons.qr_code_outlined,
+      subtitle: _hasProducts
+          ? 'Locked — products have been created. These settings cannot be changed.'
+          : 'Enable before creating products. Cannot be changed once products exist.',
+      children: [
+        if (_hasProducts)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.secondary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.secondary.withOpacity(0.3)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.lock_outline, size: 16, color: AppColors.secondary),
+                SizedBox(width: 8),
+                Text(
+                  'Settings are locked because products already exist in this company.',
+                  style: TextStyle(fontSize: 13, color: AppColors.secondary),
+                ),
+              ],
+            ),
+          ),
+        if (_hasProducts) const SizedBox(height: 16),
+        _buildCodingToggle(
+          icon: Icons.barcode_reader,
+          label: 'Enable Barcode',
+          description: 'Show barcode field on products and enable barcode scanning on transactions.',
+          value: _enableBarcode,
+          locked: _hasProducts,
+          onChanged: (v) => setState(() => _enableBarcode = v),
+        ),
+        const SizedBox(height: 12),
+        _buildCodingToggle(
+          icon: Icons.tag_outlined,
+          label: 'Enable Part Number',
+          description: "Show manufacturer's part number field on products.",
+          value: _enablePartNumber,
+          locked: _hasProducts,
+          onChanged: (v) => setState(() => _enablePartNumber = v),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCodingToggle({
+    required IconData icon,
+    required String label,
+    required String description,
+    required bool value,
+    required bool locked,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: AppColors.textSecondary),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: AppColors.textPrimary)),
+                const SizedBox(height: 2),
+                Text(description,
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          if (locked)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                value ? 'ON' : 'OFF',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: value ? AppColors.positive : AppColors.textSecondary),
+              ),
+            )
+          else
+            Switch(
+              value: value,
+              onChanged: onChanged,
+              thumbColor: WidgetStateProperty.resolveWith((s) =>
+                  s.contains(WidgetState.selected) ? Colors.white : Colors.grey.shade400),
+              trackColor: WidgetStateProperty.resolveWith((s) =>
+                  s.contains(WidgetState.selected) ? AppColors.primary : AppColors.surfaceVariant),
+              trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
+            ),
+        ],
+      ),
     );
   }
 

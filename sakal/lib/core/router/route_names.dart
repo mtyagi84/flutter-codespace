@@ -52,6 +52,8 @@ class RouteNames {
   static const String itemCategories   = '/master/item-categories';
   static const String taxMaster        = '/master/tax-master';
   static const String taxGroups        = '/master/tax-groups';
+  static const String productMaster    = '/master/products';
+  static const String productEntry     = '/master/product-entry';
 
   // Finance
   static const String exchangeRates  = '/finance/exchange-rates';

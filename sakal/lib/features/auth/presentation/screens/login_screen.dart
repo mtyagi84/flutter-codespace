@@ -109,14 +109,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) return;
 
       final session = UserSession(
-        userId:      d['user_id'] as String,
-        clientId:    d['client_id'] as String,
-        clientNo:    d['client_no'] as String,
-        companyId:   d['company_id'] as String,
-        companyName: d['company_name'] as String? ?? '',
-        fullName:    d['full_name'] as String,
-        username:    d['username'] as String,
-        locationId:  d['location_id'] as String?,
+        userId:           d['user_id']           as String,
+        clientId:         d['client_id']         as String,
+        clientNo:         d['client_no']         as String,
+        companyId:        d['company_id']        as String,
+        companyName:      d['company_name']      as String? ?? '',
+        fullName:         d['full_name']         as String,
+        username:         d['username']          as String,
+        locationId:       d['location_id']       as String?,
+        enableBarcode:    d['enable_barcode']    as bool? ?? false,
+        enablePartNumber: d['enable_part_number'] as bool? ?? false,
       );
 
       // Cache credentials for future offline login
@@ -167,15 +169,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
 
       ref.read(sessionProvider.notifier).state = UserSession(
-        userId:      result.session.userId,
-        clientId:    result.session.clientId,
-        clientNo:    result.session.clientNo,
-        companyId:   result.session.companyId,
-        companyName: result.session.companyName,
-        locationId:  result.session.locationId,
-        fullName:    result.session.fullName,
-        username:    result.session.username,
-        offlineMode: true,
+        userId:           result.session.userId,
+        clientId:         result.session.clientId,
+        clientNo:         result.session.clientNo,
+        companyId:        result.session.companyId,
+        companyName:      result.session.companyName,
+        locationId:       result.session.locationId,
+        fullName:         result.session.fullName,
+        username:         result.session.username,
+        offlineMode:      true,
+        enableBarcode:    result.session.enableBarcode,
+        enablePartNumber: result.session.enablePartNumber,
       );
       ref.read(menuProvider.notifier).state = result.menu;
       context.go(RouteNames.dashboard);

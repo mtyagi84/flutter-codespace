@@ -225,20 +225,29 @@ class _SwitchCompanyDialogState extends State<_SwitchCompanyDialog> {
     }
     setState(() => _switching = true);
     try {
-      final menuRes = await DioClient.instance.post('/rpc/fn_get_user_menu',
-          data: {
-            'p_user_id':    widget.session.userId,
-            'p_client_id':  widget.session.clientId,
-            'p_company_id': companyId,
-          });
-      final menuList = (menuRes.data as List<dynamic>)
+      // Fetch new menu and new company settings in parallel
+      final results = await Future.wait([
+        DioClient.instance.post('/rpc/fn_get_user_menu', data: {
+          'p_user_id':    widget.session.userId,
+          'p_client_id':  widget.session.clientId,
+          'p_company_id': companyId,
+        }),
+        DioClient.instance.post('/rpc/fn_get_company_settings', data: {
+          'p_company_id': companyId,
+        }),
+      ]);
+
+      final menuList = (results[0].data as List<dynamic>)
           .map((e) => MenuModule.fromJson(e as Map<String, dynamic>))
           .toList();
+      final settings = results[1].data as Map<String, dynamic>;
 
       widget.ref.read(sessionProvider.notifier).state =
           widget.session.copyWith(
-            companyId:   companyId,
-            companyName: companyName,
+            companyId:        companyId,
+            companyName:      companyName,
+            enableBarcode:    settings['enable_barcode']     as bool? ?? false,
+            enablePartNumber: settings['enable_part_number'] as bool? ?? false,
           );
       widget.ref.read(menuProvider.notifier).state = menuList;
 

@@ -37,7 +37,6 @@ INSERT INTO rim_common_master_types (type_key, type_name) VALUES
   ('BRAND',     'Brand'),
   ('UNIT',      'Unit'),
   ('ITEM_SIZE', 'Item Size'),
-  ('ITEM_TYPE', 'Item Type'),
   ('COLOR',     'Color');
 
 -- PostgREST access grants

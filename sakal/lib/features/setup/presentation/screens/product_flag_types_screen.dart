@@ -58,11 +58,15 @@ class _ProductFlagTypesScreenState extends ConsumerState<ProductFlagTypesScreen>
       builder: (ctx) => AlertDialog(
         title: const Text('Load Default Flags'),
         content: const Text(
-            'This will add the 4 standard flags:\n'
+            'This will add the 8 standard flags:\n'
             '• Can be Sold\n'
             '• Can be Purchased\n'
+            '• Appears on POS Screen\n'
+            '• Discount Allowed\n'
             '• Warehouse Transfer Allowed\n'
-            '• Intercompany Transfer Allowed\n\n'
+            '• Intercompany Transfer Allowed\n'
+            '• Allow Negative Stock\n'
+            '• Consignment Stock\n\n'
             'Existing flags with the same key will be skipped.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),

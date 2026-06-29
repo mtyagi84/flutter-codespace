@@ -89,25 +89,29 @@ class OfflineSessionCache {
       await _storage.read(key: _kUsername) != null;
 
   static Map<String, dynamic> _encodeSession(UserSession s) => {
-    'userId':      s.userId,
-    'clientId':    s.clientId,
-    'clientNo':    s.clientNo,
-    'companyId':   s.companyId,
-    'companyName': s.companyName,
-    'locationId':  s.locationId,
-    'fullName':    s.fullName,
-    'username':    s.username,
+    'userId':           s.userId,
+    'clientId':         s.clientId,
+    'clientNo':         s.clientNo,
+    'companyId':        s.companyId,
+    'companyName':      s.companyName,
+    'locationId':       s.locationId,
+    'fullName':         s.fullName,
+    'username':         s.username,
+    'enableBarcode':    s.enableBarcode,
+    'enablePartNumber': s.enablePartNumber,
   };
 
   static UserSession _decodeSession(Map<String, dynamic> m) => UserSession(
-    userId:      m['userId']      as String,
-    clientId:    m['clientId']    as String,
-    clientNo:    m['clientNo']    as String,
-    companyId:   m['companyId']   as String,
-    companyName: m['companyName'] as String,
-    locationId:  m['locationId']  as String?,
-    fullName:    m['fullName']    as String,
-    username:    m['username']    as String,
-    offlineMode: false,
+    userId:           m['userId']           as String,
+    clientId:         m['clientId']         as String,
+    clientNo:         m['clientNo']         as String,
+    companyId:        m['companyId']        as String,
+    companyName:      m['companyName']      as String,
+    locationId:       m['locationId']       as String?,
+    fullName:         m['fullName']         as String,
+    username:         m['username']         as String,
+    offlineMode:      false,
+    enableBarcode:    m['enableBarcode']    as bool? ?? false,
+    enablePartNumber: m['enablePartNumber'] as bool? ?? false,
   );
 }

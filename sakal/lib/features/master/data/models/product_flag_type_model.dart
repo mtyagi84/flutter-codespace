@@ -65,15 +65,20 @@ class ProductFlagTypeModel {
         isActive:     isActive     ?? this.isActive,
       );
 
-  // Standard flags seeded via "Load Defaults" button
+  // Standard flags seeded via "Load Defaults" button.
+  // Flags are shared by both rim_item_categories and rim_products (same JSONB pattern).
   static List<Map<String, dynamic>> defaults({
     required String clientId,
     required String companyId,
   }) =>
       [
-        {'client_id': clientId, 'company_id': companyId, 'flag_key': 'is_saleable',     'flag_label': 'Can be Sold',                   'default_value': true,  'sort_order': 1},
-        {'client_id': clientId, 'company_id': companyId, 'flag_key': 'is_purchasable',  'flag_label': 'Can be Purchased',               'default_value': true,  'sort_order': 2},
-        {'client_id': clientId, 'company_id': companyId, 'flag_key': 'is_transferable', 'flag_label': 'Warehouse Transfer Allowed',     'default_value': true,  'sort_order': 3},
-        {'client_id': clientId, 'company_id': companyId, 'flag_key': 'is_intercompany', 'flag_label': 'Intercompany Transfer Allowed',  'default_value': false, 'sort_order': 4},
+        {'client_id': clientId, 'company_id': companyId, 'flag_key': 'is_saleable',          'flag_label': 'Can be Sold',                  'default_value': true,  'sort_order': 1},
+        {'client_id': clientId, 'company_id': companyId, 'flag_key': 'is_purchasable',       'flag_label': 'Can be Purchased',              'default_value': true,  'sort_order': 2},
+        {'client_id': clientId, 'company_id': companyId, 'flag_key': 'is_pos_item',          'flag_label': 'Appears on POS Screen',         'default_value': true,  'sort_order': 3},
+        {'client_id': clientId, 'company_id': companyId, 'flag_key': 'is_discountable',      'flag_label': 'Discount Allowed',              'default_value': true,  'sort_order': 4},
+        {'client_id': clientId, 'company_id': companyId, 'flag_key': 'is_transferable',      'flag_label': 'Warehouse Transfer Allowed',    'default_value': true,  'sort_order': 5},
+        {'client_id': clientId, 'company_id': companyId, 'flag_key': 'is_intercompany',      'flag_label': 'Intercompany Transfer Allowed', 'default_value': false, 'sort_order': 6},
+        {'client_id': clientId, 'company_id': companyId, 'flag_key': 'allow_negative_stock', 'flag_label': 'Allow Negative Stock',          'default_value': false, 'sort_order': 7},
+        {'client_id': clientId, 'company_id': companyId, 'flag_key': 'is_consignment',       'flag_label': 'Consignment Stock',             'default_value': false, 'sort_order': 8},
       ];
 }

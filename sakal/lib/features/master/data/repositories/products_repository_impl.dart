@@ -1,0 +1,74 @@
+import '../../domain/repositories/products_repository.dart';
+import '../datasources/products_remote_ds.dart';
+import '../models/product_flag_type_model.dart';
+import '../models/product_media_model.dart';
+import '../models/product_model.dart';
+import '../models/product_uom_model.dart';
+
+class ProductsRepositoryImpl implements ProductsRepository {
+  final ProductsRemoteDs _remote;
+  const ProductsRepositoryImpl(this._remote);
+
+  @override
+  Future<List<ProductModel>> getProducts({
+    required String clientId,
+    required String companyId,
+    String? search,
+    String? nature,
+    bool?   isActive,
+    int     limit  = 50,
+    int     offset = 0,
+  }) =>
+      _remote.getProducts(
+        clientId:  clientId,
+        companyId: companyId,
+        search:    search,
+        nature:    nature,
+        isActive:  isActive,
+        limit:     limit,
+        offset:    offset,
+      );
+
+  @override
+  Future<ProductModel?> getProduct(String id) => _remote.getProduct(id);
+
+  @override
+  Future<void> saveProduct(Map<String, dynamic> payload, {bool isNew = false}) =>
+      _remote.saveProduct(payload, isNew: isNew);
+
+  @override
+  Future<String> generateProductCode({
+    required String clientId,
+    required String companyId,
+  }) =>
+      _remote.generateProductCode(clientId: clientId, companyId: companyId);
+
+  @override
+  Future<List<ProductUomModel>> getProductUoms(String productId) =>
+      _remote.getProductUoms(productId);
+
+  @override
+  Future<void> saveProductUom(Map<String, dynamic> payload) =>
+      _remote.saveProductUom(payload);
+
+  @override
+  Future<void> deleteProductUom(String id) => _remote.deleteProductUom(id);
+
+  @override
+  Future<List<ProductMediaModel>> getProductMedia(String productId) =>
+      _remote.getProductMedia(productId);
+
+  @override
+  Future<void> saveProductMedia(Map<String, dynamic> payload) =>
+      _remote.saveProductMedia(payload);
+
+  @override
+  Future<void> deleteProductMedia(String id) => _remote.deleteProductMedia(id);
+
+  @override
+  Future<List<ProductFlagTypeModel>> getFlagTypes({
+    required String clientId,
+    required String companyId,
+  }) =>
+      _remote.getFlagTypes(clientId: clientId, companyId: companyId);
+}
