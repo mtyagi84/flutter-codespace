@@ -319,6 +319,38 @@ _dio.get('/rim_product_flag_types', ...)
 _dio.get('/rest/v1/rim_product_flag_types', ...)
 ```
 
+### PostgREST partial select — include every non-nullable model field
+When using a partial `select`, every field cast as non-nullable in `fromJson` (`as String`, `as int`, `as bool`) MUST be in the select. Omitting it returns `null` from PostgREST → runtime `TypeError: null is not a subtype of String`. Fields cast as nullable (`as String?`, `as bool? ?? default`) are safe to omit.
+```dart
+// CORRECT — all non-nullable fields included
+'select': 'id,client_id,company_id,type_id,description,sort_order,is_active,is_deleted'
+
+// WRONG — client_id missing → fromJson crashes at runtime
+'select': 'id,type_id,description'
+```
+If in doubt, use `select: '*'` for single-record fetches.
+
+### SwitchListTile / ListTile — never inside a bare Row
+`ListTile` uses `Row(Expanded(...))` internally. Placing it inside an unconstrained outer `Row` passes `maxWidth = infinity` → "BoxConstraints forces an infinite width" crash.
+```dart
+// CORRECT — directly in Column
+Column(children: [SwitchListTile(...)])
+
+// WRONG — bare Row gives infinite width → crash
+Row(children: [SwitchListTile(...)])
+```
+Same rule: `CheckboxListTile`, `RadioListTile`, `ExpansionTile`.
+
+### rim_currencies column names
+- ISO code: `currency_id` (NOT `currency_code`)
+- Display: `${row['currency_id']} — ${row['currency_name']}`
+
+### OfflineBanner — no parameters
+`OfflineBanner` reads `sessionProvider` internally. Always: `const OfflineBanner()`. Never pass `visible:` or any other param.
+
+### saveProduct — always pass isNew flag
+Entry screens generate a UUID for new records and include it in the payload. The datasource cannot use `if (id == null) POST else PATCH` because id is always provided. Always call `saveProduct(payload, isNew: _isNew)`.
+
 ### Before adding a method to an existing file — always read the file first
 Dart has no method overloading. Duplicate method names are a compile error.
 Always `Read` the full file before adding new methods or imports.
