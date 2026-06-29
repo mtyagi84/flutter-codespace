@@ -238,7 +238,7 @@ class ProductsRemoteDs {
     final res = await _dio.get('/rim_currencies', queryParameters: {
       'client_id': 'eq.$clientId',
       'is_active': 'eq.true',
-      'select':    'id,currency_code,currency_name',
+      'select':    'id,currency_id,currency_name',
       'order':     'currency_name.asc',
     });
     return (res.data as List).cast<Map<String, dynamic>>();

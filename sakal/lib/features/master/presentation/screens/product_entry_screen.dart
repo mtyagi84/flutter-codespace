@@ -266,7 +266,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
     _costCurrencyId     = p.costCurrencyId;
     _costCurrencyDisplay = _currencies
         .where((c) => c['id'] == p.costCurrencyId)
-        .map<String>((c) => '${c['currency_code']} — ${c['currency_name']}')
+        .map<String>((c) => '${c['currency_id']} — ${c['currency_name']}')
         .firstOrNull;
     _salesTaxId         = p.salesTaxGroupId;
     _salesTaxDisplay    = _taxGroups.where((t) => t.id == p.salesTaxGroupId).firstOrNull?.groupName;
@@ -655,16 +655,12 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
             ),
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Active',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                value: _isActive,
-                onChanged: (v) => setState(() => _isActive = v),
-              ),
-            ],
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Active',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            value: _isActive,
+            onChanged: (v) => setState(() => _isActive = v),
           ),
         ],
       );
@@ -883,7 +879,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
                 const DropdownMenuItem(value: null, child: Text('— Base currency —')),
                 ..._currencies.map((c) => DropdownMenuItem(
                     value: c['id'] as String,
-                    child: Text('${c['currency_code']} — ${c['currency_name']}'))),
+                    child: Text('${c['currency_id']} — ${c['currency_name']}'))),
               ],
               onChanged: (id) => setState(() {
                 _costCurrencyId      = id;
@@ -891,7 +887,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
                     ? null
                     : _currencies
                         .where((c) => c['id'] == id)
-                        .map<String>((c) => '${c['currency_code']} — ${c['currency_name']}')
+                        .map<String>((c) => '${c['currency_id']} — ${c['currency_name']}')
                         .firstOrNull;
               }),
             ),
