@@ -119,7 +119,7 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen>
 
     return Column(
       children: [
-        OfflineBanner(visible: session?.offlineMode ?? false),
+        const OfflineBanner(),
         // ── Toolbar ──────────────────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),

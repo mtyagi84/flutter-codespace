@@ -502,7 +502,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
 
     return Column(
       children: [
-        OfflineBanner(visible: offline),
+        const OfflineBanner(),
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
