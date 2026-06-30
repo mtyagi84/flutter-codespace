@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../config/app_constants.dart';
 import '../models/menu_models.dart';
 import '../providers/session_provider.dart';
 
@@ -32,14 +33,25 @@ class OfflineSessionCache {
   }
 
   /// Restores session + menu after a browser page refresh, without a password
-  /// check. Returns null if the user previously logged out (deactivate() was called).
+  /// check. Returns null if the user previously logged out (deactivate() was called)
+  /// OR if the stored JWT has already expired.
   static Future<({UserSession session, List<MenuModule> menu})?> tryRestoreSession() async {
     final vals = await Future.wait([
       _storage.read(key: _kIsActive),
       _storage.read(key: _kSession),
       _storage.read(key: _kMenu),
+      _storage.read(key: AppConstants.keyAccessToken),
     ]);
     if (vals[0] != 'true' || vals[1] == null || vals[2] == null) return null;
+
+    // If the JWT is already expired, treat as logged-out immediately so the user
+    // is sent to the login screen on startup rather than mid-session on first API call.
+    final jwt = vals[3];
+    if (jwt != null && _isJwtExpired(jwt)) {
+      await deactivate();
+      return null;
+    }
+
     try {
       final session = _decodeSession(jsonDecode(vals[1]!) as Map<String, dynamic>);
       final menu    = (jsonDecode(vals[2]!) as List)
@@ -48,6 +60,27 @@ class OfflineSessionCache {
       return (session: session, menu: menu);
     } catch (_) {
       return null;
+    }
+  }
+
+  /// Returns true if the JWT's exp claim is in the past.
+  static bool _isJwtExpired(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return true;
+      var payload = parts[1];
+      // Base64Url padding
+      switch (payload.length % 4) {
+        case 2: payload += '==';
+        case 3: payload += '=';
+      }
+      final decoded = utf8.decode(base64Url.decode(payload));
+      final claims  = jsonDecode(decoded) as Map<String, dynamic>;
+      final exp     = claims['exp'] as int?;
+      if (exp == null) return false; // no expiry = never expires
+      return DateTime.fromMillisecondsSinceEpoch(exp * 1000).isBefore(DateTime.now());
+    } catch (_) {
+      return true; // unparseable token → treat as expired
     }
   }
 
