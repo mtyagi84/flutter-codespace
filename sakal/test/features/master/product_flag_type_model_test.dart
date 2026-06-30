@@ -91,8 +91,8 @@ void main() {
       final defs = ProductFlagTypeModel.defaults(
           clientId: 'client-1', companyId: 'company-1');
 
-      test('returns exactly 4 entries', () {
-        expect(defs.length, 4);
+      test('returns exactly 8 entries', () {
+        expect(defs.length, 8);
       });
 
       test('contains is_saleable', () {
@@ -103,12 +103,30 @@ void main() {
         expect(defs.any((d) => d['flag_key'] == 'is_purchasable'), true);
       });
 
+      test('contains is_pos_item', () {
+        expect(defs.any((d) => d['flag_key'] == 'is_pos_item'), true);
+      });
+
+      test('contains is_discountable', () {
+        expect(defs.any((d) => d['flag_key'] == 'is_discountable'), true);
+      });
+
       test('contains is_transferable', () {
         expect(defs.any((d) => d['flag_key'] == 'is_transferable'), true);
       });
 
       test('contains is_intercompany with default_value = false', () {
         final entry = defs.firstWhere((d) => d['flag_key'] == 'is_intercompany');
+        expect(entry['default_value'], false);
+      });
+
+      test('contains allow_negative_stock with default_value = false', () {
+        final entry = defs.firstWhere((d) => d['flag_key'] == 'allow_negative_stock');
+        expect(entry['default_value'], false);
+      });
+
+      test('contains is_consignment with default_value = false', () {
+        final entry = defs.firstWhere((d) => d['flag_key'] == 'is_consignment');
         expect(entry['default_value'], false);
       });
 
