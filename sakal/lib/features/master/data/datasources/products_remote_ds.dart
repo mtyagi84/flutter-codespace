@@ -256,7 +256,6 @@ class ProductsRemoteDs {
       'client_id':  'eq.$clientId',
       'company_id': 'eq.$companyId',
       'is_active':  'eq.true',
-      'is_deleted': 'eq.false',
       'select':     'id,client_id,company_id,flag_key,flag_label,default_value,'
                     'description,sort_order,is_active',
       'order':      'sort_order.asc',
