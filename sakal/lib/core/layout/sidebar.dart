@@ -177,7 +177,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
                     size: 16,
                     color: hasActive
                         ? Colors.white70
-                        : AppColors.sidebarText.withOpacity(0.6)),
+                        : AppColors.sidebarText.withValues(alpha: 0.6)),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -187,7 +187,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
                       fontWeight: FontWeight.w700,
                       color: hasActive
                           ? Colors.white
-                          : AppColors.sidebarText.withOpacity(0.7),
+                          : AppColors.sidebarText.withValues(alpha: 0.7),
                       letterSpacing: 0.8,
                     ),
                   ),
@@ -197,7 +197,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
                       ? Icons.keyboard_arrow_up
                       : Icons.keyboard_arrow_down,
                   size: 16,
-                  color: AppColors.sidebarText.withOpacity(0.5),
+                  color: AppColors.sidebarText.withValues(alpha: 0.5),
                 ),
               ],
             ),
@@ -232,7 +232,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
             height: 34,
             padding: const EdgeInsets.only(left: 28, right: 12),
             decoration: BoxDecoration(
-              color: active ? AppColors.sidebarItemActive.withOpacity(0.6) : Colors.transparent,
+              color: active ? AppColors.sidebarItemActive.withValues(alpha: 0.6) : Colors.transparent,
               border: isGroupActive
                   ? const Border(
                       left: BorderSide(color: AppColors.secondary, width: 3))
@@ -244,7 +244,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
                     size: 13,
                     color: active
                         ? Colors.white70
-                        : AppColors.sidebarText.withOpacity(0.5)),
+                        : AppColors.sidebarText.withValues(alpha: 0.5)),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -254,14 +254,14 @@ class _SidebarState extends ConsumerState<Sidebar> {
                       fontWeight: FontWeight.w600,
                       color: active
                           ? Colors.white
-                          : AppColors.sidebarText.withOpacity(0.6),
+                          : AppColors.sidebarText.withValues(alpha: 0.6),
                       letterSpacing: 0.4,
                     ),
                   ),
                 ),
                 Icon(Icons.arrow_forward_ios,
                     size: 10,
-                    color: AppColors.sidebarText.withOpacity(0.4)),
+                    color: AppColors.sidebarText.withValues(alpha: 0.4)),
               ],
             ),
           ),

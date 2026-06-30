@@ -27,7 +27,7 @@ class LandingScreen extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
-                      color: Colors.white.withOpacity(0.65),
+                      color: Colors.white.withValues(alpha: 0.65),
                       letterSpacing: 0.4,
                     ),
                   ),
@@ -48,7 +48,7 @@ class LandingScreen extends StatelessWidget {
                     '${AppConfig.companyName}  ·  v${AppConfig.appVersion}',
                     style: TextStyle(
                       fontSize: 11,
-                      color: Colors.white.withOpacity(0.35),
+                      color: Colors.white.withValues(alpha: 0.35),
                     ),
                   ),
                 ],

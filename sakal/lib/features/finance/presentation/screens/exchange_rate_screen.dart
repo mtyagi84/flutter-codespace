@@ -477,8 +477,8 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: AppColors.negative.withOpacity(0.08),
-                border: Border.all(color: AppColors.negative.withOpacity(0.3)),
+                color: AppColors.negative.withValues(alpha: 0.08),
+                border: Border.all(color: AppColors.negative.withValues(alpha: 0.3)),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Row(children: [
@@ -498,8 +498,8 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: AppColors.negative.withOpacity(0.08),
-                border: Border.all(color: AppColors.negative.withOpacity(0.3)),
+                color: AppColors.negative.withValues(alpha: 0.08),
+                border: Border.all(color: AppColors.negative.withValues(alpha: 0.3)),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(_saveError!,
@@ -667,7 +667,7 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.1),
+                        color: AppColors.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(

@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/config/app_config.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/services/local_storage.dart';
@@ -368,7 +367,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   Text(
                     'Your 30-day free trial has started.',
                     style: TextStyle(
-                        fontSize: 14, color: Colors.white.withOpacity(0.7)),
+                        fontSize: 14, color: Colors.white.withValues(alpha: 0.7)),
                   ),
                   const SizedBox(height: 40),
                   Container(
@@ -416,7 +415,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.secondary.withOpacity(0.15),
+                      color: AppColors.secondary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: AppColors.secondary, width: 1),
                     ),
@@ -585,9 +584,9 @@ class _ErrorBanner extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.negative.withOpacity(0.1),
+        color: AppColors.negative.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.negative.withOpacity(0.4)),
+        border: Border.all(color: AppColors.negative.withValues(alpha: 0.4)),
       ),
       child: Row(
         children: [

@@ -248,6 +248,7 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
 
   Future<void> _delete(ItemCategoryModel node) async {
     final hasKids = await _repo.hasChildren(node.id!);
+    if (!mounted) return;
     if (hasKids) {
       _showMsg('Cannot delete "${node.categoryName}" — it has sub-categories. Delete those first.');
       return;
@@ -494,7 +495,7 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
           onTap: _canEdit ? () => _openEdit(node) : null,
           child: Container(
             color: isSelected
-                ? AppColors.primary.withOpacity(0.07)
+                ? AppColors.primary.withValues(alpha: 0.07)
                 : Colors.transparent,
             padding: EdgeInsets.only(
               left: 12.0 + depth * 20.0,
@@ -524,7 +525,7 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                   decoration: BoxDecoration(
-                    color: _levelColor(node.levelNo).withOpacity(0.12),
+                    color: _levelColor(node.levelNo).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -664,7 +665,7 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                               decoration: BoxDecoration(
-                                color: _levelColor(_formLevel ?? 1).withOpacity(0.12),
+                                color: _levelColor(_formLevel ?? 1).withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(

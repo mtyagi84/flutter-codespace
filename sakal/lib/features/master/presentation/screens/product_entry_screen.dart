@@ -70,10 +70,10 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
   String? _brandId;        String? _brandDisplay;
   String? _itemSizeId;     String? _itemSizeDisplay;
   String? _itemColorId;    String? _itemColorDisplay;
-  String? _baseUomId;      String? _baseUomDisplay;
-  String? _costCurrencyId; String? _costCurrencyDisplay;
-  String? _salesTaxId;     String? _salesTaxDisplay;
-  String? _purchTaxId;     String? _purchTaxDisplay;
+  String? _baseUomId;
+  String? _costCurrencyId;
+  String? _salesTaxId;
+  String? _purchTaxId;
 
   // ── Sub-table state ────────────────────────────────────────────────────────
   List<ProductUomModel>  _uomRows   = [];
@@ -264,16 +264,9 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
     _itemColorId        = p.itemColorId;
     _itemColorDisplay   = _colors.where((c) => c.id == p.itemColorId).firstOrNull?.description;
     _baseUomId          = p.baseUomId;
-    _baseUomDisplay     = _uoms.where((u) => u.id == p.baseUomId).firstOrNull?.description;
     _costCurrencyId     = p.costCurrencyId;
-    _costCurrencyDisplay = _currencies
-        .where((c) => c['id'] == p.costCurrencyId)
-        .map<String>((c) => '${c['currency_id']} — ${c['currency_name']}')
-        .firstOrNull;
     _salesTaxId         = p.salesTaxGroupId;
-    _salesTaxDisplay    = _taxGroups.where((t) => t.id == p.salesTaxGroupId).firstOrNull?.groupName;
     _purchTaxId         = p.purchaseTaxGroupId;
-    _purchTaxDisplay    = _taxGroups.where((t) => t.id == p.purchaseTaxGroupId).firstOrNull?.groupName;
 
     _averageCost        = p.averageCost;
     _lastPurchaseCost   = p.lastPurchaseCost;
@@ -827,10 +820,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
                     value: u.id, child: Text(u.description))),
               ],
               onChanged: (id) => setState(() {
-                _baseUomId      = id;
-                _baseUomDisplay = id == null
-                    ? null
-                    : _uoms.firstWhere((u) => u.id == id).description;
+                _baseUomId = id;
               }),
             ),
             right: DropdownButtonFormField<String>(
@@ -884,13 +874,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
                     child: Text('${c['currency_id']} — ${c['currency_name']}'))),
               ],
               onChanged: (id) => setState(() {
-                _costCurrencyId      = id;
-                _costCurrencyDisplay = id == null
-                    ? null
-                    : _currencies
-                        .where((c) => c['id'] == id)
-                        .map<String>((c) => '${c['currency_id']} — ${c['currency_name']}')
-                        .firstOrNull;
+                _costCurrencyId = id;
               }),
             ),
           ),
@@ -935,13 +919,13 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
               label:    'Sales Tax Group',
               filter:   ['SALES', 'BOTH'],
               value:    _salesTaxId,
-              onPicked: (id, name) => setState(() { _salesTaxId = id; _salesTaxDisplay = name; }),
+              onPicked: (id, name) => setState(() { _salesTaxId = id; }),
             ),
             right: _buildTaxGroupPicker(
               label:    'Purchase Tax Group',
               filter:   ['PURCHASE', 'BOTH'],
               value:    _purchTaxId,
-              onPicked: (id, name) => setState(() { _purchTaxId = id; _purchTaxDisplay = name; }),
+              onPicked: (id, name) => setState(() { _purchTaxId = id; }),
             ),
           ),
           const SizedBox(height: 16),
@@ -1672,9 +1656,9 @@ class _ErrorBanner extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppColors.negative.withOpacity(0.08),
+          color: AppColors.negative.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.negative.withOpacity(0.3)),
+          border: Border.all(color: AppColors.negative.withValues(alpha: 0.3)),
         ),
         child: Row(
           children: [
@@ -1697,9 +1681,9 @@ class _SuccessBanner extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppColors.positive.withOpacity(0.08),
+          color: AppColors.positive.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.positive.withOpacity(0.3)),
+          border: Border.all(color: AppColors.positive.withValues(alpha: 0.3)),
         ),
         child: Row(
           children: [

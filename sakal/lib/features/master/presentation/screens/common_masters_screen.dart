@@ -340,8 +340,8 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: AppColors.negative.withOpacity(0.08),
-                border: Border.all(color: AppColors.negative.withOpacity(0.3)),
+                color: AppColors.negative.withValues(alpha: 0.08),
+                border: Border.all(color: AppColors.negative.withValues(alpha: 0.3)),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Row(children: [
@@ -632,7 +632,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
                 ? Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.08),
+                      color: AppColors.primary.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(m.shortName!,
@@ -690,7 +690,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
   }) {
     return StatefulBuilder(
       builder: (_, setRowState) => Container(
-        color: AppColors.primary.withOpacity(0.04),
+        color: AppColors.primary.withValues(alpha: 0.04),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         child: Row(children: [
           // Description
@@ -854,7 +854,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
                     margin: const EdgeInsets.only(left: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.08),
+                      color: AppColors.primary.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(m.shortName!,
@@ -909,7 +909,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: AppColors.primary.withOpacity(0.4), width: 1.5),
+          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4), width: 1.5),
         ),
         child: Padding(
           padding: const EdgeInsets.all(14),

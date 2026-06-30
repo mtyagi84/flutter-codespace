@@ -216,7 +216,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 Text(
                   '${AppConfig.companyName}  ·  v${AppConfig.appVersion}',
                   style: TextStyle(
-                      color: Colors.white.withOpacity(0.45), fontSize: 12),
+                      color: Colors.white.withValues(alpha: 0.45), fontSize: 12),
                 ),
               ],
             ),
@@ -333,12 +333,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
                       color: _workOffline
-                          ? const Color(0xFFE65100).withOpacity(0.08)
+                          ? const Color(0xFFE65100).withValues(alpha: 0.08)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: _workOffline
-                            ? const Color(0xFFE65100).withOpacity(0.5)
+                            ? const Color(0xFFE65100).withValues(alpha: 0.5)
                             : AppColors.border,
                       ),
                     ),
@@ -381,7 +381,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             size: 16,
                             color: _workOffline
                                 ? const Color(0xFFE65100)
-                                : AppColors.textSecondary.withOpacity(0.4)),
+                                : AppColors.textSecondary.withValues(alpha: 0.4)),
                       ],
                     ),
                   ),
@@ -394,10 +394,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.negative.withOpacity(0.08),
+                    color: AppColors.negative.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                        color: AppColors.negative.withOpacity(0.3)),
+                        color: AppColors.negative.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -472,7 +472,7 @@ class _Logo extends StatelessWidget {
         Text(AppConfig.appTagline,
             style: TextStyle(
                 fontSize: 12,
-                color: Colors.white.withOpacity(0.65),
+                color: Colors.white.withValues(alpha: 0.65),
                 letterSpacing: 0.5)),
       ],
     );

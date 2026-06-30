@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/models/menu_models.dart';
 import '../../../../core/network/dio_client.dart';
-import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -521,11 +520,11 @@ class _FinanceVoucherListScreenState
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
     decoration: BoxDecoration(
       color: (posted ? AppColors.positive : AppColors.badgeDraft)
-          .withOpacity(0.1),
+          .withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(4),
       border: Border.all(
           color: (posted ? AppColors.positive : AppColors.badgeDraft)
-              .withOpacity(0.4)),
+              .withValues(alpha: 0.4)),
     ),
     child: Text(
       posted ? 'Posted' : 'Draft',

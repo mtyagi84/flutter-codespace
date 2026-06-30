@@ -1529,53 +1529,55 @@ class _FinanceVoucherEntryScreenState
             // "On Account" is locked once bills are loaded to prevent orphaning
             // settlement data. User must clear the party to switch modes.
             final billsLoaded = !_isOnAccount && _bills.isNotEmpty;
-            return Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-              Radio<bool>(
-                value: false,
-                groupValue: _isOnAccount,
-                onChanged: (locked || !billAllowed)
-                    ? null
-                    : (v) { if (v != null) setState(() => _isOnAccount = v); },
-              ),
-              Text(
-                'Against Bill',
-                style: TextStyle(
-                    fontSize: 13,
-                    color: (locked || !billAllowed)
-                        ? AppColors.textDisabled
-                        : AppColors.textPrimary),
-              ),
-              if (whyDisabled != null) ...[
-                const SizedBox(width: 4),
-                Tooltip(
-                  message: whyDisabled,
-                  child: const Icon(Icons.info_outline,
-                      size: 14, color: AppColors.textSecondary),
+            return RadioGroup<bool>(
+              groupValue: _isOnAccount,
+              onChanged: (v) { if (v != null) setState(() => _isOnAccount = v); },
+              child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                Radio<bool>(
+                  value: false,
+                  onChanged: (locked || !billAllowed)
+                      ? null
+                      : (v) { if (v != null) setState(() => _isOnAccount = v); },
                 ),
-              ],
-              const SizedBox(width: 20),
-              Radio<bool>(
-                value: true,
-                groupValue: _isOnAccount,
-                onChanged: (locked || billsLoaded)
-                    ? null
-                    : (v) { if (v != null) setState(() => _isOnAccount = v); },
-              ),
-              Text('On Account',
+                Text(
+                  'Against Bill',
                   style: TextStyle(
                       fontSize: 13,
-                      color: (locked || billsLoaded)
+                      color: (locked || !billAllowed)
                           ? AppColors.textDisabled
-                          : AppColors.textPrimary)),
-              if (billsLoaded) ...[
-                const SizedBox(width: 4),
-                const Tooltip(
-                  message: 'Bills are loaded — clear the party to switch to On Account',
-                  child: Icon(Icons.lock_outline,
-                      size: 14, color: AppColors.textSecondary),
+                          : AppColors.textPrimary),
                 ),
-              ],
-            ]);
+                if (whyDisabled != null) ...[
+                  const SizedBox(width: 4),
+                  Tooltip(
+                    message: whyDisabled,
+                    child: const Icon(Icons.info_outline,
+                        size: 14, color: AppColors.textSecondary),
+                  ),
+                ],
+                const SizedBox(width: 20),
+                Radio<bool>(
+                  value: true,
+                  onChanged: (locked || billsLoaded)
+                      ? null
+                      : (v) { if (v != null) setState(() => _isOnAccount = v); },
+                ),
+                Text('On Account',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: (locked || billsLoaded)
+                            ? AppColors.textDisabled
+                            : AppColors.textPrimary)),
+                if (billsLoaded) ...[
+                  const SizedBox(width: 4),
+                  const Tooltip(
+                    message: 'Bills are loaded — clear the party to switch to On Account',
+                    child: Icon(Icons.lock_outline,
+                        size: 14, color: AppColors.textSecondary),
+                  ),
+                ],
+              ]),
+            );
           }),
         ]),
       ),
@@ -2046,11 +2048,11 @@ class _FinanceVoucherEntryScreenState
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: hasAmount
-            ? AppColors.positive.withOpacity(0.06)
+            ? AppColors.positive.withValues(alpha: 0.06)
             : Colors.grey.shade50,
         border: Border.all(
           color: hasAmount
-              ? AppColors.positive.withOpacity(0.3)
+              ? AppColors.positive.withValues(alpha: 0.3)
               : AppColors.border,
         ),
         borderRadius: BorderRadius.circular(8),
@@ -2136,8 +2138,8 @@ class _FinanceVoucherEntryScreenState
     width: double.infinity,
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     decoration: BoxDecoration(
-      color: AppColors.negative.withOpacity(0.08),
-      border: Border.all(color: AppColors.negative.withOpacity(0.3)),
+      color: AppColors.negative.withValues(alpha: 0.08),
+      border: Border.all(color: AppColors.negative.withValues(alpha: 0.3)),
       borderRadius: BorderRadius.circular(6),
     ),
     child: Row(children: [
@@ -2166,9 +2168,9 @@ class _FinanceVoucherEntryScreenState
   Widget _statusChip(String label, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
     decoration: BoxDecoration(
-      color: color.withOpacity(0.1),
+      color: color.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(4),
-      border: Border.all(color: color.withOpacity(0.4)),
+      border: Border.all(color: color.withValues(alpha: 0.4)),
     ),
     child: Text(label,
         style: TextStyle(

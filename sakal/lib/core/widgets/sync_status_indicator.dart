@@ -20,10 +20,10 @@ class SyncStatusIndicator extends ConsumerWidget {
             margin: const EdgeInsets.only(right: 8),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: const Color(0xFFE65100).withOpacity(0.12),
+              color: const Color(0xFFE65100).withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
               border:
-                  Border.all(color: const Color(0xFFE65100).withOpacity(0.4)),
+                  Border.all(color: const Color(0xFFE65100).withValues(alpha: 0.4)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,

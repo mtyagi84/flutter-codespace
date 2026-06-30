@@ -378,7 +378,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
                     child: Row(children: [
                       CircleAvatar(
                         radius: 18,
-                        backgroundColor: AppColors.info.withOpacity(0.1),
+                        backgroundColor: AppColors.info.withValues(alpha: 0.1),
                         child: Text(
                           (row['account_name'] as String).isNotEmpty
                               ? (row['account_name'] as String)[0].toUpperCase()

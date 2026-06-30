@@ -651,7 +651,7 @@ class _ChartOfAccountsScreenState
                 style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
               ),
               value: _isActive,
-              activeColor: AppColors.positive,
+              activeThumbColor: AppColors.positive,
               onChanged: isFixed ? null : (v) => setState(() => _isActive = v),
             ),
 
@@ -1086,7 +1086,7 @@ class _NodeRowState extends State<_NodeRow> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: natureColor.withOpacity(0.12),
+                  color: natureColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(nature,
@@ -1302,7 +1302,7 @@ class _TypeChip extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border.all(
             color: selected ? AppColors.primary
-                : _disabled ? AppColors.border.withOpacity(0.4)
+                : _disabled ? AppColors.border.withValues(alpha: 0.4)
                 : AppColors.border,
             width: selected ? 2 : 1),
         borderRadius: BorderRadius.circular(6),
