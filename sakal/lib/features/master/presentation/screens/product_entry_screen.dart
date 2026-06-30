@@ -290,7 +290,15 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
   // ── Save ───────────────────────────────────────────────────────────────────
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fill in all required fields.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
     final session = ref.read(sessionProvider)!;
     setState(() { _saving = true; _error = null; _successMsg = null; });
 
@@ -360,6 +368,13 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
         setState(() {
           _saving = false;
           _error  = e.response?.data?['message'] as String? ?? 'Save failed. Please try again.';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error  = 'Unexpected error: $e';
         });
       }
     }
