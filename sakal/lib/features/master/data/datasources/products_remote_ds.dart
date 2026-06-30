@@ -27,7 +27,7 @@ class ProductsRemoteDs {
       'client_id':  'eq.$clientId',
       'company_id': 'eq.$companyId',
       'is_deleted': 'eq.false',
-      'select':     'id,product_code,product_name,product_nature,base_uom_id,is_active,'
+      'select':     'id,client_id,company_id,product_code,product_name,product_nature,base_uom_id,is_active,'
                     'category:rim_item_categories!category_id(category_name),'
                     'base_uom:rim_common_masters!base_uom_id(description)',
       'order':      'product_code.asc',

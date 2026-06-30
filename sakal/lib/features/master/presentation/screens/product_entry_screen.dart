@@ -498,6 +498,22 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
     setState(() => _uomRows.removeAt(index));
   }
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  /// Label widget with a red asterisk — use `label: _req('Field')` on required fields.
+  static Widget _req(String text) => RichText(
+    text: TextSpan(
+      text: text,
+      style: const TextStyle(
+          color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w400),
+      children: const [
+        TextSpan(
+            text: ' *',
+            style: TextStyle(color: AppColors.negative, fontWeight: FontWeight.w600)),
+      ],
+    ),
+  );
+
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
@@ -613,8 +629,8 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
               controller: _codeCtrl,
               textCapitalization: TextCapitalization.characters,
               decoration: InputDecoration(
-                labelText: 'Product Code *',
-                hintText:  'e.g. PRD-00001',
+                label:    _req('Product Code'),
+                hintText: 'e.g. PRD-00001',
                 suffixIcon: _isNew
                     ? TextButton(
                         onPressed: _generateCode,
@@ -627,9 +643,9 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
             ),
             right: TextFormField(
               controller: _nameCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Product Name *',
-                hintText:  'Full product name',
+              decoration: InputDecoration(
+                label:    _req('Product Name'),
+                hintText: 'Full product name',
               ),
               validator: (v) => (v == null || v.trim().isEmpty)
                   ? 'Product name is required'
@@ -826,7 +842,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
           _TwoCol(
             left: DropdownButtonFormField<String?>(
               value: _baseUomId,
-              decoration: const InputDecoration(labelText: 'Base UOM *'),
+              decoration: InputDecoration(label: _req('Base UOM')),
               isExpanded: true,
               validator: (v) => v == null ? 'Base UOM is required' : null,
               items: [
