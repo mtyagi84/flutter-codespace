@@ -351,6 +351,48 @@ Same rule: `CheckboxListTile`, `RadioListTile`, `ExpansionTile`.
 ### saveProduct — always pass isNew flag
 Entry screens generate a UUID for new records and include it in the payload. The datasource cannot use `if (id == null) POST else PATCH` because id is always provided. Always call `saveProduct(payload, isNew: _isNew)`.
 
+### Required field labels — use _req() helper, never plain asterisk in labelText
+Use `label: _req('Field Name')` (a RichText widget with red `*`) instead of `labelText: 'Field Name *'`.
+Every entry screen should have this static helper:
+```dart
+static Widget _req(String text) => RichText(
+  text: TextSpan(
+    text: text,
+    style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w400),
+    children: const [
+      TextSpan(text: ' *', style: TextStyle(color: AppColors.negative, fontWeight: FontWeight.w600)),
+    ],
+  ),
+);
+```
+Use it on any `InputDecoration` with a non-null validator. Do NOT put `*` in `labelText` strings.
+
+### Form save — always give user feedback on validation failure
+When `_formKey.currentState!.validate()` returns false, always show a snackbar before returning.
+```dart
+if (!_formKey.currentState!.validate()) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Please fill in all required fields.'), backgroundColor: Colors.orange),
+  );
+  return;
+}
+```
+
+### Save exception handling — catch all, not just DioException
+Never catch only `DioException` in a save handler. Always add a catch-all after it:
+```dart
+} on DioException catch (e) {
+  setState(() { _saving = false; _error = e.response?.data?['message'] ?? 'Save failed.'; });
+} catch (e) {
+  setState(() { _saving = false; _error = 'Unexpected error: $e'; });
+}
+```
+
+### JWT expiry check on app startup
+`OfflineSessionCache.tryRestoreSession()` now decodes the JWT `exp` claim on startup.
+If the token is already expired it deactivates the session and returns null → router sends user to login immediately.
+Do NOT skip this check or move it — users must never reach the dashboard with an expired token.
+
 ### Before adding a method to an existing file — always read the file first
 Dart has no method overloading. Duplicate method names are a compile error.
 Always `Read` the full file before adding new methods or imports.
