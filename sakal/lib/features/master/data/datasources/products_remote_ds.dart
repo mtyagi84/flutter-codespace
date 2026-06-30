@@ -82,14 +82,18 @@ class ProductsRemoteDs {
     required String clientId,
     required String companyId,
   }) async {
-    final res = await _dio.get('/rim_products', queryParameters: {
-      'client_id':  'eq.$clientId',
-      'company_id': 'eq.$companyId',
-      'is_deleted': 'eq.false',
-      'select':     'id',
-    });
-    final count = (res.data as List).length + 1;
-    return 'PRD-${count.toString().padLeft(5, '0')}';
+    final res = await _dio.get('/rim_products',
+        queryParameters: {
+          'client_id':  'eq.$clientId',
+          'company_id': 'eq.$companyId',
+          'is_deleted': 'eq.false',
+          'select':     'id',
+          'limit':      '0',
+        },
+        options: Options(headers: {'Prefer': 'count=exact'}));
+    final raw   = res.headers.value('content-range') ?? '*/0';
+    final count = int.tryParse(raw.split('/').last) ?? 0;
+    return 'PRD-${(count + 1).toString().padLeft(5, '0')}';
   }
 
   // ── UOM levels ─────────────────────────────────────────────────────────────
@@ -252,6 +256,9 @@ class ProductsRemoteDs {
       'client_id':  'eq.$clientId',
       'company_id': 'eq.$companyId',
       'is_active':  'eq.true',
+      'is_deleted': 'eq.false',
+      'select':     'id,client_id,company_id,flag_key,flag_label,default_value,'
+                    'description,sort_order,is_active',
       'order':      'sort_order.asc',
     });
     return (res.data as List)

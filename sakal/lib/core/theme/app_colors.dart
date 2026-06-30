@@ -38,4 +38,15 @@ class AppColors {
   static const Color badgeApproved = Color(0xFF1B3A6B);
   static const Color badgeDraft = Color(0xFF6B7280);
   static const Color badgeRejected = Color(0xFFC62828);
+
+  // Product nature badge colours
+  static const Color natureService     = Color(0xFF7C3AED);
+  static const Color natureServiceBg   = Color(0xFFEDE9FE);
+  static const Color natureRaw         = Color(0xFF0891B2);
+  static const Color natureRawBg       = Color(0xFFE0F2FE);
+  static const Color natureFinishedBg  = Color(0xFFDCFCE7);
+  static const Color naturePackaging   = Color(0xFFF59E0B);
+  static const Color naturePackagingBg = Color(0xFFFEF3C7);
+  static const Color natureConsumable  = Color(0xFFBE185D);
+  static const Color natureConsumableBg = Color(0xFFFCE7F3);
 }

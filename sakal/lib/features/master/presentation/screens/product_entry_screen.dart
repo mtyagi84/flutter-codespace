@@ -10,7 +10,6 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
-import '../../data/datasources/products_remote_ds.dart';
 import '../../data/models/common_master_model.dart';
 import '../../data/models/item_category_model.dart';
 import '../../data/models/product_flag_type_model.dart';
@@ -18,6 +17,8 @@ import '../../data/models/product_media_model.dart';
 import '../../data/models/product_model.dart';
 import '../../data/models/product_uom_model.dart';
 import '../../data/models/tax_group_model.dart';
+import '../../domain/repositories/products_repository.dart';
+import '../providers/products_providers.dart';
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -34,7 +35,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
   @override
   String get screenName => RouteNames.productMaster;
 
-  final _ds      = ProductsRemoteDs();
+  late final ProductsRepository _repo;
   final _formKey = GlobalKey<FormState>();
 
   // ── Form controllers ───────────────────────────────────────────────────────
@@ -123,6 +124,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
   }
 
   Future<void> _init() async {
+    _repo = ref.read(productsRepositoryProvider);
     final session = ref.read(sessionProvider)!;
     await _loadRefs(session);
     if (!_isNew && mounted) await _loadProduct(widget.productId!);
@@ -133,14 +135,14 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
   Future<void> _loadRefs(UserSession session) async {
     try {
       final results = await Future.wait([
-        _ds.loadMasterSets(
+        _repo.loadMasterSets(
             clientId: session.clientId, companyId: session.companyId),
-        _ds.getCategories(
+        _repo.getCategories(
             clientId: session.clientId, companyId: session.companyId),
-        _ds.getTaxGroups(
+        _repo.getTaxGroups(
             clientId: session.clientId, companyId: session.companyId),
-        _ds.getCurrencies(session.clientId),
-        _ds.getFlagTypes(
+        _repo.getCurrencies(session.clientId),
+        _repo.getFlagTypes(
             clientId: session.clientId, companyId: session.companyId),
       ]);
 
@@ -196,9 +198,9 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
     if (mounted) setState(() { _loadingProd = true; _error = null; });
     try {
       final results = await Future.wait([
-        _ds.getProduct(id),
-        _ds.getProductUoms(id),
-        _ds.getProductMedia(id),
+        _repo.getProduct(id),
+        _repo.getProductUoms(id),
+        _repo.getProductMedia(id),
       ]);
       final product = results[0] as ProductModel?;
       final uoms    = results[1] as List<ProductUomModel>;
@@ -348,7 +350,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
         },
       };
 
-      await _ds.saveProduct(payload, isNew: _isNew);
+      await _repo.saveProduct(payload, isNew: _isNew);
       await _saveUoms(productId, session);
       await _saveMedia(productId, session);
 
@@ -378,7 +380,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
           .toJson()
         ..['client_id']  = session.clientId
         ..['company_id'] = session.companyId;
-      await _ds.saveProductUom(payload);
+      await _repo.saveProductUom(payload);
     }
   }
 
@@ -386,11 +388,11 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
     for (int i = 0; i < _mediaItems.length; i++) {
       final m = _mediaItems[i];
       if (m.toDelete && m.id != null) {
-        await _ds.deleteProductMedia(m.id!);
+        await _repo.deleteProductMedia(m.id!);
         continue;
       }
       if (m.isNew && m.base64Data.isNotEmpty) {
-        await _ds.saveProductMedia({
+        await _repo.saveProductMedia({
           'id':         const Uuid().v4(),
           'client_id':  session.clientId,
           'company_id': session.companyId,
@@ -411,7 +413,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
   Future<void> _generateCode() async {
     final session = ref.read(sessionProvider)!;
     try {
-      final code = await _ds.generateProductCode(
+      final code = await _repo.generateProductCode(
           clientId: session.clientId, companyId: session.companyId);
       if (mounted) setState(() => _codeCtrl.text = code);
     } catch (_) {}
@@ -483,7 +485,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
   void _deleteUomRow(int index) {
     final row = _uomRows[index];
     if (row.id != null) {
-      _ds.deleteProductUom(row.id!).catchError((_) {});
+      _repo.deleteProductUom(row.id!).catchError((_) {});
     }
     setState(() => _uomRows.removeAt(index));
   }

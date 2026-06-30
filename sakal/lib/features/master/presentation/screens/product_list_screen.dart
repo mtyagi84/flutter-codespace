@@ -473,10 +473,10 @@ class _ProductCard extends StatelessWidget {
 
   static Color _natureColor(String nature) {
     switch (nature) {
-      case 'SERVICE':       return const Color(0xFF7C3AED);
-      case 'RAW_MATERIAL':  return const Color(0xFF0891B2);
+      case 'SERVICE':       return AppColors.natureService;
+      case 'RAW_MATERIAL':  return AppColors.natureRaw;
       case 'FINISHED_GOOD': return AppColors.positive;
-      case 'PACKAGING':     return const Color(0xFFF59E0B);
+      case 'PACKAGING':     return AppColors.naturePackaging;
       default:              return AppColors.primary;
     }
   }
@@ -507,22 +507,22 @@ class _NatureBadge extends StatelessWidget {
 
   Color _bg() {
     switch (nature) {
-      case 'SERVICE':       return const Color(0xFFEDE9FE);
-      case 'RAW_MATERIAL':  return const Color(0xFFE0F2FE);
-      case 'FINISHED_GOOD': return const Color(0xFFDCFCE7);
-      case 'PACKAGING':     return const Color(0xFFFEF3C7);
-      case 'CONSUMABLE':    return const Color(0xFFFCE7F3);
-      default:              return const Color(0xFFEFF6FF);
+      case 'SERVICE':       return AppColors.natureServiceBg;
+      case 'RAW_MATERIAL':  return AppColors.natureRawBg;
+      case 'FINISHED_GOOD': return AppColors.natureFinishedBg;
+      case 'PACKAGING':     return AppColors.naturePackagingBg;
+      case 'CONSUMABLE':    return AppColors.natureConsumableBg;
+      default:              return AppColors.surfaceVariant;
     }
   }
 
   Color _fg() {
     switch (nature) {
-      case 'SERVICE':       return const Color(0xFF7C3AED);
-      case 'RAW_MATERIAL':  return const Color(0xFF0891B2);
-      case 'FINISHED_GOOD': return const Color(0xFF166534);
-      case 'PACKAGING':     return const Color(0xFFB45309);
-      case 'CONSUMABLE':    return const Color(0xFFBE185D);
+      case 'SERVICE':       return AppColors.natureService;
+      case 'RAW_MATERIAL':  return AppColors.natureRaw;
+      case 'FINISHED_GOOD': return AppColors.positive;
+      case 'PACKAGING':     return AppColors.naturePackaging;
+      case 'CONSUMABLE':    return AppColors.natureConsumable;
       default:              return AppColors.primary;
     }
   }

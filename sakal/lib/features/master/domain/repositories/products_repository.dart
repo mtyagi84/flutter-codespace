@@ -1,7 +1,10 @@
+import '../../data/models/common_master_model.dart';
+import '../../data/models/item_category_model.dart';
 import '../../data/models/product_flag_type_model.dart';
 import '../../data/models/product_media_model.dart';
 import '../../data/models/product_model.dart';
 import '../../data/models/product_uom_model.dart';
+import '../../data/models/tax_group_model.dart';
 
 abstract class ProductsRepository {
   Future<List<ProductModel>> getProducts({
@@ -27,4 +30,9 @@ abstract class ProductsRepository {
   Future<void>                    deleteProductMedia(String id);
 
   Future<List<ProductFlagTypeModel>> getFlagTypes({required String clientId, required String companyId});
+
+  Future<Map<String, List<CommonMasterModel>>> loadMasterSets({required String clientId, required String companyId});
+  Future<List<ItemCategoryModel>>              getCategories({required String clientId, required String companyId});
+  Future<List<TaxGroupModel>>                  getTaxGroups({required String clientId, required String companyId});
+  Future<List<Map<String, dynamic>>>           getCurrencies(String clientId);
 }

@@ -1,9 +1,12 @@
 import '../../domain/repositories/products_repository.dart';
 import '../datasources/products_remote_ds.dart';
+import '../models/common_master_model.dart';
+import '../models/item_category_model.dart';
 import '../models/product_flag_type_model.dart';
 import '../models/product_media_model.dart';
 import '../models/product_model.dart';
 import '../models/product_uom_model.dart';
+import '../models/tax_group_model.dart';
 
 class ProductsRepositoryImpl implements ProductsRepository {
   final ProductsRemoteDs _remote;
@@ -71,4 +74,29 @@ class ProductsRepositoryImpl implements ProductsRepository {
     required String companyId,
   }) =>
       _remote.getFlagTypes(clientId: clientId, companyId: companyId);
+
+  @override
+  Future<Map<String, List<CommonMasterModel>>> loadMasterSets({
+    required String clientId,
+    required String companyId,
+  }) =>
+      _remote.loadMasterSets(clientId: clientId, companyId: companyId);
+
+  @override
+  Future<List<ItemCategoryModel>> getCategories({
+    required String clientId,
+    required String companyId,
+  }) =>
+      _remote.getCategories(clientId: clientId, companyId: companyId);
+
+  @override
+  Future<List<TaxGroupModel>> getTaxGroups({
+    required String clientId,
+    required String companyId,
+  }) =>
+      _remote.getTaxGroups(clientId: clientId, companyId: companyId);
+
+  @override
+  Future<List<Map<String, dynamic>>> getCurrencies(String clientId) =>
+      _remote.getCurrencies(clientId);
 }
