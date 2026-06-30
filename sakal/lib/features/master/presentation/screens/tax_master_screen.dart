@@ -9,8 +9,6 @@ import '../../data/datasources/tax_master_remote_ds.dart';
 import '../../data/models/tax_model.dart';
 import '../../data/models/tax_rate_model.dart';
 import '../../data/models/tax_type_model.dart';
-import '../providers/tax_master_providers.dart';
-
 class TaxMasterScreen extends ConsumerStatefulWidget {
   const TaxMasterScreen({super.key});
   @override
@@ -243,6 +241,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
       }
       return;
     }
+    if (!mounted) return;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -428,7 +427,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
 
   Widget _emptyPanel() => Center(
     child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Icon(Icons.receipt_long_outlined, size: 64, color: AppColors.primary.withOpacity(0.3)),
+      Icon(Icons.receipt_long_outlined, size: 64, color: AppColors.primary.withValues(alpha: 0.3)),
       const SizedBox(height: 12),
       const Text('Select a tax to edit, or tap Add Tax'),
     ]),
@@ -479,7 +478,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
         final stdRate  = _stdRateLabel(tax.id ?? '');
         return ListTile(
           selected: selected,
-          selectedTileColor: AppColors.primary.withOpacity(0.08),
+          selectedTileColor: AppColors.primary.withValues(alpha: 0.08),
           leading: CircleAvatar(
             radius: 18,
             backgroundColor: tax.isActive ? AppColors.primary : Colors.grey.shade300,
@@ -761,7 +760,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
           leading: Chip(
             label: Text(r.rateLabel, style: const TextStyle(fontSize: 10)),
             padding: EdgeInsets.zero,
-            backgroundColor: AppColors.primary.withOpacity(0.12),
+            backgroundColor: AppColors.primary.withValues(alpha: 0.12),
           ),
           title: Text('${r.rate.toStringAsFixed(4)}%  ($from → $to)',
               style: const TextStyle(fontSize: 12)),
@@ -782,7 +781,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
   Widget _rateFormRow() => Padding(
     padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
     child: Card(
-      color: AppColors.primary.withOpacity(0.04),
+      color: AppColors.primary.withValues(alpha: 0.04),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

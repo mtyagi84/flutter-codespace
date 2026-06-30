@@ -200,7 +200,7 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
                       setState(() => _activeOnly = v);
                       _applyFilter();
                     },
-                    selectedColor: AppColors.primary.withOpacity(0.12),
+                    selectedColor: AppColors.primary.withValues(alpha: 0.12),
                     checkmarkColor: AppColors.primary,
                     labelStyle: TextStyle(
                       color: _activeOnly
@@ -296,9 +296,9 @@ class _ActiveBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.positive.withOpacity(0.08),
+        color: AppColors.positive.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.positive.withOpacity(0.3)),
+        border: Border.all(color: AppColors.positive.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -329,9 +329,9 @@ class _ErrorBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.negative.withOpacity(0.08),
+        color: AppColors.negative.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.negative.withOpacity(0.3)),
+        border: Border.all(color: AppColors.negative.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -410,7 +410,7 @@ class _CurrencyRow extends StatelessWidget {
     return Container(
       color: isEven
           ? Colors.transparent
-          : AppColors.surfaceVariant.withOpacity(0.35),
+          : AppColors.surfaceVariant.withValues(alpha: 0.35),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -422,7 +422,7 @@ class _CurrencyRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
               decoration: BoxDecoration(
                 color: isActive
-                    ? AppColors.primary.withOpacity(0.08)
+                    ? AppColors.primary.withValues(alpha: 0.08)
                     : AppColors.surfaceVariant,
                 borderRadius: BorderRadius.circular(4),
               ),
@@ -491,7 +491,7 @@ class _CurrencyRow extends StatelessWidget {
                 : Switch(
                     value: isActive,
                     onChanged: (_) => onToggle(),
-                    activeColor: AppColors.positive,
+                    activeThumbColor: AppColors.positive,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
           ),

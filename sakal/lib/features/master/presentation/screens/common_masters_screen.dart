@@ -753,7 +753,8 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
             child: Checkbox(
               value: state.isActive,
               onChanged: (v) => setRowState(() => state.isActive = v ?? true),
-              activeColor: AppColors.primary,
+              fillColor: WidgetStateProperty.resolveWith((s) =>
+                  s.contains(WidgetState.selected) ? AppColors.primary : null),
             ),
           ),
           // Save / Cancel
@@ -955,7 +956,8 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
               Checkbox(
                 value: state.isActive,
                 onChanged: (v) => setRowState(() => state.isActive = v ?? true),
-                activeColor: AppColors.primary,
+                fillColor: WidgetStateProperty.resolveWith((s) =>
+                  s.contains(WidgetState.selected) ? AppColors.primary : null),
               ),
               const Text('Active', style: TextStyle(fontSize: 14)),
               const Spacer(),

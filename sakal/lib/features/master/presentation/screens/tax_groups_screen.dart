@@ -114,7 +114,6 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
       try {
         final raw = await _ds.getMembersForGroup(group.id!);
         // Resolve display names from loaded taxes
-        final s = ref.read(sessionProvider)!;
         _members = raw.map((m) {
           final t = _taxById(m.taxId);
           return m.withDisplay(code: t?.taxCode ?? '?', name: t?.taxName ?? '?');
@@ -321,7 +320,7 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
 
   Widget _emptyPanel() => Center(
     child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Icon(Icons.playlist_add_check, size: 64, color: AppColors.primary.withOpacity(0.3)),
+      Icon(Icons.playlist_add_check, size: 64, color: AppColors.primary.withValues(alpha: 0.3)),
       const SizedBox(height: 12),
       const Text('Select a tax group to edit, or tap Add Group'),
     ]),
@@ -371,7 +370,7 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
         final selected = _editing?.id == g.id && _panelMode == 'edit';
         return ListTile(
           selected: selected,
-          selectedTileColor: AppColors.primary.withOpacity(0.08),
+          selectedTileColor: AppColors.primary.withValues(alpha: 0.08),
           leading: CircleAvatar(
             radius: 18,
             backgroundColor: g.isActive ? AppColors.secondary : Colors.grey.shade300,
@@ -536,9 +535,8 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
       if (_members.isNotEmpty) ReorderableListView(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        onReorder: (oldIndex, newIndex) {
+        onReorderItem: (oldIndex, newIndex) {
           setState(() {
-            if (newIndex > oldIndex) newIndex -= 1;
             final item = _members.removeAt(oldIndex);
             _members.insert(newIndex, item);
             _renumber();
@@ -564,7 +562,7 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
           const SizedBox(width: 8),
           CircleAvatar(
             radius: 12,
-            backgroundColor: AppColors.primary.withOpacity(0.12),
+            backgroundColor: AppColors.primary.withValues(alpha: 0.12),
             child: Text('${m.sequenceNo}',
               style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.primary)),
           ),

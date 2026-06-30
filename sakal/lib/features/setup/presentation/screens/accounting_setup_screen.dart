@@ -266,13 +266,21 @@ class _AccountingSetupScreenState
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
                       color: AppColors.textPrimary)),
               const SizedBox(height: 10),
-              _stdCard('OHADA', 'OHADA / SYSCOHADA',
-                  'For DRC and Francophone Africa. Class-based numeric accounts (1xxx–9xxx).',
-                  Icons.public),
-              const SizedBox(height: 10),
-              _stdCard('INDIAN', 'Indian Accounting Standards',
-                  'Assets / Liabilities / Equity / Revenue / Expense structure.',
-                  Icons.account_balance_outlined),
+              RadioGroup<String>(
+                groupValue: _std,
+                onChanged: (v) { if (v != null) setState(() => _std = v); },
+                child: Column(
+                  children: [
+                    _stdCard('OHADA', 'OHADA / SYSCOHADA',
+                        'For DRC and Francophone Africa. Class-based numeric accounts (1xxx–9xxx).',
+                        Icons.public),
+                    const SizedBox(height: 10),
+                    _stdCard('INDIAN', 'Indian Accounting Standards',
+                        'Assets / Liabilities / Equity / Revenue / Expense structure.',
+                        Icons.account_balance_outlined),
+                  ],
+                ),
+              ),
 
               const SizedBox(height: 28),
 
@@ -350,9 +358,6 @@ class _AccountingSetupScreenState
         child: Row(children: [
           Radio<String>(
             value: value,
-            groupValue: _std,
-            activeColor: AppColors.primary,
-            onChanged: (v) => setState(() => _std = v!),
           ),
           const SizedBox(width: 8),
           Icon(icon, size: 22, color: selected ? AppColors.primary : AppColors.textSecondary),

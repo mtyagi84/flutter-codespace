@@ -1535,9 +1535,7 @@ class _FinanceVoucherEntryScreenState
               child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
                 Radio<bool>(
                   value: false,
-                  onChanged: (locked || !billAllowed)
-                      ? null
-                      : (v) { if (v != null) setState(() => _isOnAccount = v); },
+                  onChanged: (locked || !billAllowed) ? null : (_) {},
                 ),
                 Text(
                   'Against Bill',
@@ -1558,9 +1556,7 @@ class _FinanceVoucherEntryScreenState
                 const SizedBox(width: 20),
                 Radio<bool>(
                   value: true,
-                  onChanged: (locked || billsLoaded)
-                      ? null
-                      : (v) { if (v != null) setState(() => _isOnAccount = v); },
+                  onChanged: (locked || billsLoaded) ? null : (_) {},
                 ),
                 Text('On Account',
                     style: TextStyle(

@@ -509,9 +509,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: AppColors.secondary.withOpacity(0.08),
+              color: AppColors.secondary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.secondary.withOpacity(0.3)),
+              border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
             ),
             child: const Row(
               children: [
@@ -822,9 +822,9 @@ class _Banner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [

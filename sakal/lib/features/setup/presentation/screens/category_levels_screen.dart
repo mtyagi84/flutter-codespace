@@ -168,6 +168,7 @@ class _CategoryLevelsScreenState extends ConsumerState<CategoryLevelsScreen>
       return;
     }
 
+    if (!mounted) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -282,9 +283,9 @@ class _CategoryLevelsScreenState extends ConsumerState<CategoryLevelsScreen>
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.05),
+                      color: AppColors.primary.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.primary.withOpacity(0.15)),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
                     ),
                     child: const Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -374,7 +375,7 @@ class _CategoryLevelsScreenState extends ConsumerState<CategoryLevelsScreen>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppColors.textSecondary.withOpacity(0.1),
+                  color: AppColors.textSecondary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: const Text('Inactive',

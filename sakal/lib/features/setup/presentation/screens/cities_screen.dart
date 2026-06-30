@@ -483,7 +483,7 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
             child: Center(
               child: Switch.adaptive(
                 value: active,
-                activeColor: AppColors.positive,
+                activeThumbColor: AppColors.positive,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 onChanged: _toggling.contains(id)
                     ? null
@@ -714,7 +714,7 @@ class _CityDialogState extends State<_CityDialog> {
                           'Inactive cities are hidden from address autocomplete',
                           style: TextStyle(fontSize: 11)),
                       value: _isActive,
-                      activeColor: AppColors.positive,
+                      activeThumbColor: AppColors.positive,
                       onChanged: (v) => setState(() => _isActive = v),
                       contentPadding: EdgeInsets.zero,
                     ),
