@@ -1120,9 +1120,9 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
                 6: FixedColumnWidth(64),
               },
               children: [
-                TableRow(
-                  decoration: const BoxDecoration(color: AppColors.surfaceVariant),
-                  children: const [
+                const TableRow(
+                  decoration: BoxDecoration(color: AppColors.surfaceVariant),
+                  children: [
                     _TableHdr('UOM'),
                     _TableHdr('Factor'),
                     _TableHdr('Barcode'),

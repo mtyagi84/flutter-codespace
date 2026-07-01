@@ -51,7 +51,7 @@ class SyncEngine {
         );
         await (_db.update(_db.pendingSyncQueue)
               ..where((t) => t.id.equals(doc.id)))
-            .write(PendingSyncQueueCompanion(synced: const Value(true)));
+            .write(const PendingSyncQueueCompanion(synced: Value(true)));
         synced++;
       } catch (_) {
         await (_db.update(_db.pendingSyncQueue)

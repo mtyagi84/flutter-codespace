@@ -609,7 +609,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
             )),
             if (_taxTypes.firstWhere(
                 (t) => t.taxTypeCode == _selTypeCode,
-                orElse: () => TaxTypeModel(id:'',taxTypeCode:'',typeName:'',isWithholding:false,sortOrder:0,isActive:true))
+                orElse: () => const TaxTypeModel(id:'',taxTypeCode:'',typeName:'',isWithholding:false,sortOrder:0,isActive:true))
                 .isWithholding)
               Expanded(child: SwitchListTile.adaptive(
                 dense: true,
@@ -792,7 +792,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
             // Rate Label
             SizedBox(width: 130,
               child: DropdownButtonFormField<String>(
-                value: _rateLabel,
+                initialValue: _rateLabel,
                 isDense: true,
                 decoration: const InputDecoration(labelText: 'Label', isDense: true),
                 items: ['STANDARD','REDUCED','ZERO','EXEMPT','SPECIAL']

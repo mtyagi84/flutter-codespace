@@ -1538,7 +1538,7 @@ class _FinanceVoucherEntryScreenState
                 setState(() => _isOnAccount = v);
               },
               child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-                Radio<bool>(
+                const Radio<bool>(
                   value: false,
                 ),
                 Text(
@@ -1558,7 +1558,7 @@ class _FinanceVoucherEntryScreenState
                   ),
                 ],
                 const SizedBox(width: 20),
-                Radio<bool>(
+                const Radio<bool>(
                   value: true,
                 ),
                 Text('On Account',
