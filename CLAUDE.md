@@ -93,12 +93,52 @@ feature/
 **Every single table has**: `client_id + company_id + location_id`
 
 ```
-clients → companies → locations
+clients → companies → location_groups → locations
 ```
 - 1 client → multiple companies
-- 1 company → multiple locations (stores/warehouses, each can have own server)
+- 1 company → multiple location groups (entities)
+- 1 location group → multiple physical locations (e.g. shop floor + backroom)
 - Consolidation: UPSERT from location servers → central server (no conflicts — composite key)
 - Same codebase works for SaaS (cloud-hosted) or on-premise (client's LAN server)
+
+---
+
+## Inter-Location Model (set once at company setup — never change after transactions exist)
+
+`ric_companies.inter_location_model` has two values:
+
+```
+SIMPLE
+  All locations share one P&L + Balance Sheet.
+  Internal stock movements = pure stock transfer, no financial posting.
+  Groups show Gross Profit report only (Sales − COGS per group).
+
+INTER_ENTITY
+  Each location group = independent entity with own P&L + Balance Sheet.
+  Same group   → pure stock transfer (e.g. shop floor ↔ shop backroom)
+  Diff group   → inter-entity invoice (creates customer/supplier transaction)
+  Each group has TWO separate accounts for bill-by-bill reconciliation:
+    customer_account_id  — receivable (DR when others sell TO this group)
+    supplier_account_id  — payable   (CR when this group sells TO others)
+```
+
+**CRITICAL rules for all transaction screens:**
+- NEVER restrict any location from doing any external transaction (PO, Sales Invoice, GRN etc.)
+- Groups ONLY determine how internal movements between the company's OWN locations are treated
+- Always check `company.inter_location_model` + `location.group_id` before posting any stock transfer
+- Same `group_id` = always stock transfer regardless of mode
+- Different `group_id` + INTER_ENTITY = inter-entity invoice (use group's customer/supplier accounts)
+
+**`ric_location_groups` key fields:**
+```dart
+group_code, group_name
+responsible_user_id       // accountable manager
+customer_account_id       // → rim_accounts (this group as Customer in other groups' books)
+supplier_account_id       // → rim_accounts (this group as Supplier in other groups' books)
+```
+
+**`rim_accounts.inter_entity_group_id`** — marks an account as belonging to a location group.
+NULL = regular external party. NOT NULL = inter-entity account (separate aging/reports).
 
 ---
 
