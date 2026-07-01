@@ -6,6 +6,7 @@ import 'tables/exchange_rate_cache_table.dart';
 import 'tables/accounts_cache_table.dart';
 import 'tables/finance_voucher_cache_tables.dart';
 import 'tables/common_masters_cache_table.dart';
+import 'tables/products_cache_table.dart';
 
 part 'app_database.g.dart';
 
@@ -17,12 +18,13 @@ part 'app_database.g.dart';
   FinanceVoucherLinesCache,
   CommonMasterTypesCache,
   CommonMastersCache,
+  ProductsCache,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'sakal_local'));
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -37,6 +39,7 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(commonMasterTypesCache);
             await m.createTable(commonMastersCache);
           }
+          if (from < 6) await m.createTable(productsCache);
         },
       );
 }
