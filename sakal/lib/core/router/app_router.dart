@@ -12,6 +12,7 @@ import '../../features/setup/presentation/screens/countries_screen.dart';
 import '../../features/setup/presentation/screens/currencies_screen.dart';
 import '../../features/setup/presentation/screens/divisions_screen.dart';
 import '../../features/setup/presentation/screens/locations_screen.dart';
+import '../../features/setup/presentation/screens/location_groups_screen.dart';
 import '../../features/setup/presentation/screens/master_menu_screen.dart';
 import '../../features/setup/presentation/screens/permissions_screen.dart';
 import '../../features/setup/presentation/screens/users_screen.dart';
@@ -109,6 +110,7 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.masterMenu,  builder: (c, s) => const MasterMenuScreen()),
         GoRoute(path: RouteNames.company,     builder: (c, s) => const CompanyScreen()),
         GoRoute(path: RouteNames.locations,   builder: (c, s) => const LocationsScreen()),
+        GoRoute(path: RouteNames.locationGroups, builder: (c, s) => const LocationGroupsScreen()),
         GoRoute(path: RouteNames.currencies,  builder: (c, s) => const CurrenciesScreen()),
         GoRoute(path: RouteNames.countries,   builder: (c, s) => const CountriesScreen()),
         GoRoute(path: RouteNames.divisions,   builder: (c, s) => const DivisionsScreen()),

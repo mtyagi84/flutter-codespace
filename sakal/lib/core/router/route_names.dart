@@ -15,6 +15,7 @@ class RouteNames {
   static const String masterMenu  = '/setup/master-menu';
   static const String company     = '/setup/company';
   static const String locations   = '/setup/locations';
+  static const String locationGroups = '/setup/location-groups';
   static const String currencies  = '/setup/currencies';
   static const String countries   = '/setup/countries';
   static const String divisions   = '/setup/divisions';

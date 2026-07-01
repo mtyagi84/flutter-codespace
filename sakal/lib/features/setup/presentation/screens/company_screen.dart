@@ -53,6 +53,10 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
   bool _enablePartNumber = false;
   bool _hasProducts      = false; // true = settings are locked
 
+  // Inter-location model
+  String _interLocationModel = 'SIMPLE';
+  bool   _hasTransactions     = false; // true = model is locked
+
   bool    _loading = true;
   bool    _saving  = false;
   String? _error;
@@ -88,10 +92,13 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
             queryParameters: {'id': 'eq.${session.companyId}', 'select': '*'}),
         DioClient.instance.get('/rim_products',
             queryParameters: {'is_deleted': 'eq.false', 'select': 'id', 'limit': '1'}),
+        DioClient.instance.get('/rih_finance_headers',
+            queryParameters: {'company_id': 'eq.${session.companyId}', 'select': 'id', 'limit': '1'}),
       ]);
       final list = results[0].data as List<dynamic>;
       if (list.isNotEmpty) _populate(list.first as Map<String, dynamic>);
-      _hasProducts = (results[1].data as List).isNotEmpty;
+      _hasProducts     = (results[1].data as List).isNotEmpty;
+      _hasTransactions = (results[2].data as List).isNotEmpty;
       if (mounted) setState(() => _loading = false);
     } on DioException {
       if (mounted) {
@@ -126,6 +133,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
     _stampBase64     = d['company_stamp']       as String?;
     _enableBarcode    = d['enable_barcode']     as bool? ?? false;
     _enablePartNumber = d['enable_part_number'] as bool? ?? false;
+    _interLocationModel = d['inter_location_model'] as String? ?? 'SIMPLE';
   }
 
   // ── Image picking ────────────────────────────────────────────────────────
@@ -192,6 +200,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
           'company_stamp':      _stampBase64,
           if (!_hasProducts) 'enable_barcode':     _enableBarcode,
           if (!_hasProducts) 'enable_part_number': _enablePartNumber,
+          if (!_hasTransactions) 'inter_location_model': _interLocationModel,
           'updated_at':         DateTime.now().toUtc().toIso8601String(),
           'updated_by':         session.userId,
         },
@@ -271,6 +280,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
                     _buildImages(),
                     const SizedBox(height: 20),
                     _buildProductCoding(),
+                    const SizedBox(height: 20),
+                    _buildInterLocationModel(),
                     const SizedBox(height: 28),
 
                     // ── Save button ──────────────────────────────────
@@ -608,6 +619,106 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
               trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
             ),
         ],
+      ),
+    );
+  }
+
+  // ── Section: Inter-Location Model ─────────────────────────────────────────
+
+  Widget _buildInterLocationModel() {
+    return _SectionCard(
+      title: 'Inter-Location Model',
+      icon: Icons.account_tree_outlined,
+      subtitle: _hasTransactions
+          ? 'Locked — financial transactions have been posted. This cannot be changed.'
+          : 'Set once. Determines how stock movements between your own locations are treated. '
+              'See Location Groups to organise locations into entities.',
+      children: [
+        if (_hasTransactions)
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.secondary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.lock_outline, size: 16, color: AppColors.secondary),
+                SizedBox(width: 8),
+                Text(
+                  'Settings are locked because transactions already exist in this company.',
+                  style: TextStyle(fontSize: 13, color: AppColors.secondary),
+                ),
+              ],
+            ),
+          ),
+        _buildInterLocationOption(
+          value: 'SIMPLE',
+          title: 'Simple',
+          description: 'All locations share one Profit & Loss and Balance Sheet. '
+              'Internal stock movements are pure transfers — no financial posting. '
+              'Groups show a Gross Profit report only.',
+        ),
+        const SizedBox(height: 12),
+        _buildInterLocationOption(
+          value: 'INTER_ENTITY',
+          title: 'Independent Entities',
+          description: 'Each location group is its own entity with its own P&L and Balance Sheet. '
+              'Stock moved between different groups is posted as an inter-entity invoice.',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInterLocationOption({
+    required String value,
+    required String title,
+    required String description,
+  }) {
+    final selected = _interLocationModel == value;
+    return InkWell(
+      onTap: _hasTransactions
+          ? null
+          : () => setState(() => _interLocationModel = value),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary.withValues(alpha: 0.06) : AppColors.background,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+              color: selected ? AppColors.primary : AppColors.border,
+              width: selected ? 1.5 : 1),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+              size: 20,
+              color: selected ? AppColors.primary : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: AppColors.textPrimary)),
+                  const SizedBox(height: 2),
+                  Text(description,
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
