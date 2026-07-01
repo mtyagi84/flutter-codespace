@@ -6,6 +6,10 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/screen_permission_mixin.dart';
+import '../../../../core/widgets/offline_banner.dart';
+import '../../data/user_location_access_helper.dart';
+import '../widgets/location_access_picker.dart';
 
 const _salutations = ['Mr', 'Mrs', 'Ms', 'Dr', 'Prof'];
 
@@ -22,7 +26,10 @@ class UsersScreen extends ConsumerStatefulWidget {
   ConsumerState<UsersScreen> createState() => _UsersScreenState();
 }
 
-class _UsersScreenState extends ConsumerState<UsersScreen> {
+class _UsersScreenState extends ConsumerState<UsersScreen>
+    with ScreenPermissionMixin<UsersScreen> {
+  @override String get screenName => '/setup/users';
+
   List<Map<String, dynamic>> _rows      = [];
   List<Map<String, dynamic>> _locations = [];
   bool    _loading = true;
@@ -144,6 +151,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
       child: Center(
@@ -171,14 +179,18 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                       ],
                     ),
                   ),
-                  ElevatedButton.icon(
-                    onPressed: () => _openDialog(),
-                    icon: const Icon(Icons.person_add_outlined, size: 18),
-                    label: const Text('Add User'),
-                  ),
+                  if (canAdd && !offline)
+                    ElevatedButton.icon(
+                      onPressed: () => _openDialog(),
+                      icon: const Icon(Icons.person_add_outlined, size: 18),
+                      label: const Text('Add User'),
+                    ),
                 ],
               ),
               const SizedBox(height: 24),
+
+              if (offline) const OfflineBanner(),
+              if (offline) const SizedBox(height: 16),
 
               // ── Error banner ──────────────────────────────────────────
               if (_error != null) ...[
@@ -242,6 +254,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                               ..._rows.asMap().entries.map((e) => _TableRow(
                                     row: e.value,
                                     isEven: e.key.isEven,
+                                    canEdit: canEdit && !offline,
                                     onEdit: () => _openDialog(e.value),
                                     onToggle: () => _toggleActive(e.value),
                                     onDelete: () => _confirmDelete(
@@ -328,6 +341,7 @@ class _HCol extends StatelessWidget {
 class _TableRow extends StatelessWidget {
   final Map<String, dynamic> row;
   final bool isEven;
+  final bool canEdit;
   final VoidCallback onEdit;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
@@ -336,6 +350,7 @@ class _TableRow extends StatelessWidget {
   const _TableRow({
     required this.row,
     required this.isEven,
+    required this.canEdit,
     required this.onEdit,
     required this.onToggle,
     required this.onDelete,
@@ -412,7 +427,7 @@ class _TableRow extends StatelessWidget {
             width: 80,
             child: Switch(
               value: active,
-              onChanged: (_) => onToggle(),
+              onChanged: canEdit ? (_) => onToggle() : null,
               activeThumbColor: AppColors.positive,
             ),
           ),
@@ -426,19 +441,19 @@ class _TableRow extends StatelessWidget {
                   tooltip: 'Edit',
                   icon: const Icon(Icons.edit_outlined,
                       size: 18, color: AppColors.primary),
-                  onPressed: onEdit,
+                  onPressed: canEdit ? onEdit : null,
                 ),
                 IconButton(
                   tooltip: 'Reset Password',
                   icon: const Icon(Icons.lock_reset_outlined,
                       size: 18, color: AppColors.secondary),
-                  onPressed: onResetPassword,
+                  onPressed: canEdit ? onResetPassword : null,
                 ),
                 IconButton(
                   tooltip: 'Delete',
                   icon: const Icon(Icons.delete_outline,
                       size: 18, color: AppColors.negative),
-                  onPressed: onDelete,
+                  onPressed: canEdit ? onDelete : null,
                 ),
               ],
             ),
@@ -565,7 +580,9 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
   String? _salutation;
   String  _language    = 'en';
   String  _theme       = 'light';
-  String? _locationId;
+  Set<String> _selectedLocationIds = {};
+  String? _defaultLocationId;
+  bool    _loadingAccess = false;
   String? _photoBase64;
   bool    _mustChange  = true;
   bool    _saving      = false;
@@ -587,8 +604,27 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
       _salutation     = d['salutation']          as String?;
       _language       = d['language_code']       as String? ?? 'en';
       _theme          = d['theme']               as String? ?? 'light';
-      _locationId     = d['default_location_id'] as String?;
       _photoBase64    = d['photo']               as String?;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadAccess(d['id'] as String));
+    }
+  }
+
+  Future<void> _loadAccess(String userId) async {
+    final session = ref.read(sessionProvider)!;
+    setState(() => _loadingAccess = true);
+    try {
+      final result = await UserLocationAccessHelper.getForUser(
+        clientId: session.clientId, companyId: session.companyId, userId: userId,
+      );
+      if (mounted) {
+        setState(() {
+          _selectedLocationIds = result['selected'] as Set<String>;
+          _defaultLocationId   = result['default'] as String?;
+          _loadingAccess = false;
+        });
+      }
+    } on DioException {
+      if (mounted) setState(() => _loadingAccess = false);
     }
   }
 
@@ -616,16 +652,23 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in all required fields.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
     setState(() { _saving = true; _error = null; });
     final session = ref.read(sessionProvider)!;
     final now     = DateTime.now().toUtc().toIso8601String();
 
     try {
+      String userId;
       if (_isEdit) {
+        userId = widget.existing!['id'] as String;
         await DioClient.instance.patch(
           '/rim_users',
-          queryParameters: {'id': 'eq.${widget.existing!['id']}'},
+          queryParameters: {'id': 'eq.$userId'},
           data: {
             'salutation':          _salutation,
             'full_name':           _nameCtrl.text.trim(),
@@ -636,19 +679,18 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
             'photo':               _photoBase64,
             'language_code':       _language,
             'theme':               _theme,
-            'default_location_id': _locationId,
             'updated_at':          now,
             'updated_by':          session.userId,
           },
           options: Options(headers: {'Prefer': 'return=minimal'}),
         );
       } else {
-        await DioClient.instance.post(
+        final res = await DioClient.instance.post(
           '/rpc/fn_create_user',
           data: {
             'p_client_id':            session.clientId,
             'p_company_id':           session.companyId,
-            'p_location_id':          _locationId,
+            'p_location_id':          _defaultLocationId,
             'p_username':             _userCtrl.text.trim(),
             'p_full_name':            _nameCtrl.text.trim(),
             'p_salutation':           _salutation,
@@ -664,13 +706,26 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
             'p_created_by':           session.userId,
           },
         );
+        userId = res.data as String;
       }
+
+      await UserLocationAccessHelper.save(
+        clientId: session.clientId,
+        companyId: session.companyId,
+        userId: userId,
+        selectedLocationIds: _selectedLocationIds,
+        defaultLocationId: _defaultLocationId,
+        updatedBy: session.userId,
+      );
+
       if (mounted) Navigator.of(context, rootNavigator: true).pop();
       widget.onSaved();
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] as String?
           ?? 'Save failed. Please try again.';
       if (mounted) setState(() { _saving = false; _error = msg; });
+    } catch (e) {
+      if (mounted) setState(() { _saving = false; _error = 'Unexpected error: $e'; });
     }
   }
 
@@ -800,40 +855,14 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                 ),
                 const SizedBox(height: 14),
 
-                // ── Row 3: Phone + Default Location ───────────────────
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _phoneCtrl,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(
-                          labelText: 'Phone',
-                          prefixIcon: Icon(Icons.phone_outlined),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _locationId,
-                        decoration: const InputDecoration(
-                          labelText: 'Default Location',
-                          prefixIcon: Icon(Icons.store_outlined),
-                        ),
-                        items: [
-                          const DropdownMenuItem(
-                              value: null, child: Text('— None —')),
-                          ...widget.locations.map((l) => DropdownMenuItem(
-                                value: l['id'] as String,
-                                child: Text(l['location_name'] as String),
-                              )),
-                        ],
-                        onChanged: (v) => setState(() => _locationId = v),
-                      ),
-                    ),
-                  ],
+                // ── Row 3: Phone ────────────────────────────────────────
+                TextFormField(
+                  controller: _phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Phone',
+                    prefixIcon: Icon(Icons.phone_outlined),
+                  ),
                 ),
                 const SizedBox(height: 14),
 
@@ -878,6 +907,28 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 14),
+
+                // ── Assigned Locations ──────────────────────────────────
+                const Text('Assigned Locations',
+                    style: TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                const SizedBox(height: 6),
+                _loadingAccess
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      )
+                    : LocationAccessPicker(
+                        key: ValueKey(widget.existing?['id'] ?? 'new'),
+                        locations: widget.locations,
+                        initialSelected: _selectedLocationIds,
+                        initialDefault: _defaultLocationId,
+                        onChanged: (selected, defaultId) => setState(() {
+                          _selectedLocationIds = selected;
+                          _defaultLocationId   = defaultId;
+                        }),
+                      ),
                 const SizedBox(height: 14),
 
                 // ── Profile Photo ──────────────────────────────────────

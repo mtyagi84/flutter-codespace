@@ -1,6 +1,8 @@
 -- ============================================================
 -- 029_user_location_access.sql
--- Which locations a user can view / transact at, and their default.
+-- Which locations a user is restricted to, and their default.
+-- Add/edit/view/approve rights come from ric_master_menus screen
+-- permissions, not from this table — this table only scopes locations.
 -- See memory: project-location-groups-design.
 -- ============================================================
 
@@ -10,8 +12,6 @@ CREATE TABLE ric_user_location_access (
     company_id      UUID        NOT NULL REFERENCES ric_companies(id),
     user_id         UUID        NOT NULL REFERENCES rim_users(id),
     location_id     UUID        NOT NULL REFERENCES ric_locations(id),
-    can_view        BOOLEAN     NOT NULL DEFAULT true,
-    can_transact    BOOLEAN     NOT NULL DEFAULT true,
     is_default      BOOLEAN     NOT NULL DEFAULT false,
     is_active       BOOLEAN     NOT NULL DEFAULT true,
     is_deleted      BOOLEAN     NOT NULL DEFAULT false,

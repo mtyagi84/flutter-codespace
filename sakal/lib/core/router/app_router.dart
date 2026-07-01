@@ -16,6 +16,7 @@ import '../../features/setup/presentation/screens/location_groups_screen.dart';
 import '../../features/setup/presentation/screens/master_menu_screen.dart';
 import '../../features/setup/presentation/screens/permissions_screen.dart';
 import '../../features/setup/presentation/screens/users_screen.dart';
+import '../../features/setup/presentation/screens/user_location_access_screen.dart';
 import '../../features/setup/presentation/screens/accounting_setup_screen.dart';
 import '../../features/master/presentation/screens/chart_of_accounts_screen.dart';
 import '../../features/master/presentation/screens/common_masters_screen.dart';
@@ -116,6 +117,7 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.divisions,   builder: (c, s) => const DivisionsScreen()),
         GoRoute(path: RouteNames.cities,      builder: (c, s) => const CitiesScreen()),
         GoRoute(path: RouteNames.users,          builder: (c, s) => const UsersScreen()),
+        GoRoute(path: RouteNames.userLocationAccess, builder: (c, s) => const UserLocationAccessScreen()),
         GoRoute(path: RouteNames.permissions,    builder: (c, s) => const PermissionsScreen()),
         GoRoute(path: RouteNames.accountingSetup,builder: (c, s) => const AccountingSetupScreen()),
         GoRoute(path: RouteNames.financialYears, builder: (c, s) => const _Placeholder('Financial Years')),

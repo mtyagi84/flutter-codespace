@@ -21,6 +21,7 @@ class RouteNames {
   static const String divisions   = '/setup/divisions';
   static const String cities      = '/setup/cities';
   static const String users       = '/setup/users';
+  static const String userLocationAccess = '/setup/user-location-access';
   static const String permissions = '/setup/permissions';
 
   // Sales — screen_names must match ric_master_menus seeds
