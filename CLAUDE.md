@@ -393,6 +393,19 @@ Never catch only `DioException` in a save handler. Always add a catch-all after 
 If the token is already expired it deactivates the session and returns null → router sends user to login immediately.
 Do NOT skip this check or move it — users must never reach the dashboard with an expired token.
 
+### No deprecated Flutter/Dart APIs — ever
+`flutter analyze` must stay at zero warnings. Never use deprecated members. Common ones:
+| Deprecated | Use instead |
+|---|---|
+| `.withOpacity(x)` | `.withValues(alpha: x)` |
+| `Switch(activeColor:)` | `Switch(activeThumbColor:)` |
+| `Checkbox(activeColor:)` | `Checkbox(fillColor: WidgetStateProperty.all(...))` |
+| `Autocomplete(value:)` | `Autocomplete(initialValue:)` |
+| `DropdownButtonFormField(value:)` | `DropdownButtonFormField(initialValue:)` |
+| `Radio(onChanged:)` | Wrap in `RadioGroup` ancestor |
+Always add `const` to constructors/literals where all arguments are compile-time constants.
+Always add `{ }` braces to single-statement `if`/`for` bodies (`curly_braces_in_flow_control_structures`).
+
 ### Before adding a method to an existing file — always read the file first
 Dart has no method overloading. Duplicate method names are a compile error.
 Always `Read` the full file before adding new methods or imports.
