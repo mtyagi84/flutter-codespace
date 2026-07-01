@@ -581,7 +581,7 @@ class _UserTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         color: isSelected
-            ? AppColors.primary.withOpacity(0.08)
+            ? AppColors.primary.withValues(alpha: 0.08)
             : Colors.transparent,
         child: Row(
           children: [
@@ -589,7 +589,7 @@ class _UserTile extends StatelessWidget {
               radius: 14,
               backgroundColor: isSelected
                   ? AppColors.primary
-                  : AppColors.primary.withOpacity(0.12),
+                  : AppColors.primary.withValues(alpha: 0.12),
               child: Text(
                 name.isNotEmpty ? name[0].toUpperCase() : '?',
                 style: TextStyle(
@@ -748,7 +748,7 @@ class _ModuleCardState extends State<_ModuleCard> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.06),
+                color: AppColors.primary.withValues(alpha: 0.06),
                 borderRadius: bottomRadius,
               ),
               child: Row(
@@ -797,7 +797,7 @@ class _ModuleCardState extends State<_ModuleCard> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 7),
                       color:
-                          AppColors.surfaceVariant.withOpacity(0.6),
+                          AppColors.surfaceVariant.withValues(alpha: 0.6),
                       child: Text(
                         group.name,
                         style: const TextStyle(
@@ -836,8 +836,8 @@ class _PermHeader extends StatelessWidget {
       padding:
           const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
       color: AppColors.surfaceVariant,
-      child: Row(
-        children: const [
+      child: const Row(
+        children: [
           Expanded(
             child: Text('Feature',
                 style: TextStyle(
@@ -896,7 +896,7 @@ class _FeatureRow extends StatelessWidget {
     return Container(
       color: isEven
           ? Colors.transparent
-          : AppColors.surfaceVariant.withOpacity(0.3),
+          : AppColors.surfaceVariant.withValues(alpha: 0.3),
       padding:
           const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       child: Row(
@@ -988,7 +988,7 @@ class _PBox extends StatelessWidget {
           ? Checkbox(
               value: value,
               onChanged: (_) => onToggle(),
-              activeColor: AppColors.primary,
+              fillColor: WidgetStateProperty.all(AppColors.primary),
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               visualDensity: VisualDensity.compact,
             )
@@ -1027,9 +1027,9 @@ class _ErrorBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.negative.withOpacity(0.08),
+        color: AppColors.negative.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.negative.withOpacity(0.3)),
+        border: Border.all(color: AppColors.negative.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [

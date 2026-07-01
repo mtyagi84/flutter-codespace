@@ -124,10 +124,12 @@ class _ProductFlagTypesScreenState extends ConsumerState<ProductFlagTypesScreen>
                     ),
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) return 'Required';
-                      if (!RegExp(r'^[a-z][a-z0-9_]*$').hasMatch(v.trim()))
+                      if (!RegExp(r'^[a-z][a-z0-9_]*$').hasMatch(v.trim())) {
                         return 'Lowercase letters, numbers and _ only';
-                      if (_flags.any((f) => f.flagKey == v.trim() && f.id != existing?.id))
+                      }
+                      if (_flags.any((f) => f.flagKey == v.trim() && f.id != existing?.id)) {
                         return 'Flag key already exists';
+                      }
                       return null;
                     },
                   ),
@@ -359,9 +361,9 @@ class _ProductFlagTypesScreenState extends ConsumerState<ProductFlagTypesScreen>
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.05),
+                      color: AppColors.primary.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.primary.withOpacity(0.15)),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
                     ),
                     child: const Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -432,7 +434,7 @@ class _ProductFlagTypesScreenState extends ConsumerState<ProductFlagTypesScreen>
       leading: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: AppColors.primary.withOpacity(0.08),
+          color: AppColors.primary.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(6),
         ),
         child: Text(

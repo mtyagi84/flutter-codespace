@@ -243,11 +243,11 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
       await _load();
       if (mounted) setState(() { _isAdd = false; _selected = null; });
     } on DioException catch (e) {
-      if (mounted) setState(() {
+      if (mounted) { setState(() {
         _saveError = e.response?.data?['message'] ?? 'Save failed.';
-      });
+      }); }
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) { setState(() => _saving = false); }
     }
   }
 
@@ -313,8 +313,8 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return Center(
-        child: Text(_error!, style: const TextStyle(color: AppColors.negative)));
+    if (_error != null) { return Center(
+        child: Text(_error!, style: const TextStyle(color: AppColors.negative))); }
 
     final showPanel = _isAdd || _selected != null;
 
@@ -481,7 +481,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
             const _Label('Ledger Currency'),
             const SizedBox(height: 6),
             DropdownButtonFormField<String>(
-              value: _currencyId,
+              initialValue: _currencyId,
               decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
               items: _currencies.map((c) => DropdownMenuItem(
                 value: c['id'] as String,
@@ -507,7 +507,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
                 const _Label('Party Type'),
                 const SizedBox(height: 6),
                 DropdownButtonFormField<String>(
-                  value: _partyType,
+                  initialValue: _partyType,
                   decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
                   items: _partyTypes.map((t) => DropdownMenuItem(
                       value: t, child: Text(t))).toList(),
@@ -516,7 +516,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
                 const SizedBox(height: 14),
                 Builder(builder: (ctx) {
                   final mobile = Responsive.isMobile(ctx);
-                  if (mobile) return Column(
+                  if (mobile) { return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const _Label('Contact Person'),
@@ -529,7 +529,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
                       TextField(controller: _phoneCtrl,
                           decoration: const InputDecoration(isDense: true)),
                     ],
-                  );
+                  ); }
                   return Row(children: [
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -565,13 +565,13 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
                 const SizedBox(height: 14),
                 Builder(builder: (ctx) {
                   final mobile = Responsive.isMobile(ctx);
-                  if (mobile) return Column(
+                  if (mobile) { return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const _Label('Country'),
                       const SizedBox(height: 6),
                       DropdownButtonFormField<String>(
-                        value: _countryId,
+                        initialValue: _countryId,
                         decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
                         items: _countries.map((c) => DropdownMenuItem(
                             value: c['id'] as String,
@@ -586,7 +586,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
                       const _Label('City'),
                       const SizedBox(height: 6),
                       DropdownButtonFormField<String>(
-                        value: _cityId,
+                        initialValue: _cityId,
                         decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
                         items: _cities.map((c) => DropdownMenuItem(
                             value: c['id'] as String,
@@ -595,14 +595,14 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
                         onChanged: (v) => setState(() => _cityId = v),
                       ),
                     ],
-                  );
+                  ); }
                   return Row(children: [
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                       const _Label('Country'),
                       const SizedBox(height: 6),
                       DropdownButtonFormField<String>(
-                        value: _countryId,
+                        initialValue: _countryId,
                         decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
                         items: _countries.map((c) => DropdownMenuItem(
                             value: c['id'] as String,
@@ -620,7 +620,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
                       const _Label('City'),
                       const SizedBox(height: 6),
                       DropdownButtonFormField<String>(
-                        value: _cityId,
+                        initialValue: _cityId,
                         decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
                         items: _cities.map((c) => DropdownMenuItem(
                             value: c['id'] as String,
@@ -639,7 +639,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
                 const SizedBox(height: 14),
                 Builder(builder: (ctx) {
                   final mobile = Responsive.isMobile(ctx);
-                  if (mobile) return Column(
+                  if (mobile) { return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const _Label('Category'),
@@ -668,7 +668,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
                         ])),
                       ]),
                     ],
-                  );
+                  ); }
                   return Row(children: [
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
                         children: [

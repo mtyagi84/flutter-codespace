@@ -54,15 +54,15 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
         'order':      'country_name.asc',
         'select':     'country_code,country_name',
       });
-      if (mounted) setState(() {
+      if (mounted) { setState(() {
         _countries = (res.data as List).cast<Map<String, dynamic>>();
         _loadingCountries = false;
-      });
+      }); }
     } on DioException catch (e) {
-      if (mounted) setState(() {
+      if (mounted) { setState(() {
         _error = e.response?.data?['message'] as String? ?? 'Failed to load countries';
         _loadingCountries = false;
-      });
+      }); }
     }
   }
 
@@ -77,12 +77,12 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
         'order': 'division_name.asc',
         'select': 'id,division_name,division_type',
       });
-      if (mounted) setState(() {
+      if (mounted) { setState(() {
         _divisions = (res.data as List).cast<Map<String, dynamic>>();
         _loadingDivisions = false;
-      });
+      }); }
     } on DioException {
-      if (mounted) setState(() => _loadingDivisions = false);
+      if (mounted) { setState(() => _loadingDivisions = false); }
     }
   }
 
@@ -103,15 +103,15 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
         params['division_id'] = 'eq.$_selectedDivision';
       }
       final res = await DioClient.instance.get('/rim_cities', queryParameters: params);
-      if (mounted) setState(() {
+      if (mounted) { setState(() {
         _cities = (res.data as List).cast<Map<String, dynamic>>();
         _loadingCities = false;
-      });
+      }); }
     } on DioException catch (e) {
-      if (mounted) setState(() {
+      if (mounted) { setState(() {
         _error = e.response?.data?['message'] as String? ?? 'Failed to load cities';
         _loadingCities = false;
-      });
+      }); }
     }
   }
 
@@ -136,9 +136,9 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
       _loadCities();
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] as String? ?? 'Save failed';
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (mounted) { ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(msg), backgroundColor: AppColors.negative),
-      );
+      ); }
     }
   }
 
@@ -192,9 +192,9 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
       _loadCities();
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] as String? ?? 'Delete failed';
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (mounted) { ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(msg), backgroundColor: AppColors.negative),
-      );
+      ); }
     }
   }
 
@@ -290,7 +290,7 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
                 child: _loadingCountries
                     ? const LinearProgressIndicator()
                     : DropdownButtonFormField<String>(
-                        value: _selectedCountry,
+                        initialValue: _selectedCountry,
                         isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Country',
@@ -322,7 +322,7 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
                   child: _loadingDivisions
                       ? const LinearProgressIndicator()
                       : DropdownButtonFormField<String>(
-                          value: _selectedDivision,
+                          initialValue: _selectedDivision,
                           isExpanded: true,
                           decoration: const InputDecoration(
                             labelText: 'Division (optional)',
@@ -417,9 +417,9 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
                   children: [
                     _buildHeader(),
                     if (filtered.isEmpty)
-                      SizedBox(
+                      const SizedBox(
                         width: _tableWidth,
-                        child: const Padding(
+                        child: Padding(
                           padding: EdgeInsets.symmetric(vertical: 32),
                           child: Center(
                             child: Text('No cities found. Add one using the button above.',
@@ -652,7 +652,7 @@ class _CityDialogState extends State<_CityDialog> {
                   children: [
                     // Country
                     DropdownButtonFormField<String>(
-                      value: _countryCode,
+                      initialValue: _countryCode,
                       decoration: const InputDecoration(
                         labelText: 'Country *',
                         prefixIcon: Icon(Icons.public_outlined),
@@ -671,7 +671,7 @@ class _CityDialogState extends State<_CityDialog> {
 
                     // Division (optional)
                     DropdownButtonFormField<String>(
-                      value: _divisionId,
+                      initialValue: _divisionId,
                       decoration: const InputDecoration(
                         labelText: 'Division (optional)',
                         prefixIcon: Icon(Icons.layers_outlined),

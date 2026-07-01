@@ -438,8 +438,8 @@ class _TableHeader extends StatelessWidget {
         color: AppColors.surfaceVariant,
         borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
       ),
-      child: Row(
-        children: const [
+      child: const Row(
+        children: [
           SizedBox(width: 55,  child: _HCol('Code')),
           SizedBox(width: 200, child: _HCol('Country Name')),
           SizedBox(width: 65,  child: _HCol('Alpha-3')),

@@ -157,7 +157,7 @@ class VoucherPdfBuilder {
       final val = co['tax_${i}_value'] as String? ?? '';
       if (lbl.isNotEmpty && val.isNotEmpty) {
         taxRows.add(pw.Text('$lbl: $val',
-            style: pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)));
+            style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)));
       }
     }
 
@@ -192,13 +192,13 @@ class VoucherPdfBuilder {
                       fontSize: 12, fontWeight: pw.FontWeight.bold)),
               if (address.isNotEmpty)
                 pw.Text(address,
-                    style: pw.TextStyle(fontSize: 9)),
+                    style: const pw.TextStyle(fontSize: 9)),
               if (cityLine.isNotEmpty)
                 pw.Text(cityLine,
-                    style: pw.TextStyle(fontSize: 9)),
+                    style: const pw.TextStyle(fontSize: 9)),
               if (contactLine.isNotEmpty)
                 pw.Text(contactLine,
-                    style: pw.TextStyle(fontSize: 9)),
+                    style: const pw.TextStyle(fontSize: 9)),
               ...taxRows,
             ],
           ),
@@ -242,7 +242,7 @@ class VoucherPdfBuilder {
           ),
           pw.TextSpan(
             text: value,
-            style: pw.TextStyle(fontSize: 9),
+            style: const pw.TextStyle(fontSize: 9),
           ),
         ]),
       ),
@@ -266,7 +266,7 @@ class VoucherPdfBuilder {
       border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
       children: [
         pw.TableRow(
-          decoration: pw.BoxDecoration(color: _primary),
+          decoration: const pw.BoxDecoration(color: _primary),
           children: [
             _th('#'),
             _th('Account', left: true),
@@ -337,7 +337,7 @@ class VoucherPdfBuilder {
           border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
           children: [
             pw.TableRow(
-              decoration: pw.BoxDecoration(color: _primary),
+              decoration: const pw.BoxDecoration(color: _primary),
               children: [
                 _th('Bill No',              left: true),
                 _th('Date',                 left: true),
@@ -405,7 +405,7 @@ class VoucherPdfBuilder {
           if (showParty) ...[
             pw.Text(
               '  =  ${_fmtAmt(total * partyRate)} $partyCurrency',
-              style: pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
             ),
           ],
         ],
@@ -439,7 +439,7 @@ class VoucherPdfBuilder {
       pw.Container(width: 110, height: 0.5, color: PdfColors.grey700),
       pw.SizedBox(height: 3),
       pw.Text(label,
-          style: pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
+          style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
     ],
   );
 
@@ -472,7 +472,7 @@ class VoucherPdfBuilder {
               : right
                   ? pw.TextAlign.right
                   : pw.TextAlign.center,
-          style: pw.TextStyle(fontSize: 8.5),
+          style: const pw.TextStyle(fontSize: 8.5),
         ),
       );
 

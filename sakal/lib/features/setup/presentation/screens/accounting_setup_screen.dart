@@ -182,10 +182,10 @@ class _AccountingSetupScreenState
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              const Icon(Icons.lock_outline, size: 20, color: AppColors.positive),
-              const SizedBox(width: 8),
-              const Text('Accounting Setup',
+            const Row(children: [
+              Icon(Icons.lock_outline, size: 20, color: AppColors.positive),
+              SizedBox(width: 8),
+              Text('Accounting Setup',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary)),
             ]),
@@ -290,7 +290,7 @@ class _AccountingSetupScreenState
                       color: AppColors.textPrimary)),
               const SizedBox(height: 8),
               DropdownButtonFormField<int>(
-                value: _fyStartMonth,
+                initialValue: _fyStartMonth,
                 decoration: const InputDecoration(isDense: true),
                 items: List.generate(12, (i) => DropdownMenuItem(
                   value: i + 1,

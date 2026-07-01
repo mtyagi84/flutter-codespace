@@ -31,7 +31,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final menu = ref.read(menuProvider);
       setState(() {
-        for (final m in menu) _expandedModules.add(m.moduleCode);
+        for (final m in menu) { _expandedModules.add(m.moduleCode); }
       });
     });
   }

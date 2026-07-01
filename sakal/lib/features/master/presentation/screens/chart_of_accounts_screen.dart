@@ -190,13 +190,13 @@ class _ChartOfAccountsScreenState
     _roots    = [];
     for (final a in _accounts) {
       final pid = a['parent_id'] as String?;
-      if (pid == null) _roots.add(a);
-      else (_childMap[pid] ??= []).add(a);
+      if (pid == null) { _roots.add(a); }
+      else { (_childMap[pid] ??= []).add(a); }
     }
   }
 
   void _autoExpandRoots() {
-    for (final r in _roots) _expanded.add(r['id'] as String);
+    for (final r in _roots) { _expanded.add(r['id'] as String); }
   }
 
   List<({Map<String, dynamic> node, int depth})> _visibleNodes() {
@@ -358,11 +358,11 @@ class _ChartOfAccountsScreenState
       await _load();
       if (mounted) setState(() { _panelMode = 'none'; });
     } on DioException catch (e) {
-      if (mounted) setState(() {
+      if (mounted) { setState(() {
         _saveError = e.response?.data?['message'] ?? 'Save failed.';
-      });
+      }); }
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) { setState(() => _saving = false); }
     }
   }
 
@@ -401,8 +401,8 @@ class _ChartOfAccountsScreenState
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return Center(
-        child: Text(_error!, style: const TextStyle(color: AppColors.negative)));
+    if (_error != null) { return Center(
+        child: Text(_error!, style: const TextStyle(color: AppColors.negative))); }
 
     if (Responsive.isMobile(context)) {
       // On mobile: list OR form, never side by side
@@ -462,8 +462,8 @@ class _ChartOfAccountsScreenState
               alwaysShowActions: mobile,
               onToggle: () => setState(() {
                 final id = item.node['id'] as String;
-                if (_expanded.contains(id)) _expanded.remove(id);
-                else _expanded.add(id);
+                if (_expanded.contains(id)) { _expanded.remove(id); }
+                else { _expanded.add(id); }
               }),
               onEdit: () => _openEdit(item.node),
               onAdd:  () => _openAdd(item.node),
@@ -505,13 +505,13 @@ class _ChartOfAccountsScreenState
     _      => _emptyPanel(),
   };
 
-  Widget _emptyPanel() => Center(
+  Widget _emptyPanel() => const Center(
     child: Column(mainAxisSize: MainAxisSize.min, children: [
-      const Icon(Icons.account_tree_outlined, size: 48, color: AppColors.textDisabled),
-      const SizedBox(height: 16),
-      const Text('Select a group to add an account under it,',
+      Icon(Icons.account_tree_outlined, size: 48, color: AppColors.textDisabled),
+      SizedBox(height: 16),
+      Text('Select a group to add an account under it,',
           style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
-      const Text('or click ✏ on an existing account to edit it.',
+      Text('or click ✏ on an existing account to edit it.',
           style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
     ]),
   );
@@ -669,7 +669,7 @@ class _ChartOfAccountsScreenState
                             _addParent!['account_nature'] != 'General'
                         ? _ReadOnlyField(_nature)
                         : DropdownButtonFormField<String>(
-                            value: _nature,
+                            initialValue: _nature,
                             decoration: const InputDecoration(isDense: true),
                             items: _natures.map((n) => DropdownMenuItem(
                                 value: n, child: Text(n))).toList(),
@@ -685,7 +685,7 @@ class _ChartOfAccountsScreenState
                     const _Label('Currency'),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
-                      value: _currencyId,
+                      initialValue: _currencyId,
                       decoration: const InputDecoration(
                           isDense: true, hintText: 'Select…'),
                       items: _currencies.map((c) => DropdownMenuItem(
@@ -743,7 +743,7 @@ class _ChartOfAccountsScreenState
                   const _Label('Party Type'),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
-                    value: _partyType,
+                    initialValue: _partyType,
                     decoration: const InputDecoration(
                         isDense: true, hintText: 'Select…'),
                     items: _partyTypes.map((t) => DropdownMenuItem(
@@ -822,7 +822,7 @@ class _ChartOfAccountsScreenState
                   const _Label('Division / State / Province'),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
-                    value: _divisionId,
+                    initialValue: _divisionId,
                     decoration: const InputDecoration(
                         isDense: true, hintText: 'Select division…'),
                     items: [
@@ -851,7 +851,7 @@ class _ChartOfAccountsScreenState
                   const _Label('City'),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
-                    value: _cityId,
+                    initialValue: _cityId,
                     decoration: const InputDecoration(
                         isDense: true, hintText: 'Select…'),
                     items: _cities.map((c) => DropdownMenuItem(

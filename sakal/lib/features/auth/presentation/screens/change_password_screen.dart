@@ -111,7 +111,7 @@ class _ChangePasswordScreenState
 
                         // Success banner
                         if (_success) ...[
-                          _Banner(
+                          const _Banner(
                             color: AppColors.positive,
                             icon: Icons.check_circle_outline,
                             message: 'Password changed successfully.',

@@ -147,14 +147,14 @@ class _FeatureCard extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary)),
                 const SizedBox(height: 6),
-                Row(
+                const Row(
                   children: [
                     Text('Open',
                         style: TextStyle(
                             fontSize: 12,
                             color: AppColors.secondary,
                             fontWeight: FontWeight.w500)),
-                    const SizedBox(width: 4),
+                    SizedBox(width: 4),
                     Icon(Icons.arrow_forward,
                         size: 12, color: AppColors.secondary),
                   ],

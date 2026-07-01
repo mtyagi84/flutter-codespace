@@ -307,7 +307,7 @@ class _FinanceVoucherListScreenState
                                   child: ListView.separated(
                                     itemCount: rows.length,
                                     separatorBuilder: (_, __) =>
-                                        Divider(height: 1, color: AppColors.border),
+                                        const Divider(height: 1, color: AppColors.border),
                                     itemBuilder: (_, i) => _buildRow(rows[i], i),
                                   ),
                                 ),
@@ -536,16 +536,16 @@ class _FinanceVoucherListScreenState
     ),
   );
 
-  Widget _emptyState() => Center(
+  Widget _emptyState() => const Center(
     child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      const Icon(Icons.receipt_long_outlined, size: 48,
+      Icon(Icons.receipt_long_outlined, size: 48,
           color: AppColors.textDisabled),
-      const SizedBox(height: 16),
-      const Text('No vouchers found',
+      SizedBox(height: 16),
+      Text('No vouchers found',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600,
               color: AppColors.textPrimary)),
-      const SizedBox(height: 8),
-      const Text('Adjust the date range or create a new voucher.',
+      SizedBox(height: 8),
+      Text('Adjust the date range or create a new voucher.',
           style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
     ]),
   );
@@ -584,10 +584,10 @@ class _NewVoucherButton extends StatelessWidget {
       )).toList(),
       builder: (_, controller, __) => FilledButton.icon(
         icon: const Icon(Icons.add, size: 16),
-        label: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Text('New Voucher'),
-          const SizedBox(width: 4),
-          const Icon(Icons.arrow_drop_down, size: 18),
+        label: const Row(mainAxisSize: MainAxisSize.min, children: [
+          Text('New Voucher'),
+          SizedBox(width: 4),
+          Icon(Icons.arrow_drop_down, size: 18),
         ]),
         onPressed: () =>
             controller.isOpen ? controller.close() : controller.open(),

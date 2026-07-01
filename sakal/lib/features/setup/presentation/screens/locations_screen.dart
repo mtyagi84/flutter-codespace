@@ -142,9 +142,9 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
-                    color: AppColors.negative.withOpacity(0.08),
+                    color: AppColors.negative.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.negative.withOpacity(0.3)),
+                    border: Border.all(color: AppColors.negative.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
@@ -249,8 +249,8 @@ class _TableHeader extends StatelessWidget {
         color: AppColors.surfaceVariant,
         borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
       ),
-      child: Row(
-        children: const [
+      child: const Row(
+        children: [
           SizedBox(width: 220, child: _HCol('Location Name')),
           SizedBox(width: 100, child: _HCol('Short')),
           SizedBox(width: 130, child: _HCol('Type')),
@@ -298,7 +298,7 @@ class _TableRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final active = row['is_active'] as bool? ?? true;
     return Container(
-      color: isEven ? Colors.transparent : AppColors.surfaceVariant.withOpacity(0.35),
+      color: isEven ? Colors.transparent : AppColors.surfaceVariant.withValues(alpha: 0.35),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -341,7 +341,7 @@ class _TableRow extends StatelessWidget {
             child: Switch(
               value: active,
               onChanged: (_) => onToggle(),
-              activeColor: AppColors.positive,
+              activeThumbColor: AppColors.positive,
             ),
           ),
           SizedBox(
@@ -383,7 +383,7 @@ class _TypeChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.08),
+        color: AppColors.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(type!,
@@ -536,7 +536,7 @@ class _LocationDialogState extends ConsumerState<_LocationDialog> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: AppColors.negative.withOpacity(0.08),
+                      color: AppColors.negative.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(_error!,
@@ -580,7 +580,7 @@ class _LocationDialogState extends ConsumerState<_LocationDialog> {
                 const SizedBox(height: 14),
 
                 DropdownButtonFormField<String>(
-                  value: _locationType,
+                  initialValue: _locationType,
                   decoration: const InputDecoration(
                     labelText: 'Location Type',
                     prefixIcon: Icon(Icons.category_outlined),

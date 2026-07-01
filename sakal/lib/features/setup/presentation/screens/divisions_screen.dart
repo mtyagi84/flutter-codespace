@@ -45,10 +45,10 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
         });
       }
     } on DioException catch (e) {
-      if (mounted) setState(() {
+      if (mounted) { setState(() {
         _error = e.response?.data?['message'] as String? ?? 'Failed to load countries';
         _loadingCountries = false;
-      });
+      }); }
     }
   }
 
@@ -62,15 +62,15 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
         'or': '(is_system.eq.true,and(client_id.eq.${session.clientId},company_id.eq.${session.companyId}))',
         'order': 'division_name.asc',
       });
-      if (mounted) setState(() {
+      if (mounted) { setState(() {
         _divisions = (res.data as List).cast<Map<String, dynamic>>();
         _loadingDivisions = false;
-      });
+      }); }
     } on DioException catch (e) {
-      if (mounted) setState(() {
+      if (mounted) { setState(() {
         _error = e.response?.data?['message'] as String? ?? 'Failed to load divisions';
         _loadingDivisions = false;
-      });
+      }); }
     }
   }
 
@@ -94,9 +94,9 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
       _loadDivisions();
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] as String? ?? 'Save failed';
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (mounted) { ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(msg), backgroundColor: AppColors.negative),
-      );
+      ); }
     }
   }
 
@@ -122,9 +122,9 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
       _loadDivisions();
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] as String? ?? 'Delete failed';
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (mounted) { ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(msg), backgroundColor: AppColors.negative),
-      );
+      ); }
     }
   }
 
@@ -203,7 +203,7 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
             child: _loadingCountries
                 ? const LinearProgressIndicator()
                 : DropdownButtonFormField<String>(
-                    value: _selectedCountry,
+                    initialValue: _selectedCountry,
                     decoration: const InputDecoration(
                       labelText: 'Country',
                       prefixIcon: Icon(Icons.public_outlined),
@@ -275,9 +275,9 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
                   children: [
                     _buildHeader(),
                     if (_divisions.isEmpty)
-                      SizedBox(
+                      const SizedBox(
                         width: _tableWidth,
-                        child: const Padding(
+                        child: Padding(
                           padding: EdgeInsets.symmetric(vertical: 32),
                           child: Center(
                             child: Text('No divisions found. Add a custom one.',
@@ -330,13 +330,13 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           _dcell(d['division_code'] as String? ?? '', _w[0],
-              TextStyle(fontSize: 12, color: AppColors.primary, fontFamily: 'monospace')),
+              const TextStyle(fontSize: 12, color: AppColors.primary, fontFamily: 'monospace')),
           _vd(),
           _dcell(d['division_name'] as String? ?? '', _w[1],
               TextStyle(fontSize: 13, color: tc)),
           _vd(),
           _dcell(d['division_type'] as String? ?? '', _w[2],
-              TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           _vd(),
           SizedBox(
             width: _w[3], height: 48,
@@ -525,7 +525,7 @@ class _DivisionDialogState extends State<_DivisionDialog> {
                   children: [
                     // Country
                     DropdownButtonFormField<String>(
-                      value: _countryCode,
+                      initialValue: _countryCode,
                       decoration: const InputDecoration(
                         labelText: 'Country *',
                         prefixIcon: Icon(Icons.public_outlined),
@@ -559,7 +559,7 @@ class _DivisionDialogState extends State<_DivisionDialog> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          value: _type,
+                          initialValue: _type,
                           decoration: const InputDecoration(labelText: 'Type *'),
                           items: _types.map((t) => DropdownMenuItem(
                             value: t, child: Text(t),

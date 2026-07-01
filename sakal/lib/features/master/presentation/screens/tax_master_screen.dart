@@ -545,7 +545,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
 
           // Tax Type
           DropdownButtonFormField<String>(
-            value: _taxTypes.isEmpty ? null : _selTypeCode,
+            initialValue: _taxTypes.isEmpty ? null : _selTypeCode,
             decoration: const InputDecoration(labelText: 'Tax Type *'),
             items: _taxTypes.map((t) => DropdownMenuItem(
               value: t.taxTypeCode,
@@ -556,7 +556,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
               _selTypeCode  = v!;
               // Auto-clear reverse charge if not a withholding type
               if (_taxTypes.firstWhere((t) => t.taxTypeCode == v, orElse: () =>
-                    TaxTypeModel(id:'',taxTypeCode:'',typeName:'',isWithholding:false,sortOrder:0,isActive:true))
+                    const TaxTypeModel(id:'',taxTypeCode:'',typeName:'',isWithholding:false,sortOrder:0,isActive:true))
                   .isWithholding == false) {
                 _formReverse = false;
               }

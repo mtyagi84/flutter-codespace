@@ -34,11 +34,10 @@ class _EditState {
     String desc      = '',
     String shortName = '',
     String sortOrder = '0',
-    bool   isActive  = true,
+    this.isActive    = true,
   })  : descCtrl      = TextEditingController(text: desc),
         shortNameCtrl = TextEditingController(text: shortName),
-        sortOrderCtrl = TextEditingController(text: sortOrder),
-        isActive      = isActive;
+        sortOrderCtrl = TextEditingController(text: sortOrder);
 
   void dispose() {
     descCtrl.dispose();
@@ -91,7 +90,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
   @override
   void dispose() {
     _addState?.dispose();
-    for (final s in _editStates.values) s.dispose();
+    for (final s in _editStates.values) { s.dispose(); }
     _searchDebounce.dispose();
     super.dispose();
   }
@@ -270,7 +269,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
   String get _selectedTypeName {
     if (_selectedTypeId == null) return 'Master';
     return _types.firstWhere((t) => t.id == _selectedTypeId,
-        orElse: () => CommonMasterTypeModel(
+        orElse: () => const CommonMasterTypeModel(
             id: '', typeKey: '', typeName: 'Master', isActive: true)).typeName;
   }
 
@@ -308,14 +307,14 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
         if (isOffline) const OfflineBanner(),
 
         // ── Page header ────────────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(24, 20, 24, 4),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Common Masters',
+            Text('Common Masters',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700,
                     color: AppColors.primary)),
-            const SizedBox(height: 2),
-            const Text('Shared lookup values used in various screens',
+            SizedBox(height: 2),
+            Text('Shared lookup values used in various screens',
                 style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
           ]),
         ),
@@ -444,7 +443,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
             ),
           ),
         ),
-        value: null,
+        initialValue: null,
         items: null,
         onChanged: null,
       );
@@ -459,7 +458,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
           contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           hintText: 'No types — run migration 022',
         ),
-        value: null,
+        initialValue: null,
         items: null,
         onChanged: null,
       );
@@ -472,14 +471,14 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
         isDense: true,
         contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
-      value: _selectedTypeId,
+      initialValue: _selectedTypeId,
       items: _types
           .map((t) => DropdownMenuItem(value: t.id, child: Text(t.typeName)))
           .toList(),
       onChanged: (v) {
         if (v == null || v == _selectedTypeId) return;
         _cancelAdd();
-        for (final id in _editStates.keys.toList()) _cancelEdit(id);
+        for (final id in _editStates.keys.toList()) { _cancelEdit(id); }
         setState(() => _selectedTypeId = v);
         _loadMasters(reset: true);
       },

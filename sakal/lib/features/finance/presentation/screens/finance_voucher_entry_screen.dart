@@ -189,8 +189,8 @@ class _FinanceVoucherEntryScreenState
     _refNoCtrl.dispose();
     _remarksCtrl.dispose();
     _chequeNoCtrl.dispose();
-    for (final b in _bills) b.dispose();
-    for (final l in _accountLines) l.dispose();
+    for (final b in _bills) { b.dispose(); }
+    for (final l in _accountLines) { l.dispose(); }
     super.dispose();
   }
 
@@ -308,8 +308,8 @@ class _FinanceVoucherEntryScreenState
   // ── Apply voucher type ─────────────────────────────────────────────────────
 
   void _applyVoucherType(String type) {
-    for (final b in _bills) b.dispose();
-    for (final l in _accountLines) l.dispose();
+    for (final b in _bills) { b.dispose(); }
+    for (final l in _accountLines) { l.dispose(); }
     setState(() {
       _voucherType   = type;
       _cashBankId             = null;
@@ -428,7 +428,7 @@ class _FinanceVoucherEntryScreenState
         }
       } else {
         // On Account — restore account lines
-        for (final l in _accountLines) l.dispose();
+        for (final l in _accountLines) { l.dispose(); }
         final loaded = restObjs.map((row) {
           final accId = row.accountId.isEmpty ? null : row.accountId;
           final acc   = _otherAccounts.where((a) => a['id'] == accId).firstOrNull;
@@ -568,7 +568,7 @@ class _FinanceVoucherEntryScreenState
     final tc = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
     // Nothing to cascade when trans == base (no conversion in header).
     if (newRate <= 0 || _confirmedDisplayRate <= 0 ||
-        newRate == _confirmedDisplayRate || tc == _baseCurrency) return;
+        newRate == _confirmedDisplayRate || tc == _baseCurrency) { return; }
 
     // Scale factor: new_party_rate = old × (old_display / new_display)
     // Proof: party_rate(CDF→X) = (1/display_rate) × (USD→X_constant)
@@ -610,7 +610,7 @@ class _FinanceVoucherEntryScreenState
     final currency = _extractCurrency(account);
     final nature   = account['account_nature'] as String? ?? '';
     final billOk   = _voucherType == null || canSettleAgainstBill(_voucherType!, nature);
-    for (final b in _bills) b.dispose();
+    for (final b in _bills) { b.dispose(); }
     setState(() {
       _partyId       = account['id']           as String;
       _partyName     = account['account_name'] as String;
@@ -653,15 +653,15 @@ class _FinanceVoucherEntryScreenState
     // Display rate: "1 base = X trans" — only show / fetch when trans ≠ base
     if (transCurrency != _baseCurrency && _baseCurrency.isNotEmpty) {
       final dr = await _fetchCrossRate(_baseCurrency, transCurrency);
-      if (mounted && dr != null) setState(() {
+      if (mounted && dr != null) { setState(() {
         _rateCtrl.text        = _fmtRate(dr);
         _confirmedDisplayRate = dr;
-      });
+      }); }
     }
     // Local rate: fn_get_rate(trans → local) — always fetch
     if (_localCurrency.isNotEmpty) {
       final lr = await _fetchCrossRate(transCurrency, _localCurrency);
-      if (mounted && lr != null) setState(() => _localRate = lr);
+      if (mounted && lr != null) { setState(() => _localRate = lr); }
     }
   }
 
@@ -678,7 +678,7 @@ class _FinanceVoucherEntryScreenState
         locationId: session.locationId!,
         accountId:  _partyId!,
       );
-      for (final b in _bills) b.dispose();
+      for (final b in _bills) { b.dispose(); }
       setState(() {
         _bills = rows.map((r) {
           final bn = r['inv_bill_no'] as String? ?? '';
@@ -1269,7 +1269,7 @@ class _FinanceVoucherEntryScreenState
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: AppColors.border),
+        side: const BorderSide(color: AppColors.border),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -1279,7 +1279,7 @@ class _FinanceVoucherEntryScreenState
           Builder(builder: (_) {
             final f1 = field(DropdownButtonFormField<String>(
               decoration: dec.copyWith(labelText: 'Voucher Type *'),
-              value: _voucherType,
+              initialValue: _voucherType,
               isExpanded: true,
               items: _supportedTypes.map((t) => DropdownMenuItem(
                 value: t,
@@ -1404,7 +1404,7 @@ class _FinanceVoucherEntryScreenState
           Builder(builder: (_) {
             final f1 = field(DropdownButtonFormField<String>(
               decoration: dec.copyWith(labelText: 'Payment Mode'),
-              value: _paymentMode,
+              initialValue: _paymentMode,
               isExpanded: true,
               items: _paymentModes.map((m) => DropdownMenuItem(
                 value: m['payment_mode_code'] as String,
@@ -1531,11 +1531,15 @@ class _FinanceVoucherEntryScreenState
             final billsLoaded = !_isOnAccount && _bills.isNotEmpty;
             return RadioGroup<bool>(
               groupValue: _isOnAccount,
-              onChanged: (v) { if (v != null) setState(() => _isOnAccount = v); },
+              onChanged: (v) {
+                if (v == null) return;
+                if (v == false && (locked || !billAllowed)) return;
+                if (v == true && (locked || billsLoaded)) return;
+                setState(() => _isOnAccount = v);
+              },
               child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
                 Radio<bool>(
                   value: false,
-                  onChanged: (locked || !billAllowed) ? null : (_) {},
                 ),
                 Text(
                   'Against Bill',
@@ -1556,7 +1560,6 @@ class _FinanceVoucherEntryScreenState
                 const SizedBox(width: 20),
                 Radio<bool>(
                   value: true,
-                  onChanged: (locked || billsLoaded) ? null : (_) {},
                 ),
                 Text('On Account',
                     style: TextStyle(
@@ -1605,7 +1608,7 @@ class _FinanceVoucherEntryScreenState
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
           onSelected: _onPartySelected,
           onCleared: () {
-            for (final b in _bills) b.dispose();
+            for (final b in _bills) { b.dispose(); }
             setState(() {
               _partyId       = null;
               _partyName     = null;

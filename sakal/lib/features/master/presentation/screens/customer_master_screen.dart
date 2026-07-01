@@ -254,11 +254,11 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen> {
       await _load();
       if (mounted) setState(() { _isAdd = false; _selected = null; });
     } on DioException catch (e) {
-      if (mounted) setState(() {
+      if (mounted) { setState(() {
         _saveError = e.response?.data?['message'] ?? 'Save failed.';
-      });
+      }); }
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) { setState(() => _saving = false); }
     }
   }
 
@@ -326,8 +326,8 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return Center(
-        child: Text(_error!, style: const TextStyle(color: AppColors.negative)));
+    if (_error != null) { return Center(
+        child: Text(_error!, style: const TextStyle(color: AppColors.negative))); }
 
     final showPanel = _isAdd || _selected != null;
 
@@ -510,7 +510,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen> {
             const _Label('Ledger Currency'),
             const SizedBox(height: 6),
             DropdownButtonFormField<String>(
-              value: _currencyId,
+              initialValue: _currencyId,
               decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
               items: _currencies.map((c) => DropdownMenuItem(
                 value: c['id'] as String,
@@ -572,7 +572,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen> {
       const _Label('Party Type'),
       const SizedBox(height: 6),
       DropdownButtonFormField<String>(
-        value: _partyType,
+        initialValue: _partyType,
         decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
         items: _partyTypes.map((t) => DropdownMenuItem(
             value: t, child: Text(t))).toList(),
@@ -630,7 +630,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen> {
         const _Label('Country'),
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
-          value: _countryId,
+          initialValue: _countryId,
           decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
           items: _countries.map((c) => DropdownMenuItem(
               value: c['id'] as String,
@@ -645,7 +645,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen> {
         const _Label('City'),
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
-          value: _cityId,
+          initialValue: _cityId,
           decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
           items: _cities.map((c) => DropdownMenuItem(
               value: c['id'] as String,
@@ -659,7 +659,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen> {
             const _Label('Country'),
             const SizedBox(height: 6),
             DropdownButtonFormField<String>(
-              value: _countryId,
+              initialValue: _countryId,
               decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
               items: _countries.map((c) => DropdownMenuItem(
                   value: c['id'] as String,
@@ -676,7 +676,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen> {
             const _Label('City'),
             const SizedBox(height: 6),
             DropdownButtonFormField<String>(
-              value: _cityId,
+              initialValue: _cityId,
               decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
               items: _cities.map((c) => DropdownMenuItem(
                   value: c['id'] as String,

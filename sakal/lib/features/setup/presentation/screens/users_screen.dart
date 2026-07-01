@@ -185,9 +185,9 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
-                    color: AppColors.negative.withOpacity(0.08),
+                    color: AppColors.negative.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.negative.withOpacity(0.3)),
+                    border: Border.all(color: AppColors.negative.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
@@ -292,8 +292,8 @@ class _TableHeader extends StatelessWidget {
         color: AppColors.surfaceVariant,
         borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
       ),
-      child: Row(
-        children: const [
+      child: const Row(
+        children: [
           SizedBox(width: 48),
           SizedBox(width: 12),
           SizedBox(width: 200, child: _HCol('Name / Username')),
@@ -358,7 +358,7 @@ class _TableRow extends StatelessWidget {
     return Container(
       color: isEven
           ? Colors.transparent
-          : AppColors.surfaceVariant.withOpacity(0.35),
+          : AppColors.surfaceVariant.withValues(alpha: 0.35),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -413,7 +413,7 @@ class _TableRow extends StatelessWidget {
             child: Switch(
               value: active,
               onChanged: (_) => onToggle(),
-              activeColor: AppColors.positive,
+              activeThumbColor: AppColors.positive,
             ),
           ),
 
@@ -476,7 +476,7 @@ class _Avatar extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: 22,
-          backgroundColor: AppColors.primary.withOpacity(0.12),
+          backgroundColor: AppColors.primary.withValues(alpha: 0.12),
           backgroundImage: hasPhoto
               ? MemoryImage(const Base64Decoder().convert(photoBase64!))
               : null,
@@ -524,7 +524,7 @@ class _LangChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.08),
+        color: AppColors.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(label,
@@ -718,7 +718,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: AppColors.negative.withOpacity(0.08),
+                      color: AppColors.negative.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(_error!,
@@ -735,7 +735,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                     SizedBox(
                       width: 120,
                       child: DropdownButtonFormField<String>(
-                        value: _salutation,
+                        initialValue: _salutation,
                         decoration: const InputDecoration(labelText: 'Title'),
                         items: [
                           const DropdownMenuItem(
@@ -776,7 +776,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                           prefixIcon: const Icon(Icons.alternate_email),
                           filled: _isEdit,
                           fillColor: _isEdit
-                              ? AppColors.surfaceVariant.withOpacity(0.5)
+                              ? AppColors.surfaceVariant.withValues(alpha: 0.5)
                               : null,
                           helperText: _isEdit ? 'Username cannot be changed' : null,
                         ),
@@ -817,7 +817,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: _locationId,
+                        initialValue: _locationId,
                         decoration: const InputDecoration(
                           labelText: 'Default Location',
                           prefixIcon: Icon(Icons.store_outlined),
@@ -843,7 +843,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                   children: [
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: _language,
+                        initialValue: _language,
                         decoration: const InputDecoration(
                           labelText: 'Language',
                           prefixIcon: Icon(Icons.language_outlined),
@@ -861,7 +861,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: _theme,
+                        initialValue: _theme,
                         decoration: const InputDecoration(
                           labelText: 'Theme',
                           prefixIcon: Icon(Icons.palette_outlined),
@@ -960,7 +960,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                     ),
                     controlAffinity: ListTileControlAffinity.leading,
                     contentPadding: EdgeInsets.zero,
-                    activeColor: AppColors.primary,
+                    fillColor: WidgetStateProperty.all(AppColors.primary),
                   ),
                 ],
 
@@ -1022,7 +1022,7 @@ class _PhotoPicker extends StatelessWidget {
         // Avatar preview
         CircleAvatar(
           radius: 36,
-          backgroundColor: AppColors.primary.withOpacity(0.12),
+          backgroundColor: AppColors.primary.withValues(alpha: 0.12),
           backgroundImage: hasPhoto
               ? MemoryImage(const Base64Decoder().convert(photoBase64!))
               : null,
@@ -1180,7 +1180,7 @@ class _ResetPasswordDialogState
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: AppColors.negative.withOpacity(0.08),
+                      color: AppColors.negative.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(_error!,

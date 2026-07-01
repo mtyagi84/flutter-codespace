@@ -85,7 +85,7 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
 
   @override
   void dispose() {
-    for (final r in _rows) r.dispose();
+    for (final r in _rows) { r.dispose(); }
     super.dispose();
   }
 
@@ -131,9 +131,9 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
       );
 
       final rateMap = <String, ExchangeRateModel>{};
-      for (final r in rates) rateMap[r.toCurrency] = r;
+      for (final r in rates) { rateMap[r.toCurrency] = r; }
 
-      for (final r in _rows) r.dispose();
+      for (final r in _rows) { r.dispose(); }
 
       final rows = <_RateRow>[];
       for (final c in currencies) {
@@ -236,10 +236,10 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
         ));
       }
     } catch (e) {
-      if (mounted) setState(() {
+      if (mounted) { setState(() {
         _saving    = false;
         _saveError = 'Save failed: $e';
-      });
+      }); }
     }
   }
 
@@ -286,10 +286,10 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
         ));
       }
     } catch (e) {
-      if (mounted) setState(() {
+      if (mounted) { setState(() {
         _replicating = false;
         _saveError   = 'Replication failed: $e';
-      });
+      }); }
     }
   }
 
@@ -400,7 +400,7 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
                     isDense: true,
                     contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   ),
-                  value: _locationId,
+                  initialValue: _locationId,
                   items: _locations.map((l) => DropdownMenuItem(
                     value: l['id'] as String,
                     child: Text(l['location_name'] as String),
@@ -424,7 +424,7 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.calendar_today_outlined,
+                    const Icon(Icons.calendar_today_outlined,
                         size: 15, color: AppColors.primary),
                     const SizedBox(width: 8),
                     Text(

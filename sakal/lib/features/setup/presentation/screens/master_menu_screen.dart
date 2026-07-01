@@ -290,7 +290,7 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
             child: Center(
               child: Switch.adaptive(
                 value: active,
-                activeColor: AppColors.positive,
+                activeThumbColor: AppColors.positive,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 onChanged: (_) => _toggleActive(e['id'] as String, active),
               ),
@@ -474,7 +474,7 @@ class _EntryDialogState extends State<_EntryDialog> {
 
                       // Module dropdown
                       DropdownButtonFormField<String>(
-                        value: _moduleId,
+                        initialValue: _moduleId,
                         decoration: const InputDecoration(
                           labelText: 'Module *',
                           prefixIcon: Icon(Icons.apps_outlined),
@@ -648,7 +648,7 @@ class _EntryDialogState extends State<_EntryDialog> {
                             'Inactive entries are hidden from all users',
                             style: TextStyle(fontSize: 11)),
                         value: _isActive,
-                        activeColor: AppColors.positive,
+                        activeThumbColor: AppColors.positive,
                         onChanged: (v) => setState(() => _isActive = v),
                         contentPadding: EdgeInsets.zero,
                       ),

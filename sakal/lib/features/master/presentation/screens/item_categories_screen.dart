@@ -509,8 +509,8 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
                 if (hasKids)
                   GestureDetector(
                     onTap: () => setState(() {
-                      if (expanded) _expanded.remove(node.id!);
-                      else _expanded.add(node.id!);
+                      if (expanded) { _expanded.remove(node.id!); }
+                      else { _expanded.add(node.id!); }
                     }),
                     child: Icon(
                       expanded ? Icons.expand_more : Icons.chevron_right,
@@ -640,7 +640,7 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
                     // Level selector (only for Add; locked on Edit)
                     if (!isEdit) ...[
                       DropdownButtonFormField<int>(
-                        value: _formLevel,
+                        initialValue: _formLevel,
                         isExpanded: true,
                         decoration: const InputDecoration(labelText: 'Level'),
                         items: _levels.map((l) => DropdownMenuItem(
@@ -684,7 +684,7 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
                     // Parent selector (hidden for Level 1)
                     if ((_formLevel ?? 1) > 1) ...[
                       DropdownButtonFormField<String>(
-                        value: _formParentId,
+                        initialValue: _formParentId,
                         isExpanded: true,
                         decoration: InputDecoration(
                           labelText: 'Parent ${_levelLabel((_formLevel ?? 2) - 1)}',

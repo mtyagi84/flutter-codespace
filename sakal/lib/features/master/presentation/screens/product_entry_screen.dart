@@ -662,7 +662,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
               ),
             ),
             right: DropdownButtonFormField<String>(
-              value: _nature,
+              initialValue: _nature,
               decoration: const InputDecoration(labelText: 'Product Nature'),
               items: ProductModel.natureLabels.entries
                   .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
@@ -819,7 +819,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
       );
     }
     return DropdownButtonFormField<String?>(
-      value: value,
+      initialValue: value,
       decoration: InputDecoration(labelText: label),
       isExpanded: true,
       items: [
@@ -841,7 +841,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
         children: [
           _TwoCol(
             left: DropdownButtonFormField<String?>(
-              value: _baseUomId,
+              initialValue: _baseUomId,
               decoration: InputDecoration(label: _req('Base UOM')),
               isExpanded: true,
               validator: (v) => v == null ? 'Base UOM is required' : null,
@@ -855,7 +855,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
               }),
             ),
             right: DropdownButtonFormField<String>(
-              value: _trackingType,
+              initialValue: _trackingType,
               decoration: const InputDecoration(labelText: 'Tracking Type'),
               items: ProductModel.trackingLabels.entries
                   .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
@@ -893,7 +893,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
                   helperText: 'In company base currency'),
             ),
             right: DropdownButtonFormField<String?>(
-              value: _costCurrencyId,
+              initialValue: _costCurrencyId,
               isExpanded: true,
               decoration: const InputDecoration(
                   labelText: 'Maintain Price In',
@@ -983,7 +983,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
         .where((t) => filter.contains(t.applicableOn))
         .toList();
     return DropdownButtonFormField<String?>(
-      value: value,
+      initialValue: value,
       isExpanded: true,
       decoration: InputDecoration(labelText: label),
       items: [
@@ -1014,7 +1014,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
               decoration: const InputDecoration(labelText: 'Weight'),
             ),
             right: DropdownButtonFormField<String?>(
-              value: _weightUom,
+              initialValue: _weightUom,
               decoration: const InputDecoration(labelText: 'Weight Unit'),
               items: const [
                 DropdownMenuItem(value: null,  child: Text('—')),
@@ -1034,7 +1034,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
               decoration: const InputDecoration(labelText: 'Volume'),
             ),
             right: DropdownButtonFormField<String?>(
-              value: _volumeUom,
+              initialValue: _volumeUom,
               decoration: const InputDecoration(labelText: 'Volume Unit'),
               items: const [
                 DropdownMenuItem(value: null,     child: Text('—')),
@@ -1075,7 +1075,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
               const SizedBox(width: 12),
               Expanded(
                 child: DropdownButtonFormField<String?>(
-                  value: _dimensionUom,
+                  initialValue: _dimensionUom,
                   decoration: const InputDecoration(labelText: 'Unit'),
                   items: const [
                     DropdownMenuItem(value: null,   child: Text('—')),
@@ -1346,7 +1346,7 @@ class _UomLevelDialogState extends State<_UomLevelDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<String?>(
-                value: _uomId,
+                initialValue: _uomId,
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Unit of Measure *'),
                 items: [

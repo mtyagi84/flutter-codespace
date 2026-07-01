@@ -136,17 +136,17 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
+                  const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Currency Master',
+                        Text('Currency Master',
                             style: TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.textPrimary)),
-                        const SizedBox(height: 4),
-                        const Text(
+                        SizedBox(height: 4),
+                        Text(
                             'Activate the currencies your company transacts in. '
                             'Base and local currencies are active by default.',
                             style: TextStyle(
@@ -359,8 +359,8 @@ class _TableHeader extends StatelessWidget {
         color: AppColors.surfaceVariant,
         borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
       ),
-      child: Row(
-        children: const [
+      child: const Row(
+        children: [
           SizedBox(width: 70,  child: _HCol('Code')),
           SizedBox(width: 220, child: _HCol('Currency Name')),
           SizedBox(width: 70,  child: _HCol('Symbol')),
