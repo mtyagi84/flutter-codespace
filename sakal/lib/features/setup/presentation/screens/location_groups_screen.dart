@@ -338,8 +338,8 @@ class _LocationGroupsScreenState extends ConsumerState<LocationGroupsScreen>
         color: AppColors.surfaceVariant,
         borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
       ),
-      child: Row(
-        children: const [
+      child: const Row(
+        children: [
           SizedBox(width: 100, child: _HCol('Code')),
           SizedBox(width: 180, child: _HCol('Group Name')),
           SizedBox(width: 160, child: _HCol('Responsible')),
