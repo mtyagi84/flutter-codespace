@@ -1210,7 +1210,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
 
   // ── Generic search field (Autocomplete wrapper) ──────────────────────────
 
-  Widget _searchField<T>({
+  Widget _searchField<T extends Object>({
     required double height,
     required List<T> options,
     required String initialText,

@@ -245,7 +245,7 @@ class _AdditionalChargesScreenState extends ConsumerState<AdditionalChargesScree
       color: AppColors.surfaceVariant,
       borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
     ),
-    child: Row(children: const [
+    child: const Row(children: [
       SizedBox(width: 90,  child: _HCol('Code')),
       SizedBox(width: 170, child: _HCol('Name')),
       SizedBox(width: 100, child: _HCol('Applies To')),
