@@ -246,14 +246,14 @@ class _AdditionalChargesScreenState extends ConsumerState<AdditionalChargesScree
       borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
     ),
     child: const Row(children: [
-      SizedBox(width: 90,  child: _HCol('Code')),
-      SizedBox(width: 170, child: _HCol('Name')),
-      SizedBox(width: 100, child: _HCol('Applies To')),
-      SizedBox(width: 100, child: _HCol('Nature')),
-      SizedBox(width: 130, child: _HCol('Default')),
-      SizedBox(width: 110, child: _HCol('Tax')),
-      SizedBox(width: 80,  child: _HCol('Active')),
-      SizedBox(width: 90,  child: _HCol('Actions')),
+      Expanded(flex: 2, child: _HCol('Code')),
+      Expanded(flex: 3, child: _HCol('Name')),
+      Expanded(flex: 2, child: _HCol('Applies To')),
+      Expanded(flex: 2, child: _HCol('Nature')),
+      Expanded(flex: 2, child: _HCol('Default')),
+      Expanded(flex: 2, child: _HCol('Tax')),
+      Expanded(flex: 2, child: _HCol('Active')),
+      SizedBox(width: 90, child: _HCol('Actions')),
     ]),
   );
 
@@ -272,30 +272,37 @@ class _AdditionalChargesScreenState extends ConsumerState<AdditionalChargesScree
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          SizedBox(width: 90, child: Text(row['charge_code'] ?? '',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
-          SizedBox(width: 170, child: Text(row['charge_name'] ?? '',
-              style: const TextStyle(fontSize: 13, color: AppColors.textPrimary))),
-          SizedBox(width: 100, child: Text(row['applicable_on'] ?? '',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
-          SizedBox(width: 100, child: Text(row['nature'] == 'DEDUCT' ? 'Deduct' : 'Add',
+          Expanded(flex: 2, child: Text(row['charge_code'] ?? '',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+              overflow: TextOverflow.ellipsis)),
+          Expanded(flex: 3, child: Text(row['charge_name'] ?? '',
+              style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+              overflow: TextOverflow.ellipsis)),
+          Expanded(flex: 2, child: Text(row['applicable_on'] ?? '',
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              overflow: TextOverflow.ellipsis)),
+          Expanded(flex: 2, child: Text(row['nature'] == 'DEDUCT' ? 'Deduct' : 'Add',
               style: TextStyle(fontSize: 12,
                   color: row['nature'] == 'DEDUCT' ? AppColors.negative : AppColors.positive))),
-          SizedBox(width: 130, child: Text(defText, style: const TextStyle(fontSize: 12))),
-          SizedBox(width: 110, child: Text(
+          Expanded(flex: 2, child: Text(defText, style: const TextStyle(fontSize: 12))),
+          Expanded(flex: 2, child: Text(
               (row['is_taxable'] as bool? ?? false) ? (tax?['tax_code'] as String? ?? '—') : 'Non-taxable',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
-          SizedBox(
-            width: 80,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: (active ? AppColors.positive : AppColors.textDisabled).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(4),
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              overflow: TextOverflow.ellipsis)),
+          Expanded(
+            flex: 2,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: (active ? AppColors.positive : AppColors.textDisabled).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(active ? 'Active' : 'Inactive',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                        color: active ? AppColors.positive : AppColors.textSecondary)),
               ),
-              child: Text(active ? 'Active' : 'Inactive',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                      color: active ? AppColors.positive : AppColors.textSecondary)),
             ),
           ),
           SizedBox(
