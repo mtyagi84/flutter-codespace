@@ -611,13 +611,15 @@ class _ChargeDialogState extends ConsumerState<_ChargeDialog> {
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(labelText: 'Sort Order'),
                     )),
-                    const Spacer(),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Active', style: TextStyle(fontSize: 14)),
-                      value: _isActive,
-                      onChanged: (v) => setState(() => _isActive = v),
-                      activeThumbColor: AppColors.positive,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Active', style: TextStyle(fontSize: 14)),
+                        value: _isActive,
+                        onChanged: (v) => setState(() => _isActive = v),
+                        activeThumbColor: AppColors.positive,
+                      ),
                     ),
                   ]),
                   const SizedBox(height: 20),
