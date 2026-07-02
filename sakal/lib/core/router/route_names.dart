@@ -31,6 +31,7 @@ class RouteNames {
 
   // Purchase
   static const String purchaseOrders   = '/purchase/orders';
+  static const String purchaseOrderEntry = '/purchase/order-entry';
   static const String goodsReceipt     = '/purchase/grn';
   static const String purchaseInvoices = '/purchase/invoices';
   static const String supplierPayment  = '/purchase/payments';
@@ -54,6 +55,7 @@ class RouteNames {
   static const String itemCategories   = '/master/item-categories';
   static const String taxMaster        = '/master/tax-master';
   static const String taxGroups        = '/master/tax-groups';
+  static const String additionalCharges = '/master/additional-charges';
   static const String productMaster    = '/master/products';
   static const String productEntry     = '/master/product-entry';
 

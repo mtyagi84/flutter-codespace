@@ -25,6 +25,9 @@ import '../../features/master/presentation/screens/item_categories_screen.dart';
 import '../../features/master/presentation/screens/supplier_master_screen.dart';
 import '../../features/master/presentation/screens/tax_master_screen.dart';
 import '../../features/master/presentation/screens/tax_groups_screen.dart';
+import '../../features/master/presentation/screens/additional_charges_screen.dart';
+import '../../features/purchase/presentation/screens/purchase_order_list_screen.dart';
+import '../../features/purchase/presentation/screens/purchase_order_entry_screen.dart';
 import '../../features/master/presentation/screens/product_list_screen.dart';
 import '../../features/master/presentation/screens/product_entry_screen.dart';
 import '../../features/setup/presentation/screens/category_levels_screen.dart';
@@ -130,6 +133,7 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.itemCategories, builder: (c, s) => const ItemCategoriesScreen()),
         GoRoute(path: RouteNames.taxMaster,      builder: (c, s) => const TaxMasterScreen()),
         GoRoute(path: RouteNames.taxGroups,      builder: (c, s) => const TaxGroupsScreen()),
+        GoRoute(path: RouteNames.additionalCharges, builder: (c, s) => const AdditionalChargesScreen()),
         GoRoute(path: RouteNames.productMaster,  builder: (c, s) => const ProductListScreen()),
         GoRoute(
           path: RouteNames.productEntry,
@@ -151,7 +155,17 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.salesReceipts, builder: (c, s) => const _Placeholder('Cash Receipt')),
 
         // Purchase
-        GoRoute(path: RouteNames.purchaseOrders,   builder: (c, s) => const _Placeholder('Purchase Order')),
+        GoRoute(path: RouteNames.purchaseOrders, builder: (c, s) => const PurchaseOrderListScreen()),
+        GoRoute(
+          path: RouteNames.purchaseOrderEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return PurchaseOrderEntryScreen(
+              editOrderNo:   extra?['orderNo']   as String?,
+              editOrderDate: extra?['orderDate'] as String?,
+            );
+          },
+        ),
         GoRoute(path: RouteNames.goodsReceipt,     builder: (c, s) => const _Placeholder('Goods Receipt')),
         GoRoute(path: RouteNames.purchaseInvoices, builder: (c, s) => const _Placeholder('Purchase Invoice')),
         GoRoute(path: RouteNames.supplierPayment,  builder: (c, s) => const _Placeholder('Supplier Payment')),
