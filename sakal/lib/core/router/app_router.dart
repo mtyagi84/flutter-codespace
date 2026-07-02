@@ -26,6 +26,8 @@ import '../../features/master/presentation/screens/supplier_master_screen.dart';
 import '../../features/master/presentation/screens/tax_master_screen.dart';
 import '../../features/master/presentation/screens/tax_groups_screen.dart';
 import '../../features/master/presentation/screens/additional_charges_screen.dart';
+import '../../features/master/presentation/screens/account_link_setup_screen.dart';
+import '../../features/master/presentation/screens/account_link_configure_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_list_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_entry_screen.dart';
 import '../../features/master/presentation/screens/product_list_screen.dart';
@@ -134,6 +136,18 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.taxMaster,      builder: (c, s) => const TaxMasterScreen()),
         GoRoute(path: RouteNames.taxGroups,      builder: (c, s) => const TaxGroupsScreen()),
         GoRoute(path: RouteNames.additionalCharges, builder: (c, s) => const AdditionalChargesScreen()),
+        GoRoute(path: RouteNames.accountLinkSetup, builder: (c, s) => const AccountLinkSetupScreen()),
+        GoRoute(
+          path: RouteNames.accountLinkConfigure,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return AccountLinkConfigureScreen(
+              linkTypeId: extra?['linkTypeId'] as String? ?? '',
+              linkKey:    extra?['linkKey']    as String? ?? '',
+              linkName:   extra?['linkName']   as String? ?? '',
+            );
+          },
+        ),
         GoRoute(path: RouteNames.productMaster,  builder: (c, s) => const ProductListScreen()),
         GoRoute(
           path: RouteNames.productEntry,

@@ -85,7 +85,7 @@ final accountsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async 
     'or':         '(posting_allowed.eq.true,'
                   'account_nature.eq.Customer,'
                   'account_nature.eq.Supplier)',
-    'select':     'id,account_code,account_name,account_nature,'
+    'select':     'id,account_code,account_name,account_nature,posting_allowed,'
                   'parent:rim_accounts!parent_id(account_name),'
                   'rim_currencies!account_currency_id(currency_id)',
     'order':      'account_code.asc',
