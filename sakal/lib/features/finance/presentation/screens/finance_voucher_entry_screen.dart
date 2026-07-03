@@ -1,10 +1,7 @@
 import 'dart:async';
-import 'package:drift/drift.dart' show Value;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/database/app_database.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/utils/local_id.dart';
@@ -201,48 +198,28 @@ class _FinanceVoucherEntryScreenState
     setState(() { _loading = true; _error = null; });
     final session = ref.read(sessionProvider)!;
     try {
-      List<Map<String, dynamic>> accounts;
+      // accountsProvider handles the offline/online branch (and offline
+      // caching) centrally now — see core/providers/master_cache_providers.dart.
+      final accounts = await ref.read(accountsProvider.future);
       List<Map<String, dynamic>> modes;
       String base;
       String local;
 
       if (session.offlineMode) {
-        // Serve accounts from local Drift cache; payment modes and currencies
-        // are pre-synced during online login via SyncScreen.
-        final db   = ref.read(appDatabaseProvider);
-        final rows = await (db.select(db.accountsCache)
-              ..where((t) => t.clientId.equals(session.clientId))
-              ..where((t) => t.companyId.equals(session.companyId))
-              ..where((t) => t.isActive.equals(true)))
-            .get();
-        accounts = rows.map((r) => {
-          'id':             r.id,
-          'account_code':   r.accountCode,
-          'account_name':   r.accountName,
-          'account_nature': r.accountNature,
-          'parent':         {'account_name': r.parentName},
-          'rim_currencies': {'currency_id':  r.accountCurrency},
-        }).toList();
-        // Offline: base/local currency cached in session (set during sync login).
-        // Payment modes are not needed offline (vouchers stay PENDING).
+        // Payment modes and currencies aren't needed offline — vouchers stay
+        // PENDING until synced, so there's nothing to pick a mode/rate for yet.
         modes = [];
         base  = '';
         local = '';
       } else {
         final futures = await Future.wait<dynamic>([
-          ref.read(accountsProvider.future),
           ref.read(paymentModesProvider.future),
           ref.read(baseCurrencyProvider.future),
           ref.read(localCurrencyProvider.future),
         ]);
-        accounts = futures[0] as List<Map<String, dynamic>>;
-        modes    = futures[1] as List<Map<String, dynamic>>;
-        base     = futures[2] as String;
-        local    = futures[3] as String;
-
-        // Populate AccountsCache so the data is available on next offline login.
-        // Drift is not available on Flutter Web.
-        if (!kIsWeb) unawaited(_cacheAccountsLocally(accounts, session));
+        modes = futures[0] as List<Map<String, dynamic>>;
+        base  = futures[1] as String;
+        local = futures[2] as String;
       }
 
       if (!mounted) return;
@@ -278,31 +255,6 @@ class _FinanceVoucherEntryScreenState
           _error   = 'Could not load data: $e';
         });
       }
-    }
-  }
-
-  Future<void> _cacheAccountsLocally(
-    List<Map<String, dynamic>> accounts,
-    UserSession session,
-  ) async {
-    final db  = ref.read(appDatabaseProvider);
-    final now = DateTime.now();
-    for (final a in accounts) {
-      final parentRel = a['parent'];
-      final currRel   = a['rim_currencies'];
-      await db.into(db.accountsCache).insertOnConflictUpdate(AccountsCacheCompanion.insert(
-        id:              a['id'] as String,
-        clientId:        session.clientId,
-        companyId:       session.companyId,
-        accountCode:     a['account_code']   as String? ?? '',
-        accountName:     a['account_name']   as String? ?? '',
-        accountNature:   a['account_nature'] as String? ?? '',
-        parentName:      Value(parentRel is Map
-            ? (parentRel['account_name'] as String? ?? '') : ''),
-        accountCurrency: Value(currRel is Map
-            ? (currRel['currency_id'] as String? ?? '') : ''),
-        cachedAt:        Value(now),
-      ));
     }
   }
 
