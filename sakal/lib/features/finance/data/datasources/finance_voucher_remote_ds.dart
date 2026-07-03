@@ -3,6 +3,31 @@ import '../../../../core/network/dio_client.dart';
 import '../models/finance_voucher_model.dart';
 
 class FinanceVoucherRemoteDs {
+  Future<List<Map<String, dynamic>>> listHeaders({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String fromDate,
+    required String toDate,
+    String? voucherTypeCode,
+    bool? isPosted,
+  }) async {
+    final params = <String, dynamic>{
+      'client_id':   'eq.$clientId',
+      'company_id':  'eq.$companyId',
+      'location_id': 'eq.$locationId',
+      'is_deleted':  'eq.false',
+      'trans_date':  ['gte.$fromDate', 'lte.$toDate'],
+      'select':      'trans_no,trans_date,voucher_type_code,payment_mode_code,is_on_account,is_posted,remarks',
+      'order':       'trans_date.desc,trans_no.desc',
+      'limit':       '500',
+    };
+    if (voucherTypeCode != null) params['voucher_type_code'] = 'eq.$voucherTypeCode';
+    if (isPosted != null) params['is_posted'] = 'eq.$isPosted';
+    final res = await DioClient.instance.get('/rih_finance_headers', queryParameters: params);
+    return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
   Future<FinanceVoucherHeader?> getHeader({
     required String clientId,
     required String companyId,

@@ -393,6 +393,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
   @override
   Widget build(BuildContext context) {
     final isDesktop = Responsive.isDesktop(context);
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -406,7 +407,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
             child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
           ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load, tooltip: 'Refresh'),
-          if (_canAdd)
+          if (_canAdd && !offline)
             IconButton(icon: const Icon(Icons.add), onPressed: _openAdd, tooltip: 'Add Tax'),
         ],
       ),
@@ -459,6 +460,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
   ]);
 
   Widget _buildList() {
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     final filtered = _taxes.where((t) {
       if (_search.isEmpty) return true;
       return t.taxCode.toLowerCase().contains(_search) ||
@@ -494,12 +496,12 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
               if (v == 'delete') _deleteTax(tax);
             },
             itemBuilder: (_) => [
-              if (_canEdit) const PopupMenuItem(value: 'edit', child: Text('Edit')),
-              if (_canEdit) const PopupMenuItem(value: 'delete',
+              if (_canEdit && !offline) const PopupMenuItem(value: 'edit', child: Text('Edit')),
+              if (_canEdit && !offline) const PopupMenuItem(value: 'delete',
                   child: Text('Delete', style: TextStyle(color: AppColors.negative))),
             ],
           ),
-          onTap: _canEdit ? () => _openEdit(tax) : null,
+          onTap: _canEdit && !offline ? () => _openEdit(tax) : null,
         );
       },
     );
@@ -509,6 +511,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
 
   Widget _formPanel() {
     final isEdit = _panelMode == 'edit';
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Form(
@@ -674,7 +677,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
           // Save / Cancel
           Row(children: [
             FilledButton(
-              onPressed: _saving ? null : _saveTax,
+              onPressed: (_saving || offline) ? null : _saveTax,
               style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
               child: _saving ? const SizedBox(width: 18, height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
@@ -724,11 +727,12 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
 
   Widget _ratesSection() {
     final rates = _ratesFor(_editing!.id!);
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     return ExpansionTile(
       initiallyExpanded: true,
       title: const Text('Tax Rates', style: TextStyle(fontWeight: FontWeight.w600)),
       subtitle: Text('${rates.length} rate(s) configured'),
-      trailing: _canEdit
+      trailing: (_canEdit && !offline)
           ? TextButton.icon(
               onPressed: _openAddRate,
               icon: const Icon(Icons.add, size: 16),
@@ -747,6 +751,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
   }
 
   Widget _rateRow(TaxRateModel r) {
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     final from  = r.effectiveFrom.toIso8601String().substring(0, 10);
     final to    = r.effectiveTo?.toIso8601String().substring(0, 10) ?? '—';
     final badge = r.isCurrent ? 'Current' : (r.effectiveTo != null ? 'Expired' : 'Future');
@@ -768,7 +773,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
             Chip(label: Text(badge, style: const TextStyle(fontSize: 10, color: Colors.white)),
                 backgroundColor: badgeColor, padding: EdgeInsets.zero),
-            if (_canEdit) ...[
+            if (_canEdit && !offline) ...[
               const SizedBox(width: 4),
               IconButton(icon: const Icon(Icons.edit, size: 16), onPressed: () => _openEditRate(r)),
             ],
@@ -778,7 +783,9 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
     );
   }
 
-  Widget _rateFormRow() => Padding(
+  Widget _rateFormRow() {
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
+    return Padding(
     padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
     child: Card(
       color: AppColors.primary.withValues(alpha: 0.04),
@@ -843,7 +850,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
           const SizedBox(height: 10),
           Row(children: [
             FilledButton(
-              onPressed: _saving ? null : _saveRate,
+              onPressed: (_saving || offline) ? null : _saveRate,
               style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primary, minimumSize: const Size(80, 36)),
               child: _saving ? const SizedBox(width: 16, height: 16,
@@ -858,6 +865,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
       ),
     ),
   );
+  }
 
   Widget _sectionLabel(String label) => Padding(
     padding: const EdgeInsets.only(top: 4),

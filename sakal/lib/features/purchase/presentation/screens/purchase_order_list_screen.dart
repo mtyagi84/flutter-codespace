@@ -6,9 +6,11 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/widgets/offline_banner.dart';
-import '../../data/datasources/purchase_order_remote_ds.dart';
+import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../data/models/purchase_order_model.dart';
+import '../providers/purchase_order_providers.dart';
 
 MenuFeature? _findFeature(List<MenuModule> modules, String screenPath) {
   for (final mod in modules) {
@@ -29,9 +31,8 @@ class PurchaseOrderListScreen extends ConsumerStatefulWidget {
 }
 
 class _PurchaseOrderListScreenState extends ConsumerState<PurchaseOrderListScreen> {
-  final _ds = PurchaseOrderRemoteDs();
-
   List<PurchaseOrderModel> _orders = [];
+  Set<String> _pendingIds = {};
   bool    _loading = true;
   String? _error;
   String? _filterStatus;
@@ -63,12 +64,21 @@ class _PurchaseOrderListScreenState extends ConsumerState<PurchaseOrderListScree
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
-      final rows = await _ds.listOrders(
-        clientId:  session.clientId,
-        companyId: session.companyId,
-        status:    _filterStatus,
-      );
-      if (mounted) setState(() { _orders = rows; _loading = false; });
+      final results = await Future.wait([
+        ref.read(purchaseOrderRepositoryProvider).listOrders(
+          clientId:  session.clientId,
+          companyId: session.companyId,
+          status:    _filterStatus,
+        ),
+        ref.read(syncEngineProvider).pendingDocumentIds('PURCHASE_ORDER'),
+      ]);
+      if (mounted) {
+        setState(() {
+          _orders     = results[0] as List<PurchaseOrderModel>;
+          _pendingIds = results[1] as Set<String>;
+          _loading    = false;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() { _loading = false; _error = 'Could not load purchase orders: $e'; });
     }
@@ -120,7 +130,9 @@ class _PurchaseOrderListScreenState extends ConsumerState<PurchaseOrderListScree
       );
     }
 
-    final canAdd = !isOffline && feature.addAllowed;
+    // Creating a new PO is allowed offline (queued via SyncEngine) — only
+    // Approve requires being online.
+    final canAdd = feature.addAllowed;
     final rows   = _filtered;
 
     return Column(
@@ -275,8 +287,15 @@ class _PurchaseOrderListScreenState extends ConsumerState<PurchaseOrderListScree
         child: Row(children: [
           Expanded(flex: 2, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            child: Text(o.orderNo,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)))),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Flexible(child: Text(o.orderNo,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary))),
+              if (_pendingIds.contains(o.orderNo)) ...[
+                const SizedBox(width: 6),
+                PendingSyncBadge.static(isPending: true),
+              ],
+            ]))),
           Expanded(flex: 2, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Text(_displayDate(o.orderDate), style: const TextStyle(fontSize: 13)))),
@@ -325,6 +344,10 @@ class _PurchaseOrderListScreenState extends ConsumerState<PurchaseOrderListScree
           Row(children: [
             Expanded(child: Text(o.orderNo,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
+            if (_pendingIds.contains(o.orderNo)) ...[
+              PendingSyncBadge.static(isPending: true),
+              const SizedBox(width: 6),
+            ],
             _statusBadge(o.status),
           ]),
           const SizedBox(height: 6),

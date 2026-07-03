@@ -29,6 +29,28 @@ class SyncEngine {
     return rows.length;
   }
 
+  /// Bulk lookup for list screens — one query to annotate every visible row,
+  /// instead of one query per row.
+  Future<Set<String>> pendingDocumentIds(String documentType) async {
+    final rows = await (_db.select(_db.pendingSyncQueue)
+          ..where((t) => t.documentType.equals(documentType) & t.synced.equals(false)))
+        .get();
+    return rows.map((r) => r.documentId).toSet();
+  }
+
+  /// Reactive lookup for a single document — used by entry screens so the
+  /// pending badge disappears the moment SyncScreen syncs it, without a
+  /// manual refresh.
+  Stream<bool> watchIsPending(String documentType, String documentId) {
+    return (_db.select(_db.pendingSyncQueue)
+          ..where((t) =>
+              t.documentType.equals(documentType) &
+              t.documentId.equals(documentId) &
+              t.synced.equals(false)))
+        .watch()
+        .map((rows) => rows.isNotEmpty);
+  }
+
   /// Syncs all pending documents in chronological order.
   /// Documents that fail stay PENDING with incremented retry_count.
   Future<SyncResult> syncAll({

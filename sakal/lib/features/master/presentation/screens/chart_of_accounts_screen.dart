@@ -435,6 +435,7 @@ class _ChartOfAccountsScreenState
   Widget _leftPanel() {
     final visible = _visibleNodes();
     final mobile  = Responsive.isMobile(context);
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     return Column(children: [
       Container(
         color: AppColors.surface,
@@ -460,6 +461,7 @@ class _ChartOfAccountsScreenState
               hasChildren:      (_childMap[item.node['id'] as String]?.isNotEmpty ?? false),
               isSelected:       (_panelMode == 'edit' && _editNode?['id'] == item.node['id']),
               alwaysShowActions: mobile,
+              offline: offline,
               onToggle: () => setState(() {
                 final id = item.node['id'] as String;
                 if (_expanded.contains(id)) { _expanded.remove(id); }
@@ -471,29 +473,31 @@ class _ChartOfAccountsScreenState
           },
         ),
       ),
-      const Divider(height: 1, color: AppColors.border),
-      Padding(
-        padding: const EdgeInsets.all(12),
-        child: SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            icon: const Icon(Icons.add, size: 16),
-            label: const Text('Add Root Group', style: TextStyle(fontSize: 13)),
-            onPressed: () => setState(() {
-              _panelMode      = 'add';
-              _addParent      = null;
-              _editNode       = null;
-              _postingAllowed = false;
-              _nature         = 'General';
-              _isAutoCode     = false;
-              _partyExpanded  = false;
-              _isActive       = true;
-              _saveError      = null;
-              _clearForm();
-            }),
+      if (!offline) ...[
+        const Divider(height: 1, color: AppColors.border),
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Add Root Group', style: TextStyle(fontSize: 13)),
+              onPressed: () => setState(() {
+                _panelMode      = 'add';
+                _addParent      = null;
+                _editNode       = null;
+                _postingAllowed = false;
+                _nature         = 'General';
+                _isAutoCode     = false;
+                _partyExpanded  = false;
+                _isActive       = true;
+                _saveError      = null;
+                _clearForm();
+              }),
+            ),
           ),
         ),
-      ),
+      ],
     ]);
   }
 
@@ -521,7 +525,8 @@ class _ChartOfAccountsScreenState
     final isFixed   = _editNode?['is_system_fixed'] == true;
     final isGroup   = !_postingAllowed;
     final isParty   = _nature == 'Customer' || _nature == 'Supplier';
-    final canDelete = !isAdd && !isFixed &&
+    final offline   = ref.watch(sessionProvider)?.offlineMode ?? false;
+    final canDelete = !isAdd && !isFixed && !offline &&
         (_childMap[_editNode?['id'] as String? ?? '']?.isEmpty ?? true);
 
     final parentLabel = isAdd
@@ -956,15 +961,17 @@ class _ChartOfAccountsScreenState
                   onPressed: () => setState(() => _panelMode = 'none'),
                   child: const Text('Cancel'),
                 ),
-                const SizedBox(width: 12),
-                FilledButton(
-                  onPressed: _saving ? null : _save,
-                  child: _saving
-                      ? const SizedBox(width: 18, height: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
-                      : Text(isAdd ? 'Save Account' : 'Save Changes'),
-                ),
+                if (!offline) ...[
+                  const SizedBox(width: 12),
+                  FilledButton(
+                    onPressed: _saving ? null : _save,
+                    child: _saving
+                        ? const SizedBox(width: 18, height: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : Text(isAdd ? 'Save Account' : 'Save Changes'),
+                  ),
+                ],
               ]),
           ]),
         ),
@@ -992,6 +999,7 @@ class _NodeRow extends StatefulWidget {
   final bool         hasChildren;
   final bool         isSelected;
   final bool         alwaysShowActions;
+  final bool         offline;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
   final VoidCallback onAdd;
@@ -1003,6 +1011,7 @@ class _NodeRow extends StatefulWidget {
     required this.hasChildren,
     required this.isSelected,
     required this.alwaysShowActions,
+    required this.offline,
     required this.onToggle,
     required this.onEdit,
     required this.onAdd,
@@ -1107,7 +1116,7 @@ class _NodeRowState extends State<_NodeRow> {
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 onPressed: widget.onEdit,
               ),
-              if (!isLeaf)
+              if (!isLeaf && !widget.offline)
                 IconButton(
                   icon: const Icon(Icons.add, size: 15),
                   tooltip: 'Add account under this group',

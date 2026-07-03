@@ -584,7 +584,8 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
 
   // ── Form Panel ──────────────────────────────────────────────────────────────
   Widget _buildFormPanel() {
-    final isEdit = _panelMode == 'edit';
+    final isEdit  = _panelMode == 'edit';
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
 
     // Parent options for the selected level
     final parentLevel = (_formLevel ?? 1) - 1;
@@ -769,7 +770,7 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
                     // Action buttons
                     Row(
                       children: [
-                        if (isEdit && _canEdit)
+                        if (isEdit && _canEdit && !offline)
                           Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: OutlinedButton.icon(
@@ -786,16 +787,18 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
                           onPressed: _saving ? null : _closePanel,
                           child: const Text('Cancel'),
                         ),
-                        const SizedBox(width: 8),
-                        FilledButton(
-                          onPressed: _saving ? null : _save,
-                          child: _saving
-                              ? const SizedBox(
-                                  width: 16, height: 16,
-                                  child: CircularProgressIndicator(
-                                      color: Colors.white, strokeWidth: 2))
-                              : Text(isEdit ? 'Update' : 'Save'),
-                        ),
+                        if (!offline) ...[
+                          const SizedBox(width: 8),
+                          FilledButton(
+                            onPressed: _saving ? null : _save,
+                            child: _saving
+                                ? const SizedBox(
+                                    width: 16, height: 16,
+                                    child: CircularProgressIndicator(
+                                        color: Colors.white, strokeWidth: 2))
+                                : Text(isEdit ? 'Update' : 'Save'),
+                          ),
+                        ],
                       ],
                     ),
                   ],

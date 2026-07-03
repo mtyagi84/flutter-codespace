@@ -7,6 +7,7 @@ import 'tables/accounts_cache_table.dart';
 import 'tables/finance_voucher_cache_tables.dart';
 import 'tables/common_masters_cache_table.dart';
 import 'tables/products_cache_table.dart';
+import 'tables/purchase_order_cache_tables.dart';
 
 part 'app_database.g.dart';
 
@@ -19,12 +20,15 @@ part 'app_database.g.dart';
   CommonMasterTypesCache,
   CommonMastersCache,
   ProductsCache,
+  PurchaseOrdersCache,
+  PurchaseOrderLinesCache,
+  PoChargeLinesCache,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'sakal_local'));
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -40,6 +44,11 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(commonMastersCache);
           }
           if (from < 6) await m.createTable(productsCache);
+          if (from < 7) {
+            await m.createTable(purchaseOrdersCache);
+            await m.createTable(purchaseOrderLinesCache);
+            await m.createTable(poChargeLinesCache);
+          }
         },
       );
 }

@@ -12,6 +12,34 @@ class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
   FinanceVoucherRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
+  Future<List<Map<String, dynamic>>> listHeaders({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String fromDate,
+    required String toDate,
+    String? voucherTypeCode,
+    bool? isPosted,
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.listHeaders(
+        clientId: clientId, companyId: companyId, locationId: locationId,
+        fromDate: fromDate, toDate: toDate,
+        voucherTypeCode: voucherTypeCode, isPosted: isPosted,
+      );
+    }
+    // Online: remote is the source of truth for browsing history. Offline-created
+    // (not-yet-synced) vouchers are already cached via cacheVoucherLocally and
+    // don't need caching again here — per the offline design, transaction history
+    // browsing isn't guaranteed offline, only newly-created docs are.
+    return _remote.listHeaders(
+      clientId: clientId, companyId: companyId, locationId: locationId,
+      fromDate: fromDate, toDate: toDate,
+      voucherTypeCode: voucherTypeCode, isPosted: isPosted,
+    );
+  }
+
+  @override
   Future<FinanceVoucherHeader?> getHeader({
     required String clientId,
     required String companyId,

@@ -288,6 +288,7 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
   @override
   Widget build(BuildContext context) {
     final isDesktop = Responsive.isDesktop(context);
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -299,7 +300,7 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
           if (_loading) const Padding(padding: EdgeInsets.all(12),
               child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load, tooltip: 'Refresh'),
-          if (_canAdd)
+          if (_canAdd && !offline)
             IconButton(icon: const Icon(Icons.add), onPressed: _openAdd, tooltip: 'Add Group'),
         ],
       ),
@@ -353,6 +354,7 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
   ]);
 
   Widget _buildList() {
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     final filtered = _groups.where((g) {
       if (_search.isEmpty) return true;
       return g.groupCode.toLowerCase().contains(_search) ||
@@ -392,12 +394,12 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
               if (v == 'delete') _deleteGroup(g);
             },
             itemBuilder: (_) => [
-              if (_canEdit) const PopupMenuItem(value: 'edit', child: Text('Edit')),
-              if (_canEdit) const PopupMenuItem(value: 'delete',
+              if (_canEdit && !offline) const PopupMenuItem(value: 'edit', child: Text('Edit')),
+              if (_canEdit && !offline) const PopupMenuItem(value: 'delete',
                   child: Text('Delete', style: TextStyle(color: AppColors.negative))),
             ],
           ),
-          onTap: _canEdit ? () => _openEdit(g) : null,
+          onTap: _canEdit && !offline ? () => _openEdit(g) : null,
         );
       },
     );
@@ -407,6 +409,7 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
 
   Widget _formPanel() {
     final isEdit = _panelMode == 'edit';
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Form(
@@ -491,7 +494,7 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
           // Save / Cancel
           Row(children: [
             FilledButton(
-              onPressed: _saving ? null : _saveGroup,
+              onPressed: (_saving || offline) ? null : _saveGroup,
               style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
               child: _saving
                   ? const SizedBox(width: 18, height: 18,
@@ -512,13 +515,15 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
 
   // ── Members Section ────────────────────────────────────────────────────────────
 
-  Widget _membersSection() => Column(
+  Widget _membersSection() {
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
+    return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Row(children: [
         const Text('Tax Members', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
         const Spacer(),
-        if (_canEdit) TextButton.icon(
+        if (_canEdit && !offline) TextButton.icon(
           onPressed: _showAddMemberSheet,
           icon: const Icon(Icons.add, size: 16),
           label: const Text('Add Tax'),
@@ -549,9 +554,11 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
       ),
     ],
   );
+  }
 
   Widget _memberTile(TaxGroupMemberModel m, int index) {
     final tax = _taxById(m.taxId);
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     return Card(
       key: ValueKey(m.taxId),
       margin: const EdgeInsets.symmetric(vertical: 3),
@@ -571,7 +578,7 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
             : '[${tax?.taxCode ?? '?'}] ${tax?.taxName ?? '?'}',
             style: const TextStyle(fontSize: 13)),
         subtitle: Text(tax?.taxTypeCode ?? '', style: const TextStyle(fontSize: 11)),
-        trailing: _canEdit ? IconButton(
+        trailing: (_canEdit && !offline) ? IconButton(
           icon: const Icon(Icons.close, size: 18),
           color: AppColors.negative,
           onPressed: () => _removeMember(index),

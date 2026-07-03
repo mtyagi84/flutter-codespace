@@ -121,6 +121,7 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final offline     = ref.watch(sessionProvider)?.offlineMode ?? false;
     final activeCount = _allRows.where((r) => r['is_active'] as bool? ?? false).length;
     final total       = _allRows.length;
 
@@ -259,6 +260,7 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
                                     isEven: e.key.isEven,
                                     toggling: _toggling
                                         .contains(e.value['id'] as String?),
+                                    offline: offline,
                                     onToggle: () => _toggle(e.value),
                                   )),
                               if (_filtered.length < _allRows.length)
@@ -394,11 +396,13 @@ class _CurrencyRow extends StatelessWidget {
   final Map<String, dynamic> row;
   final bool isEven;
   final bool toggling;
+  final bool offline;
   final VoidCallback onToggle;
   const _CurrencyRow({
     required this.row,
     required this.isEven,
     required this.toggling,
+    required this.offline,
     required this.onToggle,
   });
 
@@ -488,12 +492,20 @@ class _CurrencyRow extends StatelessWidget {
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2))
-                : Switch(
-                    value: isActive,
-                    onChanged: (_) => onToggle(),
-                    activeThumbColor: AppColors.positive,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
+                : offline
+                    ? Icon(
+                        isActive ? Icons.check_circle : Icons.cancel,
+                        size: 18,
+                        color: isActive
+                            ? AppColors.positive
+                            : AppColors.textSecondary,
+                      )
+                    : Switch(
+                        value: isActive,
+                        onChanged: (_) => onToggle(),
+                        activeThumbColor: AppColors.positive,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
           ),
         ],
       ),

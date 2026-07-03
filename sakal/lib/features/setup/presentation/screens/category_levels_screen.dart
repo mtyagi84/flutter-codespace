@@ -321,7 +321,8 @@ class _CategoryLevelsScreenState extends ConsumerState<CategoryLevelsScreen>
                             const Text('No levels configured yet.',
                                 style: TextStyle(color: AppColors.textSecondary)),
                             const SizedBox(height: 8),
-                            if (_canAdd)
+                            if (_canAdd &&
+                                !(ref.read(sessionProvider)?.offlineMode ?? false))
                               TextButton(
                                 onPressed: () => _openDialog(),
                                 child: const Text('Add your first level'),

@@ -199,6 +199,7 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
   }
 
   void _openDialog([Map<String, dynamic>? entry]) {
+    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
     showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -208,6 +209,7 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
         entry:              entry,
         preselectedCountry: _selectedCountry,
         preselectedDivision: _selectedDivision,
+        offline:            offline,
         onSave: (data, id) async => _save(data, id),
       ),
     );
@@ -238,6 +240,7 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     final filtered = _filtered;
     final activeCount = _cities.where((c) => c['is_active'] == true).length;
 
@@ -269,7 +272,7 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
                   ],
                 ),
               ),
-              if (_selectedCountry != null)
+              if (_selectedCountry != null && !offline)
                 ElevatedButton.icon(
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('Add City'),
@@ -463,6 +466,7 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
   Widget _buildRow(Map<String, dynamic> c) {
     final active = c['is_active'] as bool? ?? true;
     final id     = c['id'] as String;
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
 
     return ColoredBox(
       color: active ? Colors.white : const Color(0xFFF9FAFB),
@@ -481,41 +485,49 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
           SizedBox(
             width: _w[2], height: 48,
             child: Center(
-              child: Switch.adaptive(
-                value: active,
-                activeThumbColor: AppColors.positive,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                onChanged: _toggling.contains(id)
-                    ? null
-                    : (_) => _toggleActive(id, active),
-              ),
+              child: offline
+                  ? Icon(
+                      active ? Icons.check_circle : Icons.cancel,
+                      size: 18,
+                      color: active ? AppColors.positive : AppColors.textDisabled,
+                    )
+                  : Switch.adaptive(
+                      value: active,
+                      activeThumbColor: AppColors.positive,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      onChanged: _toggling.contains(id)
+                          ? null
+                          : (_) => _toggleActive(id, active),
+                    ),
             ),
           ),
           _vd(),
           SizedBox(
             width: _w[3], height: 48,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 17),
-                  color: AppColors.primary,
-                  tooltip: 'Edit',
-                  constraints: const BoxConstraints(),
-                  padding: EdgeInsets.zero,
-                  onPressed: () => _openDialog(c),
-                ),
-                const SizedBox(width: 12),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, size: 17),
-                  color: AppColors.negative,
-                  tooltip: 'Delete',
-                  constraints: const BoxConstraints(),
-                  padding: EdgeInsets.zero,
-                  onPressed: () => _delete(id),
-                ),
-              ],
-            ),
+            child: offline
+                ? const SizedBox()
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined, size: 17),
+                        color: AppColors.primary,
+                        tooltip: 'Edit',
+                        constraints: const BoxConstraints(),
+                        padding: EdgeInsets.zero,
+                        onPressed: () => _openDialog(c),
+                      ),
+                      const SizedBox(width: 12),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, size: 17),
+                        color: AppColors.negative,
+                        tooltip: 'Delete',
+                        constraints: const BoxConstraints(),
+                        padding: EdgeInsets.zero,
+                        onPressed: () => _delete(id),
+                      ),
+                    ],
+                  ),
           ),
         ],
       ),
@@ -556,6 +568,7 @@ class _CityDialog extends StatefulWidget {
   final Map<String, dynamic>? entry;
   final String? preselectedCountry;
   final String? preselectedDivision;
+  final bool offline;
   final Future<void> Function(Map<String, dynamic> data, String? id) onSave;
 
   const _CityDialog({
@@ -564,6 +577,7 @@ class _CityDialog extends StatefulWidget {
     required this.entry,
     required this.preselectedCountry,
     required this.preselectedDivision,
+    required this.offline,
     required this.onSave,
   });
 
@@ -730,7 +744,7 @@ class _CityDialogState extends State<_CityDialog> {
                         ),
                         const SizedBox(width: 12),
                         ElevatedButton(
-                          onPressed: _saving ? null : _submit,
+                          onPressed: (_saving || widget.offline) ? null : _submit,
                           child: _saving
                               ? const SizedBox(width: 18, height: 18,
                                   child: CircularProgressIndicator(

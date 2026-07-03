@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/master_type_keys.dart';
@@ -7,8 +8,12 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../../core/sync/sync_engine.dart';
+import '../../../../core/utils/local_id.dart';
 import '../../../../core/widgets/offline_banner.dart';
-import '../../data/datasources/purchase_order_remote_ds.dart';
+import '../../../../core/widgets/pending_sync_badge.dart';
+import '../../domain/repositories/purchase_order_repository.dart';
+import '../providers/purchase_order_providers.dart';
 
 MenuFeature? _findFeature(List<MenuModule> modules, String screenPath) {
   for (final mod in modules) {
@@ -104,7 +109,7 @@ class PurchaseOrderEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScreen> {
-  final _ds = PurchaseOrderRemoteDs();
+  PurchaseOrderRepository get _ds => ref.read(purchaseOrderRepositoryProvider);
 
   // ── Header state ─────────────────────────────────────────────────────────
   String?  _orderNo;
@@ -548,11 +553,35 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         'allocation_factor':  c.allocationFactor,
       }).toList();
 
-      final orderNo = await _ds.save(header: header, lines: lines, charges: charges, userId: session.userId);
-      if (mounted) {
-        setState(() { _orderNo = orderNo; _saving = false; });
-        _showSnack('Draft saved — $orderNo', color: AppColors.positive);
-        return true;
+      if (session.offlineMode) {
+        final localId = generateLocalId();
+        await ref.read(syncEngineProvider).enqueue(
+          documentType: 'PURCHASE_ORDER',
+          documentId:   localId,
+          endpoint:     '/rpc/fn_save_purchase_order',
+          payload:      {'p_header': header, 'p_lines': lines, 'p_charges': charges, 'p_user_id': session.userId},
+        );
+        // Cache locally so the PO is readable in the entry screen while still offline.
+        await _ds.cacheOrderLocally(
+          effectiveOrderNo: localId,
+          header: header,
+          lines:  lines,
+          charges: charges,
+        );
+        if (mounted) {
+          setState(() { _orderNo = localId; _saving = false; });
+          _showSnack('Saved offline — will sync when online.', color: AppColors.secondary);
+          return true;
+        }
+      } else {
+        final orderNo = await _ds.save(header: header, lines: lines, charges: charges, userId: session.userId);
+        // Cache for offline access in subsequent sessions.
+        unawaited(_ds.cacheOrderLocally(effectiveOrderNo: orderNo, header: header, lines: lines, charges: charges));
+        if (mounted) {
+          setState(() { _orderNo = orderNo; _saving = false; });
+          _showSnack('Draft saved — $orderNo', color: AppColors.positive);
+          return true;
+        }
       }
     } catch (e) {
       if (mounted) setState(() { _saving = false; _actionError = 'Save failed: $e'; });
@@ -661,8 +690,14 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
                 if (locked)
                   _statusChip(_status)
                 else
-                  Text(_orderNo != null ? 'Draft' : 'Unsaved draft',
-                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  Row(children: [
+                    Text(_orderNo != null ? 'Draft' : 'Unsaved draft',
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    if (_orderNo != null) ...[
+                      const SizedBox(width: 8),
+                      PendingSyncBadge(documentType: 'PURCHASE_ORDER', documentId: _orderNo!),
+                    ],
+                  ]),
               ]),
             ),
           ]),

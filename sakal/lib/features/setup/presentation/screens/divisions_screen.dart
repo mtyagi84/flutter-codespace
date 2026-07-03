@@ -129,6 +129,7 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
   }
 
   void _openDialog([Map<String, dynamic>? entry]) {
+    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
     showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -136,6 +137,7 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
         countries:         _countries,
         entry:             entry,
         preselectedCountry: _selectedCountry,
+        offline:           offline,
         onSave: (data, id) async => _save(data, id),
       ),
     );
@@ -158,6 +160,7 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(32, 28, 32, 32),
       child: Column(
@@ -187,7 +190,7 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
                   ],
                 ),
               ),
-              if (_selectedCountry != null)
+              if (_selectedCountry != null && !offline)
                 ElevatedButton.icon(
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('Add Custom'),
@@ -321,6 +324,7 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
 
   Widget _buildRow(Map<String, dynamic> d) {
     final isSystem = d['is_system'] as bool? ?? true;
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     final tc = isSystem ? AppColors.textSecondary : AppColors.textPrimary;
 
     return ColoredBox(
@@ -363,7 +367,7 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
           _vd(),
           SizedBox(
             width: _w[4], height: 48,
-            child: isSystem
+            child: (isSystem || offline)
                 ? const SizedBox()
                 : Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -425,12 +429,14 @@ class _DivisionDialog extends StatefulWidget {
   final List<Map<String, dynamic>> countries;
   final Map<String, dynamic>? entry;
   final String? preselectedCountry;
+  final bool offline;
   final Future<void> Function(Map<String, dynamic> data, String? id) onSave;
 
   const _DivisionDialog({
     required this.countries,
     required this.entry,
     required this.preselectedCountry,
+    required this.offline,
     required this.onSave,
   });
 
@@ -592,7 +598,7 @@ class _DivisionDialogState extends State<_DivisionDialog> {
                         ),
                         const SizedBox(width: 12),
                         ElevatedButton(
-                          onPressed: _saving ? null : _submit,
+                          onPressed: (_saving || widget.offline) ? null : _submit,
                           child: _saving
                               ? const SizedBox(width: 18, height: 18,
                                   child: CircularProgressIndicator(

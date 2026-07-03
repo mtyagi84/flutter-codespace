@@ -1,6 +1,16 @@
 import '../../data/models/finance_voucher_model.dart';
 
 abstract class FinanceVoucherRepository {
+  Future<List<Map<String, dynamic>>> listHeaders({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String fromDate,
+    required String toDate,
+    String? voucherTypeCode,
+    bool? isPosted,
+  });
+
   Future<FinanceVoucherHeader?> getHeader({
     required String clientId,
     required String companyId,

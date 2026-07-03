@@ -398,10 +398,11 @@ class _ProductFlagTypesScreenState extends ConsumerState<ProductFlagTypesScreen>
                             const Text('No flag types defined.',
                                 style: TextStyle(color: AppColors.textSecondary)),
                             const SizedBox(height: 8),
-                            TextButton(
-                              onPressed: _loadDefaults,
-                              child: const Text('Load standard defaults'),
-                            ),
+                            if (!(ref.read(sessionProvider)?.offlineMode ?? false))
+                              TextButton(
+                                onPressed: _loadDefaults,
+                                child: const Text('Load standard defaults'),
+                              ),
                           ],
                         ),
                       ),

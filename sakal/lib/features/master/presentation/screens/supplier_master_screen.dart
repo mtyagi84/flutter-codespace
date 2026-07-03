@@ -333,7 +333,9 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
     ]);
   }
 
-  Widget _listPanel() => Column(children: [
+  Widget _listPanel() {
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
+    return Column(children: [
     Container(
       color: AppColors.surface,
       padding: const EdgeInsets.all(16),
@@ -341,11 +343,12 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
         const Expanded(child: Text('Suppliers',
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary))),
-        FilledButton.icon(
-          icon: const Icon(Icons.add, size: 16),
-          label: const Text('Add'),
-          onPressed: _openAdd,
-        ),
+        if (!offline)
+          FilledButton.icon(
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add'),
+            onPressed: _openAdd,
+          ),
       ]),
     ),
     Padding(
@@ -412,6 +415,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
     ),
     if (!_showAll && _totalCount > _pageSize) _paginationFooter(),
   ]);
+  }
 
   Widget _paginationFooter() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -440,6 +444,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
   Widget _formPanel() {
     final isAdd = _isAdd;
     final row   = _selected;
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     return Column(children: [
       Container(
         color: AppColors.surface,
@@ -448,7 +453,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
           Expanded(child: Text(isAdd ? 'New Supplier' : 'Edit Supplier',
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
                   color: AppColors.textPrimary))),
-          if (!isAdd && row != null)
+          if (!isAdd && row != null && !offline)
             TextButton.icon(
               icon: const Icon(Icons.delete_outline, size: 16),
               label: const Text('Delete'),
@@ -712,14 +717,15 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
                 child: const Text('Cancel'),
               ),
               const SizedBox(width: 12),
-              FilledButton(
-                onPressed: _saving ? null : _save,
-                child: _saving
-                    ? const SizedBox(width: 18, height: 18,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : Text(isAdd ? 'Create Supplier' : 'Save Changes'),
-              ),
+              if (!offline)
+                FilledButton(
+                  onPressed: _saving ? null : _save,
+                  child: _saving
+                      ? const SizedBox(width: 18, height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : Text(isAdd ? 'Create Supplier' : 'Save Changes'),
+                ),
             ]),
           ]),
         ),

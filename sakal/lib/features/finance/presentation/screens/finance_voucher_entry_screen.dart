@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -8,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/sync/sync_engine.dart';
+import '../../../../core/utils/local_id.dart';
 import '../../data/models/finance_voucher_model.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/voucher_logic.dart';
@@ -18,6 +18,7 @@ import '../../../../core/providers/master_cache_providers.dart'
 import '../../../../core/router/route_names.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/pending_sync_badge.dart';
 import '../providers/finance_voucher_providers.dart';
 import '../../data/services/voucher_pdf_builder.dart';
 
@@ -841,7 +842,7 @@ class _FinanceVoucherEntryScreenState
 
       if (isOffline) {
         // Offline: enqueue for later sync; use a local UUID as document ID.
-        final localId = _generateLocalId();
+        final localId = generateLocalId();
         await ref.read(syncEngineProvider).enqueue(
           documentType: 'FINANCE_VOUCHER',
           documentId:   localId,
@@ -892,14 +893,6 @@ class _FinanceVoucherEntryScreenState
       }
     }
     return false;
-  }
-
-  String _generateLocalId() {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    final rng   = Random.secure();
-    final ts    = DateTime.now().millisecondsSinceEpoch.toString();
-    final rand  = List.generate(6, (_) => chars[rng.nextInt(chars.length)]).join();
-    return 'LOCAL-$ts-$rand';
   }
 
   // ── Post voucher ──────────────────────────────────────────────────────────
@@ -1175,10 +1168,16 @@ class _FinanceVoucherEntryScreenState
                   if (_isPosted)
                     _statusChip('POSTED — read only', AppColors.positive)
                   else
-                    Text(
-                      _voucherNo != null ? 'Draft' : 'Unsaved draft',
-                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                    ),
+                    Row(children: [
+                      Text(
+                        _voucherNo != null ? 'Draft' : 'Unsaved draft',
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                      if (_voucherNo != null) ...[
+                        const SizedBox(width: 8),
+                        PendingSyncBadge(documentType: 'FINANCE_VOUCHER', documentId: _voucherNo!),
+                      ],
+                    ]),
                 ]),
               ),
               if (_voucherNo != null && _isOnAccount)

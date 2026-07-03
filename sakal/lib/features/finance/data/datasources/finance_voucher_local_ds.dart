@@ -8,6 +8,37 @@ class FinanceVoucherLocalDs {
 
   // ── Read ──────────────────────────────────────────────────────────────────
 
+  Future<List<Map<String, dynamic>>> listHeaders({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String fromDate,
+    required String toDate,
+    String? voucherTypeCode,
+    bool? isPosted,
+  }) async {
+    final q = _db.select(_db.financeVoucherHeadersCache)
+      ..where((t) => t.clientId.equals(clientId))
+      ..where((t) => t.companyId.equals(companyId))
+      ..where((t) => t.locationId.equals(locationId))
+      ..where((t) => t.isDeleted.equals(false))
+      ..where((t) => t.transDate.isBiggerOrEqualValue(fromDate))
+      ..where((t) => t.transDate.isSmallerOrEqualValue(toDate))
+      ..orderBy([(t) => OrderingTerm.desc(t.transDate), (t) => OrderingTerm.desc(t.transNo)]);
+    if (voucherTypeCode != null) q.where((t) => t.voucherTypeCode.equals(voucherTypeCode));
+    if (isPosted != null) q.where((t) => t.isPosted.equals(isPosted));
+    final rows = await q.get();
+    return rows.map((r) => {
+      'trans_no':           r.transNo,
+      'trans_date':         r.transDate,
+      'voucher_type_code':  r.voucherTypeCode,
+      'payment_mode_code':  r.paymentModeCode,
+      'is_on_account':      r.isOnAccount,
+      'is_posted':          r.isPosted,
+      'remarks':            r.remarks,
+    }).toList();
+  }
+
   Future<FinanceVoucherHeader?> getHeader({
     required String clientId,
     required String companyId,

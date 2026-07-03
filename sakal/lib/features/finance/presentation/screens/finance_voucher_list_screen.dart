@@ -1,14 +1,15 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/models/menu_models.dart';
-import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
+import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/pending_sync_badge.dart';
+import '../providers/finance_voucher_providers.dart';
 
 MenuFeature? _findFeature(List<MenuModule> modules, String screenPath) {
   for (final mod in modules) {
@@ -33,6 +34,7 @@ class _FinanceVoucherListScreenState
     extends ConsumerState<FinanceVoucherListScreen> {
 
   List<Map<String, dynamic>> _vouchers = [];
+  Set<String> _pendingIds = {};
   bool    _loading = true;
   String? _error;
 
@@ -69,27 +71,26 @@ class _FinanceVoucherListScreenState
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
-      final params = <String, dynamic>{
-        'client_id':  'eq.${session.clientId}',
-        'company_id': 'eq.${session.companyId}',
-        'location_id':'eq.${session.locationId}',
-        'is_deleted': 'eq.false',
-        // Pass both gte and lte on trans_date — Dio sends them as two params
-        // PostgREST interprets: trans_date=gte.X&trans_date=lte.Y
-        'trans_date': ['gte.${_fmtDate(_fromDate)}', 'lte.${_fmtDate(_toDate)}'],
-        'select':     'trans_no,trans_date,voucher_type_code,payment_mode_code,is_on_account,is_posted,remarks',
-        'order':      'trans_date.desc,trans_no.desc',
-        'limit':      '500',
-      };
-      if (_filterType   != null) params['voucher_type_code'] = 'eq.$_filterType';
-      if (_filterPosted != null) params['is_posted']         = 'eq.$_filterPosted';
-
-      final res = await DioClient.instance.get('/rih_finance_headers',
-          queryParameters: params);
-
-      final all = List<Map<String, dynamic>>.from(res.data as List);
-      if (mounted) setState(() { _vouchers = all; _loading = false; });
-    } on DioException {
+      final results = await Future.wait([
+        ref.read(financeVoucherRepositoryProvider).listHeaders(
+          clientId:  session.clientId,
+          companyId: session.companyId,
+          locationId: session.locationId ?? '',
+          fromDate:  _fmtDate(_fromDate),
+          toDate:    _fmtDate(_toDate),
+          voucherTypeCode: _filterType,
+          isPosted:  _filterPosted,
+        ),
+        ref.read(syncEngineProvider).pendingDocumentIds('FINANCE_VOUCHER'),
+      ]);
+      if (mounted) {
+        setState(() {
+          _vouchers   = results[0] as List<Map<String, dynamic>>;
+          _pendingIds = results[1] as Set<String>;
+          _loading    = false;
+        });
+      }
+    } catch (e) {
       if (mounted) setState(() { _loading = false; _error = 'Could not load vouchers.'; });
     }
   }
@@ -150,7 +151,9 @@ class _FinanceVoucherListScreenState
       );
     }
 
-    final canAdd = !isOffline && feature.addAllowed;
+    // Creating a new voucher is allowed offline (queued via SyncEngine) —
+    // only Post/Approve requires being online.
+    final canAdd = feature.addAllowed;
     final rows   = _filtered;
 
     return Column(
@@ -372,9 +375,16 @@ class _FinanceVoucherListScreenState
             flex: 3,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              child: Text(transNo,
-                  style: const TextStyle(fontSize: 13,
-                      fontWeight: FontWeight.w500, color: AppColors.primary)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Flexible(child: Text(transNo,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13,
+                        fontWeight: FontWeight.w500, color: AppColors.primary))),
+                if (_pendingIds.contains(transNo)) ...[
+                  const SizedBox(width: 6),
+                  PendingSyncBadge.static(isPending: true),
+                ],
+              ]),
             ),
           ),
           Expanded(
@@ -473,6 +483,10 @@ class _FinanceVoucherListScreenState
                   style: const TextStyle(fontSize: 13,
                       fontWeight: FontWeight.w600, color: AppColors.primary)),
             ),
+            if (_pendingIds.contains(transNo)) ...[
+              PendingSyncBadge.static(isPending: true),
+              const SizedBox(width: 6),
+            ],
             _statusBadge(isPosted),
           ]),
           const SizedBox(height: 6),

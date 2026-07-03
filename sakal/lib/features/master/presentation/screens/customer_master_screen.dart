@@ -348,7 +348,9 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen> {
 
   // ── List panel ────────────────────────────────────────────────────────────
 
-  Widget _listPanel() => Column(children: [
+  Widget _listPanel() {
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
+    return Column(children: [
     Container(
       color: AppColors.surface,
       padding: const EdgeInsets.all(16),
@@ -356,11 +358,12 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen> {
         const Expanded(child: Text('Customers',
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary))),
-        FilledButton.icon(
-          icon: const Icon(Icons.add, size: 16),
-          label: const Text('Add'),
-          onPressed: _openAdd,
-        ),
+        if (!offline)
+          FilledButton.icon(
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add'),
+            onPressed: _openAdd,
+          ),
       ]),
     ),
     Padding(
@@ -432,6 +435,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen> {
     ),
     if (!_showAll && _totalCount > _pageSize) _paginationFooter(),
   ]);
+  }
 
   Widget _paginationFooter() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
