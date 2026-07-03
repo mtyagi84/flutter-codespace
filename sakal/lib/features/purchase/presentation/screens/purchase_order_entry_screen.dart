@@ -1011,6 +1011,10 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
   Widget _buildLineCard(_POLineRow row, bool locked, bool isMobile) {
     const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
         contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
+    // Field stays hidden but not force-cleared — an existing line loaded with a
+    // loose qty (entered before the company switched to Pack Only) must keep
+    // contributing to baseQty, not silently lose data.
+    final showLooseQty = (ref.read(sessionProvider)?.qtyEntryMode ?? 'PACK_AND_LOOSE') != 'PACK_ONLY';
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       elevation: 0,
@@ -1056,12 +1060,13 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
                 onChanged: (_) => setState(() {}))),
             SizedBox(width: 90, child: TextFormField(controller: row.qtyPackCtrl, enabled: !locked,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: dec.copyWith(labelText: 'Qty Pack'), style: const TextStyle(fontSize: 12),
+                decoration: dec.copyWith(labelText: showLooseQty ? 'Qty Pack' : 'Quantity'), style: const TextStyle(fontSize: 12),
                 onChanged: (_) => setState(() {}))),
-            SizedBox(width: 90, child: TextFormField(controller: row.qtyLooseCtrl, enabled: !locked,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: dec.copyWith(labelText: 'Qty Loose'), style: const TextStyle(fontSize: 12),
-                onChanged: (_) => setState(() {}))),
+            if (showLooseQty)
+              SizedBox(width: 90, child: TextFormField(controller: row.qtyLooseCtrl, enabled: !locked,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: dec.copyWith(labelText: 'Qty Loose'), style: const TextStyle(fontSize: 12),
+                  onChanged: (_) => setState(() {}))),
             SizedBox(width: 100, child: TextFormField(controller: row.rateCtrl, enabled: !locked,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: dec.copyWith(labelText: 'Rate'), style: const TextStyle(fontSize: 12),

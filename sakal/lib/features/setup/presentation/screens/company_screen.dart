@@ -57,6 +57,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
   String _interLocationModel = 'SIMPLE';
   bool   _hasTransactions     = false; // true = model is locked
 
+  // Quantity entry mode (Pack + Loose on PO/GRN/Sales/Transfer line entry)
+  String _qtyEntryMode = 'PACK_AND_LOOSE';
+
   bool    _loading = true;
   bool    _saving  = false;
   String? _error;
@@ -134,6 +137,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
     _enableBarcode    = d['enable_barcode']     as bool? ?? false;
     _enablePartNumber = d['enable_part_number'] as bool? ?? false;
     _interLocationModel = d['inter_location_model'] as String? ?? 'SIMPLE';
+    _qtyEntryMode        = d['qty_entry_mode']        as String? ?? 'PACK_AND_LOOSE';
   }
 
   // ── Image picking ────────────────────────────────────────────────────────
@@ -201,6 +205,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
           if (!_hasProducts) 'enable_barcode':     _enableBarcode,
           if (!_hasProducts) 'enable_part_number': _enablePartNumber,
           if (!_hasTransactions) 'inter_location_model': _interLocationModel,
+          'qty_entry_mode':     _qtyEntryMode,
           'updated_at':         DateTime.now().toUtc().toIso8601String(),
           'updated_by':         session.userId,
         },
@@ -212,6 +217,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
         companyName:      _nameCtrl.text.trim(),
         enableBarcode:    _enableBarcode,
         enablePartNumber: _enablePartNumber,
+        qtyEntryMode:     _qtyEntryMode,
       );
 
       if (mounted) {
@@ -282,6 +288,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
                     _buildProductCoding(),
                     const SizedBox(height: 20),
                     _buildInterLocationModel(),
+                    const SizedBox(height: 20),
+                    _buildQtyEntryMode(),
                     const SizedBox(height: 28),
 
                     // ── Save button ──────────────────────────────────
@@ -682,6 +690,82 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
       onTap: _hasTransactions
           ? null
           : () => setState(() => _interLocationModel = value),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary.withValues(alpha: 0.06) : AppColors.background,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+              color: selected ? AppColors.primary : AppColors.border,
+              width: selected ? 1.5 : 1),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+              size: 20,
+              color: selected ? AppColors.primary : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: AppColors.textPrimary)),
+                  const SizedBox(height: 2),
+                  Text(description,
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Section: Quantity Entry Mode ──────────────────────────────────────────
+
+  Widget _buildQtyEntryMode() {
+    return _SectionCard(
+      title: 'Quantity Entry Mode',
+      icon: Icons.inventory_2_outlined,
+      subtitle: 'Controls whether Purchase Order, GRN, Sales and Transfer line entry '
+          'shows a separate Loose Qty field, or just Pack Qty. Can be changed anytime — '
+          'existing transactions keep their original quantities either way.',
+      children: [
+        _buildQtyEntryModeOption(
+          value: 'PACK_AND_LOOSE',
+          title: 'Pack + Loose',
+          description: 'Line entry shows both Qty Pack and Qty Loose fields '
+              '(e.g. 2 cartons + 5 loose pieces).',
+        ),
+        const SizedBox(height: 12),
+        _buildQtyEntryModeOption(
+          value: 'PACK_ONLY',
+          title: 'Pack Only',
+          description: 'Line entry shows only Qty Pack. Simpler for businesses that '
+              'never break a pack/carton on purchase.',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQtyEntryModeOption({
+    required String value,
+    required String title,
+    required String description,
+  }) {
+    final selected = _qtyEntryMode == value;
+    return InkWell(
+      onTap: () => setState(() => _qtyEntryMode = value),
       borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

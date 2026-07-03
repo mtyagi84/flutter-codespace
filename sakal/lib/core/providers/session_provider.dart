@@ -13,6 +13,7 @@ class UserSession {
   final bool   offlineMode;
   final bool   enableBarcode;
   final bool   enablePartNumber;
+  final String qtyEntryMode;
 
   const UserSession({
     required this.userId,
@@ -26,6 +27,7 @@ class UserSession {
     this.offlineMode      = false,
     this.enableBarcode    = false,
     this.enablePartNumber = false,
+    this.qtyEntryMode     = 'PACK_AND_LOOSE',
   });
 
   UserSession copyWith({
@@ -33,6 +35,7 @@ class UserSession {
     String? companyName,
     bool?   enableBarcode,
     bool?   enablePartNumber,
+    String? qtyEntryMode,
   }) =>
       UserSession(
         userId:           userId,
@@ -46,6 +49,7 @@ class UserSession {
         offlineMode:      offlineMode,
         enableBarcode:    enableBarcode    ?? this.enableBarcode,
         enablePartNumber: enablePartNumber ?? this.enablePartNumber,
+        qtyEntryMode:     qtyEntryMode     ?? this.qtyEntryMode,
       );
 }
 

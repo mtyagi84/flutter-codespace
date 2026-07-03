@@ -119,6 +119,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         locationId:       d['location_id']       as String?,
         enableBarcode:    d['enable_barcode']    as bool? ?? false,
         enablePartNumber: d['enable_part_number'] as bool? ?? false,
+        qtyEntryMode:     d['qty_entry_mode']     as String? ?? 'PACK_AND_LOOSE',
       );
 
       // Cache credentials for future offline login
@@ -180,6 +181,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         offlineMode:      true,
         enableBarcode:    result.session.enableBarcode,
         enablePartNumber: result.session.enablePartNumber,
+        qtyEntryMode:     result.session.qtyEntryMode,
       );
       ref.read(menuProvider.notifier).state = result.menu;
       context.go(RouteNames.dashboard);

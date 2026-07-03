@@ -132,6 +132,7 @@ class OfflineSessionCache {
     'username':         s.username,
     'enableBarcode':    s.enableBarcode,
     'enablePartNumber': s.enablePartNumber,
+    'qtyEntryMode':     s.qtyEntryMode,
   };
 
   static UserSession _decodeSession(Map<String, dynamic> m) => UserSession(
@@ -146,5 +147,6 @@ class OfflineSessionCache {
     offlineMode:      false,
     enableBarcode:    m['enableBarcode']    as bool? ?? false,
     enablePartNumber: m['enablePartNumber'] as bool? ?? false,
+    qtyEntryMode:     m['qtyEntryMode']     as String? ?? 'PACK_AND_LOOSE',
   );
 }

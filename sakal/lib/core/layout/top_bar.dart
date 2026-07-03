@@ -247,6 +247,7 @@ class _SwitchCompanyDialogState extends State<_SwitchCompanyDialog> {
             companyName:      companyName,
             enableBarcode:    settings['enable_barcode']     as bool? ?? false,
             enablePartNumber: settings['enable_part_number'] as bool? ?? false,
+            qtyEntryMode:     settings['qty_entry_mode']     as String? ?? 'PACK_AND_LOOSE',
           );
       widget.ref.read(menuProvider.notifier).state = menuList;
 
