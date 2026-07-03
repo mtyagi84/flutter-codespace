@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
+import '../../../../core/database/app_database.dart';
+import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/network/dio_client.dart';
@@ -59,31 +63,60 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
-      final dioResults = await Future.wait([
-        DioClient.instance.get('/rim_account_link_setup', queryParameters: {
-          'client_id':    'eq.${session.clientId}',
-          'company_id':   'eq.${session.companyId}',
-          'link_type_id': 'eq.${widget.linkTypeId}',
-          'select':       'id,link_type',
-          'limit':        '1',
-        }),
-        DioClient.instance.get('/rim_account_link_defaults', queryParameters: {
-          'client_id':    'eq.${session.clientId}',
-          'company_id':   'eq.${session.companyId}',
-          'link_type_id': 'eq.${widget.linkTypeId}',
-          'is_deleted':   'eq.false',
-          'select':       'id,link_key_id,account_id,'
-                          'account:rim_accounts!account_id(account_code,account_name)',
-        }),
-      ]);
+      List<Map<String, dynamic>> setupRows;
+      List<Map<String, dynamic>> defaultRows;
+
+      if (session.offlineMode && !kIsWeb) {
+        // Shared cache with the list screen — holds ALL link types for this
+        // company, so filter down to this one client-side after reading.
+        final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+        final allSetup = await local.getLookups(
+            cacheKey: 'ACCOUNT_LINK_SETUP', clientId: session.clientId, companyId: session.companyId);
+        final allDefaults = await local.getLookups(
+            cacheKey: 'ACCOUNT_LINK_DEFAULTS', clientId: session.clientId, companyId: session.companyId);
+        setupRows   = allSetup.where((r) => r['link_type_id'] == widget.linkTypeId).toList();
+        defaultRows = allDefaults.where((r) => r['link_type_id'] == widget.linkTypeId).toList();
+      } else {
+        final dioResults = await Future.wait([
+          DioClient.instance.get('/rim_account_link_setup', queryParameters: {
+            'client_id':    'eq.${session.clientId}',
+            'company_id':   'eq.${session.companyId}',
+            'link_type_id': 'eq.${widget.linkTypeId}',
+            'select':       'id,link_type_id,link_type',
+            'limit':        '1',
+          }),
+          DioClient.instance.get('/rim_account_link_defaults', queryParameters: {
+            'client_id':    'eq.${session.clientId}',
+            'company_id':   'eq.${session.companyId}',
+            'link_type_id': 'eq.${widget.linkTypeId}',
+            'is_deleted':   'eq.false',
+            'select':       'id,link_type_id,link_key_id,account_id,'
+                            'account:rim_accounts!account_id(account_code,account_name)',
+          }),
+        ]);
+        setupRows   = List<Map<String, dynamic>>.from(dioResults[0].data as List);
+        defaultRows = List<Map<String, dynamic>>.from(dioResults[1].data as List);
+
+        if (!kIsWeb) {
+          final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+          unawaited(local.upsertLookups(
+            cacheKey: 'ACCOUNT_LINK_SETUP', rows: setupRows, idOf: (r) => r['id'] as String,
+            clientId: session.clientId, companyId: session.companyId,
+          ));
+          unawaited(local.upsertLookups(
+            cacheKey: 'ACCOUNT_LINK_DEFAULTS', rows: defaultRows, idOf: (r) => r['id'] as String,
+            clientId: session.clientId, companyId: session.companyId,
+          ));
+        }
+      }
+
       final categories = await ref.read(itemCategoriesRepositoryProvider).getCategories(
           clientId: session.clientId, companyId: session.companyId);
       if (!mounted) return;
-      final setupRows = List<Map<String, dynamic>>.from(dioResults[0].data as List);
       setState(() {
         _setupId  = setupRows.isNotEmpty ? setupRows.first['id'] as String : null;
         _level    = setupRows.isNotEmpty ? setupRows.first['link_type'] as String : null;
-        _defaults = List<Map<String, dynamic>>.from(dioResults[1].data as List);
+        _defaults = defaultRows;
         _categories = categories;
         _loading    = false;
       });

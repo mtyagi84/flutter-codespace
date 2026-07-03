@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
+import '../../../../core/database/app_database.dart';
+import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/network/dio_client.dart';
@@ -57,29 +61,45 @@ class _ItemAccountLinksScreenState extends ConsumerState<ItemAccountLinksScreen>
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
-      final results = await Future.wait([
-        DioClient.instance.get('/rim_products', queryParameters: {
-          'client_id':  'eq.${session.clientId}',
-          'company_id': 'eq.${session.companyId}',
-          'is_active':  'eq.true',
-          'is_deleted': 'eq.false',
-          'select':     'id,product_code,product_name,category_id',
-          'order':      'product_name.asc',
-          'limit':      '2000',
-        }),
-        DioClient.instance.get('/rim_account_link_types', queryParameters: {
+      // Products has its own dedicated offline cache (productsRepositoryProvider) —
+      // this screen's own fetch here is a known separate gap, out of scope for
+      // this pass; it stays remote-only for now.
+      final productsRes = await DioClient.instance.get('/rim_products', queryParameters: {
+        'client_id':  'eq.${session.clientId}',
+        'company_id': 'eq.${session.companyId}',
+        'is_active':  'eq.true',
+        'is_deleted': 'eq.false',
+        'select':     'id,product_code,product_name,category_id',
+        'order':      'product_name.asc',
+        'limit':      '2000',
+      });
+
+      List<Map<String, dynamic>> linkTypes;
+      if (session.offlineMode && !kIsWeb) {
+        final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+        linkTypes = await local.getLookups(cacheKey: 'ACCOUNT_LINK_TYPES');
+      } else {
+        final res = await DioClient.instance.get('/rim_account_link_types', queryParameters: {
           'is_deleted': 'eq.false',
           'is_active':  'eq.true',
           'select':     'id,link_key,link_name,sort_order',
           'order':      'sort_order.asc',
-        }),
-      ]);
+        });
+        linkTypes = List<Map<String, dynamic>>.from(res.data as List);
+        if (!kIsWeb) {
+          final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+          unawaited(local.upsertLookups(
+            cacheKey: 'ACCOUNT_LINK_TYPES', rows: linkTypes, idOf: (r) => r['id'] as String,
+          ));
+        }
+      }
+
       final categories = await ref.read(itemCategoriesRepositoryProvider).getCategories(
           clientId: session.clientId, companyId: session.companyId);
       if (!mounted) return;
       setState(() {
-        _products   = List<Map<String, dynamic>>.from(results[0].data as List);
-        _linkTypes  = List<Map<String, dynamic>>.from(results[1].data as List);
+        _products   = List<Map<String, dynamic>>.from(productsRes.data as List);
+        _linkTypes  = linkTypes;
         _categories = categories;
         _loading    = false;
       });

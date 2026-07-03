@@ -1,7 +1,11 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import '../../../../core/database/app_database.dart';
+import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
@@ -36,38 +40,71 @@ class _LocationGroupsScreenState extends ConsumerState<LocationGroupsScreen>
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
-      final results = await Future.wait([
-        DioClient.instance.get('/ric_location_groups', queryParameters: {
-          'client_id':  'eq.${session.clientId}',
-          'company_id': 'eq.${session.companyId}',
-          'is_deleted': 'eq.false',
-          'select':     '*,'
-              'responsible:rim_users!responsible_user_id(full_name),'
-              'customer_account:rim_accounts!customer_account_id(account_code,account_name),'
-              'supplier_account:rim_accounts!supplier_account_id(account_code,account_name)',
-          'order':      'group_name.asc',
-        }),
-        DioClient.instance.get('/rim_users', queryParameters: {
-          'client_id':  'eq.${session.clientId}',
-          'company_id': 'eq.${session.companyId}',
-          'is_deleted': 'eq.false',
-          'select':     'id,full_name',
-          'order':      'full_name.asc',
-        }),
-        DioClient.instance.get('/ric_companies', queryParameters: {
+      List<Map<String, dynamic>> rows;
+      List<Map<String, dynamic>> users;
+
+      if (session.offlineMode && !kIsWeb) {
+        final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+        rows  = await local.getLookups(cacheKey: 'LOCATION_GROUPS', clientId: session.clientId, companyId: session.companyId);
+        users = await local.getLookups(cacheKey: 'USERS', clientId: session.clientId, companyId: session.companyId);
+      } else {
+        final results = await Future.wait([
+          DioClient.instance.get('/ric_location_groups', queryParameters: {
+            'client_id':  'eq.${session.clientId}',
+            'company_id': 'eq.${session.companyId}',
+            'is_deleted': 'eq.false',
+            'select':     '*,'
+                'responsible:rim_users!responsible_user_id(full_name),'
+                'customer_account:rim_accounts!customer_account_id(account_code,account_name),'
+                'supplier_account:rim_accounts!supplier_account_id(account_code,account_name)',
+            'order':      'group_name.asc',
+          }),
+          DioClient.instance.get('/rim_users', queryParameters: {
+            'client_id':  'eq.${session.clientId}',
+            'company_id': 'eq.${session.companyId}',
+            'is_deleted': 'eq.false',
+            'select':     'id,full_name',
+            'order':      'full_name.asc',
+          }),
+        ]);
+        rows  = List<Map<String, dynamic>>.from(results[0].data as List);
+        users = List<Map<String, dynamic>>.from(results[1].data as List);
+
+        if (!kIsWeb) {
+          final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+          unawaited(local.upsertLookups(
+            cacheKey: 'LOCATION_GROUPS', rows: rows, idOf: (r) => r['id'] as String,
+            labelOf: (r) => r['group_name'] as String? ?? '',
+            clientId: session.clientId, companyId: session.companyId,
+          ));
+          unawaited(local.upsertLookups(
+            cacheKey: 'USERS', rows: users, idOf: (r) => r['id'] as String,
+            labelOf: (r) => r['full_name'] as String? ?? '',
+            clientId: session.clientId, companyId: session.companyId,
+          ));
+        }
+      }
+
+      // Company setup (inter_location_model) is a single small config value,
+      // not a list lookup — stays remote-only; harmless default if unavailable.
+      String interLocationModel = 'SIMPLE';
+      if (!session.offlineMode) {
+        final companyRes = await DioClient.instance.get('/ric_companies', queryParameters: {
           'id':     'eq.${session.companyId}',
           'select': 'inter_location_model',
           'limit':  '1',
-        }),
-      ]);
-      final companyList = results[2].data as List<dynamic>;
+        });
+        final companyList = companyRes.data as List<dynamic>;
+        interLocationModel = companyList.isNotEmpty
+            ? (companyList.first as Map<String, dynamic>)['inter_location_model'] as String? ?? 'SIMPLE'
+            : 'SIMPLE';
+      }
+
       if (mounted) {
         setState(() {
-          _rows  = List<Map<String, dynamic>>.from(results[0].data as List);
-          _users = List<Map<String, dynamic>>.from(results[1].data as List);
-          _interLocationModel = companyList.isNotEmpty
-              ? (companyList.first as Map<String, dynamic>)['inter_location_model'] as String? ?? 'SIMPLE'
-              : 'SIMPLE';
+          _rows  = rows;
+          _users = users;
+          _interLocationModel = interLocationModel;
           _loading = false;
         });
       }

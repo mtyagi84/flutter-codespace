@@ -1,7 +1,11 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
+import '../../../../core/database/app_database.dart';
+import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/router/route_names.dart';
@@ -40,28 +44,59 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
-      final results = await Future.wait([
-        DioClient.instance.get('/rim_account_link_types', queryParameters: {
-          'is_deleted': 'eq.false',
-          'is_active':  'eq.true',
-          'select':     'id,link_key,link_name,sort_order',
-          'order':      'sort_order.asc',
-        }),
-        DioClient.instance.get('/rim_account_link_setup', queryParameters: {
-          'client_id':  'eq.${session.clientId}',
-          'company_id': 'eq.${session.companyId}',
-          'select':     'link_type_id,link_type',
-        }),
-        DioClient.instance.get('/rim_account_link_defaults', queryParameters: {
-          'client_id':  'eq.${session.clientId}',
-          'company_id': 'eq.${session.companyId}',
-          'is_deleted': 'eq.false',
-          'select':     'link_type_id',
-        }),
-      ]);
+      List<Map<String, dynamic>> typeRows;
+      List<Map<String, dynamic>> setupRows;
+      List<Map<String, dynamic>> defaultRows;
+
+      if (session.offlineMode && !kIsWeb) {
+        final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+        // ACCOUNT_LINK_TYPES is a global (seeded) list — no client/company filter.
+        typeRows    = await local.getLookups(cacheKey: 'ACCOUNT_LINK_TYPES');
+        setupRows   = await local.getLookups(
+            cacheKey: 'ACCOUNT_LINK_SETUP', clientId: session.clientId, companyId: session.companyId);
+        defaultRows = await local.getLookups(
+            cacheKey: 'ACCOUNT_LINK_DEFAULTS', clientId: session.clientId, companyId: session.companyId);
+      } else {
+        final results = await Future.wait([
+          DioClient.instance.get('/rim_account_link_types', queryParameters: {
+            'is_deleted': 'eq.false',
+            'is_active':  'eq.true',
+            'select':     'id,link_key,link_name,sort_order',
+            'order':      'sort_order.asc',
+          }),
+          DioClient.instance.get('/rim_account_link_setup', queryParameters: {
+            'client_id':  'eq.${session.clientId}',
+            'company_id': 'eq.${session.companyId}',
+            'select':     'id,link_type_id,link_type',
+          }),
+          DioClient.instance.get('/rim_account_link_defaults', queryParameters: {
+            'client_id':  'eq.${session.clientId}',
+            'company_id': 'eq.${session.companyId}',
+            'is_deleted': 'eq.false',
+            'select':     'id,link_type_id',
+          }),
+        ]);
+        typeRows    = List<Map<String, dynamic>>.from(results[0].data as List);
+        setupRows   = List<Map<String, dynamic>>.from(results[1].data as List);
+        defaultRows = List<Map<String, dynamic>>.from(results[2].data as List);
+
+        if (!kIsWeb) {
+          final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+          unawaited(local.upsertLookups(
+            cacheKey: 'ACCOUNT_LINK_TYPES', rows: typeRows, idOf: (r) => r['id'] as String,
+          ));
+          unawaited(local.upsertLookups(
+            cacheKey: 'ACCOUNT_LINK_SETUP', rows: setupRows, idOf: (r) => r['id'] as String,
+            clientId: session.clientId, companyId: session.companyId,
+          ));
+          unawaited(local.upsertLookups(
+            cacheKey: 'ACCOUNT_LINK_DEFAULTS', rows: defaultRows, idOf: (r) => r['id'] as String,
+            clientId: session.clientId, companyId: session.companyId,
+          ));
+        }
+      }
+
       if (!mounted) return;
-      final setupRows  = List<Map<String, dynamic>>.from(results[1].data as List);
-      final defaultRows = List<Map<String, dynamic>>.from(results[2].data as List);
       final levelMap = <String, String>{
         for (final r in setupRows) r['link_type_id'] as String: r['link_type'] as String,
       };
@@ -71,7 +106,7 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
         countMap[id] = (countMap[id] ?? 0) + 1;
       }
       setState(() {
-        _types       = List<Map<String, dynamic>>.from(results[0].data as List);
+        _types       = typeRows;
         _levelByType = levelMap;
         _countByType = countMap;
         _loading     = false;

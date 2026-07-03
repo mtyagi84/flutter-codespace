@@ -1,6 +1,10 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/database/app_database.dart';
+import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -31,16 +35,33 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
     final session = ref.read(sessionProvider)!;
     setState(() { _loadingCountries = true; _error = null; });
     try {
-      final res = await DioClient.instance.get('/rim_countries', queryParameters: {
-        'client_id':  'eq.${session.clientId}',
-        'company_id': 'eq.${session.companyId}',
-        'is_deleted': 'eq.false',
-        'order':      'country_name.asc',
-        'select':     'country_code,country_name',
-      });
+      List<Map<String, dynamic>> rows;
+      if (session.offlineMode && !kIsWeb) {
+        final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+        rows = await local.getLookups(
+          cacheKey: 'COUNTRIES', clientId: session.clientId, companyId: session.companyId,
+        );
+      } else {
+        final res = await DioClient.instance.get('/rim_countries', queryParameters: {
+          'client_id':  'eq.${session.clientId}',
+          'company_id': 'eq.${session.companyId}',
+          'is_deleted': 'eq.false',
+          'order':      'country_name.asc',
+          'select':     'id,country_code,country_name',
+        });
+        rows = (res.data as List).cast<Map<String, dynamic>>();
+        if (!kIsWeb) {
+          final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+          unawaited(local.upsertLookups(
+            cacheKey: 'COUNTRIES', rows: rows, idOf: (r) => r['id'] as String,
+            labelOf: (r) => r['country_name'] as String? ?? '',
+            clientId: session.clientId, companyId: session.companyId,
+          ));
+        }
+      }
       if (mounted) {
         setState(() {
-          _countries = (res.data as List).cast<Map<String, dynamic>>();
+          _countries = rows;
           _loadingCountries = false;
         });
       }
@@ -57,13 +78,32 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
     final session = ref.read(sessionProvider)!;
     setState(() { _loadingDivisions = true; _divisions = []; });
     try {
-      final res = await DioClient.instance.get('/rim_divisions', queryParameters: {
-        'country_code': 'eq.$_selectedCountry',
-        'or': '(is_system.eq.true,and(client_id.eq.${session.clientId},company_id.eq.${session.companyId}))',
-        'order': 'division_name.asc',
-      });
+      List<Map<String, dynamic>> rows;
+      if (session.offlineMode && !kIsWeb) {
+        final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+        rows = await local.getLookups(
+          cacheKey: 'DIVISIONS', clientId: session.clientId, companyId: session.companyId,
+          parentId: _selectedCountry,
+        );
+      } else {
+        final res = await DioClient.instance.get('/rim_divisions', queryParameters: {
+          'country_code': 'eq.$_selectedCountry',
+          'or': '(is_system.eq.true,and(client_id.eq.${session.clientId},company_id.eq.${session.companyId}))',
+          'order': 'division_name.asc',
+        });
+        rows = (res.data as List).cast<Map<String, dynamic>>();
+        if (!kIsWeb) {
+          final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+          unawaited(local.upsertLookups(
+            cacheKey: 'DIVISIONS', rows: rows, idOf: (r) => r['id'] as String,
+            labelOf: (r) => r['division_name'] as String? ?? '',
+            parentIdOf: (r) => r['country_code'] as String? ?? '',
+            clientId: session.clientId, companyId: session.companyId,
+          ));
+        }
+      }
       if (mounted) { setState(() {
-        _divisions = (res.data as List).cast<Map<String, dynamic>>();
+        _divisions = rows;
         _loadingDivisions = false;
       }); }
     } on DioException catch (e) {

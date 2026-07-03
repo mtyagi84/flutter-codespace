@@ -1,9 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../../core/database/app_database.dart';
+import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
@@ -45,8 +50,16 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
-      final results = await Future.wait([
-        DioClient.instance.get(
+      List<Map<String, dynamic>> rows;
+      // A richer record than the plain id/full_name 'USERS' picker cache
+      // used elsewhere (location_groups, Purchase Order) — kept under its
+      // own key so this screen's fuller fields (photo, email, etc.) don't
+      // get overwritten by — or overwrite — that simpler shape.
+      if (session.offlineMode && !kIsWeb) {
+        final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+        rows = await local.getLookups(cacheKey: 'USERS_FULL', clientId: session.clientId, companyId: session.companyId);
+      } else {
+        final res = await DioClient.instance.get(
           '/rim_users',
           queryParameters: {
             'client_id':  'eq.${session.clientId}',
@@ -57,23 +70,25 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                 'language_code,theme,photo,is_active,default_location_id',
             'order': 'full_name.asc',
           },
-        ),
-        DioClient.instance.get(
-          '/ric_locations',
-          queryParameters: {
-            'client_id':  'eq.${session.clientId}',
-            'company_id': 'eq.${session.companyId}',
-            'is_deleted': 'eq.false',
-            'is_active':  'eq.true',
-            'select':     'id,location_name',
-            'order':      'location_name.asc',
-          },
-        ),
-      ]);
+        );
+        rows = List<Map<String, dynamic>>.from(res.data as List);
+        if (!kIsWeb) {
+          final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+          unawaited(local.upsertLookups(
+            cacheKey: 'USERS_FULL', rows: rows, idOf: (r) => r['id'] as String,
+            labelOf: (r) => r['full_name'] as String? ?? '',
+            clientId: session.clientId, companyId: session.companyId,
+          ));
+        }
+      }
+
+      // locationsProvider already handles the offline/online branch centrally.
+      final locations = await ref.read(locationsProvider.future);
+
       if (mounted) {
         setState(() {
-          _rows      = List<Map<String, dynamic>>.from(results[0].data as List);
-          _locations = List<Map<String, dynamic>>.from(results[1].data as List);
+          _rows      = rows;
+          _locations = locations;
           _loading   = false;
         });
       }

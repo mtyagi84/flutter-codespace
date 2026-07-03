@@ -1,6 +1,10 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/database/app_database.dart';
+import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -47,15 +51,32 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
     final session = ref.read(sessionProvider)!;
     setState(() { _loadingCountries = true; _error = null; });
     try {
-      final res = await DioClient.instance.get('/rim_countries', queryParameters: {
-        'client_id':  'eq.${session.clientId}',
-        'company_id': 'eq.${session.companyId}',
-        'is_deleted': 'eq.false',
-        'order':      'country_name.asc',
-        'select':     'country_code,country_name',
-      });
+      List<Map<String, dynamic>> rows;
+      if (session.offlineMode && !kIsWeb) {
+        final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+        rows = await local.getLookups(
+          cacheKey: 'COUNTRIES', clientId: session.clientId, companyId: session.companyId,
+        );
+      } else {
+        final res = await DioClient.instance.get('/rim_countries', queryParameters: {
+          'client_id':  'eq.${session.clientId}',
+          'company_id': 'eq.${session.companyId}',
+          'is_deleted': 'eq.false',
+          'order':      'country_name.asc',
+          'select':     'id,country_code,country_name',
+        });
+        rows = (res.data as List).cast<Map<String, dynamic>>();
+        if (!kIsWeb) {
+          final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+          unawaited(local.upsertLookups(
+            cacheKey: 'COUNTRIES', rows: rows, idOf: (r) => r['id'] as String,
+            labelOf: (r) => r['country_name'] as String? ?? '',
+            clientId: session.clientId, companyId: session.companyId,
+          ));
+        }
+      }
       if (mounted) { setState(() {
-        _countries = (res.data as List).cast<Map<String, dynamic>>();
+        _countries = rows;
         _loadingCountries = false;
       }); }
     } on DioException catch (e) {
@@ -71,14 +92,33 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
     final session = ref.read(sessionProvider)!;
     setState(() { _loadingDivisions = true; _divisions = []; _selectedDivision = null; });
     try {
-      final res = await DioClient.instance.get('/rim_divisions', queryParameters: {
-        'country_code': 'eq.$_selectedCountry',
-        'or': '(is_system.eq.true,and(client_id.eq.${session.clientId},company_id.eq.${session.companyId}))',
-        'order': 'division_name.asc',
-        'select': 'id,division_name,division_type',
-      });
+      List<Map<String, dynamic>> rows;
+      if (session.offlineMode && !kIsWeb) {
+        final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+        rows = await local.getLookups(
+          cacheKey: 'DIVISIONS', clientId: session.clientId, companyId: session.companyId,
+          parentId: _selectedCountry,
+        );
+      } else {
+        final res = await DioClient.instance.get('/rim_divisions', queryParameters: {
+          'country_code': 'eq.$_selectedCountry',
+          'or': '(is_system.eq.true,and(client_id.eq.${session.clientId},company_id.eq.${session.companyId}))',
+          'order': 'division_name.asc',
+          'select': 'id,division_name,division_type,country_code',
+        });
+        rows = (res.data as List).cast<Map<String, dynamic>>();
+        if (!kIsWeb) {
+          final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+          unawaited(local.upsertLookups(
+            cacheKey: 'DIVISIONS', rows: rows, idOf: (r) => r['id'] as String,
+            labelOf: (r) => r['division_name'] as String? ?? '',
+            parentIdOf: (r) => r['country_code'] as String? ?? '',
+            clientId: session.clientId, companyId: session.companyId,
+          ));
+        }
+      }
       if (mounted) { setState(() {
-        _divisions = (res.data as List).cast<Map<String, dynamic>>();
+        _divisions = rows;
         _loadingDivisions = false;
       }); }
     } on DioException {
@@ -91,20 +131,42 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
     final session = ref.read(sessionProvider)!;
     setState(() { _loadingCities = true; _error = null; });
     try {
-      final params = <String, dynamic>{
-        'client_id':    'eq.${session.clientId}',
-        'company_id':   'eq.${session.companyId}',
-        'country_code': 'eq.$_selectedCountry',
-        'is_deleted':   'eq.false',
-        'order':        'city_name.asc',
-        'select':       'id,city_name,division_id,is_active',
-      };
-      if (_selectedDivision != null) {
-        params['division_id'] = 'eq.$_selectedDivision';
+      List<Map<String, dynamic>> rows;
+      if (session.offlineMode && !kIsWeb) {
+        final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+        rows = await local.getLookups(
+          cacheKey: 'CITIES', clientId: session.clientId, companyId: session.companyId,
+          parentId: _selectedCountry,
+        );
+        if (_selectedDivision != null) {
+          rows = rows.where((c) => c['division_id'] == _selectedDivision).toList();
+        }
+      } else {
+        final params = <String, dynamic>{
+          'client_id':    'eq.${session.clientId}',
+          'company_id':   'eq.${session.companyId}',
+          'country_code': 'eq.$_selectedCountry',
+          'is_deleted':   'eq.false',
+          'order':        'city_name.asc',
+          'select':       'id,city_name,division_id,is_active,country_code',
+        };
+        if (_selectedDivision != null) {
+          params['division_id'] = 'eq.$_selectedDivision';
+        }
+        final res = await DioClient.instance.get('/rim_cities', queryParameters: params);
+        rows = (res.data as List).cast<Map<String, dynamic>>();
+        if (!kIsWeb) {
+          final local = GenericLookupLocalDs(ref.read(appDatabaseProvider));
+          unawaited(local.upsertLookups(
+            cacheKey: 'CITIES', rows: rows, idOf: (r) => r['id'] as String,
+            labelOf: (r) => r['city_name'] as String? ?? '',
+            parentIdOf: (r) => r['country_code'] as String? ?? '',
+            clientId: session.clientId, companyId: session.companyId,
+          ));
+        }
       }
-      final res = await DioClient.instance.get('/rim_cities', queryParameters: params);
       if (mounted) { setState(() {
-        _cities = (res.data as List).cast<Map<String, dynamic>>();
+        _cities = rows;
         _loadingCities = false;
       }); }
     } on DioException catch (e) {
