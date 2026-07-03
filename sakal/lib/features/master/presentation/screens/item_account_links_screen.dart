@@ -6,6 +6,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../data/models/item_category_model.dart';
@@ -127,19 +128,22 @@ class _ItemAccountLinksScreenState extends ConsumerState<ItemAccountLinksScreen>
   }
 
   void _openItem(Map<String, dynamic> product) {
+    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _ItemAccountLinksDialog(product: product, linkTypes: _linkTypes, canEdit: canEdit),
+      builder: (_) => _ItemAccountLinksDialog(
+          product: product, linkTypes: _linkTypes, canEdit: canEdit, offline: offline),
     ).then((_) => _load());
   }
 
   @override
   Widget build(BuildContext context) {
-    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
+    final offline  = ref.watch(sessionProvider)?.offlineMode ?? false;
+    final isMobile = Responsive.isMobile(context);
     final filtered = _filteredProducts;
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
+      padding: EdgeInsets.all(isMobile ? 16 : 32),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 900),
@@ -177,18 +181,29 @@ class _ItemAccountLinksScreenState extends ConsumerState<ItemAccountLinksScreen>
               if (_loading)
                 const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()))
               else ...[
-                Row(children: [
-                  Expanded(flex: 2, child: _categoryFilterField()),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: TextField(
+                if (isMobile)
+                  Column(children: [
+                    _categoryFilterField(),
+                    const SizedBox(height: 12),
+                    TextField(
                       controller: _searchCtrl,
                       decoration: const InputDecoration(
                           labelText: 'Search item code or name', prefixIcon: Icon(Icons.search)),
                     ),
-                  ),
-                ]),
+                  ])
+                else
+                  Row(children: [
+                    Expanded(flex: 2, child: _categoryFilterField()),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: TextField(
+                        controller: _searchCtrl,
+                        decoration: const InputDecoration(
+                            labelText: 'Search item code or name', prefixIcon: Icon(Icons.search)),
+                      ),
+                    ),
+                  ]),
                 const SizedBox(height: 16),
 
                 Card(
@@ -200,6 +215,7 @@ class _ItemAccountLinksScreenState extends ConsumerState<ItemAccountLinksScreen>
                         )
                       : Column(
                           children: filtered.map((p) => ListTile(
+                            minVerticalPadding: 16,
                             title: Text('${p['product_code']} — ${p['product_name']}',
                                 style: const TextStyle(fontSize: 13)),
                             trailing: const Icon(Icons.chevron_right, size: 18),
@@ -278,7 +294,13 @@ class _ItemAccountLinksDialog extends ConsumerStatefulWidget {
   final Map<String, dynamic> product;
   final List<Map<String, dynamic>> linkTypes;
   final bool canEdit;
-  const _ItemAccountLinksDialog({required this.product, required this.linkTypes, required this.canEdit});
+  final bool offline;
+  const _ItemAccountLinksDialog({
+    required this.product,
+    required this.linkTypes,
+    required this.canEdit,
+    required this.offline,
+  });
 
   @override
   ConsumerState<_ItemAccountLinksDialog> createState() => _ItemAccountLinksDialogState();
@@ -402,12 +424,14 @@ class _ItemAccountLinksDialogState extends ConsumerState<_ItemAccountLinksDialog
   @override
   Widget build(BuildContext context) {
     final accountsAsync = ref.watch(accountsProvider);
+    final isMobile = Responsive.isMobile(context);
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      insetPadding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 40, vertical: 24),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 620, maxHeight: 640),
         child: Padding(
-          padding: const EdgeInsets.all(28),
+          padding: EdgeInsets.all(isMobile ? 18 : 28),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -422,7 +446,9 @@ class _ItemAccountLinksDialogState extends ConsumerState<_ItemAccountLinksDialog
               ]),
               const Text('Account links for this item — overrides the general Company/Category/Location setup.',
                   style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
+              if (widget.offline) const OfflineBanner(),
+              if (widget.offline) const SizedBox(height: 12),
 
               if (_error != null) ...[
                 Text(_error!, style: const TextStyle(fontSize: 12, color: AppColors.negative)),
@@ -444,77 +470,82 @@ class _ItemAccountLinksDialogState extends ConsumerState<_ItemAccountLinksDialog
                           final accountId = row['accountId'] as String?;
                           final matches = accounts.where((a) => a['id'] == accountId).toList();
                           final selected = matches.isNotEmpty ? matches.first : null;
+                          final picker = Autocomplete<Map<String, dynamic>>(
+                            key: ValueKey('${id}_${accountId ?? 'none'}'),
+                            initialValue: TextEditingValue(text: selected != null ? _displayAccount(selected) : ''),
+                            optionsBuilder: (v) {
+                              final q = v.text.toLowerCase().trim();
+                              final filtered = q.isEmpty
+                                  ? accounts
+                                  : accounts.where((a) =>
+                                      (a['account_code'] as String? ?? '').toLowerCase().contains(q) ||
+                                      (a['account_name']  as String? ?? '').toLowerCase().contains(q));
+                              return filtered.take(50);
+                            },
+                            displayStringForOption: _displayAccount,
+                            fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
+                              controller: textCtrl,
+                              focusNode: focusNode,
+                              enabled: widget.canEdit && !widget.offline && !_saving,
+                              decoration: const InputDecoration(isDense: true, hintText: 'Not configured'),
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            onSelected: (a) => setState(() => _rows[id] = {...row, 'accountId': a['id'], 'source': 'ITEM'}),
+                            optionsViewBuilder: (context, onSel, options) => Align(
+                              alignment: Alignment.topLeft,
+                              child: Material(
+                                elevation: 4,
+                                borderRadius: BorderRadius.circular(4),
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(maxHeight: 240, maxWidth: 360),
+                                  child: ListView.builder(
+                                    padding: EdgeInsets.zero,
+                                    shrinkWrap: true,
+                                    itemCount: options.length,
+                                    itemBuilder: (context, idx) {
+                                      final a = options.elementAt(idx);
+                                      return InkWell(
+                                        onTap: () => onSel(a),
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                          child: Text(_displayAccount(a), style: const TextStyle(fontSize: 13)),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                          final badge = Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: (row['source'] == 'ITEM' ? AppColors.secondary : AppColors.textDisabled)
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(_sourceLabel(row['source'] as String?),
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
+                                    color: row['source'] == 'ITEM' ? AppColors.secondary : AppColors.textSecondary)),
+                          );
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 6),
-                            child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-                              Expanded(flex: 2, child: Text(t['link_name'] ?? '', style: const TextStyle(fontSize: 13))),
-                              Expanded(
-                                flex: 3,
-                                child: Autocomplete<Map<String, dynamic>>(
-                                  key: ValueKey('${id}_${accountId ?? 'none'}'),
-                                  initialValue: TextEditingValue(text: selected != null ? _displayAccount(selected) : ''),
-                                  optionsBuilder: (v) {
-                                    final q = v.text.toLowerCase().trim();
-                                    final filtered = q.isEmpty
-                                        ? accounts
-                                        : accounts.where((a) =>
-                                            (a['account_code'] as String? ?? '').toLowerCase().contains(q) ||
-                                            (a['account_name']  as String? ?? '').toLowerCase().contains(q));
-                                    return filtered.take(50);
-                                  },
-                                  displayStringForOption: _displayAccount,
-                                  fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-                                    controller: textCtrl,
-                                    focusNode: focusNode,
-                                    enabled: widget.canEdit && !_saving,
-                                    decoration: const InputDecoration(isDense: true, hintText: 'Not configured'),
-                                    style: const TextStyle(fontSize: 13),
-                                  ),
-                                  onSelected: (a) => setState(() => _rows[id] = {...row, 'accountId': a['id'], 'source': 'ITEM'}),
-                                  optionsViewBuilder: (context, onSel, options) => Align(
-                                    alignment: Alignment.topLeft,
-                                    child: Material(
-                                      elevation: 4,
-                                      borderRadius: BorderRadius.circular(4),
-                                      child: ConstrainedBox(
-                                        constraints: const BoxConstraints(maxHeight: 240, maxWidth: 360),
-                                        child: ListView.builder(
-                                          padding: EdgeInsets.zero,
-                                          shrinkWrap: true,
-                                          itemCount: options.length,
-                                          itemBuilder: (context, idx) {
-                                            final a = options.elementAt(idx);
-                                            return InkWell(
-                                              onTap: () => onSel(a),
-                                              child: Padding(
-                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                                child: Text(_displayAccount(a), style: const TextStyle(fontSize: 13)),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              SizedBox(
-                                width: 90,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: (row['source'] == 'ITEM' ? AppColors.secondary : AppColors.textDisabled)
-                                        .withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(_sourceLabel(row['source'] as String?),
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
-                                          color: row['source'] == 'ITEM' ? AppColors.secondary : AppColors.textSecondary)),
-                                ),
-                              ),
-                            ]),
+                            child: isMobile
+                                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                    Row(children: [
+                                      Expanded(child: Text(t['link_name'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+                                      badge,
+                                    ]),
+                                    const SizedBox(height: 4),
+                                    picker,
+                                  ])
+                                : Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                                    Expanded(flex: 2, child: Text(t['link_name'] ?? '', style: const TextStyle(fontSize: 13))),
+                                    Expanded(flex: 3, child: picker),
+                                    const SizedBox(width: 8),
+                                    SizedBox(width: 90, child: badge),
+                                  ]),
                           );
                         }).toList(),
                       ),
@@ -531,7 +562,7 @@ class _ItemAccountLinksDialogState extends ConsumerState<_ItemAccountLinksDialog
                 SizedBox(
                   width: 120,
                   child: ElevatedButton(
-                    onPressed: (_saving || !widget.canEdit) ? null : _save,
+                    onPressed: (_saving || !widget.canEdit || widget.offline) ? null : _save,
                     child: _saving
                         ? const SizedBox(height: 18, width: 18,
                             child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))

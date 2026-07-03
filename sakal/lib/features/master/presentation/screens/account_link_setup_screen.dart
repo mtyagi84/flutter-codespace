@@ -6,6 +6,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 
@@ -101,9 +102,10 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
 
   @override
   Widget build(BuildContext context) {
-    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
+    final offline  = ref.watch(sessionProvider)?.offlineMode ?? false;
+    final isMobile = Responsive.isMobile(context);
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
+      padding: EdgeInsets.all(isMobile ? 16 : 32),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1000),
@@ -144,14 +146,16 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: _loading
                     ? const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()))
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildTableHeader(),
-                          const Divider(height: 1),
-                          ..._types.asMap().entries.map((e) => _buildRow(e.value, e.key.isEven)),
-                        ],
-                      ),
+                    : isMobile
+                        ? Column(children: _types.map((t) => _buildMobileCard(t, offline)).toList())
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildTableHeader(),
+                              const Divider(height: 1),
+                              ..._types.asMap().entries.map((e) => _buildRow(e.value, e.key.isEven)),
+                            ],
+                          ),
               ),
             ],
           ),
@@ -210,6 +214,47 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMobileCard(Map<String, dynamic> type, bool offline) {
+    final level = _levelByType[type['id']];
+    final count = _countByType[type['id']] ?? 0;
+    final configuredText = level == null ? 'Not configured' : (level == 'COMPANY' ? (count > 0 ? '1 account' : '—') : '$count assigned');
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(
+            child: Text(type['link_name'] ?? '',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: _levelColor(level).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(_levelLabel(level),
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _levelColor(level))),
+          ),
+        ]),
+        const SizedBox(height: 6),
+        Text(configuredText, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: (canEdit && !offline) ? () => _openConfigure(type) : null,
+            child: const Text('Configure'),
+          ),
+        ),
+      ]),
     );
   }
 }

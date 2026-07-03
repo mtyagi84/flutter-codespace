@@ -6,6 +6,7 @@ import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 
@@ -154,35 +155,49 @@ class _AdditionalChargesScreenState extends ConsumerState<AdditionalChargesScree
 
   @override
   Widget build(BuildContext context) {
-    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
+    final offline  = ref.watch(sessionProvider)?.offlineMode ?? false;
+    final isMobile = Responsive.isMobile(context);
+    final addButton = (canAdd && !offline)
+        ? ElevatedButton.icon(
+            onPressed: () => _openDialog(),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add Charge'),
+          )
+        : null;
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
+      padding: EdgeInsets.all(isMobile ? 16 : 32),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1000),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: [
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Additional Charges',
-                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                      SizedBox(height: 4),
-                      Text('Shared charge types for Sales and Purchase — freight, loading, handling, insurance…',
-                          style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                    ],
+              if (isMobile) ...[
+                const Text('Additional Charges',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                const SizedBox(height: 4),
+                const Text('Shared charge types for Sales and Purchase — freight, loading, handling, insurance…',
+                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                if (addButton != null) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(width: double.infinity, child: addButton),
+                ],
+              ] else
+                Row(children: [
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Additional Charges',
+                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                        SizedBox(height: 4),
+                        Text('Shared charge types for Sales and Purchase — freight, loading, handling, insurance…',
+                            style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                      ],
+                    ),
                   ),
-                ),
-                if (canAdd && !offline)
-                  ElevatedButton.icon(
-                    onPressed: () => _openDialog(),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Add Charge'),
-                  ),
-              ]),
+                  if (addButton != null) addButton,
+                ]),
               const SizedBox(height: 20),
 
               if (offline) const OfflineBanner(),
@@ -223,14 +238,18 @@ class _AdditionalChargesScreenState extends ConsumerState<AdditionalChargesScree
                               ]),
                             ),
                           )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildTableHeader(),
-                              const Divider(height: 1),
-                              ..._rows.asMap().entries.map((e) => _buildRow(e.value, e.key.isEven)),
-                            ],
-                          ),
+                        : isMobile
+                            ? Column(
+                                children: _rows.map((r) => _buildMobileCard(r, offline)).toList(),
+                              )
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildTableHeader(),
+                                  const Divider(height: 1),
+                                  ..._rows.asMap().entries.map((e) => _buildRow(e.value, e.key.isEven)),
+                                ],
+                              ),
               ),
             ],
           ),
@@ -322,6 +341,64 @@ class _AdditionalChargesScreenState extends ConsumerState<AdditionalChargesScree
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMobileCard(Map<String, dynamic> row, bool offline) {
+    final active  = row['is_active'] as bool? ?? true;
+    final tax     = row['tax'] as Map<String, dynamic>?;
+    final isPct   = row['amount_or_percent'] == 'PERCENT';
+    final defVal  = isPct ? row['default_percent'] : row['default_amount'];
+    final defText = defVal != null
+        ? (isPct ? '${(defVal as num).toStringAsFixed(2)}%' : (defVal as num).toStringAsFixed(2))
+        : '—';
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(
+            child: Text('${row['charge_code']}  ${row['charge_name']}',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: (active ? AppColors.positive : AppColors.textDisabled).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(active ? 'Active' : 'Inactive',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                    color: active ? AppColors.positive : AppColors.textSecondary)),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        Wrap(spacing: 16, runSpacing: 4, children: [
+          Text('Applies: ${row['applicable_on'] ?? ''}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          Text(row['nature'] == 'DEDUCT' ? 'Deduct' : 'Add',
+              style: TextStyle(fontSize: 12, color: row['nature'] == 'DEDUCT' ? AppColors.negative : AppColors.positive)),
+          Text('Default: $defText', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          Text((row['is_taxable'] as bool? ?? false) ? (tax?['tax_code'] as String? ?? '—') : 'Non-taxable',
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        ]),
+        const SizedBox(height: 4),
+        Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+          IconButton(
+            tooltip: 'Edit',
+            icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.primary),
+            onPressed: (canEdit && !offline) ? () => _openDialog(row) : null,
+          ),
+          IconButton(
+            tooltip: 'Delete',
+            icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.negative),
+            onPressed: (canEdit && !offline) ? () => _confirmDelete(row) : null,
+          ),
+        ]),
+      ]),
     );
   }
 }

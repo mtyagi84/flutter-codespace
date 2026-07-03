@@ -6,6 +6,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../data/models/item_category_model.dart';
@@ -412,8 +413,8 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: SizedBox(
-          width: 400,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
           child: _accountAutocomplete(
             accounts: accounts,
             currentAccountId: existing?['account_id'] as String?,
@@ -426,6 +427,7 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
   }
 
   Widget _buildLocationLevel(List<Map<String, dynamic>> accounts, bool offline) {
+    final isMobile = Responsive.isMobile(context);
     final locationsAsync = ref.watch(locationsProvider);
     return locationsAsync.when(
       loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
@@ -436,21 +438,25 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
           children: locations.map((loc) {
             final existing = _defaults.where((d) => d['link_key_id'] == loc['id']).toList();
             final row = existing.isNotEmpty ? existing.first : null;
+            final picker = _accountAutocomplete(
+              accounts: accounts,
+              currentAccountId: row?['account_id'] as String?,
+              enabled: canEdit && !offline && !_busy,
+              onPicked: (id) => _upsertDefault(
+                  linkKeyId: loc['id'] as String, accountId: id, existingId: row?['id'] as String?),
+            );
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(children: [
-                Expanded(flex: 2, child: Text(loc['location_name'] ?? '', style: const TextStyle(fontSize: 13))),
-                Expanded(
-                  flex: 3,
-                  child: _accountAutocomplete(
-                    accounts: accounts,
-                    currentAccountId: row?['account_id'] as String?,
-                    enabled: canEdit && !offline && !_busy,
-                    onPicked: (id) => _upsertDefault(
-                        linkKeyId: loc['id'] as String, accountId: id, existingId: row?['id'] as String?),
-                  ),
-                ),
-              ]),
+              child: isMobile
+                  ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(loc['location_name'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                      picker,
+                    ])
+                  : Row(children: [
+                      Expanded(flex: 2, child: Text(loc['location_name'] ?? '', style: const TextStyle(fontSize: 13))),
+                      Expanded(flex: 3, child: picker),
+                    ]),
             );
           }).toList(),
         ),
@@ -463,6 +469,7 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
   // levels can be enabled later without any schema change (link_key_id
   // already accepts any category id); this is purely a UI restriction.
   Widget _buildCategoryLevel(List<Map<String, dynamic>> accounts, bool offline) {
+    final isMobile = Responsive.isMobile(context);
     final level1 = _categories.where((c) => c.id != null && c.levelNo == 1).toList()
       ..sort((a, b) => a.categoryName.compareTo(b.categoryName));
     return Card(
@@ -476,21 +483,25 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
               children: level1.map((cat) {
                 final existing = _defaults.where((d) => d['link_key_id'] == cat.id).toList();
                 final row = existing.isNotEmpty ? existing.first : null;
+                final picker = _accountAutocomplete(
+                  accounts: accounts,
+                  currentAccountId: row?['account_id'] as String?,
+                  enabled: canEdit && !offline && !_busy,
+                  onPicked: (id) => _upsertDefault(
+                      linkKeyId: cat.id!, accountId: id, existingId: row?['id'] as String?),
+                );
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  child: Row(children: [
-                    Expanded(flex: 2, child: Text(cat.categoryName, style: const TextStyle(fontSize: 13))),
-                    Expanded(
-                      flex: 3,
-                      child: _accountAutocomplete(
-                        accounts: accounts,
-                        currentAccountId: row?['account_id'] as String?,
-                        enabled: canEdit && !offline && !_busy,
-                        onPicked: (id) => _upsertDefault(
-                            linkKeyId: cat.id!, accountId: id, existingId: row?['id'] as String?),
-                      ),
-                    ),
-                  ]),
+                  child: isMobile
+                      ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(cat.categoryName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 6),
+                          picker,
+                        ])
+                      : Row(children: [
+                          Expanded(flex: 2, child: Text(cat.categoryName, style: const TextStyle(fontSize: 13))),
+                          Expanded(flex: 3, child: picker),
+                        ]),
                 );
               }).toList(),
             ),
@@ -498,7 +509,25 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
   }
 
   Widget _buildKeyedLevel(List<Map<String, dynamic>> accounts, bool offline) {
+    final isMobile = Responsive.isMobile(context);
     final keyOptions = _products;
+
+    final productPicker = KeyedSubtree(
+      key: ValueKey('key-picker-${_defaults.length}'),
+      child: _productAutocomplete(offline),
+    );
+    final accountPicker = _accountAutocomplete(
+      accounts: accounts,
+      currentAccountId: _pendingAccountId,
+      enabled: canEdit && !offline && !_busy,
+      onPicked: (id) => setState(() => _pendingAccountId = id),
+    );
+    final addButton = ElevatedButton(
+      onPressed: (canEdit && !offline && !_busy && _pendingKeyId != null && _pendingAccountId != null)
+          ? () => _upsertDefault(linkKeyId: _pendingKeyId, accountId: _pendingAccountId!)
+          : null,
+      child: const Text('Add'),
+    );
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -507,32 +536,22 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(
-                flex: 3,
-                child: KeyedSubtree(
-                  key: ValueKey('key-picker-${_defaults.length}'),
-                  child: _productAutocomplete(offline),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 3,
-                child: _accountAutocomplete(
-                  accounts: accounts,
-                  currentAccountId: _pendingAccountId,
-                  enabled: canEdit && !offline && !_busy,
-                  onPicked: (id) => setState(() => _pendingAccountId = id),
-                ),
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton(
-                onPressed: (canEdit && !offline && !_busy && _pendingKeyId != null && _pendingAccountId != null)
-                    ? () => _upsertDefault(linkKeyId: _pendingKeyId, accountId: _pendingAccountId!)
-                    : null,
-                child: const Text('Add'),
-              ),
-            ]),
+            if (isMobile)
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                productPicker,
+                const SizedBox(height: 12),
+                accountPicker,
+                const SizedBox(height: 12),
+                SizedBox(width: double.infinity, child: addButton),
+              ])
+            else
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(flex: 3, child: productPicker),
+                const SizedBox(width: 12),
+                Expanded(flex: 3, child: accountPicker),
+                const SizedBox(width: 12),
+                addButton,
+              ]),
             if (keyOptions.isEmpty && !_productsLoaded)
               const Padding(padding: EdgeInsets.only(top: 12), child: LinearProgressIndicator()),
             const SizedBox(height: 20),
@@ -544,19 +563,31 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
             else
               ..._defaults.map((d) {
                 final acc = d['account'] as Map<String, dynamic>?;
-                final label = _products.where((p) => p['id'] == d['link_key_id']).map((p) => '${p['product_code']} — ${p['product_name']}').firstOrNull ?? d['link_key_id'];
+                final label = (_products.where((p) => p['id'] == d['link_key_id']).map((p) => '${p['product_code']} — ${p['product_name']}').firstOrNull ?? d['link_key_id']) as String;
+                final accountText = acc != null ? '[${acc['account_code']}] ${acc['account_name']}' : '—';
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(children: [
-                    Expanded(flex: 3, child: Text(label as String, style: const TextStyle(fontSize: 13))),
-                    Expanded(flex: 3, child: Text(
-                        acc != null ? '[${acc['account_code']}] ${acc['account_name']}' : '—',
-                        style: const TextStyle(fontSize: 13, color: AppColors.textSecondary))),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
-                      onPressed: (canEdit && !offline && !_busy) ? () => _removeDefault(d) : null,
-                    ),
-                  ]),
+                  child: isMobile
+                      ? Row(children: [
+                          Expanded(
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                              Text(accountText, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                            ]),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
+                            onPressed: (canEdit && !offline && !_busy) ? () => _removeDefault(d) : null,
+                          ),
+                        ])
+                      : Row(children: [
+                          Expanded(flex: 3, child: Text(label, style: const TextStyle(fontSize: 13))),
+                          Expanded(flex: 3, child: Text(accountText, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary))),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
+                            onPressed: (canEdit && !offline && !_busy) ? () => _removeDefault(d) : null,
+                          ),
+                        ]),
                 );
               }),
           ],
