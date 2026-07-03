@@ -60,6 +60,7 @@ class RouteNames {
   static const String productEntry     = '/master/product-entry';
   static const String accountLinkSetup     = '/master/account-link-setup';
   static const String accountLinkConfigure = '/master/account-link-configure';
+  static const String itemAccountLinks     = '/master/item-account-links';
 
   // Finance
   static const String exchangeRates  = '/finance/exchange-rates';

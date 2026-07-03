@@ -37,7 +37,6 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
   String? _setupId;
   List<Map<String, dynamic>> _defaults = [];   // rows: id, link_key_id, account_id
   List<ItemCategoryModel>    _categories = [];
-  Map<String, String>        _catPaths = {};
   List<Map<String, dynamic>> _products = [];
   bool _productsLoaded = false;
 
@@ -85,7 +84,6 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
         _level    = setupRows.isNotEmpty ? setupRows.first['link_type'] as String : null;
         _defaults = List<Map<String, dynamic>>.from(dioResults[1].data as List);
         _categories = categories;
-        _catPaths   = _buildCategoryPaths(categories);
         _loading    = false;
       });
       if (_level == 'ITEM') await _loadProducts();
@@ -111,17 +109,6 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
       _products = List<Map<String, dynamic>>.from(res.data as List);
       _productsLoaded = true;
     });
-  }
-
-  Map<String, String> _buildCategoryPaths(List<ItemCategoryModel> cats) {
-    final byId = {for (final c in cats) if (c.id != null) c.id!: c};
-    String pathOf(ItemCategoryModel c) {
-      if (c.parentId == null) return c.categoryName;
-      final p = byId[c.parentId];
-      if (p == null) return c.categoryName;
-      return '${pathOf(p)} › ${c.categoryName}';
-    }
-    return {for (final c in cats) if (c.id != null) c.id!: pathOf(c)};
   }
 
   void _showError(String msg) {
@@ -350,9 +337,9 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
           case 'LOCATION':
             return _buildLocationLevel(accounts, offline);
           case 'CATEGORY':
-            return _buildKeyedLevel(accounts, offline, isCategory: true);
+            return _buildCategoryLevel(accounts, offline);
           case 'ITEM':
-            return _buildKeyedLevel(accounts, offline, isCategory: false);
+            return _buildKeyedLevel(accounts, offline);
           default:
             return const SizedBox.shrink();
         }
@@ -471,10 +458,47 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
     );
   }
 
-  Widget _buildKeyedLevel(List<Map<String, dynamic>> accounts, bool offline, {required bool isCategory}) {
-    final keyOptions = isCategory
-        ? _categories.where((c) => c.id != null).toList()
-        : _products;
+  // Category-wise is restricted to Level 1 (main categories) for now — every
+  // Level 1 category is shown directly, same UX as Location-wise. Deeper
+  // levels can be enabled later without any schema change (link_key_id
+  // already accepts any category id); this is purely a UI restriction.
+  Widget _buildCategoryLevel(List<Map<String, dynamic>> accounts, bool offline) {
+    final level1 = _categories.where((c) => c.id != null && c.levelNo == 1).toList()
+      ..sort((a, b) => a.categoryName.compareTo(b.categoryName));
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: level1.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(20),
+              child: Text('No main categories set up yet.', style: TextStyle(color: AppColors.textSecondary)),
+            )
+          : Column(
+              children: level1.map((cat) {
+                final existing = _defaults.where((d) => d['link_key_id'] == cat.id).toList();
+                final row = existing.isNotEmpty ? existing.first : null;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(children: [
+                    Expanded(flex: 2, child: Text(cat.categoryName, style: const TextStyle(fontSize: 13))),
+                    Expanded(
+                      flex: 3,
+                      child: _accountAutocomplete(
+                        accounts: accounts,
+                        currentAccountId: row?['account_id'] as String?,
+                        enabled: canEdit && !offline && !_busy,
+                        onPicked: (id) => _upsertDefault(
+                            linkKeyId: cat.id!, accountId: id, existingId: row?['id'] as String?),
+                      ),
+                    ),
+                  ]),
+                );
+              }).toList(),
+            ),
+    );
+  }
+
+  Widget _buildKeyedLevel(List<Map<String, dynamic>> accounts, bool offline) {
+    final keyOptions = _products;
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -488,7 +512,7 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
                 flex: 3,
                 child: KeyedSubtree(
                   key: ValueKey('key-picker-${_defaults.length}'),
-                  child: isCategory ? _categoryAutocomplete(offline) : _productAutocomplete(offline),
+                  child: _productAutocomplete(offline),
                 ),
               ),
               const SizedBox(width: 12),
@@ -509,7 +533,7 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
                 child: const Text('Add'),
               ),
             ]),
-            if (keyOptions.isEmpty && !isCategory && !_productsLoaded)
+            if (keyOptions.isEmpty && !_productsLoaded)
               const Padding(padding: EdgeInsets.only(top: 12), child: LinearProgressIndicator()),
             const SizedBox(height: 20),
             if (_defaults.isEmpty)
@@ -520,9 +544,7 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
             else
               ..._defaults.map((d) {
                 final acc = d['account'] as Map<String, dynamic>?;
-                final label = isCategory
-                    ? (_catPaths[d['link_key_id']] ?? 'Unknown category')
-                    : (_products.where((p) => p['id'] == d['link_key_id']).map((p) => '${p['product_code']} — ${p['product_name']}').firstOrNull ?? d['link_key_id']);
+                final label = _products.where((p) => p['id'] == d['link_key_id']).map((p) => '${p['product_code']} — ${p['product_name']}').firstOrNull ?? d['link_key_id'];
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Row(children: [
@@ -542,50 +564,6 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
       ),
     );
   }
-
-  Widget _categoryAutocomplete(bool offline) => Autocomplete<ItemCategoryModel>(
-    displayStringForOption: (c) => _catPaths[c.id] ?? c.categoryName,
-    optionsBuilder: (v) {
-      final q = v.text.toLowerCase().trim();
-      final options = _categories.where((c) => c.id != null);
-      return q.isEmpty
-          ? options
-          : options.where((c) => (_catPaths[c.id] ?? c.categoryName).toLowerCase().contains(q));
-    },
-    onSelected: (c) => setState(() => _pendingKeyId = c.id),
-    fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-      controller: textCtrl,
-      focusNode: focusNode,
-      enabled: canEdit && !offline && !_busy,
-      decoration: const InputDecoration(labelText: 'Category', prefixIcon: Icon(Icons.category_outlined)),
-      style: const TextStyle(fontSize: 13),
-    ),
-    optionsViewBuilder: (context, onSel, options) => Align(
-      alignment: Alignment.topLeft,
-      child: Material(
-        elevation: 4,
-        borderRadius: BorderRadius.circular(4),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 240, maxWidth: 400),
-          child: ListView.builder(
-            padding: EdgeInsets.zero,
-            shrinkWrap: true,
-            itemCount: options.length,
-            itemBuilder: (context, idx) {
-              final c = options.elementAt(idx);
-              return InkWell(
-                onTap: () => onSel(c),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Text(_catPaths[c.id] ?? c.categoryName, style: const TextStyle(fontSize: 13)),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    ),
-  );
 
   Widget _productAutocomplete(bool offline) => Autocomplete<Map<String, dynamic>>(
     displayStringForOption: (p) => '${p['product_code']} — ${p['product_name']}',
