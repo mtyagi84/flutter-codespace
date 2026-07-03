@@ -330,6 +330,42 @@ Do NOT call `onSessionExpired` when the 401 comes from `fn_login` itself.
 
 ---
 
+## Backend / PostgreSQL Rules (must follow on every new transaction module)
+
+### Shared posting engines — never write directly to the ledger tables
+Every module that posts GL entries or moves stock calls ONE shared procedure — never inserts into `rih_finance_headers`/`rid_finance_lines` or updates `rim_product_location` directly from its own `fn_approve_*`/`fn_post_*` function:
+- **`fn_post_voucher(...)`** (`backend/migrations/037_voucher_posting_engine.sql`) — the only entry point for auto-generated GL postings. Composes the existing `fn_save_finance_voucher` + `fn_post_finance_voucher` rather than reimplementing them; tags the header `source_doc_type/no/date` + `posting_source='AUTO'`.
+- **`fn_post_stock_movement(...)`** (`backend/migrations/036_stock_posting_engine.sql`) — the only entry point for stock movement. Writes `ril_stock_ledger` (immutable) and updates `rim_product_location.current_stock`/`cost_price` atomically, guaranteeing `current_stock` always equals `SUM(ledger.qty_change)`.
+Every future module (Purchase Invoice, Sales Invoice, Transfer, Adjustment) calls these two, not bespoke SQL.
+
+### Concurrency — row-level locking, and a real gotcha to avoid repeating
+Use `SELECT ... FOR UPDATE` on any row a concurrent writer could race on (e.g. `rim_product_location`, PO/GRN lines) — see `fn_post_stock_movement` for the pattern. Locking is scoped per row, not global: different rows never contend.
+**`SELECT ... ORDER BY ... FOR UPDATE` does NOT guarantee PostgreSQL acquires locks in that ORDER BY sequence** — the sort and the row-locking are not reliably sequenced together. When a function must lock multiple rows in a deterministic order to avoid deadlocks, lock **one row per statement**, in a loop over an already-sorted key list (see `fn_approve_grn`'s PO-line-locking loop in `038_grn.sql` for the correct pattern — this was a real bug caught on self-review).
+**Fixed lock order** (binding on every future function touching more than one row-type): PO lines, then `rim_product_location` rows sorted by `product_id`.
+
+### Period / backdate checks — every posting function's first validation
+`fn_check_period_open(company_id, trans_date)` and `fn_check_backdate_allowed(client_id, company_id, transaction_type, trans_date)` (`backend/migrations/035_period_close_backdated_control.sql`) must be called by every `fn_approve_*`/`fn_post_*` as its first action, before any other validation. Enforced only at Approve/Post — never block a DRAFT save, since drafts don't affect books.
+
+### RLS policy convention — never a permissive dev policy on a real table
+Every new table uses the `auth_rw_<table>` pattern (see `013_chart_of_accounts.sql`, `031_purchase_orders.sql`, `032_account_link_setup.sql`):
+```sql
+CREATE POLICY "auth_rw_<table>" ON <table>
+    FOR ALL TO authenticated
+    USING     (client_id  = (current_setting('request.jwt.claims', true)::json->>'client_id')::uuid
+           AND company_id = (current_setting('request.jwt.claims', true)::json->>'company_id')::uuid)
+    WITH CHECK(client_id  = (current_setting('request.jwt.claims', true)::json->>'client_id')::uuid
+           AND company_id = (current_setting('request.jwt.claims', true)::json->>'company_id')::uuid);
+
+REVOKE ALL ON <table> FROM anon;
+GRANT SELECT, INSERT[, UPDATE] ON <table> TO authenticated;
+```
+Never `CREATE POLICY ... FOR ALL USING (true) WITH CHECK (true)` on a real migration table — that permissive shape belongs only in pgTAP test fixtures, and was mistakenly copied into a real migration once already (caught and fixed same-session).
+
+### Immutability — never edit a posted/approved transaction in place
+Once a GRN/voucher/PO is APPROVED or POSTED, no screen or function may UPDATE its lines or amounts. A correction is always a new reversing entry + a new correct entry, never an in-place edit — this is what makes historical reports and backdated cost/tax corrections trustworthy. `fn_save_finance_voucher`/`fn_save_purchase_order`/`fn_save_grn` already enforce this (block edits once status leaves DRAFT); keep that enforcement in every future `fn_save_*`.
+
+---
+
 ## Dart / Flutter Rules (never get these wrong)
 
 ### Riverpod class names — exact spelling
@@ -380,6 +416,9 @@ Column(children: [SwitchListTile(...)])
 Row(children: [SwitchListTile(...)])
 ```
 Same rule: `CheckboxListTile`, `RadioListTile`, `ExpansionTile`.
+
+### DropdownButtonFormField in a fixed-width container — always set isExpanded: true
+Without `isExpanded: true`, the dropdown sizes its selected-item display to the item's intrinsic content width, not the box width — a long item label (tax group, department, account name) overflows past a `SizedBox(width: ...)` edge, producing "RIGHT OVERFLOWED BY N PIXELS". Set `isExpanded: true` by default on every `DropdownButtonFormField` placed inside a fixed-width `SizedBox` (table columns, `Wrap` line-item rows, compact form grids) unless the item set is short and fixed (e.g. a 2-value Local/Import toggle, where overflow is impossible).
 
 ### rim_currencies column names
 - ISO code: `currency_id` (NOT `currency_code`)
