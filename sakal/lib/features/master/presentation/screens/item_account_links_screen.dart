@@ -298,6 +298,14 @@ class _ItemAccountLinksDialogState extends ConsumerState<_ItemAccountLinksDialog
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
+  static String _sourceLabel(String? linkType) => switch (linkType) {
+    'ITEM'     => 'Override',
+    'COMPANY'  => 'Company default',
+    'CATEGORY' => 'Category default',
+    'LOCATION' => 'Location default',
+    _          => 'Not configured',
+  };
+
   Future<void> _load() async {
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
@@ -307,33 +315,44 @@ class _ItemAccountLinksDialogState extends ConsumerState<_ItemAccountLinksDialog
         'company_id': 'eq.${session.companyId}',
         'product_id': 'eq.${widget.product['id']}',
         'is_deleted': 'eq.false',
-        'select':     'id,link_type_id,account_id',
+        'select':     'id,link_type_id,link_type,account_id',
       });
       final cached = List<Map<String, dynamic>>.from(cacheRes.data as List);
-      final cachedByType = {for (final r in cached) r['link_type_id'] as String: r};
+      var cachedByType = {for (final r in cached) r['link_type_id'] as String: r};
 
       final toResolve = widget.linkTypes.where((t) => !cachedByType.containsKey(t['id'])).toList();
-      final resolved = await Future.wait(toResolve.map((t) => DioClient.instance.post(
-          '/rpc/fn_resolve_account_link', data: {
-        'p_client_id':   session.clientId,
-        'p_company_id':  session.companyId,
-        'p_location_id': session.locationId,
-        'p_product_id':  widget.product['id'],
-        'p_link_key':    t['link_key'],
-      })));
+      if (toResolve.isNotEmpty) {
+        await Future.wait(toResolve.map((t) => DioClient.instance.post(
+            '/rpc/fn_resolve_account_link', data: {
+          'p_client_id':   session.clientId,
+          'p_company_id':  session.companyId,
+          'p_location_id': session.locationId,
+          'p_product_id':  widget.product['id'],
+          'p_link_key':    t['link_key'],
+        })));
+        // Freshly resolved types are now cached — re-fetch once to pick up
+        // their link_type (source) alongside the account, in one shot.
+        final refreshed = await DioClient.instance.get('/rim_account_links', queryParameters: {
+          'client_id':  'eq.${session.clientId}',
+          'company_id': 'eq.${session.companyId}',
+          'product_id': 'eq.${widget.product['id']}',
+          'is_deleted': 'eq.false',
+          'select':     'id,link_type_id,link_type,account_id',
+        });
+        final refreshedRows = List<Map<String, dynamic>>.from(refreshed.data as List);
+        cachedByType = {for (final r in refreshedRows) r['link_type_id'] as String: r};
+      }
 
       if (!mounted) return;
       setState(() {
         for (final t in widget.linkTypes) {
           final id = t['id'] as String;
           final cachedRow = cachedByType[id];
-          if (cachedRow != null) {
-            _rows[id] = {'cacheId': cachedRow['id'], 'accountId': cachedRow['account_id']};
-          } else {
-            final idx = toResolve.indexWhere((x) => x['id'] == id);
-            final accountId = idx >= 0 ? resolved[idx].data as String? : null;
-            _rows[id] = {'cacheId': null, 'accountId': accountId};
-          }
+          _rows[id] = {
+            'cacheId':   cachedRow?['id'],
+            'accountId': cachedRow?['account_id'],
+            'source':    cachedRow?['link_type'] as String?,
+          };
           _original[id] = _rows[id]!['accountId'] as String?;
         }
         _loading = false;
@@ -451,7 +470,7 @@ class _ItemAccountLinksDialogState extends ConsumerState<_ItemAccountLinksDialog
                                     decoration: const InputDecoration(isDense: true, hintText: 'Not configured'),
                                     style: const TextStyle(fontSize: 13),
                                   ),
-                                  onSelected: (a) => setState(() => _rows[id] = {...row, 'accountId': a['id']}),
+                                  onSelected: (a) => setState(() => _rows[id] = {...row, 'accountId': a['id'], 'source': 'ITEM'}),
                                   optionsViewBuilder: (context, onSel, options) => Align(
                                     alignment: Alignment.topLeft,
                                     child: Material(
@@ -477,6 +496,22 @@ class _ItemAccountLinksDialogState extends ConsumerState<_ItemAccountLinksDialog
                                       ),
                                     ),
                                   ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                width: 90,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: (row['source'] == 'ITEM' ? AppColors.secondary : AppColors.textDisabled)
+                                        .withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(_sourceLabel(row['source'] as String?),
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
+                                          color: row['source'] == 'ITEM' ? AppColors.secondary : AppColors.textSecondary)),
                                 ),
                               ),
                             ]),
