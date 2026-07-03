@@ -23,6 +23,8 @@ class RouteNames {
   static const String users       = '/setup/users';
   static const String userLocationAccess = '/setup/user-location-access';
   static const String permissions = '/setup/permissions';
+  static const String periodClose = '/setup/period-close';
+  static const String backdatedEntryControl = '/setup/backdated-entry-control';
 
   // Sales — screen_names must match ric_master_menus seeds
   static const String salesInvoices = '/sales/invoices';

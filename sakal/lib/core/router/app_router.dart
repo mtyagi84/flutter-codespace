@@ -18,6 +18,8 @@ import '../../features/setup/presentation/screens/permissions_screen.dart';
 import '../../features/setup/presentation/screens/users_screen.dart';
 import '../../features/setup/presentation/screens/user_location_access_screen.dart';
 import '../../features/setup/presentation/screens/accounting_setup_screen.dart';
+import '../../features/setup/presentation/screens/period_close_screen.dart';
+import '../../features/setup/presentation/screens/backdated_entry_control_screen.dart';
 import '../../features/master/presentation/screens/chart_of_accounts_screen.dart';
 import '../../features/master/presentation/screens/common_masters_screen.dart';
 import '../../features/master/presentation/screens/customer_master_screen.dart';
@@ -127,6 +129,8 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.permissions,    builder: (c, s) => const PermissionsScreen()),
         GoRoute(path: RouteNames.accountingSetup,builder: (c, s) => const AccountingSetupScreen()),
         GoRoute(path: RouteNames.financialYears, builder: (c, s) => const _Placeholder('Financial Years')),
+        GoRoute(path: RouteNames.periodClose,    builder: (c, s) => const PeriodCloseScreen()),
+        GoRoute(path: RouteNames.backdatedEntryControl, builder: (c, s) => const BackdatedEntryControlScreen()),
 
         // Master data
         GoRoute(path: RouteNames.chartOfAccounts,builder: (c, s) => const ChartOfAccountsScreen()),

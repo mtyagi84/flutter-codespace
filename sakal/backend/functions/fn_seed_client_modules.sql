@@ -44,7 +44,9 @@ begin
         (p_client_id, p_company_id, v_ad, 'AD-LOC', 'Location Setup',   '/setup/locations',   1, 'AD-SETG', 'System Setup',    0, false, false, false),
         (p_client_id, p_company_id, v_ad, 'AD-CUR', 'Currency Setup',   '/setup/currencies',  2, 'AD-SETG', 'System Setup',    0, false, false, false),
         (p_client_id, p_company_id, v_ad, 'AD-USR', 'User Management',  '/setup/users',       0, 'AD-USMG', 'User Management', 1, false, false, false),
-        (p_client_id, p_company_id, v_ad, 'AD-PRM', 'User Permissions', '/setup/permissions', 1, 'AD-USMG', 'User Management', 1, false, false, false)
+        (p_client_id, p_company_id, v_ad, 'AD-PRM', 'User Permissions', '/setup/permissions', 1, 'AD-USMG', 'User Management', 1, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'AD-PDC', 'Period Close',              '/setup/period-close',            3, 'AD-SETG', 'System Setup', 0, true,  false, false),
+        (p_client_id, p_company_id, v_ad, 'AD-BDC', 'Backdated Entry Control',   '/setup/backdated-entry-control', 4, 'AD-SETG', 'System Setup', 0, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set group_code      = excluded.group_code,
             group_name      = excluded.group_name,
