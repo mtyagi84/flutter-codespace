@@ -13,25 +13,25 @@ import '../sync/sync_engine.dart';
 ///    one bulk query (`SyncEngine.pendingDocumentIds`). Reusing the reactive
 ///    form per row would open one Drift stream subscription per row.
 class PendingSyncBadge extends ConsumerWidget {
-  final String? documentType;
-  final String? documentId;
+  // Unused (empty string) when constructed via .static — only the reactive
+  // constructor's watchIsPending() call in build() reads these.
+  final String documentType;
+  final String documentId;
   final bool? _staticIsPending;
 
-  const PendingSyncBadge({super.key, required String documentType, required String documentId})
-      : documentType = documentType,
-        documentId = documentId,
-        _staticIsPending = null;
+  const PendingSyncBadge({super.key, required this.documentType, required this.documentId})
+      : _staticIsPending = null;
 
   const PendingSyncBadge.static({super.key, required bool isPending})
-      : documentType = null,
-        documentId = null,
+      : documentType = '',
+        documentId = '',
         _staticIsPending = isPending;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (_staticIsPending != null) return _chip(_staticIsPending);
     return StreamBuilder<bool>(
-      stream: ref.watch(syncEngineProvider).watchIsPending(documentType!, documentId!),
+      stream: ref.watch(syncEngineProvider).watchIsPending(documentType, documentId),
       builder: (context, snapshot) => _chip(snapshot.data ?? false),
     );
   }

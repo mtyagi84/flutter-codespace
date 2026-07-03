@@ -293,7 +293,7 @@ class _PurchaseOrderListScreenState extends ConsumerState<PurchaseOrderListScree
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary))),
               if (_pendingIds.contains(o.orderNo)) ...[
                 const SizedBox(width: 6),
-                PendingSyncBadge.static(isPending: true),
+                const PendingSyncBadge.static(isPending: true),
               ],
             ]))),
           Expanded(flex: 2, child: Padding(
@@ -345,7 +345,7 @@ class _PurchaseOrderListScreenState extends ConsumerState<PurchaseOrderListScree
             Expanded(child: Text(o.orderNo,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
             if (_pendingIds.contains(o.orderNo)) ...[
-              PendingSyncBadge.static(isPending: true),
+              const PendingSyncBadge.static(isPending: true),
               const SizedBox(width: 6),
             ],
             _statusBadge(o.status),

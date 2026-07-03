@@ -382,7 +382,7 @@ class _FinanceVoucherListScreenState
                         fontWeight: FontWeight.w500, color: AppColors.primary))),
                 if (_pendingIds.contains(transNo)) ...[
                   const SizedBox(width: 6),
-                  PendingSyncBadge.static(isPending: true),
+                  const PendingSyncBadge.static(isPending: true),
                 ],
               ]),
             ),
@@ -484,7 +484,7 @@ class _FinanceVoucherListScreenState
                       fontWeight: FontWeight.w600, color: AppColors.primary)),
             ),
             if (_pendingIds.contains(transNo)) ...[
-              PendingSyncBadge.static(isPending: true),
+              const PendingSyncBadge.static(isPending: true),
               const SizedBox(width: 6),
             ],
             _statusBadge(isPosted),
