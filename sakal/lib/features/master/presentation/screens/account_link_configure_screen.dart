@@ -152,9 +152,11 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
           content: Text('Switching to a different level will remove the ${_defaults.length} '
               'existing assignment(s) for "${widget.linkName}". Continue?'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
             TextButton(
-                onPressed: () => Navigator.pop(context, true),
+                onPressed: () => Navigator.of(context, rootNavigator: true).pop(false),
+                child: const Text('Cancel')),
+            TextButton(
+                onPressed: () => Navigator.of(context, rootNavigator: true).pop(true),
                 child: const Text('Switch', style: TextStyle(color: AppColors.negative))),
           ],
         ),
