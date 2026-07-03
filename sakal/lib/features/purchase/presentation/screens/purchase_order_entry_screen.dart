@@ -1049,6 +1049,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
           Wrap(spacing: 8, runSpacing: 8, children: [
             SizedBox(width: 140, child: DropdownButtonFormField<String>(
               decoration: dec.copyWith(labelText: 'UOM'),
+              isExpanded: true,
               initialValue: row.uomId,
               items: _uoms.map((u) => DropdownMenuItem(value: u['id'] as String,
                   child: Text(u['description'] as String, style: const TextStyle(fontSize: 12)))).toList(),
@@ -1077,6 +1078,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
                 onChanged: (_) => setState(() {}))),
             SizedBox(width: 170, child: DropdownButtonFormField<String?>(
               decoration: dec.copyWith(labelText: 'Tax Group'),
+              isExpanded: true,
               initialValue: row.taxGroupId,
               items: [
                 const DropdownMenuItem(value: null, child: Text('No Tax', style: TextStyle(fontSize: 12))),
@@ -1087,6 +1089,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
             )),
             SizedBox(width: 170, child: DropdownButtonFormField<String?>(
               decoration: dec.copyWith(labelText: 'Department'),
+              isExpanded: true,
               initialValue: row.departmentId,
               items: [
                 const DropdownMenuItem(value: null, child: Text('—', style: TextStyle(fontSize: 12))),
@@ -1097,6 +1100,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
             )),
             SizedBox(width: 170, child: DropdownButtonFormField<String?>(
               decoration: dec.copyWith(labelText: 'Consumption Area'),
+              isExpanded: true,
               initialValue: row.consumptionAreaId,
               items: [
                 const DropdownMenuItem(value: null, child: Text('—', style: TextStyle(fontSize: 12))),
@@ -1158,6 +1162,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         child: Wrap(spacing: 10, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
           SizedBox(width: 200, child: DropdownButtonFormField<String>(
             decoration: dec.copyWith(labelText: 'Charge Type'),
+            isExpanded: true,
             initialValue: row.chargeId,
             items: _additionalCharges.map((c) => DropdownMenuItem(value: c['id'] as String,
                 child: Text(c['charge_name'] as String, style: const TextStyle(fontSize: 12)))).toList(),
