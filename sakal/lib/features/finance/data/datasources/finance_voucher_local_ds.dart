@@ -22,13 +22,16 @@ class FinanceVoucherLocalDs {
       ..where((t) => t.companyId.equals(companyId))
       ..where((t) => t.locationId.equals(locationId))
       ..where((t) => t.isDeleted.equals(false))
-      ..where((t) => t.transDate.isBiggerOrEqualValue(fromDate))
-      ..where((t) => t.transDate.isSmallerOrEqualValue(toDate))
       ..orderBy([(t) => OrderingTerm.desc(t.transDate), (t) => OrderingTerm.desc(t.transNo)]);
     if (voucherTypeCode != null) q.where((t) => t.voucherTypeCode.equals(voucherTypeCode));
     if (isPosted != null) q.where((t) => t.isPosted.equals(isPosted));
     final rows = await q.get();
-    return rows.map((r) => {
+    // Date range filtered in Dart, not SQL — this is a small local cache
+    // table (whatever's already been synced/created), not worth chasing
+    // Drift's comparison-operator API for.
+    return rows
+        .where((r) => r.transDate.compareTo(fromDate) >= 0 && r.transDate.compareTo(toDate) <= 0)
+        .map((r) => {
       'trans_no':           r.transNo,
       'trans_date':         r.transDate,
       'voucher_type_code':  r.voucherTypeCode,
