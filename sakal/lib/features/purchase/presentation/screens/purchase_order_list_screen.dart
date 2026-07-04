@@ -1,27 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/models/menu_models.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../data/models/purchase_order_model.dart';
 import '../providers/purchase_order_providers.dart';
-
-MenuFeature? _findFeature(List<MenuModule> modules, String screenPath) {
-  for (final mod in modules) {
-    for (final grp in mod.groups) {
-      for (final feat in grp.features) {
-        if (feat.screenName == screenPath) return feat;
-      }
-    }
-  }
-  return null;
-}
 
 class PurchaseOrderListScreen extends ConsumerStatefulWidget {
   const PurchaseOrderListScreen({super.key});
@@ -30,7 +19,10 @@ class PurchaseOrderListScreen extends ConsumerStatefulWidget {
   ConsumerState<PurchaseOrderListScreen> createState() => _PurchaseOrderListScreenState();
 }
 
-class _PurchaseOrderListScreenState extends ConsumerState<PurchaseOrderListScreen> {
+class _PurchaseOrderListScreenState extends ConsumerState<PurchaseOrderListScreen>
+    with ScreenPermissionMixin<PurchaseOrderListScreen> {
+  @override String get screenName => RouteNames.purchaseOrders;
+
   List<PurchaseOrderModel> _orders = [];
   Set<String> _pendingIds = {};
   bool    _loading = true;
@@ -123,23 +115,10 @@ class _PurchaseOrderListScreenState extends ConsumerState<PurchaseOrderListScree
     final session   = ref.watch(sessionProvider);
     final isOffline = session?.offlineMode ?? false;
     final isMobile  = Responsive.isMobile(context);
-    final menus     = ref.watch(menuProvider);
-    final feature   = _findFeature(menus, RouteNames.purchaseOrders);
-
-    if (feature == null) {
-      return const Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.lock_outline, size: 48, color: AppColors.textDisabled),
-          SizedBox(height: 12),
-          Text('You do not have access to this screen.', style: TextStyle(color: AppColors.textSecondary)),
-        ]),
-      );
-    }
 
     // Creating a new PO is allowed offline (queued via SyncEngine) — only
     // Approve requires being online.
-    final canAdd = feature.addAllowed;
-    final rows   = _filtered;
+    final rows = _filtered;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

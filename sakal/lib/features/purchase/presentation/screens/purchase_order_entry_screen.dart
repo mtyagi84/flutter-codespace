@@ -3,29 +3,18 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/master_type_keys.dart';
-import '../../../../core/models/menu_models.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../domain/repositories/purchase_order_repository.dart';
 import '../providers/purchase_order_providers.dart';
-
-MenuFeature? _findFeature(List<MenuModule> modules, String screenPath) {
-  for (final mod in modules) {
-    for (final grp in mod.groups) {
-      for (final feat in grp.features) {
-        if (feat.screenName == screenPath) return feat;
-      }
-    }
-  }
-  return null;
-}
 
 // ── UI-state row classes (live editing — not DB models) ──────────────────────
 
@@ -124,7 +113,12 @@ class PurchaseOrderEntryScreen extends ConsumerStatefulWidget {
   ConsumerState<PurchaseOrderEntryScreen> createState() => _PurchaseOrderEntryScreenState();
 }
 
-class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScreen> {
+class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScreen>
+    with ScreenPermissionMixin<PurchaseOrderEntryScreen> {
+  // Same key as the list screen — the entry screen is not itself a menu
+  // item, per the shared ERP navigation pattern (Menu -> List -> Entry).
+  @override String get screenName => RouteNames.purchaseOrders;
+
   PurchaseOrderRepository get _ds => ref.read(purchaseOrderRepositoryProvider);
 
   // ── Header state ─────────────────────────────────────────────────────────
@@ -433,7 +427,16 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     final barcode = rawBarcode.trim();
     if (barcode.isEmpty) return;
     final session = ref.read(sessionProvider)!;
-    final match = await _ds.getProductByBarcode(clientId: session.clientId, companyId: session.companyId, barcode: barcode);
+    Map<String, dynamic>? match;
+    try {
+      match = await _ds.getProductByBarcode(clientId: session.clientId, companyId: session.companyId, barcode: barcode);
+    } on DioException catch (e) {
+      if (mounted) _showSnack('Barcode lookup failed: ${_serverError(e)}', color: AppColors.negative);
+      return;
+    } catch (e) {
+      if (mounted) _showSnack('Barcode lookup failed: $e', color: AppColors.negative);
+      return;
+    }
     if (!mounted) return;
     if (match == null) {
       _showSnack('No product found for barcode "$barcode".', color: AppColors.negative);
@@ -691,7 +694,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
   // procurement trail and must NOT carry over. The copy always becomes a
   // fresh Direct order with no reference, never a duplicate of someone
   // else's indent/quotation.
-  bool get _canCopy => _orderNo != null;
+  bool get _canCopy => _orderNo != null && canCopy;
 
   Future<void> _applyCopy() async {
     setState(() {
@@ -830,24 +833,12 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     final session   = ref.watch(sessionProvider);
     final isOffline = session?.offlineMode ?? false;
     final isMobile  = Responsive.isMobile(context);
-    final menus     = ref.watch(menuProvider);
-    final feature   = _findFeature(menus, RouteNames.purchaseOrders);
-
-    if (feature == null) {
-      return const Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.lock_outline, size: 48, color: AppColors.textDisabled),
-          SizedBox(height: 12),
-          Text('You do not have access to this screen.', style: TextStyle(color: AppColors.textSecondary)),
-        ]),
-      );
-    }
 
     if (!_loading) _recompute();
 
-    final canSave    = _status == 'DRAFT' && (_orderNo == null ? feature.addAllowed : feature.editAllowed);
-    final canApprove = _status == 'DRAFT' && !isOffline && feature.approveAllowed && _orderNo != null;
-    final locked     = _status != 'DRAFT';
+    final canSave      = _status == 'DRAFT' && (_orderNo == null ? canAdd : canEdit);
+    final showApprove  = _status == 'DRAFT' && !isOffline && canApprove && _orderNo != null;
+    final locked       = _status != 'DRAFT';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -859,18 +850,18 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
           child: isMobile
               ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   _buildTitleBlock(locked),
-                  if (_canCopy || canSave || canApprove) ...[
+                  if (_canCopy || canSave || showApprove) ...[
                     const SizedBox(height: 10),
                     Row(children: [
                       if (_canCopy) _buildCopyButton(),
-                      if (canSave || canApprove) _buildActionButtons(canSave: canSave, canApprove: canApprove),
+                      if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
                     ]),
                   ],
                 ])
               : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(child: _buildTitleBlock(locked)),
                   if (_canCopy) _buildCopyButton(),
-                  if (canSave || canApprove) _buildActionButtons(canSave: canSave, canApprove: canApprove),
+                  if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
                 ]),
         ),
 
