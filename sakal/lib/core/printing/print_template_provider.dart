@@ -1,0 +1,40 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../network/dio_client.dart';
+import '../providers/session_provider.dart';
+import 'default_templates/purchase_order_default_template.dart';
+import 'default_templates/voucher_default_template.dart';
+import 'print_models.dart';
+
+/// Fetches the company's active default template for a document type, or
+/// falls back to a hardcoded Dart default — printing always works, even
+/// for a brand-new company that has never touched the (not-yet-built)
+/// template designer screen, and even if the fetch fails for any reason
+/// (offline, RLS, network blip).
+final printTemplateProvider = FutureProvider.family<PrintTemplate, String>((ref, documentType) async {
+  final session = ref.watch(sessionProvider);
+  if (session != null) {
+    try {
+      final res = await DioClient.instance.get('/ric_print_templates', queryParameters: {
+        'client_id':     'eq.${session.clientId}',
+        'company_id':    'eq.${session.companyId}',
+        'document_type': 'eq.$documentType',
+        'is_default':    'eq.true',
+        'is_active':     'eq.true',
+        'is_deleted':    'eq.false',
+        'select':        '*',
+        'limit':         '1',
+      });
+      final list = res.data as List;
+      if (list.isNotEmpty) return PrintTemplate.fromJson(list.first as Map<String, dynamic>);
+    } catch (_) {
+      // Fall through to the hardcoded default on any error.
+    }
+  }
+  return _defaultFor(documentType);
+});
+
+PrintTemplate _defaultFor(String documentType) => switch (documentType) {
+  'PURCHASE_ORDER' => purchaseOrderDefaultTemplate,
+  'VOUCHER'        => voucherDefaultTemplate,
+  _ => throw ArgumentError('No default print template registered for document type "$documentType".'),
+};

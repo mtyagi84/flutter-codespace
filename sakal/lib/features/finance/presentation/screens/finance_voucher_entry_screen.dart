@@ -12,12 +12,13 @@ import '../../../../core/models/menu_models.dart';
 import '../../../../core/providers/master_cache_providers.dart'
     show accountsProvider, baseCurrencyProvider, localCurrencyProvider,
          paymentModesProvider, companyDetailsProvider;
+import '../../../../core/printing/print_engine.dart';
+import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../providers/finance_voucher_providers.dart';
-import '../../data/services/voucher_pdf_builder.dart';
 
 MenuFeature? _findFeature(List<MenuModule> modules, String screenPath) {
   for (final mod in modules) {
@@ -429,83 +430,84 @@ class _FinanceVoucherEntryScreenState
 
   // ── Print voucher ─────────────────────────────────────────────────────────
 
+  // Voucher On Account and Against Bill rows are normalized into one common
+  // {particulars, amount, party_amount, remarks} shape here — see
+  // lib/core/printing/default_templates/voucher_default_template.dart for
+  // why (v1 simplification; a richer dual-mode layout can be built once the
+  // template designer exists).
+  static const _voucherTypeLabels = {
+    'CRV': 'CASH RECEIPT VOUCHER',
+    'BRV': 'BANK RECEIPT VOUCHER',
+    'CPV': 'CASH PAYMENT VOUCHER',
+    'BPV': 'BANK PAYMENT VOUCHER',
+  };
+
+  Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) {
+    final tc = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
+
+    final cashAcc = _cashBankList.where((a) => a['id'] == _cashBankId).firstOrNull;
+    final cashBankDisplay = cashAcc != null
+        ? '[${cashAcc['account_code']}] ${cashAcc['account_name']}' : '';
+
+    final modeEntry = _paymentModes.where((m) => m['payment_mode_code'] == _paymentMode).firstOrNull;
+    final modeName  = modeEntry?['payment_mode_name'] as String? ?? _paymentMode ?? '';
+
+    final showRate = _transCurrency.isNotEmpty && _transCurrency != _baseCurrency;
+
+    final List<Map<String, dynamic>> rows;
+    if (_isOnAccount) {
+      rows = _accountLines.where((l) => l.accountId != null && l.amount > 0).map((l) {
+        final lineCurr = l.accountCurrency.isEmpty ? _baseCurrency : l.accountCurrency;
+        final isCross  = lineCurr != tc;
+        final partyAmt = l.amount * l.partyRate;
+        return {
+          'particulars':  l.accountName ?? '',
+          'amount':       l.amount,
+          'party_amount': isCross && partyAmt > 0 ? '${partyAmt.toStringAsFixed(2)} $lineCurr' : '—',
+          'remarks':      l.remarksCtrl.text,
+        };
+      }).toList();
+    } else {
+      rows = _bills.where((b) => b.payTrans > 0).map((b) {
+        final dateStr = (b.invBillDate ?? '').length >= 10
+            ? b.invBillDate!.substring(0, 10) : (b.invBillDate ?? '');
+        return {
+          'particulars':  '${b.invBillNo} ($dateStr)',
+          'amount':       b.payTrans,
+          'party_amount': '${(b.payTrans * _partyRate).toStringAsFixed(2)} ${b.partyCurrency}',
+          'remarks':      'Balance: ${b.balanceAmount.toStringAsFixed(2)}',
+        };
+      }).toList();
+    }
+
+    return {
+      'company': company,
+      'header': {
+        'voucher_type_label': _voucherTypeLabels[_voucherType] ?? _voucherType ?? '',
+        'voucher_no':         _voucherNo ?? '',
+        'trans_date':         _displayDate(_transDate),
+        'cash_bank_account':  cashBankDisplay,
+        'payment_mode':       modeName,
+        'ref_no':             _refNoCtrl.text,
+        'currency_line':      showRate
+            ? 'Currency: $tc (1 $_baseCurrency = ${_fmtRate(_confirmedDisplayRate)} $tc)' : '',
+        'remarks':            _remarksCtrl.text,
+      },
+      'lines': rows,
+      'totals': {'total_display': '${_totalTransAmount.toStringAsFixed(2)} $tc'},
+      'signatures': {'prepared_by': _preparedBy, 'authorised_by': _authorisedBy},
+    };
+  }
+
   Future<void> _printVoucher() async {
     if (_voucherNo == null || _voucherType == null) return;
     setState(() => _printing = true);
     try {
-    final company = await ref.read(companyDetailsProvider.future);
-    if (!mounted || company == null) { setState(() => _printing = false); return; }
-
-    final tc = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
-
-    // Resolve cash/bank display name
-    final cashAcc = _cashBankList
-        .where((a) => a['id'] == _cashBankId)
-        .firstOrNull;
-    final cashBankDisplay = cashAcc != null
-        ? '[${cashAcc['account_code']}] ${cashAcc['account_name']}'
-        : '';
-
-    // Resolve payment mode display name
-    final modeEntry = _paymentModes
-        .where((m) => m['payment_mode_code'] == _paymentMode)
-        .firstOrNull;
-    final modeName =
-        modeEntry?['payment_mode_name'] as String? ?? _paymentMode ?? '';
-
-    // Build On Account print lines
-    final printLines = _accountLines
-        .where((l) => l.accountId != null && l.amount > 0)
-        .map((l) {
-          final lineCurr = l.accountCurrency.isEmpty ? _baseCurrency : l.accountCurrency;
-          return {
-            'account_name':      l.accountName ?? '',
-            'amount':            l.amount,
-            'party_amount':      l.amount * l.partyRate,
-            'party_currency':    lineCurr,
-            'is_cross_currency': lineCurr != tc,
-            'remarks':           l.remarksCtrl.text,
-          };
-        })
-        .toList();
-
-    // Build Against Bill print lines
-    final printBills = _bills
-        .where((b) => b.payTrans > 0)
-        .map((b) => {
-              'bill_no':        b.invBillNo,
-              'bill_date':      b.invBillDate ?? '',
-              'bill_amount':    b.billAmount,
-              'balance_amount': b.balanceAmount,
-              'pay_trans':      b.payTrans,
-              'pay_party':      b.payTrans * _partyRate,
-              'party_currency': b.partyCurrency,
-            })
-        .toList();
-
-      await VoucherPdfBuilder.print(
-        company:         company,
-        voucherType:     _voucherType!,
-        voucherNo:       _voucherNo!,
-        transDate:       _displayDate(_transDate),
-        transCurrency:   tc,
-        baseCurrency:    _baseCurrency,
-        displayRate:     _confirmedDisplayRate,
-        cashBankAccount: cashBankDisplay,
-        paymentMode:     modeName,
-        refNo:           _refNoCtrl.text,
-        refDate:         _refDate != null ? _displayDate(_refDate!) : null,
-        remarks:         _remarksCtrl.text,
-        isOnAccount:     _isOnAccount,
-        lines:           printLines,
-        bills:           printBills,
-        partyName:       _partyName,
-        partyCurrency:   _partyCurrency.isEmpty ? null : _partyCurrency,
-        partyRate:       _partyRate,
-        totalTrans:      _totalTransAmount,
-        preparedBy:      _preparedBy,
-        authorisedBy:    _authorisedBy,
-      );
+      final company  = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
+      final template = await ref.read(printTemplateProvider('VOUCHER').future);
+      final document = _buildPrintDocument(company);
+      await PrintEngine.printDocument(
+          template: template, document: document, filename: '$_voucherType-$_voucherNo.pdf');
     } catch (e) {
       if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
     } finally {

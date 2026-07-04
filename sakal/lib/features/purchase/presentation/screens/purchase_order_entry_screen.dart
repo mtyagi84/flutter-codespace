@@ -3,6 +3,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/master_type_keys.dart';
+import '../../../../core/printing/print_engine.dart';
+import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
@@ -174,6 +176,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
   String? _error;
   bool    _saving  = false;
   bool    _approving = false;
+  bool    _printing = false;
   String? _actionError;
 
   @override
@@ -729,6 +732,59 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     if (mounted) _showSnack('Copied — edit as needed and save as a new draft.', color: AppColors.secondary);
   }
 
+  // ── Print ─────────────────────────────────────────────────────────────────
+  // Available on any saved PO regardless of status — the shared print engine
+  // (lib/core/printing/) draws a DRAFT watermark automatically when
+  // header.status != APPROVED. See default_templates/purchase_order_default_template.dart
+  // for the field bindings this document map must satisfy.
+
+  Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) {
+    final buyerName = _users.where((u) => u['id'] == _buyerId).map((u) => u['full_name'] as String).firstOrNull;
+    return {
+      'company': company,
+      'header': {
+        'order_no':      _orderNo ?? '',
+        'order_date':    _displayDate(_orderDate),
+        'status':        _status,
+        'supplier_name': _supplierDisplay ?? '',
+        'buyer_name':    buyerName ?? '',
+        'currency_code': _poCurrencyCode ?? '',
+        'po_type':       _poType,
+      },
+      'lines': _lines.where((l) => l.productId != null).map((l) {
+        final desc = l.productDisplay.contains('] ') ? l.productDisplay.split('] ').last : l.productDisplay;
+        final uomLabel = _uoms.where((u) => u['id'] == l.uomId).map((u) => u['description'] as String).firstOrNull;
+        return {
+          'product_name': desc,
+          'uom_label':    uomLabel ?? '',
+          'base_qty':     l.baseQty,
+          'rate':         l.rate,
+          'final_amount': l.finalAmount,
+        };
+      }).toList(),
+      'charges': _charges.map((c) => {'charge_name': c.chargeName, 'amount': c.amount}).toList(),
+      'paymentTerms': _paymentTerms.where((t) => t.termId != null).map((t) => {
+        'term_name': t.termName, 'description': t.descCtrl.text,
+      }).toList(),
+      'totals': {'grand_total': _grandTotal},
+    };
+  }
+
+  Future<void> _printPO() async {
+    if (_orderNo == null) return;
+    setState(() => _printing = true);
+    try {
+      final company  = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
+      final template = await ref.read(printTemplateProvider('PURCHASE_ORDER').future);
+      final document = _buildPrintDocument(company);
+      await PrintEngine.printDocument(template: template, document: document, filename: '$_orderNo.pdf');
+    } catch (e) {
+      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } finally {
+      if (mounted) setState(() => _printing = false);
+    }
+  }
+
   // Immediate client-side feedback so a user can't even reach the confirm
   // dialog with an incomplete line — fn_approve_purchase_order (migration
   // 040) enforces the same rule authoritatively on the server.
@@ -850,10 +906,11 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
           child: isMobile
               ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   _buildTitleBlock(locked),
-                  if (_canCopy || canSave || showApprove) ...[
+                  if (_canCopy || _orderNo != null || canSave || showApprove) ...[
                     const SizedBox(height: 10),
                     Row(children: [
                       if (_canCopy) _buildCopyButton(),
+                      if (_orderNo != null) _buildPrintButton(),
                       if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
                     ]),
                   ],
@@ -861,6 +918,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
               : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(child: _buildTitleBlock(locked)),
                   if (_canCopy) _buildCopyButton(),
+                  if (_orderNo != null) _buildPrintButton(),
                   if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
                 ]),
         ),
@@ -1659,6 +1717,17 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
       icon: const Icon(Icons.copy_outlined),
       color: AppColors.primary,
       onPressed: _applyCopy,
+    ),
+  );
+
+  Widget _buildPrintButton() => Tooltip(
+    message: _printing ? 'Preparing PDF…' : 'Print / Save as PDF',
+    child: IconButton(
+      icon: _printing
+          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.print_outlined),
+      color: AppColors.primary,
+      onPressed: _printing ? null : _printPO,
     ),
   );
 
