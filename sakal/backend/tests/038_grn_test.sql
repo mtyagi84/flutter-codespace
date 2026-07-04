@@ -165,7 +165,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ── Plan ──────────────────────────────────────────────────────────────────────
-SELECT plan(7);
+SELECT plan(10);
 
 SELECT ok(
   (SELECT status FROM rih_grn_headers
@@ -204,7 +204,35 @@ SELECT ok(
   (SELECT is_posted FROM rih_finance_headers
    WHERE client_id = '00000000-0000-0000-0038-000000000001'
      AND trans_no = (SELECT posted_voucher_no FROM rih_grn_headers WHERE grn_no = current_setting('pgtap.v_grn_no_038'))) = true,
-  'ok 6 — the auto-generated finance voucher posted successfully (balanced: Stock 1000 + Tax 160 = Accrual 1160)'
+  'ok 6 — the auto-generated finance voucher posted successfully (balanced: Stock Dr 1000 = Purchase Accrual Cr 1000, VAT deferred to the future Purchase Invoice)'
+);
+
+-- migration 050: VAT is deliberately NOT posted at GRN time (recoverable
+-- asset, not recognized until the real supplier tax invoice exists) — so
+-- this GRN (gross 1000, tax 160, final 1160) must produce exactly 2 finance
+-- lines, not 3, and the Purchase Accrual Cr must be the tax-EXCLUSIVE 1000.
+SELECT ok(
+  (SELECT count(*) FROM rid_finance_lines
+   WHERE client_id = '00000000-0000-0000-0038-000000000001'
+     AND trans_no = (SELECT posted_voucher_no FROM rih_grn_headers WHERE grn_no = current_setting('pgtap.v_grn_no_038'))
+     AND is_deleted = false) = 2,
+  'ok 7 — exactly 2 finance lines posted (Stock Dr + Accrual Cr) — no separate VAT line at GRN time'
+);
+
+SELECT ok(
+  (SELECT trans_amount FROM rid_finance_lines
+   WHERE client_id = '00000000-0000-0000-0038-000000000001'
+     AND trans_no = (SELECT posted_voucher_no FROM rih_grn_headers WHERE grn_no = current_setting('pgtap.v_grn_no_038'))
+     AND source_line_type = 'ACCRUAL' AND source_line_no = 1) = 1000,
+  'ok 8 — Purchase Accrual Cr is the tax-exclusive 1000 (not 1160), tagged source_line_type=ACCRUAL/source_line_no=1'
+);
+
+SELECT ok(
+  (SELECT trans_amount FROM rid_finance_lines
+   WHERE client_id = '00000000-0000-0000-0038-000000000001'
+     AND trans_no = (SELECT posted_voucher_no FROM rih_grn_headers WHERE grn_no = current_setting('pgtap.v_grn_no_038'))
+     AND source_line_type = 'STOCK' AND source_line_no = 1) = 1000,
+  'ok 9 — Stock Dr is tagged source_line_type=STOCK/source_line_no=1, traceable back to this GRN line'
 );
 
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -247,7 +275,7 @@ SELECT ok(
     SELECT 1 FROM v_grn_po_links
     WHERE client_id = '00000000-0000-0000-0038-000000000001' AND grn_no = current_setting('pgtap.v_direct_grn_no_038')
   ),
-  'ok 7 — Direct GRN saves with receipt_mode=DIRECT and shows zero rows in v_grn_po_links (no PO reference on its line)'
+  'ok 10 — Direct GRN saves with receipt_mode=DIRECT and shows zero rows in v_grn_po_links (no PO reference on its line)'
 );
 
 SELECT * FROM finish();
