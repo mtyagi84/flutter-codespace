@@ -246,12 +246,12 @@ class _PeriodCloseScreenState extends ConsumerState<PeriodCloseScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(children: [
-                Expanded(
+                const Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Period Close',
+                    Text('Period Close',
                         style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                    const SizedBox(height: 4),
-                    const Text(
+                    SizedBox(height: 4),
+                    Text(
                         'Lock a date range once it has been filed/reported — no transaction can post '
                         'against a locked period, company-wide, regardless of when it is entered.',
                         style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
