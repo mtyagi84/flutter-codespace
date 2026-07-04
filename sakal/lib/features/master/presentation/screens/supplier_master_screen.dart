@@ -240,6 +240,11 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
           data: _buildPayload(session, name),
         );
       }
+      // accountsProvider (shared account picker cache) is fetched once per
+      // app session — invalidate so a newly created supplier shows up
+      // elsewhere (Purchase, GRN, Finance Voucher, ...) without a
+      // logout/login.
+      ref.invalidate(accountsProvider);
       await _load();
       if (mounted) setState(() { _isAdd = false; _selected = null; });
     } on DioException catch (e) {
@@ -306,6 +311,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
       queryParameters: {'id': 'eq.$id'},
       data: {'is_deleted': true, 'updated_by': session.userId},
     );
+    ref.invalidate(accountsProvider);
     setState(() { _selected = null; _isAdd = false; });
     await _load();
   }

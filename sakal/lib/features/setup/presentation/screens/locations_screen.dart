@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
@@ -97,6 +98,7 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
         data: {'is_active': newVal, 'updated_at': DateTime.now().toUtc().toIso8601String()},
         options: Options(headers: {'Prefer': 'return=minimal'}),
       );
+      ref.invalidate(locationsProvider);
       _load();
     } on DioException {
       _showError('Could not update status.');
@@ -111,6 +113,7 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
         data: {'is_deleted': true, 'updated_at': DateTime.now().toUtc().toIso8601String()},
         options: Options(headers: {'Prefer': 'return=minimal'}),
       );
+      ref.invalidate(locationsProvider);
       _load();
     } on DioException {
       _showError('Could not delete location.');
@@ -594,6 +597,10 @@ class _LocationDialogState extends ConsumerState<_LocationDialog> {
           options: Options(headers: {'Prefer': 'return=minimal'}),
         );
       }
+      // locationsProvider (shared picker cache) is fetched once per app
+      // session — invalidate so a new/edited location shows up elsewhere
+      // (GRN, PO, User Location Access, ...) without a logout/login.
+      ref.invalidate(locationsProvider);
       if (mounted) Navigator.of(context, rootNavigator: true).pop();
       widget.onSaved();
     } on DioException catch (e) {

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 
@@ -97,6 +98,10 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
         },
         options: Options(headers: {'Prefer': 'return=minimal'}),
       );
+      // currenciesProvider (shared picker cache) is fetched once per app
+      // session — invalidate so activating/deactivating a currency here is
+      // reflected elsewhere (GRN, PO, Finance Voucher, ...) immediately.
+      ref.invalidate(currenciesProvider);
     } on DioException {
       // Revert on failure
       final idx = _allRows.indexWhere((r) => r['id'] == id);

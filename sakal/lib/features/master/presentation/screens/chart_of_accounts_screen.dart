@@ -355,6 +355,11 @@ class _ChartOfAccountsScreenState
           data: payload,
         );
       }
+      // The shared account picker cache (accountsProvider) is only fetched
+      // once per app session — invalidate it so every other screen using it
+      // (GRN, PO, Finance Voucher, Additional Charges, ...) sees this
+      // ledger without needing to log out and back in.
+      ref.invalidate(accountsProvider);
       await _load();
       if (mounted) setState(() { _panelMode = 'none'; });
     } on DioException catch (e) {
@@ -392,6 +397,7 @@ class _ChartOfAccountsScreenState
       queryParameters: {'id': 'eq.$id'},
       data: {'is_deleted': true, 'updated_by': session.userId},
     );
+    ref.invalidate(accountsProvider);
     setState(() { _panelMode = 'none'; _editNode = null; });
     await _load();
   }

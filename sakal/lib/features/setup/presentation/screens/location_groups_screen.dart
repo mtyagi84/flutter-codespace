@@ -175,6 +175,7 @@ class _LocationGroupsScreenState extends ConsumerState<LocationGroupsScreen>
         }
       }
 
+      ref.invalidate(accountsProvider);
       if (mounted) Navigator.of(context, rootNavigator: true).pop();
       _load();
     } on DioException catch (e) {
