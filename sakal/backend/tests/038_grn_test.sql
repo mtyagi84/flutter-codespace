@@ -244,10 +244,10 @@ SELECT ok(
   (SELECT receipt_mode FROM rih_grn_headers
    WHERE client_id = '00000000-0000-0000-0038-000000000001' AND grn_no = current_setting('pgtap.v_direct_grn_no_038')) = 'DIRECT'
   AND NOT EXISTS (
-    SELECT 1 FROM rid_grn_po_links
+    SELECT 1 FROM v_grn_po_links
     WHERE client_id = '00000000-0000-0000-0038-000000000001' AND grn_no = current_setting('pgtap.v_direct_grn_no_038')
   ),
-  'ok 7 — Direct GRN saves with receipt_mode=DIRECT and derives zero rid_grn_po_links rows (no PO reference on its line)'
+  'ok 7 — Direct GRN saves with receipt_mode=DIRECT and shows zero rows in v_grn_po_links (no PO reference on its line)'
 );
 
 SELECT * FROM finish();

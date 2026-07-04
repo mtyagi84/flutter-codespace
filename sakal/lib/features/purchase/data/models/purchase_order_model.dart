@@ -19,7 +19,6 @@ class PurchaseOrderModel {
   final String? rfqDate;
   final String? quotationNo;
   final String? quotationDate;
-  final String? paymentTerms;
   final String  poCurrencyId;
   final String? poCurrencyCode;
   final double  rateToBase;
@@ -60,7 +59,6 @@ class PurchaseOrderModel {
     this.rfqDate,
     this.quotationNo,
     this.quotationDate,
-    this.paymentTerms,
     required this.poCurrencyId,
     this.poCurrencyCode,
     this.rateToBase = 1,
@@ -107,7 +105,6 @@ class PurchaseOrderModel {
       rfqDate:         j['rfq_date'] as String?,
       quotationNo:     j['quotation_no'] as String?,
       quotationDate:   j['quotation_date'] as String?,
-      paymentTerms:    j['payment_terms'] as String?,
       poCurrencyId:    j['po_currency_id'] as String,
       poCurrencyCode:  currency?['currency_id'] as String?,
       rateToBase:      (j['rate_to_base'] as num? ?? 1).toDouble(),

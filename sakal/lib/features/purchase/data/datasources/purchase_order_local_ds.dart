@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 import '../../../../core/database/app_database.dart';
 import '../models/po_charge_line_model.dart';
+import '../models/po_payment_term_model.dart';
 import '../models/purchase_order_line_model.dart';
 import '../models/purchase_order_model.dart';
 
@@ -88,6 +89,23 @@ class PurchaseOrderLocalDs {
     return rows.map(_chargeFromCache).toList();
   }
 
+  Future<List<PoPaymentTermModel>> getPaymentTerms({
+    required String clientId,
+    required String companyId,
+    required String orderNo,
+    required String orderDate,
+  }) async {
+    final rows = await (_db.select(_db.poPaymentTermsCache)
+          ..where((t) => t.clientId.equals(clientId))
+          ..where((t) => t.companyId.equals(companyId))
+          ..where((t) => t.orderNo.equals(orderNo))
+          ..where((t) => t.orderDate.equals(orderDate))
+          ..where((t) => t.isDeleted.equals(false))
+          ..orderBy([(t) => OrderingTerm.asc(t.serialNo)]))
+        .get();
+    return rows.map(_paymentTermFromCache).toList();
+  }
+
   // ── Write — from model objects (after remote fetch) ───────────────────────
 
   Future<void> cacheHeader(PurchaseOrderModel h) =>
@@ -111,7 +129,6 @@ class PurchaseOrderLocalDs {
               rfqDate:         Value(h.rfqDate ?? ''),
               quotationNo:     Value(h.quotationNo ?? ''),
               quotationDate:   Value(h.quotationDate ?? ''),
-              paymentTerms:    Value(h.paymentTerms ?? ''),
               poCurrencyId:    h.poCurrencyId,
               poCurrencyCode:  Value(h.poCurrencyCode ?? ''),
               rateToBase:      Value(h.rateToBase),
@@ -228,6 +245,36 @@ class PurchaseOrderLocalDs {
     }
   }
 
+  Future<void> cachePaymentTerms(
+    String clientId,
+    String companyId,
+    String orderNo,
+    String orderDate,
+    List<PoPaymentTermModel> terms,
+  ) async {
+    await (_db.delete(_db.poPaymentTermsCache)
+          ..where((t) => t.clientId.equals(clientId))
+          ..where((t) => t.companyId.equals(companyId))
+          ..where((t) => t.orderNo.equals(orderNo))
+          ..where((t) => t.orderDate.equals(orderDate)))
+        .go();
+    for (final t in terms) {
+      await _db.into(_db.poPaymentTermsCache).insert(
+            PoPaymentTermsCacheCompanion.insert(
+              clientId:    clientId,
+              companyId:   companyId,
+              orderNo:     orderNo,
+              orderDate:   orderDate,
+              serialNo:    t.serialNo,
+              termId:      t.termId,
+              termName:    Value(t.termName),
+              description: Value(t.description ?? ''),
+              cachedAt:    Value(DateTime.now()),
+            ),
+          );
+    }
+  }
+
   // ── Write — from raw Maps (offline save path before server round-trip) ────
 
   Future<void> cacheFromMaps(
@@ -235,6 +282,7 @@ class PurchaseOrderLocalDs {
     Map<String, dynamic> headerMap,
     List<Map<String, dynamic>> lineMaps,
     List<Map<String, dynamic>> chargeMaps,
+    List<Map<String, dynamic>> paymentTermMaps,
   ) async {
     final now = DateTime.now();
     final clientId   = headerMap['client_id']   as String? ?? '';
@@ -259,7 +307,6 @@ class PurchaseOrderLocalDs {
             rfqDate:         Value(headerMap['rfq_date']     as String? ?? ''),
             quotationNo:     Value(headerMap['quotation_no']   as String? ?? ''),
             quotationDate:   Value(headerMap['quotation_date'] as String? ?? ''),
-            paymentTerms:    Value(headerMap['payment_terms'] as String? ?? ''),
             poCurrencyId:    headerMap['po_currency_id'] as String? ?? '',
             rateToBase:      Value((headerMap['rate_to_base']  as num? ?? 1).toDouble()),
             rateToLocal:     Value((headerMap['rate_to_local'] as num? ?? 1).toDouble()),
@@ -351,6 +398,28 @@ class PurchaseOrderLocalDs {
             ),
           );
     }
+
+    await (_db.delete(_db.poPaymentTermsCache)
+          ..where((t) => t.clientId.equals(clientId))
+          ..where((t) => t.companyId.equals(companyId))
+          ..where((t) => t.orderNo.equals(effectiveOrderNo))
+          ..where((t) => t.orderDate.equals(orderDate)))
+        .go();
+    for (final t in paymentTermMaps) {
+      await _db.into(_db.poPaymentTermsCache).insert(
+            PoPaymentTermsCacheCompanion.insert(
+              clientId:    clientId,
+              companyId:   companyId,
+              orderNo:     effectiveOrderNo,
+              orderDate:   orderDate,
+              serialNo:    (t['serial_no'] as num? ?? 0).toInt(),
+              termId:      t['term_id'] as String? ?? '',
+              termName:    Value(t['term_name'] as String? ?? ''),
+              description: Value(t['description'] as String? ?? ''),
+              cachedAt:    Value(now),
+            ),
+          );
+    }
   }
 
   // ── Converters ────────────────────────────────────────────────────────────
@@ -375,7 +444,6 @@ class PurchaseOrderLocalDs {
         rfqDate:         r.rfqDate,
         quotationNo:     r.quotationNo,
         quotationDate:   r.quotationDate,
-        paymentTerms:    r.paymentTerms,
         poCurrencyId:    r.poCurrencyId,
         poCurrencyCode:  r.poCurrencyCode,
         rateToBase:      r.rateToBase,
@@ -444,5 +512,13 @@ class PurchaseOrderLocalDs {
         amount:           r.amount,
         taxAmount:        r.taxAmount,
         allocationFactor: r.allocationFactor,
+      );
+
+  PoPaymentTermModel _paymentTermFromCache(PoPaymentTermCacheEntry r) => PoPaymentTermModel(
+        id:          '${r.orderNo}_${r.orderDate}_${r.serialNo}',
+        serialNo:    r.serialNo,
+        termId:      r.termId,
+        termName:    r.termName,
+        description: r.description,
       );
 }

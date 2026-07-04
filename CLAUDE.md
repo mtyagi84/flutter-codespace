@@ -295,6 +295,11 @@ class _MyScreenState extends ConsumerState<MyScreen>
 Mobile = card layout, Desktop = table. Use `SakalAdaptiveList` widget.
 Template: `lib/features/finance/presentation/screens/finance_voucher_list_screen.dart`
 
+### Save/Approve buttons — top-right of the header row (all entry screens)
+Every entry screen places its primary action buttons (`Save Draft`, `Approve`, `Post`, etc.) in the **top header row, right-aligned next to the title** — never at the bottom of the scrollable form. Desktop: `Row(children: [Expanded(child: titleBlock), if (canSave || canApprove) actionButtons])`. Mobile: stack the buttons in a `Column` below the title block instead of inline, to avoid overflow on narrow screens. Extract the title+status block into its own small widget (e.g. `_buildTitleBlock`) so it can be reused in both the mobile and desktop branches.
+Template: `lib/features/purchase/presentation/screens/purchase_order_entry_screen.dart`.
+This supersedes the earlier bottom-of-form placement used by Finance Voucher Entry — retrofit older screens opportunistically, don't leave the two conventions coexisting long-term.
+
 ### PostgREST save (INSERT or UPDATE)
 - No `Prefer: return=representation` header (causes 401 with RLS)
 - PATCH uses `?id=eq.<id>` filter

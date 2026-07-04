@@ -24,13 +24,14 @@ part 'app_database.g.dart';
   PurchaseOrdersCache,
   PurchaseOrderLinesCache,
   PoChargeLinesCache,
+  PoPaymentTermsCache,
   GenericLookupCache,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'sakal_local'));
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -52,6 +53,12 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(poChargeLinesCache);
           }
           if (from < 8) await m.createTable(genericLookupCache);
+          // v9 drops PurchaseOrdersCache.paymentTerms (superseded by
+          // PoPaymentTermsCache, mirroring PoChargeLinesCache) — the column
+          // is simply left as an unused orphan in the underlying SQLite file
+          // on upgrade rather than migrated, since this is a device-local
+          // cache rebuilt from the server, not a data store of record.
+          if (from < 9) await m.createTable(poPaymentTermsCache);
         },
       );
 }

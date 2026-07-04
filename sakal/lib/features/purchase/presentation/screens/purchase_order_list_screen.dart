@@ -91,10 +91,16 @@ class _PurchaseOrderListScreenState extends ConsumerState<PurchaseOrderListScree
         (o.supplierName ?? '').toLowerCase().contains(_searchText)).toList();
   }
 
-  void _openNew() => context.push(RouteNames.purchaseOrderEntry);
+  Future<void> _openNew() async {
+    await context.push(RouteNames.purchaseOrderEntry);
+    if (mounted) _load();
+  }
 
-  void _openEdit(PurchaseOrderModel o) => context.push(
-      RouteNames.purchaseOrderEntry, extra: {'orderNo': o.orderNo, 'orderDate': o.orderDate});
+  Future<void> _openEdit(PurchaseOrderModel o) async {
+    await context.push(
+        RouteNames.purchaseOrderEntry, extra: {'orderNo': o.orderNo, 'orderDate': o.orderDate});
+    if (mounted) _load();
+  }
 
   String _displayDate(String iso) {
     final d = DateTime.tryParse(iso);

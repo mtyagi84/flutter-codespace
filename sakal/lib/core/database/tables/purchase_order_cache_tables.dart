@@ -24,7 +24,6 @@ class PurchaseOrdersCache extends Table {
   TextColumn get rfqDate         => text().withDefault(const Constant(''))();
   TextColumn get quotationNo     => text().withDefault(const Constant(''))();
   TextColumn get quotationDate   => text().withDefault(const Constant(''))();
-  TextColumn get paymentTerms    => text().withDefault(const Constant(''))();
   TextColumn get poCurrencyId    => text()();
   TextColumn get poCurrencyCode  => text().withDefault(const Constant(''))();
   RealColumn get rateToBase      => real().withDefault(const Constant(1.0))();
@@ -113,6 +112,25 @@ class PoChargeLinesCache extends Table {
   RealColumn get allocationFactor  => real().nullable()();
   BoolColumn get isDeleted         => boolean().withDefault(const Constant(false))();
   DateTimeColumn get cachedAt      => dateTime().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {clientId, companyId, orderNo, orderDate, serialNo};
+}
+
+/// Multi-select Payment Terms per PO — same shape/pattern as PoChargeLinesCache.
+/// termName is a frozen snapshot of the common-master label at save time.
+@DataClassName('PoPaymentTermCacheEntry')
+class PoPaymentTermsCache extends Table {
+  TextColumn get clientId    => text()();
+  TextColumn get companyId   => text()();
+  TextColumn get orderNo     => text()();
+  TextColumn get orderDate   => text()();
+  IntColumn  get serialNo    => integer()();
+  TextColumn get termId      => text()();
+  TextColumn get termName    => text().withDefault(const Constant(''))();
+  TextColumn get description => text().withDefault(const Constant(''))();
+  BoolColumn get isDeleted   => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get cachedAt => dateTime().nullable()();
 
   @override
   Set<Column> get primaryKey => {clientId, companyId, orderNo, orderDate, serialNo};

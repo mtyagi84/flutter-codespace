@@ -13,9 +13,15 @@
 --   DIRECT     — single supplier, no PO reference at all.
 -- One GRN line per item/PO-line reference, even if received across
 -- multiple batches — batch/expiry split lives in a child table
--- (rid_grn_line_batches), not as separate GRN lines. rid_grn_po_links is a
--- lightweight, DERIVED header-level junction for display/filtering only —
--- the actual PO qty_received rollup is driven by rid_grn_lines.source_po_*.
+-- (rid_transaction_line_batches), not as separate GRN lines. That table
+-- (and its serial-tracking sibling rid_transaction_line_serials) is
+-- document-type-generic — keyed by source_doc_type/no/date, not a GRN-only
+-- FK — so Transfer, Sales Delivery and Adjustment reuse the same two
+-- tables instead of each inventing their own. There is no header-level
+-- PO-links junction table: "which GRNs touched PO X" is answered directly
+-- off rid_grn_lines.source_po_* (already indexed) via v_grn_po_links, a
+-- plain view — a maintained junction table would only add write overhead
+-- (delete+reinsert on every edit) for a query an index already answers.
 --
 -- GL posting (fn_approve_grn), all resolved via fn_resolve_account_link /
 -- the tax master's own GL links — nothing new invented:
@@ -38,8 +44,10 @@
 -- this migration was built from. One fn_post_voucher call per GRN, not per line.
 --
 -- Objects:
---   rih_grn_headers, rid_grn_lines, rid_grn_line_batches,
---   rid_grn_line_serials, rid_grn_po_links, rid_grn_charge_lines
+--   rih_grn_headers, rid_grn_lines, rid_grn_charge_lines
+--   rid_transaction_line_batches, rid_transaction_line_serials → shared with
+--     future Transfer/Sales Delivery/Adjustment, not GRN-specific
+--   v_grn_po_links        → plain view, not a maintained table
 --   fn_save_grn(...)     → draft-only, mirrors fn_save_purchase_order
 --   fn_approve_grn(...)  → the orchestration described above
 -- ============================================================
@@ -104,8 +112,8 @@ GRANT SELECT, INSERT, UPDATE ON rih_grn_headers TO authenticated;
 -- ── rid_grn_lines ─────────────────────────────────────────────────────────────
 -- source_po_* triple is nullable — NULL for Direct GRN lines, set for
 -- Against-PO lines. This is what fn_approve_grn uses to increment the PO
--- line's qty_received; rid_grn_po_links (below) is a separate, derived,
--- display-only junction, not what drives the rollup.
+-- line's qty_received; v_grn_po_links (a plain view, defined after this
+-- table) reads the same columns for display/filtering, nothing separate.
 CREATE TABLE IF NOT EXISTS rid_grn_lines (
     id                    UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
     client_id             UUID          NOT NULL,
@@ -162,102 +170,88 @@ CREATE POLICY "auth_rw_grn_lines" ON rid_grn_lines
 REVOKE ALL ON rid_grn_lines FROM anon;
 GRANT SELECT, INSERT, UPDATE ON rid_grn_lines TO authenticated;
 
--- ── rid_grn_line_batches ──────────────────────────────────────────────────────
--- Child rows under one rid_grn_lines row for BATCH / BATCH_WITH_EXPIRY items.
--- SUM(base_qty) across a line's batch children must equal that line's own
--- base_qty — validated in fn_save_grn.
-CREATE TABLE IF NOT EXISTS rid_grn_line_batches (
-    id           UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-    client_id    UUID          NOT NULL,
-    company_id   UUID          NOT NULL,
-    grn_no       TEXT          NOT NULL,
-    grn_date     DATE          NOT NULL,
-    line_serial  INTEGER       NOT NULL,
-    batch_no     TEXT          NOT NULL,
-    expiry_date  DATE,
-    qty_pack     NUMERIC(18,4) NOT NULL DEFAULT 0,
-    qty_loose    NUMERIC(18,4) NOT NULL DEFAULT 0,
-    base_qty     NUMERIC(18,4) NOT NULL DEFAULT 0,
-    created_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
-    created_by   UUID          REFERENCES rim_users(id),
-    FOREIGN KEY (client_id, company_id, grn_no, grn_date, line_serial)
-        REFERENCES rid_grn_lines (client_id, company_id, grn_no, grn_date, serial_no)
+-- ── rid_transaction_line_batches ──────────────────────────────────────────────
+-- Document-type-generic draft-entry staging for BATCH / BATCH_WITH_EXPIRY
+-- items — GRN today, Transfer/Sales Delivery/Adjustment later reuse the same
+-- table instead of each inventing rid_<module>_line_batches. Keyed by
+-- source_doc_type/no/date + line_serial rather than an FK to any one
+-- module's line table (different doc types have different line tables) —
+-- each module's own fn_save_* is responsible for delete+reinsert on edit,
+-- exactly like rid_grn_lines.source_po_* is already a soft/logical
+-- cross-module reference with no FK. SUM(base_qty) across a line's batch
+-- children must equal that line's own base_qty — validated in fn_save_grn.
+CREATE TABLE IF NOT EXISTS rid_transaction_line_batches (
+    id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id       UUID          NOT NULL,
+    company_id      UUID          NOT NULL,
+    source_doc_type TEXT          NOT NULL,   -- 'GRN', later 'TRANSFER_OUT', 'SALES_INVOICE', ...
+    source_doc_no   TEXT          NOT NULL,
+    source_doc_date DATE          NOT NULL,
+    line_serial     INTEGER       NOT NULL,
+    batch_no        TEXT          NOT NULL,
+    expiry_date     DATE,
+    qty_pack        NUMERIC(18,4) NOT NULL DEFAULT 0,
+    qty_loose       NUMERIC(18,4) NOT NULL DEFAULT 0,
+    base_qty        NUMERIC(18,4) NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    created_by      UUID          REFERENCES rim_users(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_grn_line_batches_line
-    ON rid_grn_line_batches (client_id, company_id, grn_no, grn_date, line_serial);
+CREATE INDEX IF NOT EXISTS idx_txn_line_batches_doc
+    ON rid_transaction_line_batches (client_id, company_id, source_doc_type, source_doc_no, source_doc_date, line_serial);
 
-ALTER TABLE rid_grn_line_batches ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "auth_rw_grn_line_batches" ON rid_grn_line_batches
+ALTER TABLE rid_transaction_line_batches ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "auth_rw_transaction_line_batches" ON rid_transaction_line_batches
     FOR ALL TO authenticated
     USING     (client_id  = (current_setting('request.jwt.claims', true)::json->>'client_id')::uuid
            AND company_id = (current_setting('request.jwt.claims', true)::json->>'company_id')::uuid)
     WITH CHECK(client_id  = (current_setting('request.jwt.claims', true)::json->>'client_id')::uuid
            AND company_id = (current_setting('request.jwt.claims', true)::json->>'company_id')::uuid);
 
-REVOKE ALL ON rid_grn_line_batches FROM anon;
-GRANT SELECT, INSERT, UPDATE ON rid_grn_line_batches TO authenticated;
+REVOKE ALL ON rid_transaction_line_batches FROM anon;
+GRANT SELECT, INSERT, UPDATE ON rid_transaction_line_batches TO authenticated;
 
--- ── rid_grn_line_serials ──────────────────────────────────────────────────────
--- One row per unit for SERIAL-tracked items. Receipt-audit only — does not
--- drive individual stock postings (one fn_post_stock_movement call still
--- covers the whole line's base_qty); a live per-serial balance table is
--- deferred until Sales/Issue needs to pick specific serials.
-CREATE TABLE IF NOT EXISTS rid_grn_line_serials (
-    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    client_id    UUID        NOT NULL,
-    company_id   UUID        NOT NULL,
-    grn_no       TEXT        NOT NULL,
-    grn_date     DATE        NOT NULL,
-    line_serial  INTEGER     NOT NULL,
-    serial_no    TEXT        NOT NULL,
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-    created_by   UUID        REFERENCES rim_users(id),
-    FOREIGN KEY (client_id, company_id, grn_no, grn_date, line_serial)
-        REFERENCES rid_grn_lines (client_id, company_id, grn_no, grn_date, serial_no)
+-- ── rid_transaction_line_serials ──────────────────────────────────────────────
+-- Same generalization as rid_transaction_line_batches, for SERIAL-tracked
+-- items. This is draft-entry staging only (mutable, deleted+reinserted on
+-- edit) — the immutable posted record of each serial unit lives directly on
+-- ril_stock_ledger.serial_no, one ledger row per unit, once approved.
+CREATE TABLE IF NOT EXISTS rid_transaction_line_serials (
+    id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id       UUID        NOT NULL,
+    company_id      UUID        NOT NULL,
+    source_doc_type TEXT        NOT NULL,
+    source_doc_no   TEXT        NOT NULL,
+    source_doc_date DATE        NOT NULL,
+    line_serial     INTEGER     NOT NULL,
+    serial_no       TEXT        NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_by      UUID        REFERENCES rim_users(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_grn_line_serials_line
-    ON rid_grn_line_serials (client_id, company_id, grn_no, grn_date, line_serial);
+CREATE INDEX IF NOT EXISTS idx_txn_line_serials_doc
+    ON rid_transaction_line_serials (client_id, company_id, source_doc_type, source_doc_no, source_doc_date, line_serial);
 
-ALTER TABLE rid_grn_line_serials ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "auth_rw_grn_line_serials" ON rid_grn_line_serials
+ALTER TABLE rid_transaction_line_serials ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "auth_rw_transaction_line_serials" ON rid_transaction_line_serials
     FOR ALL TO authenticated
     USING     (client_id  = (current_setting('request.jwt.claims', true)::json->>'client_id')::uuid
            AND company_id = (current_setting('request.jwt.claims', true)::json->>'company_id')::uuid)
     WITH CHECK(client_id  = (current_setting('request.jwt.claims', true)::json->>'client_id')::uuid
            AND company_id = (current_setting('request.jwt.claims', true)::json->>'company_id')::uuid);
 
-REVOKE ALL ON rid_grn_line_serials FROM anon;
-GRANT SELECT, INSERT, UPDATE ON rid_grn_line_serials TO authenticated;
+REVOKE ALL ON rid_transaction_line_serials FROM anon;
+GRANT SELECT, INSERT, UPDATE ON rid_transaction_line_serials TO authenticated;
 
--- ── rid_grn_po_links ──────────────────────────────────────────────────────────
--- Derived, header-level, display/filter-only junction — populated at save
--- time from the distinct PO refs across rid_grn_lines. NOT what drives the
--- qty_received rollup (that's rid_grn_lines.source_po_* directly).
-CREATE TABLE IF NOT EXISTS rid_grn_po_links (
-    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    client_id            UUID NOT NULL,
-    company_id           UUID NOT NULL,
-    grn_no               TEXT NOT NULL,
-    grn_date             DATE NOT NULL,
-    source_po_order_no   TEXT NOT NULL,
-    source_po_order_date DATE NOT NULL,
-    UNIQUE (client_id, company_id, grn_no, grn_date, source_po_order_no, source_po_order_date),
-    FOREIGN KEY (client_id, company_id, grn_no, grn_date)
-        REFERENCES rih_grn_headers (client_id, company_id, grn_no, grn_date)
-);
-
-ALTER TABLE rid_grn_po_links ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "auth_rw_grn_po_links" ON rid_grn_po_links
-    FOR ALL TO authenticated
-    USING     (client_id  = (current_setting('request.jwt.claims', true)::json->>'client_id')::uuid
-           AND company_id = (current_setting('request.jwt.claims', true)::json->>'company_id')::uuid)
-    WITH CHECK(client_id  = (current_setting('request.jwt.claims', true)::json->>'client_id')::uuid
-           AND company_id = (current_setting('request.jwt.claims', true)::json->>'company_id')::uuid);
-
-REVOKE ALL ON rid_grn_po_links FROM anon;
-GRANT SELECT, INSERT ON rid_grn_po_links TO authenticated;
+-- ── v_grn_po_links ─────────────────────────────────────────────────────────────
+-- "Which GRNs touched PO X" answered as a plain view off rid_grn_lines
+-- (already indexed on source_po_*), not a maintained junction table —
+-- avoids a redundant delete+reinsert-on-every-edit table for a query an
+-- index already answers.
+CREATE OR REPLACE VIEW v_grn_po_links AS
+SELECT DISTINCT client_id, company_id, grn_no, grn_date, source_po_order_no, source_po_order_date
+FROM rid_grn_lines
+WHERE source_po_order_no IS NOT NULL AND is_deleted = false;
 
 -- ── rid_grn_charge_lines ──────────────────────────────────────────────────────
 -- Same shape as rid_po_charge_lines. source_po_order_no/date (nullable) keeps
@@ -309,9 +303,10 @@ GRANT SELECT, INSERT, UPDATE ON rid_grn_charge_lines TO authenticated;
 -- ── fn_save_grn ───────────────────────────────────────────────────────────────
 -- Draft-only, mirrors fn_save_purchase_order's delete-and-reinsert pattern
 -- exactly: NEW -> fn_next_trans_no (location-scoped, unlike PO's company-wide
--- numbering — a GRN is a location event). EDIT draft -> delete+reinsert
--- lines/batches/serials/charges, then re-derive rid_grn_po_links from the
--- distinct source_po_* pairs across the new lines.
+-- numbering — a GRN is a location event). EDIT draft -> lock header row FOR
+-- UPDATE before the status check (closes a TOCTOU race against a concurrent
+-- fn_approve_grn — the same fix belongs in fn_save_purchase_order, see
+-- migration 039), then delete+reinsert lines/batches/serials/charges.
 CREATE OR REPLACE FUNCTION fn_save_grn(
     p_header  JSONB,
     p_lines   JSONB,
@@ -330,6 +325,7 @@ DECLARE
     v_grn_no       TEXT;
     v_grn_date     DATE;
     v_old_grn_date DATE;
+    v_old_status   TEXT;
     v_is_new       BOOLEAN;
     v_line         JSONB;
     v_batch        JSONB;
@@ -348,36 +344,32 @@ BEGIN
     IF v_is_new THEN
         v_grn_no := fn_next_trans_no(v_client_id, v_company_id, v_location_id, 'GRN');
     ELSE
-        SELECT grn_date INTO v_old_grn_date
+        -- Lock the header row before checking status — a plain SELECT here
+        -- would leave a window where a concurrent fn_approve_grn commits
+        -- between this check and the deletes below.
+        SELECT grn_date, status INTO v_old_grn_date, v_old_status
         FROM rih_grn_headers
         WHERE client_id = v_client_id AND company_id = v_company_id
-          AND grn_no = v_grn_no AND is_deleted = false;
+          AND grn_no = v_grn_no AND is_deleted = false
+        FOR UPDATE;
 
-        IF EXISTS (
-            SELECT 1 FROM rih_grn_headers
-            WHERE client_id = v_client_id AND company_id = v_company_id
-              AND grn_no = v_grn_no AND status != 'DRAFT'
-        ) THEN
-            RAISE EXCEPTION 'GRN % is already APPROVED and cannot be edited.', v_grn_no;
+        IF v_old_status != 'DRAFT' THEN
+            RAISE EXCEPTION 'GRN % is % and cannot be edited.', v_grn_no, v_old_status;
         END IF;
 
-        DELETE FROM rid_grn_line_batches
+        DELETE FROM rid_transaction_line_batches
         WHERE client_id = v_client_id AND company_id = v_company_id
-          AND grn_no = v_grn_no AND grn_date = v_old_grn_date;
+          AND source_doc_type = 'GRN' AND source_doc_no = v_grn_no AND source_doc_date = v_old_grn_date;
 
-        DELETE FROM rid_grn_line_serials
+        DELETE FROM rid_transaction_line_serials
         WHERE client_id = v_client_id AND company_id = v_company_id
-          AND grn_no = v_grn_no AND grn_date = v_old_grn_date;
+          AND source_doc_type = 'GRN' AND source_doc_no = v_grn_no AND source_doc_date = v_old_grn_date;
 
         DELETE FROM rid_grn_lines
         WHERE client_id = v_client_id AND company_id = v_company_id
           AND grn_no = v_grn_no AND grn_date = v_old_grn_date;
 
         DELETE FROM rid_grn_charge_lines
-        WHERE client_id = v_client_id AND company_id = v_company_id
-          AND grn_no = v_grn_no AND grn_date = v_old_grn_date;
-
-        DELETE FROM rid_grn_po_links
         WHERE client_id = v_client_id AND company_id = v_company_id
           AND grn_no = v_grn_no AND grn_date = v_old_grn_date;
     END IF;
@@ -479,11 +471,11 @@ BEGIN
             SELECT * FROM jsonb_array_elements(coalesce(p_batches, '[]'::jsonb))
             WHERE (value->>'line_serial')::integer = (v_line->>'serial_no')::integer
         LOOP
-            INSERT INTO rid_grn_line_batches (
-                client_id, company_id, grn_no, grn_date, line_serial,
+            INSERT INTO rid_transaction_line_batches (
+                client_id, company_id, source_doc_type, source_doc_no, source_doc_date, line_serial,
                 batch_no, expiry_date, qty_pack, qty_loose, base_qty, created_by
             ) VALUES (
-                v_client_id, v_company_id, v_grn_no, v_grn_date, (v_line->>'serial_no')::integer,
+                v_client_id, v_company_id, 'GRN', v_grn_no, v_grn_date, (v_line->>'serial_no')::integer,
                 v_batch->>'batch_no', (nullif(v_batch->>'expiry_date', ''))::date,
                 coalesce((v_batch->>'qty_pack')::numeric, 0),
                 coalesce((v_batch->>'qty_loose')::numeric, 0),
@@ -503,10 +495,10 @@ BEGIN
             SELECT * FROM jsonb_array_elements(coalesce(p_serials, '[]'::jsonb))
             WHERE (value->>'line_serial')::integer = (v_line->>'serial_no')::integer
         LOOP
-            INSERT INTO rid_grn_line_serials (
-                client_id, company_id, grn_no, grn_date, line_serial, serial_no, created_by
+            INSERT INTO rid_transaction_line_serials (
+                client_id, company_id, source_doc_type, source_doc_no, source_doc_date, line_serial, serial_no, created_by
             ) VALUES (
-                v_client_id, v_company_id, v_grn_no, v_grn_date, (v_line->>'serial_no')::integer,
+                v_client_id, v_company_id, 'GRN', v_grn_no, v_grn_date, (v_line->>'serial_no')::integer,
                 v_serial->>'serial_no', p_user_id
             );
         END LOOP;
@@ -538,16 +530,6 @@ BEGIN
         );
     END LOOP;
 
-    -- Derive rid_grn_po_links from the distinct PO references across the
-    -- lines just inserted — display/filter junction only.
-    INSERT INTO rid_grn_po_links (client_id, company_id, grn_no, grn_date, source_po_order_no, source_po_order_date)
-    SELECT DISTINCT v_client_id, v_company_id, v_grn_no, v_grn_date, source_po_order_no, source_po_order_date
-    FROM rid_grn_lines
-    WHERE client_id = v_client_id AND company_id = v_company_id
-      AND grn_no = v_grn_no AND grn_date = v_grn_date
-      AND source_po_order_no IS NOT NULL
-    ON CONFLICT DO NOTHING;
-
     RETURN v_grn_no;
 END;
 $$;
@@ -566,7 +548,8 @@ AS $$
 DECLARE
     v_header             rih_grn_headers%ROWTYPE;
     v_line                rid_grn_lines%ROWTYPE;
-    v_batch                rid_grn_line_batches%ROWTYPE;
+    v_batch                rid_transaction_line_batches%ROWTYPE;
+    v_serial_row            rid_transaction_line_serials%ROWTYPE;
     v_charge                 rid_grn_charge_lines%ROWTYPE;
     v_po_line                 RECORD;
     v_po_key                  RECORD;
@@ -584,6 +567,7 @@ DECLARE
     v_taxable_amount                                 NUMERIC;
     v_rate_sum                                         NUMERIC;
     v_has_batches                                        BOOLEAN;
+    v_has_serials                                          BOOLEAN;
     v_voucher_lines                                        JSONB;
     v_voucher_result                                        RECORD;
     v_po_total_ordered                                        NUMERIC;
@@ -659,22 +643,48 @@ BEGIN
         v_unit_cost_specific := v_line.rate * v_rate_to_specific;
 
         SELECT EXISTS (
-            SELECT 1 FROM rid_grn_line_batches
+            SELECT 1 FROM rid_transaction_line_batches
             WHERE client_id = p_client_id AND company_id = p_company_id
-              AND grn_no = p_grn_no AND grn_date = p_grn_date AND line_serial = v_line.serial_no
+              AND source_doc_type = 'GRN' AND source_doc_no = p_grn_no AND source_doc_date = p_grn_date
+              AND line_serial = v_line.serial_no
         ) INTO v_has_batches;
+
+        SELECT EXISTS (
+            SELECT 1 FROM rid_transaction_line_serials
+            WHERE client_id = p_client_id AND company_id = p_company_id
+              AND source_doc_type = 'GRN' AND source_doc_no = p_grn_no AND source_doc_date = p_grn_date
+              AND line_serial = v_line.serial_no
+        ) INTO v_has_serials;
 
         IF v_has_batches THEN
             FOR v_batch IN
-                SELECT * FROM rid_grn_line_batches
+                SELECT * FROM rid_transaction_line_batches
                 WHERE client_id = p_client_id AND company_id = p_company_id
-                  AND grn_no = p_grn_no AND grn_date = p_grn_date AND line_serial = v_line.serial_no
+                  AND source_doc_type = 'GRN' AND source_doc_no = p_grn_no AND source_doc_date = p_grn_date
+                  AND line_serial = v_line.serial_no
             LOOP
                 PERFORM fn_post_stock_movement(
                     p_client_id, p_company_id, v_header.location_id, v_line.product_id,
                     p_grn_date, 'GRN', v_batch.base_qty,
                     v_unit_cost_base, v_unit_cost_specific,
-                    v_batch.batch_no, v_batch.expiry_date,
+                    v_batch.batch_no, v_batch.expiry_date, NULL,
+                    'GRN', p_grn_no, p_grn_date, p_approved_by
+                );
+            END LOOP;
+        ELSIF v_has_serials THEN
+            -- One ledger row per unit — unifies serial tracking with the
+            -- batch mechanism above instead of a separate audit-only table.
+            FOR v_serial_row IN
+                SELECT * FROM rid_transaction_line_serials
+                WHERE client_id = p_client_id AND company_id = p_company_id
+                  AND source_doc_type = 'GRN' AND source_doc_no = p_grn_no AND source_doc_date = p_grn_date
+                  AND line_serial = v_line.serial_no
+            LOOP
+                PERFORM fn_post_stock_movement(
+                    p_client_id, p_company_id, v_header.location_id, v_line.product_id,
+                    p_grn_date, 'GRN', 1,
+                    v_unit_cost_base, v_unit_cost_specific,
+                    NULL, NULL, v_serial_row.serial_no,
                     'GRN', p_grn_no, p_grn_date, p_approved_by
                 );
             END LOOP;
@@ -683,7 +693,7 @@ BEGIN
                 p_client_id, p_company_id, v_header.location_id, v_line.product_id,
                 p_grn_date, 'GRN', v_line.base_qty,
                 v_unit_cost_base, v_unit_cost_specific,
-                NULL, NULL,
+                NULL, NULL, NULL,
                 'GRN', p_grn_no, p_grn_date, p_approved_by
             );
         END IF;

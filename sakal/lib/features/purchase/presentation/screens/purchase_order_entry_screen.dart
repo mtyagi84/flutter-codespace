@@ -31,8 +31,15 @@ MenuFeature? _findFeature(List<MenuModule> modules, String screenPath) {
 class _POLineRow {
   String? productId;
   String  productDisplay = '';
+  final TextEditingController barcodeCtrl  = TextEditingController();
+  bool    descExpanded  = false;
   final TextEditingController descCtrl      = TextEditingController();
   String? uomId;
+  // True once a barcode scan/search has matched this line to a specific
+  // rim_product_uom row — the barcode encodes product+UOM+pack size
+  // together, so the conversion factor it implies must not then be
+  // hand-edited away from what the barcode actually means.
+  bool    convFactorLocked = false;
   final TextEditingController convFactorCtrl = TextEditingController(text: '1');
   final TextEditingController qtyPackCtrl    = TextEditingController(text: '0');
   final TextEditingController qtyLooseCtrl   = TextEditingController(text: '0');
@@ -62,9 +69,17 @@ class _POLineRow {
   double get discountPct    => double.tryParse(discountPctCtrl.text) ?? 0;
 
   void dispose() {
-    descCtrl.dispose(); convFactorCtrl.dispose(); qtyPackCtrl.dispose();
+    barcodeCtrl.dispose(); descCtrl.dispose(); convFactorCtrl.dispose(); qtyPackCtrl.dispose();
     qtyLooseCtrl.dispose(); rateCtrl.dispose(); discountPctCtrl.dispose();
   }
+}
+
+class _PaymentTermRow {
+  String? termId;
+  String  termName = '';
+  final TextEditingController descCtrl = TextEditingController();
+
+  void dispose() => descCtrl.dispose();
 }
 
 class _ChargeRow {
@@ -127,20 +142,22 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
   DateTime? _rfqDate;
   final _quotationNoCtrl  = TextEditingController();
   DateTime? _quotationDate;
-  final _paymentTermsCtrl = TextEditingController();
   String?  _poCurrencyId;
   String?  _poCurrencyCode;
-  double   _rateToBase  = 1;
-  double   _rateToLocal = 1;
+  final _rateToBaseCtrl  = TextEditingController(text: '1');
+  final _rateToLocalCtrl = TextEditingController(text: '1');
+  double   get _rateToBase  => double.tryParse(_rateToBaseCtrl.text) ?? 1;
+  double   get _rateToLocal => double.tryParse(_rateToLocalCtrl.text) ?? 1;
   String?  _buyerId;
   final _orderSubjectCtrl = TextEditingController();
   final _billToCtrl       = TextEditingController();
   final _shipToCtrl       = TextEditingController();
   final _remarksCtrl      = TextEditingController();
 
-  // ── Lines / Charges ──────────────────────────────────────────────────────
-  final List<_POLineRow>  _lines   = [];
-  final List<_ChargeRow>  _charges = [];
+  // ── Lines / Charges / Payment Terms ───────────────────────────────────────
+  final List<_POLineRow>       _lines        = [];
+  final List<_ChargeRow>       _charges      = [];
+  final List<_PaymentTermRow>  _paymentTerms = [];
 
   // ── Reference data ───────────────────────────────────────────────────────
   List<Map<String, dynamic>> _suppliers    = [];
@@ -150,6 +167,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
   List<Map<String, dynamic>> _additionalCharges = [];
   List<Map<String, dynamic>> _departments  = [];
   List<Map<String, dynamic>> _consumptionAreas = [];
+  List<Map<String, dynamic>> _paymentTermMasters = [];
   List<Map<String, dynamic>> _locations    = [];
   List<Map<String, dynamic>> _users        = [];
   Map<String, double> _taxGroupRatePct = {};
@@ -172,10 +190,11 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
   @override
   void dispose() {
     _supplierRefNoCtrl.dispose(); _indentNoCtrl.dispose(); _rfqNoCtrl.dispose();
-    _quotationNoCtrl.dispose(); _paymentTermsCtrl.dispose();
+    _quotationNoCtrl.dispose(); _rateToBaseCtrl.dispose(); _rateToLocalCtrl.dispose();
     _orderSubjectCtrl.dispose(); _billToCtrl.dispose(); _shipToCtrl.dispose(); _remarksCtrl.dispose();
     for (final l in _lines) { l.dispose(); }
     for (final c in _charges) { c.dispose(); }
+    for (final t in _paymentTerms) { t.dispose(); }
     super.dispose();
   }
 
@@ -195,6 +214,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         _ds.getAdditionalCharges(clientId: session.clientId, companyId: session.companyId),
         _ds.getCommonMastersByType(clientId: session.clientId, companyId: session.companyId, typeKey: MasterTypeKey.department),
         _ds.getCommonMastersByType(clientId: session.clientId, companyId: session.companyId, typeKey: MasterTypeKey.consumptionArea),
+        _ds.getCommonMastersByType(clientId: session.clientId, companyId: session.companyId, typeKey: MasterTypeKey.paymentTerms),
         ref.read(locationsProvider.future),
         _ds.getUsers(clientId: session.clientId, companyId: session.companyId),
         ref.read(baseCurrencyProvider.future),
@@ -209,10 +229,11 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
       _additionalCharges   = results[4] as List<Map<String, dynamic>>;
       _departments         = results[5] as List<Map<String, dynamic>>;
       _consumptionAreas    = results[6] as List<Map<String, dynamic>>;
-      _locations           = results[7] as List<Map<String, dynamic>>;
-      _users               = results[8] as List<Map<String, dynamic>>;
-      _baseCurrency        = results[9] as String;
-      _localCurrency       = results[10] as String;
+      _paymentTermMasters  = results[7] as List<Map<String, dynamic>>;
+      _locations           = results[8] as List<Map<String, dynamic>>;
+      _users               = results[9] as List<Map<String, dynamic>>;
+      _baseCurrency        = results[10] as String;
+      _localCurrency       = results[11] as String;
 
       await _loadTaxRates();
 
@@ -253,11 +274,15 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
           orderNo: orderNo, orderDate: header.orderDate);
       final charges = await _ds.getCharges(clientId: session.clientId, companyId: session.companyId,
           orderNo: orderNo, orderDate: header.orderDate);
+      final terms   = await _ds.getPaymentTerms(clientId: session.clientId, companyId: session.companyId,
+          orderNo: orderNo, orderDate: header.orderDate);
 
       for (final l in _lines) { l.dispose(); }
       for (final c in _charges) { c.dispose(); }
+      for (final t in _paymentTerms) { t.dispose(); }
       _lines.clear();
       _charges.clear();
+      _paymentTerms.clear();
 
       for (final l in lines) {
         final row = _POLineRow()
@@ -292,6 +317,14 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         ));
       }
 
+      for (final t in terms) {
+        final row = _PaymentTermRow()
+          ..termId   = t.termId
+          ..termName = t.termName;
+        row.descCtrl.text = t.description ?? '';
+        _paymentTerms.add(row);
+      }
+
       if (mounted) {
         setState(() {
           _orderNo          = header.orderNo;
@@ -309,11 +342,10 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
           _rfqDate          = header.rfqDate != null ? DateTime.tryParse(header.rfqDate!) : null;
           _quotationNoCtrl.text = header.quotationNo ?? '';
           _quotationDate    = header.quotationDate != null ? DateTime.tryParse(header.quotationDate!) : null;
-          _paymentTermsCtrl.text = header.paymentTerms ?? '';
           _poCurrencyId     = header.poCurrencyId;
           _poCurrencyCode   = header.poCurrencyCode;
-          _rateToBase       = header.rateToBase;
-          _rateToLocal      = header.rateToLocal;
+          _rateToBaseCtrl.text  = header.rateToBase.toString();
+          _rateToLocalCtrl.text = header.rateToLocal.toString();
           _buyerId          = header.buyerId;
           _orderSubjectCtrl.text = header.orderSubject ?? '';
           _billToCtrl.text  = header.billTo ?? '';
@@ -351,12 +383,36 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
 
   void _removeCharge(_ChargeRow row) => setState(() { row.dispose(); _charges.remove(row); });
 
-  Future<void> _onProductSelected(_POLineRow row, Map<String, dynamic> product) async {
+  void _addPaymentTerm() {
+    if (_paymentTermMasters.isEmpty) return;
+    final first = _paymentTermMasters.first;
+    setState(() => _paymentTerms.add(_PaymentTermRow()
+      ..termId   = first['id'] as String
+      ..termName = first['description'] as String));
+  }
+
+  void _removePaymentTerm(_PaymentTermRow row) => setState(() { row.dispose(); _paymentTerms.remove(row); });
+
+  bool _isDuplicateProduct(String productId, {required _POLineRow excluding}) =>
+      _lines.any((l) => l != excluding && l.productId == productId);
+
+  Future<void> _onProductSelected(_POLineRow row, Map<String, dynamic> product, {bool fromBarcode = false}) async {
+    final productId = product['id'] as String;
+    if (_isDuplicateProduct(productId, excluding: row)) {
+      _showSnack('This product is already on another line — edit that line\'s quantity instead.', color: AppColors.negative);
+      return;
+    }
     setState(() {
-      row.productId      = product['id'] as String;
+      row.productId      = productId;
       row.productDisplay = '[${product['product_code']}] ${product['product_name']}';
       row.descCtrl.text  = product['product_name'] as String? ?? '';
-      row.uomId          = product['base_uom_id'] as String?;
+      if (!fromBarcode) {
+        // A plain code/name pick doesn't imply a pack size — leave UOM/factor
+        // as the product's default and freely editable. A barcode match sets
+        // these separately, right after this call, and locks the factor.
+        row.uomId            = product['base_uom_id'] as String?;
+        row.convFactorLocked = false;
+      }
       row.taxGroupId     = product['purchase_tax_group_id'] as String?;
       final cost = (product['last_purchase_cost'] as num?) ?? (product['standard_cost'] as num?) ?? 0;
       row.rateCtrl.text  = cost.toString();
@@ -372,14 +428,40 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     }
   }
 
+  Future<void> _onBarcodeSubmitted(_POLineRow row, String rawBarcode) async {
+    final barcode = rawBarcode.trim();
+    if (barcode.isEmpty) return;
+    final session = ref.read(sessionProvider)!;
+    final match = await _ds.getProductByBarcode(clientId: session.clientId, companyId: session.companyId, barcode: barcode);
+    if (!mounted) return;
+    if (match == null) {
+      _showSnack('No product found for barcode "$barcode".', color: AppColors.negative);
+      return;
+    }
+    await _onProductSelected(row, match, fromBarcode: true);
+    // If _onProductSelected rejected the match as a duplicate, row.productId
+    // still points at whatever it was before — don't override UOM/factor.
+    if (mounted && row.productId == match['id']) {
+      setState(() {
+        row.uomId               = match['matched_uom_id'] as String? ?? row.uomId;
+        row.convFactorCtrl.text = (match['matched_uom_conversion_factor'] as num? ?? 1).toString();
+        row.convFactorLocked    = true;
+        row.barcodeCtrl.clear();
+      });
+    }
+  }
+
   Future<void> _onSupplierSelected(Map<String, dynamic> account) async {
     setState(() {
       _supplierId      = account['id'] as String;
       _supplierDisplay = '[${account['account_code']}] ${account['account_name']}';
     });
+    // Always re-sync currency (and rates) to whichever supplier is selected —
+    // switching suppliers mid-entry should re-derive the currency from the
+    // new supplier, not keep whatever the previous supplier implied.
     final currRel = account['rim_currencies'];
     final supplierCurrency = currRel is Map ? currRel['currency_id'] as String? : null;
-    if (_poCurrencyId == null && supplierCurrency != null) {
+    if (supplierCurrency != null) {
       final match = (await ref.read(currenciesProvider.future))
           .where((c) => c['currency_id'] == supplierCurrency).toList();
       if (match.isNotEmpty && mounted) {
@@ -392,8 +474,8 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     setState(() {
       _poCurrencyId   = currency['id'] as String;
       _poCurrencyCode = currency['currency_id'] as String;
-      _rateToBase     = 1;
-      _rateToLocal    = 1;
+      _rateToBaseCtrl.text  = '1';
+      _rateToLocalCtrl.text = '1';
     });
     await _fetchRates();
   }
@@ -406,15 +488,15 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
       final r = await _ds.getExchangeRate(
         companyId: session.companyId, locationId: _locationId!,
         fromCurrency: _poCurrencyCode!, toCurrency: _baseCurrency, rateDate: _fmtDate(_orderDate));
-      if (mounted && r != null) setState(() => _rateToBase = r);
+      if (mounted && r != null) setState(() => _rateToBaseCtrl.text = r.toString());
     } else if (mounted) {
-      setState(() => _rateToBase = 1);
+      setState(() => _rateToBaseCtrl.text = '1');
     }
     if (_localCurrency.isNotEmpty) {
       final r = await _ds.getExchangeRate(
         companyId: session.companyId, locationId: _locationId!,
         fromCurrency: _poCurrencyCode!, toCurrency: _localCurrency, rateDate: _fmtDate(_orderDate));
-      if (mounted && r != null) setState(() => _rateToLocal = r);
+      if (mounted && r != null) setState(() => _rateToLocalCtrl.text = r.toString());
     }
   }
 
@@ -492,7 +574,6 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         'rfq_date':           _rfqDate != null ? _fmtDate(_rfqDate!) : '',
         'quotation_no':       _quotationNoCtrl.text,
         'quotation_date':     _quotationDate != null ? _fmtDate(_quotationDate!) : '',
-        'payment_terms':      _paymentTermsCtrl.text,
         'po_currency_id':     _poCurrencyId,
         'rate_to_base':       _rateToBase,
         'rate_to_local':      _rateToLocal,
@@ -514,7 +595,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         'serial_no':              serial++,
         'product_id':             l.productId,
         'item_description':       l.descCtrl.text,
-        'barcode':                '',
+        'barcode':                l.barcodeCtrl.text,
         'uom_id':                 l.uomId,
         'uom_conversion_factor':  l.convFactor,
         'qty_pack':               l.qtyPack,
@@ -553,13 +634,22 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         'allocation_factor':  c.allocationFactor,
       }).toList();
 
+      var termSerial = 1;
+      final paymentTerms = _paymentTerms.where((t) => t.termId != null).map((t) => {
+        'serial_no':   termSerial++,
+        'term_id':     t.termId,
+        'term_name':   t.termName,
+        'description': t.descCtrl.text,
+      }).toList();
+
       if (session.offlineMode) {
         final localId = generateLocalId();
         await ref.read(syncEngineProvider).enqueue(
           documentType: 'PURCHASE_ORDER',
           documentId:   localId,
           endpoint:     '/rpc/fn_save_purchase_order',
-          payload:      {'p_header': header, 'p_lines': lines, 'p_charges': charges, 'p_user_id': session.userId},
+          payload:      {'p_header': header, 'p_lines': lines, 'p_charges': charges,
+              'p_payment_terms': paymentTerms, 'p_user_id': session.userId},
         );
         // Cache locally so the PO is readable in the entry screen while still offline.
         await _ds.cacheOrderLocally(
@@ -567,6 +657,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
           header: header,
           lines:  lines,
           charges: charges,
+          paymentTerms: paymentTerms,
         );
         if (mounted) {
           setState(() { _orderNo = localId; _saving = false; });
@@ -574,9 +665,11 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
           return true;
         }
       } else {
-        final orderNo = await _ds.save(header: header, lines: lines, charges: charges, userId: session.userId);
+        final orderNo = await _ds.save(
+            header: header, lines: lines, charges: charges, paymentTerms: paymentTerms, userId: session.userId);
         // Cache for offline access in subsequent sessions.
-        unawaited(_ds.cacheOrderLocally(effectiveOrderNo: orderNo, header: header, lines: lines, charges: charges));
+        unawaited(_ds.cacheOrderLocally(
+            effectiveOrderNo: orderNo, header: header, lines: lines, charges: charges, paymentTerms: paymentTerms));
         if (mounted) {
           setState(() { _orderNo = orderNo; _saving = false; });
           _showSnack('Draft saved — $orderNo', color: AppColors.positive);
@@ -589,7 +682,27 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     return false;
   }
 
+  // Immediate client-side feedback so a user can't even reach the confirm
+  // dialog with an incomplete line — fn_approve_purchase_order (migration
+  // 040) enforces the same rule authoritatively on the server.
+  String? _validateForApprove() {
+    final activeLines = _lines.where((l) => l.productId != null).toList();
+    if (activeLines.isEmpty) return 'Add at least one line item before approving.';
+    for (final l in activeLines) {
+      if (l.baseQty <= 0) return 'Every line needs a quantity greater than zero.';
+      if (l.rate <= 0) return 'Every line needs a rate greater than zero.';
+      if (l.uomId == null) return 'Every line needs a UOM selected.';
+    }
+    return null;
+  }
+
   Future<void> _approveOrder() async {
+    final validationError = _validateForApprove();
+    if (validationError != null) {
+      _showSnack(validationError, color: AppColors.negative);
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -681,26 +794,18 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
 
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: Row(children: [
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(_orderNo != null ? 'Purchase Order · $_orderNo' : 'New Purchase Order',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-                const SizedBox(height: 2),
-                if (locked)
-                  _statusChip(_status)
-                else
-                  Row(children: [
-                    Text(_orderNo != null ? 'Draft' : 'Unsaved draft',
-                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                    if (_orderNo != null) ...[
-                      const SizedBox(width: 8),
-                      PendingSyncBadge(documentType: 'PURCHASE_ORDER', documentId: _orderNo!),
-                    ],
-                  ]),
-              ]),
-            ),
-          ]),
+          child: isMobile
+              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _buildTitleBlock(locked),
+                  if (canSave || canApprove) ...[
+                    const SizedBox(height: 10),
+                    _buildActionButtons(canSave: canSave, canApprove: canApprove),
+                  ],
+                ])
+              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(child: _buildTitleBlock(locked)),
+                  if (canSave || canApprove) _buildActionButtons(canSave: canSave, canApprove: canApprove),
+                ]),
         ),
 
         const Divider(height: 20),
@@ -714,20 +819,18 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (_error != null) ...[_errorBanner(_error!, onRetry: _init), const SizedBox(height: 16)],
+                      if (_actionError != null) ...[_errorBanner(_actionError!), const SizedBox(height: 16)],
                       _buildHeaderCard(locked, isMobile),
                       const SizedBox(height: 16),
                       _buildAdditionalDetails(locked),
+                      const SizedBox(height: 20),
+                      _buildPaymentTermsSection(locked),
                       const SizedBox(height: 20),
                       _buildLinesSection(locked, isMobile),
                       const SizedBox(height: 20),
                       _buildChargesSection(locked, isMobile),
                       const SizedBox(height: 12),
                       _buildTotalsBar(),
-                      if (_actionError != null) ...[const SizedBox(height: 12), _errorBanner(_actionError!)],
-                      if (canSave || canApprove) ...[
-                        const SizedBox(height: 20),
-                        _buildActionButtons(canSave: canSave, canApprove: canApprove),
-                      ],
                     ],
                   ),
                 ),
@@ -735,6 +838,23 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
       ],
     );
   }
+
+  Widget _buildTitleBlock(bool locked) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Text(_orderNo != null ? 'Purchase Order · $_orderNo' : 'New Purchase Order',
+        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+    const SizedBox(height: 2),
+    if (locked)
+      _statusChip(_status)
+    else
+      Row(children: [
+        Text(_orderNo != null ? 'Draft' : 'Unsaved draft',
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        if (_orderNo != null) ...[
+          const SizedBox(width: 8),
+          PendingSyncBadge(documentType: 'PURCHASE_ORDER', documentId: _orderNo!),
+        ],
+      ]),
+  ]);
 
   Widget _statusChip(String status) {
     final color = status == 'APPROVED' ? AppColors.positive
@@ -863,13 +983,19 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
                     if (c != null) _onCurrencySelected(c);
                   },
                 ));
-                final f2 = field(InputDecorator(
+                final f2 = field(TextFormField(
+                  controller: _rateToBaseCtrl, enabled: !locked,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: dec.copyWith(labelText: 'Rate → Base ($_baseCurrency)'),
-                  child: Text(_rateToBase.toStringAsFixed(4), style: const TextStyle(fontSize: 13)),
+                  style: const TextStyle(fontSize: 13),
+                  onChanged: (_) => setState(() {}),
                 ));
-                final f3 = field(InputDecorator(
+                final f3 = field(TextFormField(
+                  controller: _rateToLocalCtrl, enabled: !locked,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: dec.copyWith(labelText: 'Rate → Local ($_localCurrency)'),
-                  child: Text(_rateToLocal.toStringAsFixed(4), style: const TextStyle(fontSize: 13)),
+                  style: const TextStyle(fontSize: 13),
+                  onChanged: (_) => setState(() {}),
                 ));
                 return isMobile
                     ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -888,12 +1014,8 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
           }),
           const SizedBox(height: 12),
 
-          // Row 4: Payment Terms | Buyer
+          // Row 4: Buyer — Payment Terms now has its own multi-select section below.
           Builder(builder: (_) {
-            final f1 = field(TextFormField(
-              controller: _paymentTermsCtrl, enabled: !locked,
-              decoration: dec.copyWith(labelText: 'Payment Terms'), style: const TextStyle(fontSize: 13),
-            ));
             final f2 = field(DropdownButtonFormField<String>(
               decoration: dec.copyWith(labelText: 'Buyer'),
               initialValue: _buyerId,
@@ -904,11 +1026,8 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
               onChanged: locked ? null : (v) => setState(() => _buyerId = v),
             ));
             return isMobile
-                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    SizedBox(width: double.infinity, child: f1), const SizedBox(height: 8),
-                    SizedBox(width: double.infinity, child: f2),
-                  ])
-                : Row(children: [Expanded(child: f1), const SizedBox(width: 12), Expanded(child: f2)]);
+                ? SizedBox(width: double.infinity, child: f2)
+                : Row(children: [Expanded(flex: 2, child: f2), const Spacer(flex: 3)]);
           }),
         ]),
       ),
@@ -991,6 +1110,62 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     ),
   );
 
+  // ── Payment Terms section ────────────────────────────────────────────────
+  // Multi-select, common-master-driven: a PO can carry several terms, each
+  // with its own free-text description (e.g. "50% Advance" -> "Due before
+  // dispatch", "Balance NET 30" -> "From GRN date"). Saved to
+  // rid_po_payment_terms — see backend/migrations/040_po_payment_terms_and_line_validation.sql.
+
+  Widget _buildPaymentTermsSection(bool locked) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(children: [
+        const Text('Payment Terms', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+        const Spacer(),
+        if (!locked && _paymentTermMasters.isNotEmpty)
+          TextButton.icon(onPressed: _addPaymentTerm, icon: const Icon(Icons.add, size: 16), label: const Text('Add Term')),
+      ]),
+      const SizedBox(height: 8),
+      if (_paymentTerms.isEmpty)
+        const Padding(padding: EdgeInsets.all(16), child: Text('No payment terms added.')),
+      ..._paymentTerms.map((row) => _buildPaymentTermCard(row, locked)),
+    ],
+  );
+
+  Widget _buildPaymentTermCard(_PaymentTermRow row, bool locked) {
+    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Wrap(spacing: 10, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          SizedBox(width: 200, child: DropdownButtonFormField<String>(
+            decoration: dec.copyWith(labelText: 'Term'),
+            isExpanded: true,
+            initialValue: row.termId,
+            items: _paymentTermMasters.map((t) => DropdownMenuItem(value: t['id'] as String,
+                child: Text(t['description'] as String, style: const TextStyle(fontSize: 12)))).toList(),
+            onChanged: locked ? null : (v) {
+              final t = _paymentTermMasters.where((x) => x['id'] == v).firstOrNull;
+              if (t == null) return;
+              setState(() { row.termId = t['id'] as String; row.termName = t['description'] as String; });
+            },
+          )),
+          SizedBox(width: 280, child: TextFormField(controller: row.descCtrl, enabled: !locked,
+              decoration: dec.copyWith(labelText: 'Description (e.g. 50% advance, balance NET 30)'),
+              style: const TextStyle(fontSize: 12))),
+          if (!locked) IconButton(
+            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
+            onPressed: () => _removePaymentTerm(row),
+          ),
+        ]),
+      ),
+    );
+  }
+
   // ── Lines section ────────────────────────────────────────────────────────
 
   Widget _buildLinesSection(bool locked, bool isMobile) => Column(
@@ -1023,6 +1198,13 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
+            SizedBox(width: 140, height: 48, child: TextFormField(
+              controller: row.barcodeCtrl, enabled: !locked,
+              decoration: dec.copyWith(labelText: 'Scan/Enter Barcode'),
+              style: const TextStyle(fontSize: 12),
+              onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
+            )),
+            const SizedBox(width: 8),
             Expanded(
               child: _searchField<Map<String, dynamic>>(
                 height: 48,
@@ -1034,7 +1216,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
                 matches: (p, q) => (p['product_code'] as String? ?? '').toLowerCase().contains(q) ||
                     (p['product_name'] as String? ?? '').toLowerCase().contains(q),
                 onSelected: (p) => _onProductSelected(row, p),
-                onCleared: () => setState(() { row.productId = null; row.productDisplay = ''; }),
+                onCleared: () => setState(() { row.productId = null; row.productDisplay = ''; row.convFactorLocked = false; }),
               ),
             ),
             if (!locked) IconButton(
@@ -1042,9 +1224,25 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
               onPressed: () => _removeLine(row),
             ),
           ]),
-          const SizedBox(height: 8),
-          TextFormField(controller: row.descCtrl, enabled: !locked,
-              decoration: dec.copyWith(labelText: 'Item Description'), style: const TextStyle(fontSize: 13)),
+          const SizedBox(height: 6),
+          InkWell(
+            onTap: () => setState(() => row.descExpanded = !row.descExpanded),
+            child: Row(children: [
+              Icon(row.descExpanded ? Icons.arrow_drop_down : Icons.arrow_right, size: 18, color: AppColors.textSecondary),
+              Expanded(child: Text(
+                row.descExpanded
+                    ? 'Item Description'
+                    : (row.descCtrl.text.isEmpty ? 'Item Description' : row.descCtrl.text),
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+              )),
+            ]),
+          ),
+          if (row.descExpanded) ...[
+            const SizedBox(height: 4),
+            TextFormField(controller: row.descCtrl, enabled: !locked,
+                decoration: dec.copyWith(labelText: 'Item Description'), style: const TextStyle(fontSize: 13)),
+          ],
           const SizedBox(height: 8),
           Wrap(spacing: 8, runSpacing: 8, children: [
             SizedBox(width: 140, child: DropdownButtonFormField<String>(
@@ -1053,11 +1251,16 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
               initialValue: row.uomId,
               items: _uoms.map((u) => DropdownMenuItem(value: u['id'] as String,
                   child: Text(u['description'] as String, style: const TextStyle(fontSize: 12)))).toList(),
-              onChanged: locked ? null : (v) => setState(() => row.uomId = v),
+              onChanged: (locked || row.convFactorLocked) ? null : (v) => setState(() => row.uomId = v),
             )),
-            SizedBox(width: 90, child: TextFormField(controller: row.convFactorCtrl, enabled: !locked,
+            SizedBox(width: 90, child: TextFormField(controller: row.convFactorCtrl,
+                enabled: !locked && !row.convFactorLocked,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: dec.copyWith(labelText: 'Conv. Factor'), style: const TextStyle(fontSize: 12),
+                decoration: dec.copyWith(labelText: 'Conv. Factor',
+                    suffixIcon: row.convFactorLocked
+                        ? const Icon(Icons.lock_outline, size: 14, color: AppColors.textSecondary)
+                        : null),
+                style: const TextStyle(fontSize: 12),
                 onChanged: (_) => setState(() {}))),
             SizedBox(width: 90, child: TextFormField(controller: row.qtyPackCtrl, enabled: !locked,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),

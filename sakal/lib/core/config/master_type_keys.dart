@@ -5,4 +5,5 @@ class MasterTypeKey {
   static const color    = 'COLOR';
   static const department      = 'DEPARTMENT';
   static const consumptionArea = 'CONSUMPTION_AREA';
+  static const paymentTerms    = 'PAYMENT_TERMS';
 }

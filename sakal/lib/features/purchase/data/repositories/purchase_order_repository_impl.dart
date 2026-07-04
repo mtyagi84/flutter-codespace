@@ -4,6 +4,7 @@ import '../../domain/repositories/purchase_order_repository.dart';
 import '../datasources/purchase_order_remote_ds.dart';
 import '../datasources/purchase_order_local_ds.dart';
 import '../models/po_charge_line_model.dart';
+import '../models/po_payment_term_model.dart';
 import '../models/purchase_order_line_model.dart';
 import '../models/purchase_order_model.dart';
 
@@ -117,12 +118,28 @@ class PurchaseOrderRepositoryImpl implements PurchaseOrderRepository {
   }
 
   @override
+  Future<List<PoPaymentTermModel>> getPaymentTerms({
+    required String clientId,
+    required String companyId,
+    required String orderNo,
+    required String orderDate,
+  }) async {
+    if (_isOffline && _local != null) {
+      return _local.getPaymentTerms(clientId: clientId, companyId: companyId, orderNo: orderNo, orderDate: orderDate);
+    }
+    final terms = await _remote.getPaymentTerms(clientId: clientId, companyId: companyId, orderNo: orderNo, orderDate: orderDate);
+    if (_local != null) unawaited(_local.cachePaymentTerms(clientId, companyId, orderNo, orderDate, terms));
+    return terms;
+  }
+
+  @override
   Future<String> save({
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,
     required List<Map<String, dynamic>> charges,
+    required List<Map<String, dynamic>> paymentTerms,
     required String userId,
-  }) => _remote.save(header: header, lines: lines, charges: charges, userId: userId);
+  }) => _remote.save(header: header, lines: lines, charges: charges, paymentTerms: paymentTerms, userId: userId);
 
   @override
   Future<void> cacheOrderLocally({
@@ -130,7 +147,8 @@ class PurchaseOrderRepositoryImpl implements PurchaseOrderRepository {
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,
     required List<Map<String, dynamic>> charges,
-  }) => _local?.cacheFromMaps(effectiveOrderNo, header, lines, charges) ?? Future.value();
+    required List<Map<String, dynamic>> paymentTerms,
+  }) => _local?.cacheFromMaps(effectiveOrderNo, header, lines, charges, paymentTerms) ?? Future.value();
 
   @override
   Future<void> approve({
@@ -178,6 +196,17 @@ class PurchaseOrderRepositoryImpl implements PurchaseOrderRepository {
       ));
     }
     return rows;
+  }
+
+  @override
+  Future<Map<String, dynamic>?> getProductByBarcode({
+    required String clientId,
+    required String companyId,
+    required String barcode,
+  }) {
+    // Always online — barcode lookup needs the live rim_product_uom table;
+    // not worth a dedicated offline cache for a feature this narrow.
+    return _remote.getProductByBarcode(clientId: clientId, companyId: companyId, barcode: barcode);
   }
 
   @override

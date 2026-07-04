@@ -1,4 +1,5 @@
 import '../../data/models/po_charge_line_model.dart';
+import '../../data/models/po_payment_term_model.dart';
 import '../../data/models/purchase_order_line_model.dart';
 import '../../data/models/purchase_order_model.dart';
 
@@ -33,11 +34,19 @@ abstract class PurchaseOrderRepository {
     required String orderDate,
   });
 
+  Future<List<PoPaymentTermModel>> getPaymentTerms({
+    required String clientId,
+    required String companyId,
+    required String orderNo,
+    required String orderDate,
+  });
+
   /// Returns the assigned order_no. Always online — never called while offline.
   Future<String> save({
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,
     required List<Map<String, dynamic>> charges,
+    required List<Map<String, dynamic>> paymentTerms,
     required String userId,
   });
 
@@ -48,6 +57,7 @@ abstract class PurchaseOrderRepository {
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,
     required List<Map<String, dynamic>> charges,
+    required List<Map<String, dynamic>> paymentTerms,
   });
 
   Future<void> approve({
@@ -71,6 +81,12 @@ abstract class PurchaseOrderRepository {
     required String clientId,
     required String companyId,
     String? search,
+  });
+
+  Future<Map<String, dynamic>?> getProductByBarcode({
+    required String clientId,
+    required String companyId,
+    required String barcode,
   });
 
   Future<List<Map<String, dynamic>>> getCommonMastersByType({

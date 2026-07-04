@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import '../../../../core/network/dio_client.dart';
 import '../models/po_charge_line_model.dart';
+import '../models/po_payment_term_model.dart';
 import '../models/purchase_order_line_model.dart';
 import '../models/purchase_order_model.dart';
 
@@ -106,6 +107,26 @@ class PurchaseOrderRemoteDs {
         .toList();
   }
 
+  Future<List<PoPaymentTermModel>> getPaymentTerms({
+    required String clientId,
+    required String companyId,
+    required String orderNo,
+    required String orderDate,
+  }) async {
+    final res = await _dio.get('/rid_po_payment_terms', queryParameters: {
+      'client_id':  'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'order_no':   'eq.$orderNo',
+      'order_date': 'eq.$orderDate',
+      'is_deleted': 'eq.false',
+      'select':     '*',
+      'order':      'serial_no.asc',
+    });
+    return (res.data as List)
+        .map((e) => PoPaymentTermModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   // ── Save / Approve ────────────────────────────────────────────────────────────
 
   /// Returns the assigned order_no.
@@ -113,13 +134,15 @@ class PurchaseOrderRemoteDs {
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,
     required List<Map<String, dynamic>> charges,
+    required List<Map<String, dynamic>> paymentTerms,
     required String userId,
   }) async {
     final res = await _dio.post('/rpc/fn_save_purchase_order', data: {
-      'p_header':  header,
-      'p_lines':   lines,
-      'p_charges': charges,
-      'p_user_id': userId,
+      'p_header':         header,
+      'p_lines':          lines,
+      'p_charges':        charges,
+      'p_payment_terms':  paymentTerms,
+      'p_user_id':        userId,
     });
     return res.data as String;
   }
@@ -181,6 +204,37 @@ class PurchaseOrderRemoteDs {
     }
     final res = await _dio.get('/rim_products', queryParameters: params);
     return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
+  /// Barcode-based product+UOM lookup. Matches rim_product_uom.barcode
+  /// exactly — each pack level (Piece, Carton…) has its own barcode — so a
+  /// scanned/typed barcode fixes product + UOM + conversion_factor together
+  /// in one step, unlike the free-text product-code search which leaves the
+  /// conversion factor for the user to type.
+  Future<Map<String, dynamic>?> getProductByBarcode({
+    required String clientId,
+    required String companyId,
+    required String barcode,
+  }) async {
+    final res = await _dio.get('/rim_product_uom', queryParameters: {
+      'client_id':  'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'barcode':    'eq.$barcode',
+      'select':     'uom_id,conversion_factor,'
+          'product:rim_products!product_id(id,product_code,product_name,base_uom_id,'
+          'last_purchase_cost,standard_cost,purchase_tax_group_id,is_active,is_deleted)',
+      'limit':      '1',
+    });
+    final list = res.data as List;
+    if (list.isEmpty) return null;
+    final row     = list.first as Map<String, dynamic>;
+    final product = row['product'] as Map<String, dynamic>?;
+    if (product == null || product['is_deleted'] == true || product['is_active'] == false) return null;
+    return {
+      ...product,
+      'matched_uom_id': row['uom_id'],
+      'matched_uom_conversion_factor': row['conversion_factor'],
+    };
   }
 
   Future<List<Map<String, dynamic>>> getCommonMastersByType({

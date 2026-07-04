@@ -26,6 +26,19 @@
 -- ril_cost_price_history, inward movements only — outward movements never
 -- change the average cost, only current_stock.
 --
+-- Direction safety: qty_change stays signed (+IN/-OUT) — that's what makes
+-- current_stock = SUM(qty_change) trivial — but a generated `direction`
+-- column gives readable IN/OUT filtering, and a CHECK constraint pins each
+-- trans_type to its one valid sign so a wrong-signed insert fails loudly
+-- instead of silently corrupting stock.
+--
+-- Serial tracking: serial_no is a plain nullable column on the SAME ledger
+-- row shape as batch_no/expiry_date — for SERIAL-tracked products the
+-- caller (fn_approve_grn, and later Sales/Transfer/Adjustment) posts one
+-- row per unit (qty_change = +/-1) instead of one row per whole line. No
+-- separate serial ledger table; batch and serial tracking share one
+-- mechanism.
+--
 -- Objects:
 --   ril_stock_ledger              → immutable append-only movement log
 --   ril_cost_price_history        → immutable append-only cost audit trail (inward only)
@@ -48,16 +61,27 @@ CREATE TABLE IF NOT EXISTS ril_stock_ledger (
                            'TRANSFER_OUT','TRANSFER_IN',
                            'ADJUSTMENT_IN','ADJUSTMENT_OUT','OPENING_STOCK'
                        )),
-    qty_change        NUMERIC(18,4) NOT NULL,          -- signed: +IN, -OUT
+    qty_change        NUMERIC(18,4) NOT NULL,          -- signed: +IN, -OUT (source of truth for balance math)
+    direction         TEXT          GENERATED ALWAYS AS (CASE WHEN qty_change >= 0 THEN 'IN' ELSE 'OUT' END) STORED,
     base_qty          NUMERIC(18,4) NOT NULL,           -- abs(qty_change), UOM-normalized, always positive for reporting
     batch_no          TEXT,
     expiry_date       DATE,
+    serial_no         TEXT,                             -- SERIAL-tracked products: one ledger row per unit (qty_change = +/-1)
     unit_cost         NUMERIC(18,4) NOT NULL DEFAULT 0, -- base currency, snapshotted at movement time
     source_doc_type   TEXT          NOT NULL,
     source_doc_no     TEXT          NOT NULL,
     source_doc_date   DATE          NOT NULL,
     created_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),
-    created_by        UUID          REFERENCES rim_users(id)
+    created_by        UUID          REFERENCES rim_users(id),
+    -- Guards against a wrong-signed insert silently corrupting stock: each
+    -- trans_type has one fixed expected direction. qty_change stays the
+    -- source of truth for SUM() balance math; this constraint just makes a
+    -- mismatched sign fail loudly instead of drifting current_stock.
+    CONSTRAINT chk_stock_ledger_direction CHECK (
+        (trans_type IN ('GRN', 'TRANSFER_IN', 'ADJUSTMENT_IN', 'OPENING_STOCK', 'SALES_RETURN') AND qty_change > 0)
+        OR
+        (trans_type IN ('GRN_REVERSAL', 'PURCHASE_RETURN', 'SALES_INVOICE', 'TRANSFER_OUT', 'ADJUSTMENT_OUT') AND qty_change < 0)
+    )
 );
 
 CREATE INDEX IF NOT EXISTS idx_stock_ledger_product_location
@@ -132,6 +156,7 @@ CREATE OR REPLACE FUNCTION fn_post_stock_movement(
     p_unit_cost_specific NUMERIC DEFAULT NULL,   -- required (NOT NULL) when p_qty_change > 0
     p_batch_no           TEXT    DEFAULT NULL,
     p_expiry_date        DATE    DEFAULT NULL,
+    p_serial_no          TEXT    DEFAULT NULL,   -- SERIAL-tracked products: caller loops one unit (qty=+/-1) per serial
     p_source_doc_type    TEXT    DEFAULT NULL,
     p_source_doc_no      TEXT    DEFAULT NULL,
     p_source_doc_date    DATE    DEFAULT NULL,
@@ -211,11 +236,11 @@ BEGIN
 
     INSERT INTO ril_stock_ledger (
         client_id, company_id, location_id, product_id, trans_date, trans_type,
-        qty_change, base_qty, batch_no, expiry_date, unit_cost,
+        qty_change, base_qty, batch_no, expiry_date, serial_no, unit_cost,
         source_doc_type, source_doc_no, source_doc_date, created_by
     ) VALUES (
         p_client_id, p_company_id, p_location_id, p_product_id, p_trans_date, p_trans_type,
-        p_qty_change, abs(p_qty_change), p_batch_no, p_expiry_date, v_cost_after,
+        p_qty_change, abs(p_qty_change), p_batch_no, p_expiry_date, p_serial_no, v_cost_after,
         p_source_doc_type, p_source_doc_no, p_source_doc_date, p_user_id
     );
 END;
@@ -248,6 +273,6 @@ CREATE OR REPLACE FUNCTION fn_verify_stock_integrity(
 $$;
 
 GRANT EXECUTE ON FUNCTION fn_post_stock_movement(
-    UUID, UUID, UUID, UUID, DATE, TEXT, NUMERIC, NUMERIC, NUMERIC, TEXT, DATE, TEXT, TEXT, DATE, UUID
+    UUID, UUID, UUID, UUID, DATE, TEXT, NUMERIC, NUMERIC, NUMERIC, TEXT, DATE, TEXT, TEXT, TEXT, DATE, UUID
 ) TO authenticated;
 GRANT EXECUTE ON FUNCTION fn_verify_stock_integrity(UUID, UUID) TO authenticated;
