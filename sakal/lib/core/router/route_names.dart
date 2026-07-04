@@ -25,6 +25,8 @@ class RouteNames {
   static const String permissions = '/setup/permissions';
   static const String periodClose = '/setup/period-close';
   static const String backdatedEntryControl = '/setup/backdated-entry-control';
+  static const String printTemplates = '/setup/print-templates';
+  static const String printTemplateDesigner = '/setup/print-templates/designer';
 
   // Sales — screen_names must match ric_master_menus seeds
   static const String salesInvoices = '/sales/invoices';

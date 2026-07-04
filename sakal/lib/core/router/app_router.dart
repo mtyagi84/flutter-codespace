@@ -20,6 +20,8 @@ import '../../features/setup/presentation/screens/user_location_access_screen.da
 import '../../features/setup/presentation/screens/accounting_setup_screen.dart';
 import '../../features/setup/presentation/screens/period_close_screen.dart';
 import '../../features/setup/presentation/screens/backdated_entry_control_screen.dart';
+import '../../features/setup/presentation/screens/print_template_list_screen.dart';
+import '../../features/setup/presentation/screens/print_template_designer_screen.dart';
 import '../../features/master/presentation/screens/chart_of_accounts_screen.dart';
 import '../../features/master/presentation/screens/common_masters_screen.dart';
 import '../../features/master/presentation/screens/customer_master_screen.dart';
@@ -131,6 +133,17 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.financialYears, builder: (c, s) => const _Placeholder('Financial Years')),
         GoRoute(path: RouteNames.periodClose,    builder: (c, s) => const PeriodCloseScreen()),
         GoRoute(path: RouteNames.backdatedEntryControl, builder: (c, s) => const BackdatedEntryControlScreen()),
+        GoRoute(path: RouteNames.printTemplates, builder: (c, s) => const PrintTemplateListScreen()),
+        GoRoute(
+          path: RouteNames.printTemplateDesigner,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return PrintTemplateDesignerScreen(
+              templateId:  extra?['templateId'] as String?,
+              documentType: extra?['documentType'] as String?,
+            );
+          },
+        ),
 
         // Master data
         GoRoute(path: RouteNames.chartOfAccounts,builder: (c, s) => const ChartOfAccountsScreen()),

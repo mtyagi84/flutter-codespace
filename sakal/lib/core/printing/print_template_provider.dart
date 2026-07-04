@@ -30,10 +30,14 @@ final printTemplateProvider = FutureProvider.family<PrintTemplate, String>((ref,
       // Fall through to the hardcoded default on any error.
     }
   }
-  return _defaultFor(documentType);
+  return defaultTemplateFor(documentType);
 });
 
-PrintTemplate _defaultFor(String documentType) => switch (documentType) {
+/// The hardcoded Dart fallback template for a document type — also used by
+/// the designer screen (print_template_designer_screen.dart) as the starting
+/// point for a brand-new template, so an admin edits a proven-good layout
+/// instead of a blank page.
+PrintTemplate defaultTemplateFor(String documentType) => switch (documentType) {
   'PURCHASE_ORDER' => purchaseOrderDefaultTemplate,
   'VOUCHER'        => voucherDefaultTemplate,
   _ => throw ArgumentError('No default print template registered for document type "$documentType".'),
