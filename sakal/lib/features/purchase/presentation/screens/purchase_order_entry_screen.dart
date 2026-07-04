@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/master_type_keys.dart';
@@ -676,10 +677,53 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
           return true;
         }
       }
+    } on DioException catch (e) {
+      if (mounted) setState(() { _saving = false; _actionError = 'Save failed: ${_serverError(e)}'; });
     } catch (e) {
-      if (mounted) setState(() { _saving = false; _actionError = 'Save failed: $e'; });
+      if (mounted) setState(() { _saving = false; _actionError = 'Unexpected error: $e'; });
     }
     return false;
+  }
+
+  // ── Copy PO ───────────────────────────────────────────────────────────────
+  // Any saved PO can be copied — but if the source was raised against an
+  // Indent/RFQ/Quotation, those references belong to that ONE original
+  // procurement trail and must NOT carry over. The copy always becomes a
+  // fresh Direct order with no reference, never a duplicate of someone
+  // else's indent/quotation.
+  bool get _canCopy => _orderNo != null;
+
+  Future<void> _applyCopy() async {
+    setState(() {
+      _orderNo   = null;           // becomes a new unsaved draft
+      _orderDate = DateTime.now(); // default to today
+      _status    = 'DRAFT';
+      _supplierRefNoCtrl.clear();  // the supplier's ref for the ORIGINAL order only
+      _supplierRefDate = null;
+      _indentNoCtrl.clear();       // copy always becomes a Direct order — no
+      _indentDate = null;          // reference to the source's Indent/RFQ/
+      _rfqNoCtrl.clear();          // Quotation trail carries over
+      _rfqDate = null;
+      _quotationNoCtrl.clear();
+      _quotationDate = null;
+      for (final l in _lines) { l.qtyReceived = 0; } // nothing received against the new order yet
+      // Supplier, currency, rates, buyer, lines, charges, payment terms,
+      // subject/addresses/remarks: kept as-is.
+    });
+    // Refresh each line's stock-at-order snapshot against today rather than
+    // carrying over the original order date's stale figures.
+    if (_locationId != null) {
+      for (final l in _lines) {
+        if (l.productId == null) continue;
+        final snap = await _ds.getProductStockSnapshot(productId: l.productId!, locationId: _locationId!);
+        if (!mounted) return;
+        setState(() {
+          l.qtyOnHandAtOrder    = snap['current_stock'] ?? 0;
+          l.reorderLevelAtOrder = snap['reorder_level'] ?? 0;
+        });
+      }
+    }
+    if (mounted) _showSnack('Copied — edit as needed and save as a new draft.', color: AppColors.secondary);
   }
 
   // Immediate client-side feedback so a user can't even reach the confirm
@@ -735,9 +779,27 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         setState(() { _status = 'APPROVED'; _approving = false; });
         _showSnack('$_orderNo approved.', color: AppColors.positive);
       }
+    } on DioException catch (e) {
+      if (mounted) setState(() { _approving = false; _actionError = 'Approve failed: ${_serverError(e)}'; });
     } catch (e) {
-      if (mounted) setState(() { _approving = false; _actionError = 'Approve failed: $e'; });
+      if (mounted) setState(() { _approving = false; _actionError = 'Unexpected error: $e'; });
     }
+  }
+
+  // PostgREST error bodies are {code, details, hint, message} — `message` is
+  // the short RAISE EXCEPTION code (e.g. 'FUTURE_DATE_NOT_ALLOWED'), `details`
+  // is the human-readable text from `USING DETAIL`. Prefer details, fall back
+  // to message, then to the raw exception — never show the user a bare
+  // DioException dump.
+  String _serverError(DioException e) {
+    final data = e.response?.data;
+    if (data is Map) {
+      final details = data['details'] as String?;
+      final message = data['message'] as String?;
+      if (details != null && details.isNotEmpty) return details;
+      if (message != null && message.isNotEmpty) return message;
+    }
+    return e.message ?? e.toString();
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -797,13 +859,17 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
           child: isMobile
               ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   _buildTitleBlock(locked),
-                  if (canSave || canApprove) ...[
+                  if (_canCopy || canSave || canApprove) ...[
                     const SizedBox(height: 10),
-                    _buildActionButtons(canSave: canSave, canApprove: canApprove),
+                    Row(children: [
+                      if (_canCopy) _buildCopyButton(),
+                      if (canSave || canApprove) _buildActionButtons(canSave: canSave, canApprove: canApprove),
+                    ]),
                   ],
                 ])
               : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(child: _buildTitleBlock(locked)),
+                  if (_canCopy) _buildCopyButton(),
                   if (canSave || canApprove) _buildActionButtons(canSave: canSave, canApprove: canApprove),
                 ]),
         ),
@@ -824,11 +890,11 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
                       const SizedBox(height: 16),
                       _buildAdditionalDetails(locked),
                       const SizedBox(height: 20),
-                      _buildPaymentTermsSection(locked),
-                      const SizedBox(height: 20),
                       _buildLinesSection(locked, isMobile),
                       const SizedBox(height: 20),
                       _buildChargesSection(locked, isMobile),
+                      const SizedBox(height: 20),
+                      _buildPaymentTermsSection(locked),
                       const SizedBox(height: 12),
                       _buildTotalsBar(),
                     ],
@@ -1116,53 +1182,70 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
   // dispatch", "Balance NET 30" -> "From GRN date"). Saved to
   // rid_po_payment_terms — see backend/migrations/040_po_payment_terms_and_line_validation.sql.
 
-  Widget _buildPaymentTermsSection(bool locked) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(children: [
-        const Text('Payment Terms', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-        const Spacer(),
-        if (!locked && _paymentTermMasters.isNotEmpty)
-          TextButton.icon(onPressed: _addPaymentTerm, icon: const Icon(Icons.add, size: 16), label: const Text('Add Term')),
-      ]),
-      const SizedBox(height: 8),
-      if (_paymentTerms.isEmpty)
-        const Padding(padding: EdgeInsets.all(16), child: Text('No payment terms added.')),
-      ..._paymentTerms.map((row) => _buildPaymentTermCard(row, locked)),
-    ],
-  );
+  Widget _buildPaymentTermsSection(bool locked) {
+    const btnW = 32.0;
+    Widget colHeader(String label) => Padding(
+      padding: const EdgeInsets.only(bottom: 4, left: 2),
+      child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          const Text('Payment Terms', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          const Spacer(),
+          if (!locked && _paymentTermMasters.isNotEmpty)
+            TextButton.icon(onPressed: _addPaymentTerm, icon: const Icon(Icons.add, size: 16), label: const Text('Add Term')),
+        ]),
+        const SizedBox(height: 8),
+        if (_paymentTerms.isEmpty)
+          const Padding(padding: EdgeInsets.all(16), child: Text('No payment terms added.'))
+        else ...[
+          // Column headers shown once above the data rows — same pattern as
+          // Finance Voucher Entry's On Account section, instead of repeating
+          // a floating labelText on every row.
+          Row(children: [
+            Expanded(flex: 2, child: colHeader('Term')),
+            const SizedBox(width: 12),
+            Expanded(flex: 3, child: colHeader('Description')),
+            if (!locked) SizedBox(width: btnW + 8),
+          ]),
+          ..._paymentTerms.map((row) => _buildPaymentTermCard(row, locked)),
+        ],
+      ],
+    );
+  }
 
   Widget _buildPaymentTermCard(_PaymentTermRow row, bool locked) {
     const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(spacing: 10, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          SizedBox(width: 200, child: DropdownButtonFormField<String>(
-            decoration: dec.copyWith(labelText: 'Term'),
-            isExpanded: true,
-            initialValue: row.termId,
-            items: _paymentTermMasters.map((t) => DropdownMenuItem(value: t['id'] as String,
-                child: Text(t['description'] as String, style: const TextStyle(fontSize: 12)))).toList(),
-            onChanged: locked ? null : (v) {
-              final t = _paymentTermMasters.where((x) => x['id'] == v).firstOrNull;
-              if (t == null) return;
-              setState(() { row.termId = t['id'] as String; row.termName = t['description'] as String; });
-            },
-          )),
-          SizedBox(width: 280, child: TextFormField(controller: row.descCtrl, enabled: !locked,
-              decoration: dec.copyWith(labelText: 'Description (e.g. 50% advance, balance NET 30)'),
-              style: const TextStyle(fontSize: 12))),
-          if (!locked) IconButton(
-            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
-            onPressed: () => _removePaymentTerm(row),
-          ),
-        ]),
-      ),
+        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        Expanded(flex: 2, child: SizedBox(height: 44, child: DropdownButtonFormField<String>(
+          decoration: dec,
+          isExpanded: true,
+          initialValue: row.termId,
+          items: _paymentTermMasters.map((t) => DropdownMenuItem(value: t['id'] as String,
+              child: Text(t['description'] as String, style: const TextStyle(fontSize: 13)))).toList(),
+          onChanged: locked ? null : (v) {
+            final t = _paymentTermMasters.where((x) => x['id'] == v).firstOrNull;
+            if (t == null) return;
+            setState(() { row.termId = t['id'] as String; row.termName = t['description'] as String; });
+          },
+        ))),
+        const SizedBox(width: 12),
+        Expanded(flex: 3, child: SizedBox(height: 44, child: TextFormField(
+          controller: row.descCtrl, enabled: !locked,
+          decoration: dec.copyWith(hintText: 'e.g. 50% advance, balance NET 30'),
+          style: const TextStyle(fontSize: 13),
+        ))),
+        if (!locked) IconButton(
+          icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
+          onPressed: () => _removePaymentTerm(row),
+        ),
+      ]),
     );
   }
 
@@ -1446,6 +1529,15 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
   );
 
   // ── Action buttons ────────────────────────────────────────────────────────
+
+  Widget _buildCopyButton() => Tooltip(
+    message: 'Copy to new Purchase Order',
+    child: IconButton(
+      icon: const Icon(Icons.copy_outlined),
+      color: AppColors.primary,
+      onPressed: _applyCopy,
+    ),
+  );
 
   Widget _buildActionButtons({required bool canSave, required bool canApprove}) => Row(children: [
     if (canSave) FilledButton(
