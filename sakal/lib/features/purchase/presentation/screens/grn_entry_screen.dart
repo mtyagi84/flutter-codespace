@@ -527,7 +527,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
                     title: Text(orderNo, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                     subtitle: Text('${po['order_date']} · ${ccy ?? ''}', style: const TextStyle(fontSize: 12)),
                     onChanged: (v) => setDialogState(() {
-                      if (v == true) chosen.add(orderNo); else chosen.remove(orderNo);
+                      if (v == true) { chosen.add(orderNo); } else { chosen.remove(orderNo); }
                     }),
                   );
                 }).toList(),
@@ -563,9 +563,11 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
         final ccyCode   = currency is Map ? currency['currency_id'] as String? : null;
 
         if (_grnCurrencyId != null && ccyId != _grnCurrencyId) {
-          if (mounted) _showSnack(
-              'Skipped $orderNo — its currency (${ccyCode ?? '?'}) does not match this GRN\'s currency (${_grnCurrencyCode ?? '?'}).',
-              color: AppColors.negative);
+          if (mounted) {
+            _showSnack(
+                'Skipped $orderNo — its currency (${ccyCode ?? '?'}) does not match this GRN\'s currency (${_grnCurrencyCode ?? '?'}).',
+                color: AppColors.negative);
+          }
           continue;
         }
 

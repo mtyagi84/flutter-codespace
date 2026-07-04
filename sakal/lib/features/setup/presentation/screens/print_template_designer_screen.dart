@@ -492,7 +492,7 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
     if (isMobile) {
       return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [titleBlock, const SizedBox(height: 12), buttons]);
     }
-    return Row(children: [Expanded(child: titleBlock), buttons]);
+    return Row(children: [const Expanded(child: titleBlock), buttons]);
   }
 
   Widget _buildSettingsCard(bool isMobile) {
