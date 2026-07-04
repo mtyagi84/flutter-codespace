@@ -369,6 +369,17 @@ Never `CREATE POLICY ... FOR ALL USING (true) WITH CHECK (true)` on a real migra
 ### Immutability — never edit a posted/approved transaction in place
 Once a GRN/voucher/PO is APPROVED or POSTED, no screen or function may UPDATE its lines or amounts. A correction is always a new reversing entry + a new correct entry, never an in-place edit — this is what makes historical reports and backdated cost/tax corrections trustworthy. `fn_save_finance_voucher`/`fn_save_purchase_order`/`fn_save_grn` already enforce this (block edits once status leaves DRAFT); keep that enforcement in every future `fn_save_*`.
 
+### Error messages — never a raw ID, always the human label
+Never interpolate a raw UUID (or any other system-generated id) into a `RAISE EXCEPTION`/`USING DETAIL` message, or into any Flutter-side error/snackbar text. Always resolve and show the human label instead — `[code] name` for master data (accounts, taxes, products, charges), matching the Account Picker convention. This applies app-wide, backend and Flutter alike, not just posting functions.
+```sql
+-- WRONG — user sees a meaningless UUID
+USING DETAIL = format('Tax %s has no Input GL account configured.', v_tax_row.tax_id);
+
+-- CORRECT — resolve the label first (join/select the code+name columns you need)
+USING DETAIL = format('Tax [%s] %s has no Input GL account configured.', v_tax_row.tax_code, v_tax_row.tax_name);
+```
+Real bug caught live: `fn_approve_grn` showed `Tax c4dc5508-...-a914f785fa35 has no Input GL account configured.` — fixed in `046_grn_readable_error_messages.sql` (also fixed the two "no account resolved for product" messages and the charge-tax message in the same function, which had the identical defect). When adding a new `RAISE EXCEPTION` that references a row, pull its code/name columns into the query already in scope rather than reaching for `.id` as a shortcut.
+
 ---
 
 ## Dart / Flutter Rules (never get these wrong)
