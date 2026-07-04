@@ -191,6 +191,12 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
   bool    _consolidating = false;
   String? _actionError;
 
+  // ── Posted journal entries (read-only, APPROVED GRNs only) ──────────────
+  String? _postedVoucherNo;
+  String? _postedVoucherDate;
+  List<Map<String, dynamic>> _voucherLines = [];
+  bool _loadingVoucherLines = false;
+
   @override
   void initState() {
     super.initState();
@@ -351,11 +357,31 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
           _billToCtrl.text  = header.billTo ?? '';
           _shipToCtrl.text  = header.shipTo ?? '';
           _remarksCtrl.text = header.remarks ?? '';
+          _postedVoucherNo   = header.postedVoucherNo;
+          _postedVoucherDate = header.postedVoucherDate;
           _loading = false;
         });
       }
+      if (_postedVoucherNo != null && _postedVoucherDate != null) {
+        unawaited(_loadPostedVoucherLines());
+      }
     } catch (e) {
       if (mounted) setState(() { _loading = false; _error = 'Could not load GRN: $e'; });
+    }
+  }
+
+  Future<void> _loadPostedVoucherLines() async {
+    if (_postedVoucherNo == null || _postedVoucherDate == null) return;
+    setState(() => _loadingVoucherLines = true);
+    final session = ref.read(sessionProvider)!;
+    try {
+      final lines = await _ds.getPostedVoucherLines(
+        clientId: session.clientId, companyId: session.companyId,
+        voucherNo: _postedVoucherNo!, voucherDate: _postedVoucherDate!,
+      );
+      if (mounted) setState(() { _voucherLines = lines; _loadingVoucherLines = false; });
+    } catch (e) {
+      if (mounted) setState(() => _loadingVoucherLines = false);
     }
   }
 
@@ -1107,9 +1133,22 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
       await _ds.approve(
         clientId: session.clientId, companyId: session.companyId,
         grnNo: _grnNo!, grnDate: _fmtDate(_grnDate), approvedBy: session.userId);
+      // Re-fetch the header for the posted_voucher_no/date fn_approve_grn just
+      // assigned, so the Posted Journal Entries section can appear immediately
+      // without a full page reload.
+      final refreshed = await _ds.getHeader(
+        clientId: session.clientId, companyId: session.companyId, grnNo: _grnNo!, grnDate: _fmtDate(_grnDate));
       if (mounted) {
-        setState(() { _status = 'APPROVED'; _approving = false; });
+        setState(() {
+          _status = 'APPROVED';
+          _approving = false;
+          _postedVoucherNo   = refreshed?.postedVoucherNo;
+          _postedVoucherDate = refreshed?.postedVoucherDate;
+        });
         _showSnack('$_grnNo approved.', color: AppColors.positive);
+      }
+      if (_postedVoucherNo != null && _postedVoucherDate != null) {
+        unawaited(_loadPostedVoucherLines());
       }
     } on DioException catch (e) {
       if (mounted) setState(() { _approving = false; _actionError = 'Approve failed: ${_serverError(e)}'; });
@@ -1211,6 +1250,10 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
                       _buildChargesSection(locked, isMobile),
                       const SizedBox(height: 12),
                       _buildTotalsBar(),
+                      if (_status == 'APPROVED' && _postedVoucherNo != null) ...[
+                        const SizedBox(height: 20),
+                        _buildPostedVoucherSection(),
+                      ],
                     ],
                   ),
                 ),
@@ -1958,6 +2001,97 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
               color: color ?? AppColors.textPrimary)),
     ],
   );
+
+  // ── Posted journal entries (read-only, APPROVED GRNs only) ──────────────
+
+  Widget _buildPostedVoucherSection() {
+    Widget colHeader(String label, {TextAlign align = TextAlign.left}) => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Text(label, textAlign: align,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12)),
+    );
+    Widget cell(String text, {TextAlign align = TextAlign.left, bool bold = false}) => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Text(text, textAlign: align,
+          style: TextStyle(fontSize: 13, fontWeight: bold ? FontWeight.w700 : FontWeight.w400)),
+    );
+
+    double totalDebit = 0, totalCredit = 0;
+    for (final l in _voucherLines) {
+      final amount = (l['trans_amount'] as num? ?? 0).toDouble();
+      if (l['trans_nature'] == 'DR') { totalDebit += amount; } else { totalCredit += amount; }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          const Text('Posted Journal Entries',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(color: AppColors.positive.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+            child: Text(_postedVoucherNo ?? '', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.positive)),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        if (_loadingVoucherLines)
+          const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+        else if (_voucherLines.isEmpty)
+          const Padding(padding: EdgeInsets.all(16), child: Text('No journal entry lines found for this voucher.'))
+        else
+          Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
+            clipBehavior: Clip.antiAlias,
+            child: Column(children: [
+              Container(
+                color: AppColors.primary,
+                child: Row(children: [
+                  Expanded(flex: 3, child: colHeader('Voucher No')),
+                  Expanded(flex: 2, child: colHeader('Serial No')),
+                  Expanded(flex: 4, child: colHeader('Ledger Name')),
+                  Expanded(flex: 2, child: colHeader('Debit', align: TextAlign.right)),
+                  Expanded(flex: 2, child: colHeader('Credit', align: TextAlign.right)),
+                ]),
+              ),
+              for (var i = 0; i < _voucherLines.length; i++) Builder(builder: (_) {
+                final l = _voucherLines[i];
+                final account = l['account'] as Map<String, dynamic>?;
+                final ledgerName = account != null ? '[${account['account_code']}] ${account['account_name']}' : '—';
+                final amount = (l['trans_amount'] as num? ?? 0).toDouble();
+                final isDr = l['trans_nature'] == 'DR';
+                return Container(
+                  color: i.isEven ? Colors.white : AppColors.background,
+                  child: Row(children: [
+                    Expanded(flex: 3, child: cell(l['trans_no'] as String? ?? '')),
+                    Expanded(flex: 2, child: cell('${l['serial_no']}')),
+                    Expanded(flex: 4, child: cell(ledgerName)),
+                    Expanded(flex: 2, child: cell(isDr ? amount.toStringAsFixed(2) : '—', align: TextAlign.right)),
+                    Expanded(flex: 2, child: cell(!isDr ? amount.toStringAsFixed(2) : '—', align: TextAlign.right)),
+                  ]),
+                );
+              }),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.06),
+                  border: const Border(top: BorderSide(color: AppColors.border)),
+                ),
+                child: Row(children: [
+                  const Expanded(flex: 9, child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    child: Text('Total', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                  )),
+                  Expanded(flex: 2, child: cell(totalDebit.toStringAsFixed(2), align: TextAlign.right, bold: true)),
+                  Expanded(flex: 2, child: cell(totalCredit.toStringAsFixed(2), align: TextAlign.right, bold: true)),
+                ]),
+              ),
+            ]),
+          ),
+      ],
+    );
+  }
 
   // ── Action buttons ────────────────────────────────────────────────────────
 

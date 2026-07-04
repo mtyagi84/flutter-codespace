@@ -33,6 +33,14 @@ abstract class GrnRepository {
     required String grnDate,
   });
 
+  /// GL lines fn_post_voucher created when this GRN was approved.
+  Future<List<Map<String, dynamic>>> getPostedVoucherLines({
+    required String clientId,
+    required String companyId,
+    required String voucherNo,
+    required String voucherDate,
+  });
+
   /// Returns the assigned grn_no. Always online — never called while offline.
   Future<String> save({
     required Map<String, dynamic> header,

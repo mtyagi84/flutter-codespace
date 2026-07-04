@@ -17,6 +17,11 @@ class FinanceVoucherRemoteDs {
       'company_id':  'eq.$companyId',
       'location_id': 'eq.$locationId',
       'is_deleted':  'eq.false',
+      // This screen is for manually-entered Payment/Receipt vouchers only —
+      // system-generated journal entries (posting_source='AUTO', e.g. the
+      // JV a GRN approval creates via fn_post_voucher) belong to their
+      // source document's own screen, not here.
+      'posting_source': 'eq.MANUAL',
       'trans_date':  ['gte.$fromDate', 'lte.$toDate'],
       'select':      'trans_no,trans_date,voucher_type_code,payment_mode_code,is_on_account,is_posted,remarks',
       'order':       'trans_date.desc,trans_no.desc',

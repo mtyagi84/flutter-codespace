@@ -111,6 +111,15 @@ class GrnRepositoryImpl implements GrnRepository {
   }
 
   @override
+  Future<List<Map<String, dynamic>>> getPostedVoucherLines({
+    required String clientId,
+    required String companyId,
+    required String voucherNo,
+    required String voucherDate,
+  }) => _remote.getPostedVoucherLines(
+        clientId: clientId, companyId: companyId, voucherNo: voucherNo, voucherDate: voucherDate);
+
+  @override
   Future<String> save({
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,

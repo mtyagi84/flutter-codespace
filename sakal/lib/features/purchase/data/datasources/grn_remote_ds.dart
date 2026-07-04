@@ -17,6 +17,30 @@ class GrnRemoteDs {
       'uom:rim_common_masters!uom_id(description),'
       'tax_group:rim_tax_groups!tax_group_id(group_name)';
 
+  /// The GL lines fn_post_voucher created when this GRN was approved — for
+  /// the read-only "Posted Journal Entries" section on an APPROVED GRN.
+  /// Resolves the ledger name via a join rather than a client-side lookup
+  /// list, since GL lines can touch Stock/Accrual/Tax/Charge accounts that
+  /// were never loaded into the screen's own supplier picker.
+  Future<List<Map<String, dynamic>>> getPostedVoucherLines({
+    required String clientId,
+    required String companyId,
+    required String voucherNo,
+    required String voucherDate,
+  }) async {
+    final res = await _dio.get('/rid_finance_lines', queryParameters: {
+      'client_id':  'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'trans_no':   'eq.$voucherNo',
+      'trans_date': 'eq.$voucherDate',
+      'is_deleted': 'eq.false',
+      'select':     'serial_no,trans_no,trans_nature,trans_amount,'
+          'account:rim_accounts!account_id(account_code,account_name)',
+      'order':      'serial_no.asc',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
   // ── List ───────────────────────────────────────────────────────────────────
 
   Future<List<GrnModel>> listGrns({
