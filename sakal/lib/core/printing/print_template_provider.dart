@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../network/dio_client.dart';
 import '../providers/session_provider.dart';
 import 'default_templates/purchase_order_default_template.dart';
+import 'default_templates/grn_default_template.dart';
 import 'default_templates/voucher_default_template.dart';
 import 'print_models.dart';
 
@@ -39,6 +40,7 @@ final printTemplateProvider = FutureProvider.family<PrintTemplate, String>((ref,
 /// instead of a blank page.
 PrintTemplate defaultTemplateFor(String documentType) => switch (documentType) {
   'PURCHASE_ORDER' => purchaseOrderDefaultTemplate,
+  'GRN'            => grnDefaultTemplate,
   'VOUCHER'        => voucherDefaultTemplate,
   _ => throw ArgumentError('No default print template registered for document type "$documentType".'),
 };

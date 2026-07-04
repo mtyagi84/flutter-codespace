@@ -35,6 +35,8 @@ import '../../features/master/presentation/screens/account_link_configure_screen
 import '../../features/master/presentation/screens/item_account_links_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_list_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_entry_screen.dart';
+import '../../features/purchase/presentation/screens/grn_list_screen.dart';
+import '../../features/purchase/presentation/screens/grn_entry_screen.dart';
 import '../../features/master/presentation/screens/product_list_screen.dart';
 import '../../features/master/presentation/screens/product_entry_screen.dart';
 import '../../features/setup/presentation/screens/category_levels_screen.dart';
@@ -199,7 +201,17 @@ final appRouter = GoRouter(
             );
           },
         ),
-        GoRoute(path: RouteNames.goodsReceipt,     builder: (c, s) => const _Placeholder('Goods Receipt')),
+        GoRoute(path: RouteNames.goodsReceipt, builder: (c, s) => const GrnListScreen()),
+        GoRoute(
+          path: RouteNames.grnEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return GrnEntryScreen(
+              editGrnNo:   extra?['grnNo']   as String?,
+              editGrnDate: extra?['grnDate'] as String?,
+            );
+          },
+        ),
         GoRoute(path: RouteNames.purchaseInvoices, builder: (c, s) => const _Placeholder('Purchase Invoice')),
         GoRoute(path: RouteNames.supplierPayment,  builder: (c, s) => const _Placeholder('Supplier Payment')),
 

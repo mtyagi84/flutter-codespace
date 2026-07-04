@@ -37,6 +37,7 @@ class RouteNames {
   static const String purchaseOrders   = '/purchase/orders';
   static const String purchaseOrderEntry = '/purchase/order-entry';
   static const String goodsReceipt     = '/purchase/grn';
+  static const String grnEntry         = '/purchase/grn-entry';
   static const String purchaseInvoices = '/purchase/invoices';
   static const String supplierPayment  = '/purchase/payments';
 

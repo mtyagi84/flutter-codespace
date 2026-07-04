@@ -9,6 +9,7 @@ import 'tables/common_masters_cache_table.dart';
 import 'tables/products_cache_table.dart';
 import 'tables/purchase_order_cache_tables.dart';
 import 'tables/generic_lookup_cache_table.dart';
+import 'tables/grn_cache_tables.dart';
 
 part 'app_database.g.dart';
 
@@ -26,12 +27,15 @@ part 'app_database.g.dart';
   PoChargeLinesCache,
   PoPaymentTermsCache,
   GenericLookupCache,
+  GrnHeadersCache,
+  GrnLinesCache,
+  GrnChargeLinesCache,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'sakal_local'));
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -59,6 +63,11 @@ class AppDatabase extends _$AppDatabase {
           // on upgrade rather than migrated, since this is a device-local
           // cache rebuilt from the server, not a data store of record.
           if (from < 9) await m.createTable(poPaymentTermsCache);
+          if (from < 10) {
+            await m.createTable(grnHeadersCache);
+            await m.createTable(grnLinesCache);
+            await m.createTable(grnChargeLinesCache);
+          }
         },
       );
 }

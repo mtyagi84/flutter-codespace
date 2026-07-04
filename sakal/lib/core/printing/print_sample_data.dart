@@ -45,6 +45,35 @@ class PrintSampleData {
         'grand_total': 604.2,
       },
     },
+    'GRN' => {
+      'company': _company(),
+      'header': {
+        'grn_no':               'GRN/2026/00001',
+        'grn_date':             '10 Jul 2026',
+        'status':               'DRAFT',
+        'receipt_mode':         'Against PO',
+        'supplier_name':        '[2110] Sample Supplier Ltd',
+        'currency_code':        'USD',
+        'supplier_delivery_no': 'DN-4521',
+        'bill_to':              'Head Office, Lubumbashi',
+        'ship_to':              'Main Warehouse, Lubumbashi',
+        'remarks':              'Sample remarks for preview.',
+      },
+      'lines': [
+        {'product_name': 'Sample Item A', 'uom_label': 'Piece', 'base_qty': 10, 'rate': 25.5, 'final_amount': 255.0},
+        {'product_name': 'Sample Item B', 'uom_label': 'Carton', 'base_qty': 2, 'rate': 120.0, 'final_amount': 240.0},
+      ],
+      'charges': [
+        {'charge_name': 'Freight', 'amount': 30.0},
+      ],
+      'totals': {
+        'gross_amount': 495.0,
+        'discount_amount': 0.0,
+        'item_tax_amount': 79.2,
+        'charges_amount': 30.0,
+        'grand_total': 604.2,
+      },
+    },
     'VOUCHER' => {
       'company': _company(),
       'header': {
