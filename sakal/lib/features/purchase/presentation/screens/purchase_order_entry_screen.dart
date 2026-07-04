@@ -1190,6 +1190,12 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     // loose qty (entered before the company switched to Pack Only) must keep
     // contributing to baseQty, not silently lose data.
     final showLooseQty = (ref.read(sessionProvider)?.qtyEntryMode ?? 'PACK_AND_LOOSE') != 'PACK_ONLY';
+    // Barcode search is a company-level setup decision (ric_companies.enable_barcode,
+    // migration 027) — same gate the Product Master screen already uses, not a
+    // PO-specific toggle. Hidden entirely (not just disabled) when off, since a
+    // company that never enabled barcode coding has no rim_product_uom.barcode
+    // data for the lookup to match against anyway.
+    final showBarcode = ref.read(sessionProvider)?.enableBarcode ?? false;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       elevation: 0,
@@ -1198,13 +1204,15 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            SizedBox(width: 140, height: 48, child: TextFormField(
-              controller: row.barcodeCtrl, enabled: !locked,
-              decoration: dec.copyWith(labelText: 'Scan/Enter Barcode'),
-              style: const TextStyle(fontSize: 12),
-              onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
-            )),
-            const SizedBox(width: 8),
+            if (showBarcode) ...[
+              SizedBox(width: 140, height: 48, child: TextFormField(
+                controller: row.barcodeCtrl, enabled: !locked,
+                decoration: dec.copyWith(labelText: 'Scan/Enter Barcode'),
+                style: const TextStyle(fontSize: 12),
+                onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
+              )),
+              const SizedBox(width: 8),
+            ],
             Expanded(
               child: _searchField<Map<String, dynamic>>(
                 height: 48,
