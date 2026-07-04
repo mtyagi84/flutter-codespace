@@ -465,7 +465,7 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
   }
 
   Widget _buildHeader(bool isMobile, bool offline) {
-    final titleBlock = const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    const titleBlock = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('Template Designer', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
       SizedBox(height: 4),
       Text('Design a custom print layout — use Preview to see it with sample data before saving.',
