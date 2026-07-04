@@ -165,7 +165,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ── Plan ──────────────────────────────────────────────────────────────────────
-SELECT plan(10);
+SELECT plan(13);
 
 SELECT ok(
   (SELECT status FROM rih_grn_headers
@@ -276,6 +276,97 @@ SELECT ok(
     WHERE client_id = '00000000-0000-0000-0038-000000000001' AND grn_no = current_setting('pgtap.v_direct_grn_no_038')
   ),
   'ok 10 — Direct GRN saves with receipt_mode=DIRECT and shows zero rows in v_grn_po_links (no PO reference on its line)'
+);
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Migration 051: GRN raised in a currency OTHER than base — the exact bug
+-- reported live (a EUR GRN posted trans_currency='USD'). The fixture's base
+-- currency is USD, so this exercises the actual conversion path the original
+-- bug skipped entirely.
+-- ══════════════════════════════════════════════════════════════════════════════
+
+DO $$
+BEGIN
+  INSERT INTO rim_currencies (id, client_id, company_id, currency_id, currency_name, currency_notation, is_active, created_at)
+  VALUES ('00000000-0000-0000-0038-000000000015', '00000000-0000-0000-0038-000000000001', '00000000-0000-0000-0038-000000000002',
+          'EUR', 'Euro', '€', true, now())
+  ON CONFLICT (id) DO NOTHING;
+
+  -- USD -> EUR at 0.5, so EUR -> USD (rate_to_base) is 1/0.5 = 2 — a clean
+  -- number to assert against without floating-point rounding noise.
+  INSERT INTO rim_exchange_rates (client_id, company_id, location_id, rate_date, from_currency, to_currency, buying_rate, selling_rate, created_by)
+  VALUES ('00000000-0000-0000-0038-000000000001', '00000000-0000-0000-0038-000000000002', '00000000-0000-0000-0038-000000000003',
+          '2026-06-03', 'USD', 'EUR', 0.5, 0.5, '00000000-0000-0000-0038-000000000004')
+  ON CONFLICT (client_id, company_id, location_id, rate_date, from_currency, to_currency) DO NOTHING;
+END;
+$$ LANGUAGE plpgsql;
+
+DO $$
+DECLARE
+  v_eur_grn_no text;
+BEGIN
+  v_eur_grn_no := fn_save_grn(
+    jsonb_build_object(
+      'client_id', '00000000-0000-0000-0038-000000000001',
+      'company_id', '00000000-0000-0000-0038-000000000002',
+      'location_id', '00000000-0000-0000-0038-000000000003',
+      'grn_no', NULL, 'grn_date', '2026-06-03',
+      'supplier_id', '00000000-0000-0000-0038-000000000006',
+      'receipt_mode', 'DIRECT',
+      'grn_currency_id', '00000000-0000-0000-0038-000000000015',
+      'rate_to_base', 2, 'rate_to_local', 3
+    ),
+    jsonb_build_array(
+      jsonb_build_object(
+        'serial_no', 1, 'product_id', '00000000-0000-0000-0038-000000000009',
+        'qty_pack', 1, 'qty_loose', 0, 'base_qty', 1, 'rate', 100,
+        'gross_amount', 100, 'tax_amount', 0, 'final_amount', 100, 'charge_amount', 0, 'landed_amount', 100
+      )
+    ),
+    '[]'::jsonb, '[]'::jsonb, '[]'::jsonb,
+    '00000000-0000-0000-0038-000000000004'
+  );
+  PERFORM set_config('pgtap.v_eur_grn_no_038', v_eur_grn_no, false);
+
+  PERFORM fn_approve_grn(
+    '00000000-0000-0000-0038-000000000001', '00000000-0000-0000-0038-000000000002',
+    v_eur_grn_no, '2026-06-03'::date, '00000000-0000-0000-0038-000000000004'
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT ok(
+  (SELECT trans_currency FROM rid_finance_lines
+   WHERE client_id = '00000000-0000-0000-0038-000000000001'
+     AND trans_no = (SELECT posted_voucher_no FROM rih_grn_headers WHERE grn_no = current_setting('pgtap.v_eur_grn_no_038'))
+     AND source_line_type = 'STOCK' AND source_line_no = 1) = 'EUR',
+  'ok 11 — a GRN raised in EUR posts trans_currency=EUR, not the company base currency (USD) — the bug reported live'
+);
+
+SELECT ok(
+  (SELECT trans_amount FROM rid_finance_lines
+   WHERE client_id = '00000000-0000-0000-0038-000000000001'
+     AND trans_no = (SELECT posted_voucher_no FROM rih_grn_headers WHERE grn_no = current_setting('pgtap.v_eur_grn_no_038'))
+     AND source_line_type = 'STOCK' AND source_line_no = 1) = 100
+  AND
+  (SELECT base_amount FROM rid_finance_lines
+   WHERE client_id = '00000000-0000-0000-0038-000000000001'
+     AND trans_no = (SELECT posted_voucher_no FROM rih_grn_headers WHERE grn_no = current_setting('pgtap.v_eur_grn_no_038'))
+     AND source_line_type = 'STOCK' AND source_line_no = 1) = 200,
+  'ok 12 — base_amount = trans_amount(100) * rate_to_base(2) = 200 (previously base_amount just copied trans_amount with rate hardcoded to 1)'
+);
+
+SELECT ok(
+  (SELECT party_currency FROM rid_finance_lines
+   WHERE client_id = '00000000-0000-0000-0038-000000000001'
+     AND trans_no = (SELECT posted_voucher_no FROM rih_grn_headers WHERE grn_no = current_setting('pgtap.v_eur_grn_no_038'))
+     AND source_line_type = 'STOCK' AND source_line_no = 1) = 'EUR'
+  AND
+  (SELECT party_rate FROM rid_finance_lines
+   WHERE client_id = '00000000-0000-0000-0038-000000000001'
+     AND trans_no = (SELECT posted_voucher_no FROM rih_grn_headers WHERE grn_no = current_setting('pgtap.v_eur_grn_no_038'))
+     AND source_line_type = 'STOCK' AND source_line_no = 1) = 1,
+  'ok 13 — Stock account has no configured ledger currency, so party_currency falls back to the GRN currency (EUR) at party_rate=1'
 );
 
 SELECT * FROM finish();
