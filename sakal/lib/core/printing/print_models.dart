@@ -160,19 +160,30 @@ class PrintCondition {
   }
 }
 
-/// One positioned (canvas) or stacked (flow) item on the page.
+/// One item on the page. Meaning of x/y/w/h depends on which renderer reads
+/// them:
+///   Canvas (A4/Letter, pdf_canvas_renderer.dart) — a FLOWING document, not
+///     a fixed-pixel canvas: elements sharing the same `y` render side by
+///     side in one row (e.g. "PO No" + "Date"); different `y` values become
+///     separate rows in ascending order. `w` is each element's relative
+///     flex weight within its row, not an absolute width. `x`/`y`/`w` are
+///     therefore ordering/grouping keys, not literal coordinates — a fixed
+///     pixel position can't work for a line-item table whose row count
+///     varies per document. `h` only matters for element types with no
+///     natural size of their own (image, barcode, rect).
+///   Flow (receipt, pdf_flow_renderer.dart) — x/y/w/h are ignored entirely;
+///     elements simply stack in list order, full width.
 class PrintElement {
   final String id;
   final PrintElementType type;
 
-  // Canvas positioning, millimetres from the page's top-left. Ignored by
-  // the flow/receipt renderer, which stacks elements in list order instead.
   final double x, y, w, h;
 
   final String? text;   // literal text — type=text, or watermark caption
   final String? bind;   // data-binding path — type=field/image/barcode/table
   final String? label;  // optional prefix, e.g. "PO No: " — type=field
   final PrintFont font;
+  final PrintDataFormat format; // type=field — e.g. currency so "9.8" prints as "9.80"
 
   final List<PrintTableColumn> columns; // type=table
   final bool showHeader;                // type=table
@@ -192,6 +203,7 @@ class PrintElement {
     this.bind,
     this.label,
     this.font = const PrintFont(),
+    this.format = PrintDataFormat.text,
     this.columns = const [],
     this.showHeader = true,
     this.barcodeFormat = PrintBarcodeFormat.code128,
@@ -209,6 +221,7 @@ class PrintElement {
     bind:          j['bind'] as String?,
     label:         j['label'] as String?,
     font:          j['font'] != null ? PrintFont.fromJson(j['font'] as Map<String, dynamic>) : const PrintFont(),
+    format:        _formatFromJson(j['format'] as String?),
     columns:       (j['columns'] as List<dynamic>? ?? [])
         .map((c) => PrintTableColumn.fromJson(c as Map<String, dynamic>)).toList(),
     showHeader:    j['showHeader'] as bool? ?? true,
@@ -222,6 +235,7 @@ class PrintElement {
     if (bind != null) 'bind': bind,
     if (label != null) 'label': label,
     'font': font.toJson(),
+    'format': format.name,
     if (columns.isNotEmpty) 'columns': columns.map((c) => c.toJson()).toList(),
     'showHeader': showHeader,
     'barcodeFormat': barcodeFormat.name,

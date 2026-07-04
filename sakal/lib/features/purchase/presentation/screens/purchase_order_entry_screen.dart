@@ -751,6 +751,9 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         'buyer_name':    buyerName ?? '',
         'currency_code': _poCurrencyCode ?? '',
         'po_type':       _poType,
+        'bill_to':       _billToCtrl.text,
+        'ship_to':       _shipToCtrl.text,
+        'remarks':       _remarksCtrl.text,
       },
       'lines': _lines.where((l) => l.productId != null).map((l) {
         final desc = l.productDisplay.contains('] ') ? l.productDisplay.split('] ').last : l.productDisplay;
@@ -767,7 +770,13 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
       'paymentTerms': _paymentTerms.where((t) => t.termId != null).map((t) => {
         'term_name': t.termName, 'description': t.descCtrl.text,
       }).toList(),
-      'totals': {'grand_total': _grandTotal},
+      'totals': {
+        'gross_amount':    _grossTotal,
+        'discount_amount': _discountTotal,
+        'item_tax_amount': _itemTaxTotal,
+        'charges_amount':  _chargesTotal,
+        'grand_total':     _grandTotal,
+      },
     };
   }
 

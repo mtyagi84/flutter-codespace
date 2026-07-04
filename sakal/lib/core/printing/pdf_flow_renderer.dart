@@ -44,7 +44,7 @@ class PdfFlowRenderer {
 
       case PrintElementType.field:
         final value = resolveScalar(document, el.bind ?? '');
-        return _line('${el.label ?? ''}${value ?? ''}', el.font);
+        return _line('${el.label ?? ''}${formatPrintValue(value, el.format)}', el.font);
 
       case PrintElementType.image:
         final b64 = resolveScalar(document, el.bind ?? '') as String?;
