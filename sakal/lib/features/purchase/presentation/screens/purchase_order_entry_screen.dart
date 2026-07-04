@@ -894,7 +894,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
                       const SizedBox(height: 20),
                       _buildChargesSection(locked, isMobile),
                       const SizedBox(height: 20),
-                      _buildPaymentTermsSection(locked),
+                      _buildPaymentTermsSection(locked, isMobile),
                       const SizedBox(height: 12),
                       _buildTotalsBar(),
                     ],
@@ -1182,7 +1182,9 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
   // dispatch", "Balance NET 30" -> "From GRN date"). Saved to
   // rid_po_payment_terms — see backend/migrations/040_po_payment_terms_and_line_validation.sql.
 
-  Widget _buildPaymentTermsSection(bool locked) {
+  static const _termColWidth = 220.0;
+
+  Widget _buildPaymentTermsSection(bool locked, bool isMobile) {
     const btnW = 32.0;
     Widget colHeader(String label) => Padding(
       padding: const EdgeInsets.only(bottom: 4, left: 2),
@@ -1201,14 +1203,18 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         const SizedBox(height: 8),
         if (_paymentTerms.isEmpty)
           const Padding(padding: EdgeInsets.all(16), child: Text('No payment terms added.'))
+        else if (isMobile)
+          ..._paymentTerms.map((row) => _buildPaymentTermCardMobile(row, locked))
         else ...[
           // Column headers shown once above the data rows — same pattern as
           // Finance Voucher Entry's On Account section, instead of repeating
-          // a floating labelText on every row.
+          // a floating labelText on every row. Term stays a fixed width (its
+          // options are short labels); Description expands to claim whatever
+          // space is left, however wide the screen.
           Row(children: [
-            Expanded(flex: 2, child: colHeader('Term')),
+            SizedBox(width: _termColWidth, child: colHeader('Term')),
             const SizedBox(width: 12),
-            Expanded(flex: 3, child: colHeader('Description')),
+            Expanded(child: colHeader('Description')),
             if (!locked) SizedBox(width: btnW + 8),
           ]),
           ..._paymentTerms.map((row) => _buildPaymentTermCard(row, locked)),
@@ -1223,7 +1229,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-        Expanded(flex: 2, child: SizedBox(height: 44, child: DropdownButtonFormField<String>(
+        SizedBox(width: _termColWidth, height: 44, child: DropdownButtonFormField<String>(
           decoration: dec,
           isExpanded: true,
           initialValue: row.termId,
@@ -1234,9 +1240,9 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
             if (t == null) return;
             setState(() { row.termId = t['id'] as String; row.termName = t['description'] as String; });
           },
-        ))),
+        )),
         const SizedBox(width: 12),
-        Expanded(flex: 3, child: SizedBox(height: 44, child: TextFormField(
+        Expanded(child: SizedBox(height: 44, child: TextFormField(
           controller: row.descCtrl, enabled: !locked,
           decoration: dec.copyWith(hintText: 'e.g. 50% advance, balance NET 30'),
           style: const TextStyle(fontSize: 13),
@@ -1246,6 +1252,42 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
           onPressed: () => _removePaymentTerm(row),
         ),
       ]),
+    );
+  }
+
+  Widget _buildPaymentTermCardMobile(_PaymentTermRow row, bool locked) {
+    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: DropdownButtonFormField<String>(
+              decoration: dec.copyWith(labelText: 'Term'),
+              isExpanded: true,
+              initialValue: row.termId,
+              items: _paymentTermMasters.map((t) => DropdownMenuItem(value: t['id'] as String,
+                  child: Text(t['description'] as String, style: const TextStyle(fontSize: 13)))).toList(),
+              onChanged: locked ? null : (v) {
+                final t = _paymentTermMasters.where((x) => x['id'] == v).firstOrNull;
+                if (t == null) return;
+                setState(() { row.termId = t['id'] as String; row.termName = t['description'] as String; });
+              },
+            )),
+            if (!locked) IconButton(
+              icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
+              onPressed: () => _removePaymentTerm(row),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          TextFormField(controller: row.descCtrl, enabled: !locked,
+              decoration: dec.copyWith(labelText: 'Description'), style: const TextStyle(fontSize: 13)),
+        ]),
+      ),
     );
   }
 
@@ -1428,23 +1470,113 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
 
   // ── Charges section ──────────────────────────────────────────────────────
 
-  Widget _buildChargesSection(bool locked, bool isMobile) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(children: [
-        const Text('Additional Charges', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-        const Spacer(),
-        if (!locked && _additionalCharges.isNotEmpty)
-          TextButton.icon(onPressed: _addCharge, icon: const Icon(Icons.add, size: 16), label: const Text('Add Charge')),
-      ]),
-      const SizedBox(height: 8),
-      if (_charges.isEmpty)
-        const Padding(padding: EdgeInsets.all(16), child: Text('No additional charges (freight, loading, handling…).')),
-      ..._charges.map((row) => _buildChargeCard(row, locked)),
-    ],
-  );
+  Widget _buildChargesSection(bool locked, bool isMobile) {
+    const btnW = 32.0;
+    Widget colHeader(String label, {TextAlign align = TextAlign.left}) => Padding(
+      padding: const EdgeInsets.only(bottom: 4, left: 2),
+      child: Text(label, textAlign: align,
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          const Text('Additional Charges', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          const Spacer(),
+          if (!locked && _additionalCharges.isNotEmpty)
+            TextButton.icon(onPressed: _addCharge, icon: const Icon(Icons.add, size: 16), label: const Text('Add Charge')),
+        ]),
+        const SizedBox(height: 8),
+        if (_charges.isEmpty)
+          const Padding(padding: EdgeInsets.all(16), child: Text('No additional charges (freight, loading, handling…).'))
+        else if (isMobile)
+          ..._charges.map((row) => _buildChargeCardMobile(row, locked))
+        else ...[
+          // Same fixed-column pattern as Payment Terms — every row lines up
+          // under the same headers instead of a Wrap that reflows narrower
+          // or wider per row depending on which optional widgets (e.g. the
+          // Tax figure) happen to render for that charge.
+          Row(children: [
+            Expanded(flex: 3, child: colHeader('Charge Type')),
+            const SizedBox(width: 12),
+            Expanded(flex: 2, child: colHeader('Amount / %', align: TextAlign.right)),
+            const SizedBox(width: 12),
+            const SizedBox(width: 72),
+            const SizedBox(width: 12),
+            Expanded(flex: 2, child: colHeader('Amount', align: TextAlign.right)),
+            const SizedBox(width: 12),
+            Expanded(flex: 2, child: colHeader('Tax', align: TextAlign.right)),
+            if (!locked) SizedBox(width: btnW + 8),
+          ]),
+          ..._charges.map((row) => _buildChargeCard(row, locked)),
+        ],
+      ],
+    );
+  }
 
   Widget _buildChargeCard(_ChargeRow row, bool locked) {
+    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
+    Widget rightText(String text, {Color? color, bool bold = false}) => Text(text,
+        textAlign: TextAlign.right,
+        style: TextStyle(fontSize: 13, color: color ?? AppColors.textPrimary,
+            fontWeight: bold ? FontWeight.w700 : FontWeight.w400));
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        Expanded(flex: 3, child: SizedBox(height: 44, child: DropdownButtonFormField<String>(
+          decoration: dec,
+          isExpanded: true,
+          initialValue: row.chargeId,
+          items: _additionalCharges.map((c) => DropdownMenuItem(value: c['id'] as String,
+              child: Text(c['charge_name'] as String, style: const TextStyle(fontSize: 13)))).toList(),
+          onChanged: locked ? null : (v) {
+            final c = _additionalCharges.where((x) => x['id'] == v).firstOrNull;
+            if (c == null) return;
+            setState(() {
+              row.chargeId        = c['id'] as String;
+              row.chargeName      = c['charge_name'] as String;
+              row.isTaxable       = c['is_taxable'] as bool? ?? false;
+              row.taxId           = c['tax_id'] as String?;
+              row.nature          = c['nature'] as String? ?? 'ADD';
+              row.glAccountId     = c['default_gl_account_id'] as String?;
+              row.amountOrPercent = c['amount_or_percent'] as String? ?? 'AMOUNT';
+            });
+          },
+        ))),
+        const SizedBox(width: 12),
+        Expanded(flex: 2, child: SizedBox(height: 44, child: TextFormField(
+          controller: row.valueCtrl, enabled: !locked, textAlign: TextAlign.right,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: dec.copyWith(hintText: row.amountOrPercent == 'PERCENT' ? '%' : 'Amount'),
+          style: const TextStyle(fontSize: 13), onChanged: (_) => setState(() {}),
+        ))),
+        const SizedBox(width: 12),
+        SizedBox(width: 72, child: Center(child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: (row.nature == 'DEDUCT' ? AppColors.negative : AppColors.positive).withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(row.nature == 'DEDUCT' ? 'Deduct' : 'Add',
+              style: TextStyle(fontSize: 11, color: row.nature == 'DEDUCT' ? AppColors.negative : AppColors.positive)),
+        ))),
+        const SizedBox(width: 12),
+        Expanded(flex: 2, child: rightText(row.amount.toStringAsFixed(2))),
+        const SizedBox(width: 12),
+        Expanded(flex: 2, child: rightText(row.isTaxable ? row.taxAmount.toStringAsFixed(2) : '—',
+            color: row.isTaxable ? null : AppColors.textDisabled)),
+        if (!locked) IconButton(
+          icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
+          onPressed: () => _removeCharge(row),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildChargeCardMobile(_ChargeRow row, bool locked) {
     const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
         contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
     return Card(
