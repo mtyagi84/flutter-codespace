@@ -650,6 +650,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
         ccyId   = byCurrency.keys.firstOrNull;
         ccyCode = ccyId != null ? byCurrency[ccyId] : null;
       } else {
+        if (!mounted) return false;
         final picked = await showDialog<MapEntry<String, String?>>(
           context: context,
           builder: (dialogContext) => SimpleDialog(
