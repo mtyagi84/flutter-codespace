@@ -445,13 +445,14 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
       _showSnack('No product found for barcode "$barcode".', color: AppColors.negative);
       return;
     }
-    await _onProductSelected(row, match, fromBarcode: true);
+    final matchedProduct = match; // re-bind: null-promotion doesn't survive into the setState closure below
+    await _onProductSelected(row, matchedProduct, fromBarcode: true);
     // If _onProductSelected rejected the match as a duplicate, row.productId
     // still points at whatever it was before — don't override UOM/factor.
-    if (mounted && row.productId == match['id']) {
+    if (mounted && row.productId == matchedProduct['id']) {
       setState(() {
-        row.uomId               = match['matched_uom_id'] as String? ?? row.uomId;
-        row.convFactorCtrl.text = (match['matched_uom_conversion_factor'] as num? ?? 1).toString();
+        row.uomId               = matchedProduct['matched_uom_id'] as String? ?? row.uomId;
+        row.convFactorCtrl.text = (matchedProduct['matched_uom_conversion_factor'] as num? ?? 1).toString();
         row.convFactorLocked    = true;
         row.barcodeCtrl.clear();
       });
@@ -1264,7 +1265,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
             SizedBox(width: _termColWidth, child: colHeader('Term')),
             const SizedBox(width: 12),
             Expanded(child: colHeader('Description')),
-            if (!locked) SizedBox(width: btnW + 8),
+            if (!locked) const SizedBox(width: btnW + 8),
           ]),
           ..._paymentTerms.map((row) => _buildPaymentTermCard(row, locked)),
         ],
@@ -1556,7 +1557,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
             Expanded(flex: 2, child: colHeader('Amount', align: TextAlign.right)),
             const SizedBox(width: 12),
             Expanded(flex: 2, child: colHeader('Tax', align: TextAlign.right)),
-            if (!locked) SizedBox(width: btnW + 8),
+            if (!locked) const SizedBox(width: btnW + 8),
           ]),
           ..._charges.map((row) => _buildChargeCard(row, locked)),
         ],

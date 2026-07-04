@@ -46,12 +46,16 @@ class PdfCanvasRenderer {
         ),
       );
     }
+    // pw.Positioned has no width/height parameters (unlike Flutter's) — size
+    // the content with a SizedBox instead and only position its top-left.
     return pw.Positioned(
-      left:   el.x * PdfPageFormat.mm,
-      top:    el.y * PdfPageFormat.mm,
-      width:  el.w * PdfPageFormat.mm,
-      height: el.h * PdfPageFormat.mm,
-      child:  _content(el, document),
+      left: el.x * PdfPageFormat.mm,
+      top:  el.y * PdfPageFormat.mm,
+      child: pw.SizedBox(
+        width:  el.w * PdfPageFormat.mm,
+        height: el.h * PdfPageFormat.mm,
+        child:  _content(el, document),
+      ),
     );
   }
 

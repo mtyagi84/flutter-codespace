@@ -6,7 +6,7 @@ import '../print_models.dart';
 /// custom one. Field bindings match the document map built by
 /// PurchaseOrderEntryScreen's Print handler — see that screen's
 /// `_buildPrintDocument()`.
-final purchaseOrderDefaultTemplate = PrintTemplate(
+const purchaseOrderDefaultTemplate = PrintTemplate(
   documentType: 'PURCHASE_ORDER',
   templateName: 'Default',
   paperProfile: PaperProfile.a4,

@@ -8,7 +8,7 @@ import '../print_models.dart';
 /// element can serve both modes — a deliberate v1 simplification; a richer
 /// dual-mode layout (separate bill no/date/balance columns) can be built in
 /// the template designer (Phase 2) once it exists.
-final voucherDefaultTemplate = PrintTemplate(
+const voucherDefaultTemplate = PrintTemplate(
   documentType: 'VOUCHER',
   templateName: 'Default',
   paperProfile: PaperProfile.a4,
@@ -64,10 +64,18 @@ final voucherDefaultTemplate = PrintTemplate(
       id: 'remarks', type: PrintElementType.field, bind: 'header.remarks', label: 'Remarks: ',
       x: 15, y: 77, w: 180, h: 6, font: const PrintFont(size: 9),
     ),
-    PrintElement(id: 'div2', type: PrintElementType.line, x: 15, y: 85, w: 180, h: 1),
+    // Against Bill only — same "Party: X" line the old builder showed above
+    // the bill table. is_on_account_str is a string ('true'/'false') since
+    // PrintCondition compares against a string value.
+    PrintElement(
+      id: 'party_name', type: PrintElementType.field, bind: 'header.party_name', label: 'Party: ',
+      x: 15, y: 83, w: 180, h: 5, font: const PrintFont(size: 10, bold: true),
+      showWhen: const PrintCondition(field: 'header.is_on_account_str', equals: 'false'),
+    ),
+    PrintElement(id: 'div2', type: PrintElementType.line, x: 15, y: 89, w: 180, h: 1),
     PrintElement(
       id: 'lines_table', type: PrintElementType.table, bind: 'lines',
-      x: 15, y: 89, w: 180, h: 100,
+      x: 15, y: 93, w: 180, h: 100,
       columns: const [
         PrintTableColumn(bind: 'particulars', label: 'Particulars', width: 70),
         PrintTableColumn(bind: 'amount', label: 'Amount', width: 40, align: PrintAlign.right, format: PrintDataFormat.currency),
@@ -77,17 +85,17 @@ final voucherDefaultTemplate = PrintTemplate(
     ),
     PrintElement(
       id: 'total', type: PrintElementType.field, bind: 'totals.total_display', label: 'Total: ',
-      x: 115, y: 195, w: 80, h: 8,
+      x: 115, y: 197, w: 80, h: 8,
       font: const PrintFont(size: 12, bold: true, align: PrintAlign.right),
     ),
-    PrintElement(id: 'div3', type: PrintElementType.line, x: 15, y: 230, w: 180, h: 1),
+    PrintElement(id: 'div3', type: PrintElementType.line, x: 15, y: 232, w: 180, h: 1),
     PrintElement(
       id: 'prepared_by', type: PrintElementType.field, bind: 'signatures.prepared_by', label: 'Prepared By: ',
-      x: 15, y: 235, w: 80, h: 6, font: const PrintFont(size: 9, align: PrintAlign.center),
+      x: 15, y: 237, w: 80, h: 6, font: const PrintFont(size: 9, align: PrintAlign.center),
     ),
     PrintElement(
       id: 'authorised_by', type: PrintElementType.field, bind: 'signatures.authorised_by', label: 'Authorised By: ',
-      x: 115, y: 235, w: 80, h: 6, font: const PrintFont(size: 9, align: PrintAlign.center),
+      x: 115, y: 237, w: 80, h: 6, font: const PrintFont(size: 9, align: PrintAlign.center),
     ),
   ],
 );

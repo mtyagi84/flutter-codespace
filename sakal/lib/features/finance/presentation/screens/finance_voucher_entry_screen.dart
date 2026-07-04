@@ -492,6 +492,11 @@ class _FinanceVoucherEntryScreenState
         'currency_line':      showRate
             ? 'Currency: $tc (1 $_baseCurrency = ${_fmtRate(_confirmedDisplayRate)} $tc)' : '',
         'remarks':            _remarksCtrl.text,
+        // Against Bill only — shown via a showWhen condition in the
+        // template, same as the old builder's "Party: X" line above the
+        // bill table.
+        'is_on_account_str':  _isOnAccount.toString(),
+        'party_name':         _partyName ?? '',
       },
       'lines': rows,
       'totals': {'total_display': '${_totalTransAmount.toStringAsFixed(2)} $tc'},
