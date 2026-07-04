@@ -64,6 +64,11 @@ abstract class GrnRepository {
 
   // ── Against-PO consolidation — always online (needs live PO balances) ──────
 
+  Future<List<Map<String, dynamic>>> getSuppliersWithOpenPos({
+    required String clientId,
+    required String companyId,
+  });
+
   Future<List<Map<String, dynamic>>> getOpenPurchaseOrdersForSupplier({
     required String clientId,
     required String companyId,
@@ -75,6 +80,7 @@ abstract class GrnRepository {
     required String companyId,
     required String orderNo,
     required String orderDate,
+    String? excludeGrnNo,
   });
 
   Future<List<Map<String, dynamic>>> getPoChargeLinesForOrder({

@@ -199,13 +199,21 @@ class GrnRemoteDs {
     return List<Map<String, dynamic>>.from(res.data as List);
   }
 
-  /// This PO's lines that still have qty outstanding (base_qty > qty_received),
-  /// with the pending quantity pre-computed for the caller.
+  /// This PO's lines that still have qty outstanding, with the pending
+  /// quantity pre-computed onto each row as 'pending_qty'.
+  ///
+  /// qty_received only reflects APPROVED GRNs (fn_approve_grn increments it
+  /// at approval time) — a second, still-DRAFT GRN against the same PO would
+  /// otherwise see the full original ordered quantity as available, letting
+  /// two drafts both claim the same stock. [excludeGrnNo] is the GRN
+  /// currently being edited, if any — its own lines must not be treated as
+  /// "already committed by someone else".
   Future<List<Map<String, dynamic>>> getPendingPoLines({
     required String clientId,
     required String companyId,
     required String orderNo,
     required String orderDate,
+    String? excludeGrnNo,
   }) async {
     final res = await _dio.get('/rid_purchase_order_lines', queryParameters: {
       'client_id':  'eq.$clientId',
@@ -220,11 +228,93 @@ class GrnRemoteDs {
       'order':      'serial_no.asc',
     });
     final rows = List<Map<String, dynamic>>.from(res.data as List);
+
+    final committedByLine = await _committedDraftQtyByPoLine(
+      clientId: clientId, companyId: companyId, orderNo: orderNo, orderDate: orderDate,
+      excludeGrnNo: excludeGrnNo,
+    );
+
     return rows.where((r) {
-      final ordered  = (r['base_qty'] as num? ?? 0).toDouble();
-      final received = (r['qty_received'] as num? ?? 0).toDouble();
-      return ordered - received > 0.0001;
+      final serialNo  = r['serial_no'] as int;
+      final ordered   = (r['base_qty'] as num? ?? 0).toDouble();
+      final received  = (r['qty_received'] as num? ?? 0).toDouble();
+      final committed = committedByLine[serialNo] ?? 0;
+      final pending   = ordered - received - committed;
+      r['pending_qty'] = pending;
+      return pending > 0.0001;
     }).toList();
+  }
+
+  /// Quantity of this PO already claimed by OTHER still-DRAFT GRNs (approved
+  /// GRNs are already reflected in rid_purchase_order_lines.qty_received, so
+  /// including them here too would double-subtract). Keyed by
+  /// source_po_line_serial.
+  Future<Map<int, double>> _committedDraftQtyByPoLine({
+    required String clientId,
+    required String companyId,
+    required String orderNo,
+    required String orderDate,
+    String? excludeGrnNo,
+  }) async {
+    final linesRes = await _dio.get('/rid_grn_lines', queryParameters: {
+      'client_id':            'eq.$clientId',
+      'company_id':           'eq.$companyId',
+      'source_po_order_no':   'eq.$orderNo',
+      'source_po_order_date': 'eq.$orderDate',
+      'is_deleted':           'eq.false',
+      'select':               'grn_no,source_po_line_serial,base_qty',
+    });
+    final lines = List<Map<String, dynamic>>.from(linesRes.data as List);
+    if (lines.isEmpty) return {};
+
+    final grnNos = lines.map((l) => l['grn_no'] as String)
+        .where((g) => g != excludeGrnNo).toSet();
+    if (grnNos.isEmpty) return {};
+
+    final headersRes = await _dio.get('/rih_grn_headers', queryParameters: {
+      'client_id':  'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'grn_no':     'in.(${grnNos.join(',')})',
+      'status':     'eq.DRAFT',
+      'select':     'grn_no',
+    });
+    final draftGrnNos = (headersRes.data as List)
+        .map((e) => (e as Map<String, dynamic>)['grn_no'] as String).toSet();
+    if (draftGrnNos.isEmpty) return {};
+
+    final result = <int, double>{};
+    for (final l in lines) {
+      final grnNo = l['grn_no'] as String;
+      if (grnNo == excludeGrnNo || !draftGrnNos.contains(grnNo)) continue;
+      final serialNo = l['source_po_line_serial'] as int?;
+      if (serialNo == null) continue;
+      result[serialNo] = (result[serialNo] ?? 0) + (l['base_qty'] as num? ?? 0).toDouble();
+    }
+    return result;
+  }
+
+  /// Distinct suppliers with at least one PO still open for receipt — the
+  /// candidate list for the Against-PO wizard's first step.
+  Future<List<Map<String, dynamic>>> getSuppliersWithOpenPos({
+    required String clientId,
+    required String companyId,
+  }) async {
+    final res = await _dio.get('/rih_purchase_orders', queryParameters: {
+      'client_id':  'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'is_deleted': 'eq.false',
+      'status':     'in.(APPROVED,PARTIALLY_RECEIVED)',
+      'select':     'supplier:rim_accounts!supplier_id(id,account_code,account_name)',
+    });
+    final seen = <String>{};
+    final result = <Map<String, dynamic>>[];
+    for (final e in res.data as List) {
+      final supplier = (e as Map<String, dynamic>)['supplier'] as Map<String, dynamic>?;
+      if (supplier == null) continue;
+      if (seen.add(supplier['id'] as String)) result.add(supplier);
+    }
+    result.sort((a, b) => (a['account_code'] as String? ?? '').compareTo(b['account_code'] as String? ?? ''));
+    return result;
   }
 
   /// Charge lines from a consolidated PO, seeded as editable GRN charge

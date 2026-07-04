@@ -485,12 +485,109 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
   }
 
   // ── Against-PO consolidation ──────────────────────────────────────────────
+  // Supplier -> Currency -> Purchase Order(s), fully chained the instant
+  // Receipt Mode switches to AGAINST_PO. Supplier and Currency lock the
+  // moment they're set here (see _modeLocked/_supplierCurrencyLocked) —
+  // there's deliberately no half-configured resting state, so cancelling at
+  // any step rolls the whole pick back to Direct mode.
 
-  Future<void> _openAddFromPoDialog() async {
-    if (_supplierId == null) {
-      _showSnack('Select a supplier first.', color: AppColors.negative);
+  Future<void> _onReceiptModeChanged(String newMode) async {
+    if (newMode == 'AGAINST_PO') {
+      setState(() => _receiptMode = 'AGAINST_PO');
+      await _startAgainstPoWizard();
+    } else {
+      setState(() => _receiptMode = 'DIRECT');
+    }
+  }
+
+  Future<void> _startAgainstPoWizard() async {
+    final session = ref.read(sessionProvider)!;
+    List<Map<String, dynamic>> suppliers;
+    try {
+      suppliers = await _ds.getSuppliersWithOpenPos(clientId: session.clientId, companyId: session.companyId);
+    } catch (e) {
+      if (mounted) _showSnack('Could not load suppliers with open purchase orders: $e', color: AppColors.negative);
+      if (mounted) setState(() => _receiptMode = 'DIRECT');
       return;
     }
+    if (suppliers.isEmpty) {
+      if (mounted) _showSnack('No suppliers have approved purchase orders pending receipt.', color: AppColors.secondary);
+      if (mounted) setState(() => _receiptMode = 'DIRECT');
+      return;
+    }
+
+    final picked = await _pickSupplierDialog(suppliers);
+    if (picked == null) {
+      if (mounted) setState(() => _receiptMode = 'DIRECT');
+      return;
+    }
+    setState(() {
+      _supplierId      = picked['id'] as String;
+      _supplierDisplay = '[${picked['account_code']}] ${picked['account_name']}';
+    });
+
+    final proceeded = await _pickCurrencyThenPos(isInitialWizard: true);
+    if (!proceeded && mounted) {
+      setState(() {
+        _receiptMode     = 'DIRECT';
+        _supplierId      = null;
+        _supplierDisplay = null;
+      });
+    }
+  }
+
+  Future<Map<String, dynamic>?> _pickSupplierDialog(List<Map<String, dynamic>> suppliers) {
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) {
+        final searchCtrl = TextEditingController();
+        return StatefulBuilder(builder: (context, setDialogState) {
+          final q = searchCtrl.text.trim().toLowerCase();
+          final filtered = q.isEmpty ? suppliers : suppliers.where((s) =>
+              (s['account_code'] as String? ?? '').toLowerCase().contains(q) ||
+              (s['account_name'] as String? ?? '').toLowerCase().contains(q)).toList();
+          return AlertDialog(
+            title: const Text('Select Supplier'),
+            content: SizedBox(
+              width: 420,
+              height: 420,
+              child: Column(children: [
+                TextField(
+                  controller: searchCtrl,
+                  decoration: const InputDecoration(
+                      hintText: 'Search supplier…', prefixIcon: Icon(Icons.search, size: 18), isDense: true),
+                  onChanged: (_) => setDialogState(() {}),
+                ),
+                const SizedBox(height: 10),
+                Expanded(child: ListView.separated(
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final s = filtered[i];
+                    return ListTile(
+                      dense: true,
+                      title: Text('[${s['account_code']}] ${s['account_name']}', style: const TextStyle(fontSize: 13)),
+                      onTap: () => Navigator.of(dialogContext, rootNavigator: true).pop(s),
+                    );
+                  },
+                )),
+              ]),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(null),
+                  child: const Text('Cancel')),
+            ],
+          );
+        });
+      },
+    );
+  }
+
+  /// Resolves (or asks for, if the supplier has more than one) the currency
+  /// among this supplier's open POs, then opens the PO picker filtered to
+  /// it. Returns false if the chain was abandoned at any step, so the
+  /// initial wizard knows to roll everything back.
+  Future<bool> _pickCurrencyThenPos({required bool isInitialWizard}) async {
     final session = ref.read(sessionProvider)!;
     List<Map<String, dynamic>> openPos;
     try {
@@ -498,22 +595,79 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
           clientId: session.clientId, companyId: session.companyId, supplierId: _supplierId!);
     } catch (e) {
       if (mounted) _showSnack('Could not load open purchase orders: $e', color: AppColors.negative);
-      return;
+      return false;
     }
-    openPos = openPos.where((po) => !_consolidatedPoOrderNos.contains(po['order_no'] as String)).toList();
-    if (!mounted) return;
+    if (!isInitialWizard) {
+      openPos = openPos.where((po) => !_consolidatedPoOrderNos.contains(po['order_no'] as String)).toList();
+    }
     if (openPos.isEmpty) {
-      _showSnack('No further open purchase orders for this supplier.', color: AppColors.secondary);
-      return;
+      if (mounted) {
+        _showSnack(
+            isInitialWizard ? 'This supplier has no open purchase orders pending receipt.'
+                             : 'No further open purchase orders for this supplier.',
+            color: AppColors.secondary);
+      }
+      return false;
     }
 
-    final selected = await showDialog<List<Map<String, dynamic>>>(
+    var ccyId = _grnCurrencyId;
+    if (ccyId == null) {
+      final byCurrency = <String, String?>{};
+      for (final po in openPos) {
+        final id = po['po_currency_id'] as String?;
+        if (id == null) continue;
+        final currency = po['currency'];
+        byCurrency[id] = currency is Map ? currency['currency_id'] as String? : null;
+      }
+      String? ccyCode;
+      if (byCurrency.length <= 1) {
+        ccyId   = byCurrency.keys.firstOrNull;
+        ccyCode = ccyId != null ? byCurrency[ccyId] : null;
+      } else {
+        final picked = await showDialog<MapEntry<String, String?>>(
+          context: context,
+          builder: (dialogContext) => SimpleDialog(
+            title: const Text('Select Currency'),
+            children: byCurrency.entries.map((e) => SimpleDialogOption(
+              onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(e),
+              child: Text(e.value ?? e.key, style: const TextStyle(fontSize: 14)),
+            )).toList(),
+          ),
+        );
+        if (picked == null) return false;
+        ccyId   = picked.key;
+        ccyCode = picked.value;
+      }
+      if (ccyId != null) {
+        if (mounted) setState(() { _grnCurrencyId = ccyId; _grnCurrencyCode = ccyCode; });
+        await _fetchRates(); // live rate as of today, not the PO's stale rate_to_base
+      }
+    }
+
+    final candidates = openPos.where((po) => po['po_currency_id'] == ccyId).toList();
+    if (candidates.isEmpty) return false;
+
+    final selected = await _showPoPickerDialog(candidates);
+    if (selected == null || selected.isEmpty) return false;
+    await _consolidatePos(selected);
+    return true;
+  }
+
+  /// "Add from PO" button — adds more purchase orders from the already-locked
+  /// supplier+currency. Supplier/currency are never re-asked here.
+  Future<void> _addMorePos() async {
+    if (_supplierId == null) return;
+    await _pickCurrencyThenPos(isInitialWizard: false);
+  }
+
+  Future<List<Map<String, dynamic>>?> _showPoPickerDialog(List<Map<String, dynamic>> openPos) {
+    return showDialog<List<Map<String, dynamic>>>(
       context: context,
       builder: (dialogContext) {
         final chosen = <String>{};
         return StatefulBuilder(builder: (context, setDialogState) {
           return AlertDialog(
-            title: const Text('Add from Purchase Order'),
+            title: const Text('Select Purchase Order(s)'),
             content: SizedBox(
               width: 420,
               child: ListView(
@@ -546,8 +700,6 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
         });
       },
     );
-    if (selected == null || selected.isEmpty) return;
-    await _consolidatePos(selected);
   }
 
   Future<void> _consolidatePos(List<Map<String, dynamic>> pos) async {
@@ -558,42 +710,25 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
       for (final po in pos) {
         final orderNo   = po['order_no'] as String;
         final orderDate = po['order_date'] as String;
-        final currency  = po['currency'];
-        final ccyId     = po['po_currency_id'] as String?;
-        final ccyCode   = currency is Map ? currency['currency_id'] as String? : null;
-
-        if (_grnCurrencyId != null && ccyId != _grnCurrencyId) {
-          if (mounted) {
-            _showSnack(
-                'Skipped $orderNo — its currency (${ccyCode ?? '?'}) does not match this GRN\'s currency (${_grnCurrencyCode ?? '?'}).',
-                color: AppColors.negative);
-          }
-          continue;
-        }
 
         final pendingLines = await _ds.getPendingPoLines(
-            clientId: session.clientId, companyId: session.companyId, orderNo: orderNo, orderDate: orderDate);
+            clientId: session.clientId, companyId: session.companyId, orderNo: orderNo, orderDate: orderDate,
+            excludeGrnNo: _grnNo);
         if (pendingLines.isEmpty) {
           if (mounted) _showSnack('$orderNo has no pending quantity left to receive.', color: AppColors.secondary);
           continue;
         }
 
-        if (_grnCurrencyId == null) {
+        if (_billToCtrl.text.isEmpty || _shipToCtrl.text.isEmpty) {
           setState(() {
-            _grnCurrencyId   = ccyId;
-            _grnCurrencyCode = ccyCode;
-            _rateToBaseCtrl.text  = (po['rate_to_base']  as num? ?? 1).toString();
-            _rateToLocalCtrl.text = (po['rate_to_local'] as num? ?? 1).toString();
-            if (_billToCtrl.text.isEmpty)  _billToCtrl.text  = po['bill_to'] as String? ?? '';
-            if (_shipToCtrl.text.isEmpty)  _shipToCtrl.text  = po['ship_to'] as String? ?? '';
+            if (_billToCtrl.text.isEmpty) _billToCtrl.text = po['bill_to'] as String? ?? '';
+            if (_shipToCtrl.text.isEmpty) _shipToCtrl.text = po['ship_to'] as String? ?? '';
           });
         }
 
         for (final pl in pendingLines) {
-          final product   = pl['product'] as Map<String, dynamic>?;
-          final ordered   = (pl['base_qty'] as num? ?? 0).toDouble();
-          final received  = (pl['qty_received'] as num? ?? 0).toDouble();
-          final pending   = ordered - received;
+          final product    = pl['product'] as Map<String, dynamic>?;
+          final pending    = pl['pending_qty'] as double;
           final convFactor = (pl['uom_conversion_factor'] as num? ?? 1).toDouble();
 
           final row = _GrnLineRow()
@@ -1132,7 +1267,13 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
         contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
     Widget field(Widget child) => SizedBox(height: fh, child: child);
-    final currencyLocked = locked || (_receiptMode == 'AGAINST_PO' && _consolidatedPoOrderNos.isNotEmpty);
+    // Receipt Mode, Supplier and Currency all lock together the instant a
+    // supplier is chosen for an Against-PO GRN — picking a supplier there
+    // happens via the dedicated wizard (_startAgainstPoWizard), not by
+    // typing into the header, and there's no supported way to change any of
+    // the three afterward short of abandoning the draft.
+    final modeLocked = locked || _supplierId != null;
+    final currencyLocked = locked || (_receiptMode == 'AGAINST_PO' && _supplierId != null);
 
     return Card(
       elevation: 0,
@@ -1150,7 +1291,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
                 DropdownMenuItem(value: 'DIRECT', child: Text('Direct', style: TextStyle(fontSize: 13))),
                 DropdownMenuItem(value: 'AGAINST_PO', child: Text('Against PO', style: TextStyle(fontSize: 13))),
               ],
-              onChanged: (locked || _lines.isNotEmpty) ? null : (v) => setState(() => _receiptMode = v!),
+              onChanged: modeLocked ? null : (v) => _onReceiptModeChanged(v!),
             ));
             final f2 = field(InputDecorator(
               decoration: dec.copyWith(labelText: 'GRN No'),
@@ -1177,28 +1318,32 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
                     Expanded(flex: 3, child: f3),
                   ]);
           }),
-          if (_receiptMode == 'AGAINST_PO' && !locked) ...[
-            const SizedBox(height: 4),
-            const Align(alignment: Alignment.centerLeft, child: Text(
-                'Receipt Mode locks once a line has been added.',
-                style: TextStyle(fontSize: 11, color: AppColors.textSecondary))),
-          ],
           const SizedBox(height: 12),
 
           // Row 2: Supplier | Location
           Builder(builder: (_) {
-            final f1 = _searchField<Map<String, dynamic>>(
-              height: fh,
-              options: _suppliers,
-              initialText: _supplierDisplay ?? '',
-              locked: locked,
-              decoration: dec.copyWith(labelText: 'Supplier *'),
-              displayString: (a) => '[${a['account_code']}] ${a['account_name']}',
-              matches: (a, q) => (a['account_code'] as String? ?? '').toLowerCase().contains(q) ||
-                  (a['account_name'] as String? ?? '').toLowerCase().contains(q),
-              onSelected: (a) => _onSupplierSelected(a),
-              onCleared: () => setState(() { _supplierId = null; _supplierDisplay = ''; }),
-            );
+            // Against-PO picks its supplier through the dedicated wizard
+            // (_startAgainstPoWizard) — the header field is read-only display
+            // for that mode, never a free-text search, and locks immediately.
+            final f1 = _receiptMode == 'AGAINST_PO'
+                ? field(InputDecorator(
+                    decoration: dec.copyWith(labelText: 'Supplier *'),
+                    child: Text(_supplierDisplay?.isNotEmpty == true ? _supplierDisplay! : '(select via wizard)',
+                        style: TextStyle(fontSize: 13,
+                            color: _supplierDisplay?.isNotEmpty == true ? AppColors.textPrimary : AppColors.textDisabled)),
+                  ))
+                : _searchField<Map<String, dynamic>>(
+                    height: fh,
+                    options: _suppliers,
+                    initialText: _supplierDisplay ?? '',
+                    locked: locked,
+                    decoration: dec.copyWith(labelText: 'Supplier *'),
+                    displayString: (a) => '[${a['account_code']}] ${a['account_name']}',
+                    matches: (a, q) => (a['account_code'] as String? ?? '').toLowerCase().contains(q) ||
+                        (a['account_name'] as String? ?? '').toLowerCase().contains(q),
+                    onSelected: (a) => _onSupplierSelected(a),
+                    onCleared: () => setState(() { _supplierId = null; _supplierDisplay = ''; }),
+                  );
             final f2 = field(DropdownButtonFormField<String>(
               decoration: dec.copyWith(labelText: 'Location *'),
               initialValue: _locationId,
@@ -1331,7 +1476,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
         const Spacer(),
         if (!locked)
           TextButton.icon(
-            onPressed: _consolidating ? null : _openAddFromPoDialog,
+            onPressed: _consolidating ? null : _addMorePos,
             icon: _consolidating
                 ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.add, size: 16),
@@ -1466,11 +1611,13 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: dec.copyWith(labelText: 'Qty Loose'), style: const TextStyle(fontSize: 12),
                   onChanged: (_) => setState(() {}))),
-            SizedBox(width: 100, child: TextFormField(controller: row.rateCtrl, enabled: !locked,
+            SizedBox(width: 100, child: TextFormField(controller: row.rateCtrl, enabled: !locked && !row.isFromPo,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: dec.copyWith(labelText: 'Rate'), style: const TextStyle(fontSize: 12),
+                decoration: dec.copyWith(labelText: 'Rate',
+                    suffixIcon: row.isFromPo ? const Icon(Icons.lock_outline, size: 14, color: AppColors.textSecondary) : null),
+                style: const TextStyle(fontSize: 12),
                 onChanged: (_) => setState(() {}))),
-            SizedBox(width: 90, child: TextFormField(controller: row.discountPctCtrl, enabled: !locked,
+            SizedBox(width: 90, child: TextFormField(controller: row.discountPctCtrl, enabled: !locked && !row.isFromPo,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: dec.copyWith(labelText: 'Discount %'), style: const TextStyle(fontSize: 12),
                 onChanged: (_) => setState(() {}))),
@@ -1483,7 +1630,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
                 ..._taxGroups.map((g) => DropdownMenuItem(value: g['id'] as String,
                     child: Text(g['group_name'] as String, style: const TextStyle(fontSize: 12)))),
               ],
-              onChanged: locked ? null : (v) => setState(() => row.taxGroupId = v),
+              onChanged: (locked || row.isFromPo) ? null : (v) => setState(() => row.taxGroupId = v),
             )),
             SizedBox(width: 170, child: DropdownButtonFormField<String?>(
               decoration: dec.copyWith(labelText: 'Department'),

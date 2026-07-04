@@ -140,6 +140,12 @@ class GrnRepositoryImpl implements GrnRepository {
   }) => _remote.approve(clientId: clientId, companyId: companyId, grnNo: grnNo, grnDate: grnDate, approvedBy: approvedBy);
 
   @override
+  Future<List<Map<String, dynamic>>> getSuppliersWithOpenPos({
+    required String clientId,
+    required String companyId,
+  }) => _remote.getSuppliersWithOpenPos(clientId: clientId, companyId: companyId);
+
+  @override
   Future<List<Map<String, dynamic>>> getOpenPurchaseOrdersForSupplier({
     required String clientId,
     required String companyId,
@@ -152,7 +158,9 @@ class GrnRepositoryImpl implements GrnRepository {
     required String companyId,
     required String orderNo,
     required String orderDate,
-  }) => _remote.getPendingPoLines(clientId: clientId, companyId: companyId, orderNo: orderNo, orderDate: orderDate);
+    String? excludeGrnNo,
+  }) => _remote.getPendingPoLines(
+        clientId: clientId, companyId: companyId, orderNo: orderNo, orderDate: orderDate, excludeGrnNo: excludeGrnNo);
 
   @override
   Future<List<Map<String, dynamic>>> getPoChargeLinesForOrder({
