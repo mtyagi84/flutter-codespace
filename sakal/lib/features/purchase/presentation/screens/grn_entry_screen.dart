@@ -667,7 +667,10 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
       }
       if (ccyId != null) {
         if (mounted) setState(() { _grnCurrencyId = ccyId; _grnCurrencyCode = ccyCode; });
-        await _fetchRates(); // live rate as of today, not the PO's stale rate_to_base
+        // Rate defaults from the PO(s) actually consolidated below, not a
+        // fresh market lookup — the PO's rate_to_base/rate_to_local is the
+        // rate actually agreed with the supplier for this order; the user
+        // can still edit it here if today's rate should apply instead.
       }
     }
 
@@ -730,6 +733,19 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
   }
 
   Future<void> _consolidatePos(List<Map<String, dynamic>> pos) async {
+    // Default the GRN's rate to the FIRST consolidated PO's own agreed
+    // rate — only on the very first PO added to this GRN, so a later
+    // "Add more POs" call never clobbers a rate the user may have already
+    // edited. If multiple POs (rarely, in different rates) are picked at
+    // once, the first one wins as the default; the user can still edit it.
+    if (_consolidatedPoOrderNos.isEmpty && pos.isNotEmpty) {
+      final rateToBase  = (pos.first['rate_to_base']  as num? ?? 1).toDouble();
+      final rateToLocal = (pos.first['rate_to_local'] as num? ?? 1).toDouble();
+      setState(() {
+        _rateToBaseCtrl.text  = rateToBase.toString();
+        _rateToLocalCtrl.text = rateToLocal.toString();
+      });
+    }
     setState(() => _consolidating = true);
     final session = ref.read(sessionProvider)!;
     var addedLines = 0;
