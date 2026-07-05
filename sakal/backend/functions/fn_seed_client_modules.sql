@@ -78,7 +78,7 @@ begin
     values
         (p_client_id, p_company_id, v_pr, 'PR-PO',  'Purchase Order',   '/purchase/orders',   0, 'PR-TXN', 'Transactions', 0, true,  true,  false),
         (p_client_id, p_company_id, v_pr, 'PR-GRN', 'Goods Receipt',    '/purchase/grn',      1, 'PR-TXN', 'Transactions', 0, true,  false, false),
-        (p_client_id, p_company_id, v_pr, 'PR-INV', 'Purchase Invoice', '/purchase/invoices', 2, 'PR-TXN', 'Transactions', 0, false, false, false),
+        (p_client_id, p_company_id, v_pr, 'PR-INV', 'Purchase Invoice', '/purchase/invoices', 2, 'PR-TXN', 'Transactions', 0, true,  false, false),
         (p_client_id, p_company_id, v_pr, 'PR-PAY', 'Supplier Payment', '/purchase/payments', 3, 'PR-TXN', 'Transactions', 0, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set group_code      = excluded.group_code,
