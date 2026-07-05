@@ -246,7 +246,7 @@ class GrnRemoteDs {
       'order_date': 'eq.$orderDate',
       'is_deleted': 'eq.false',
       'select':     '*,'
-          'product:rim_products!product_id(product_code,product_name,tracking_type),'
+          'product:rim_products!product_id(product_code,product_name,tracking_type,allowed_cost_variance),'
           'uom:rim_common_masters!uom_id(description),'
           'tax_group:rim_tax_groups!tax_group_id(group_name)',
       'order':      'serial_no.asc',
@@ -392,7 +392,7 @@ class GrnRemoteDs {
       'is_deleted': 'eq.false',
       'is_active':  'eq.true',
       'select':     'id,product_code,product_name,base_uom_id,tracking_type,'
-          'last_purchase_cost,standard_cost,purchase_tax_group_id,'
+          'last_purchase_cost,standard_cost,allowed_cost_variance,purchase_tax_group_id,'
           'uom:rim_common_masters!base_uom_id(description)',
       'order':      'product_code.asc',
       'limit':      '500',
@@ -402,6 +402,27 @@ class GrnRemoteDs {
     }
     final res = await _dio.get('/rim_products', queryParameters: params);
     return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
+  /// Product's moving-average cost at this location, in base currency
+  /// (rim_product_location.cost_price) — the baseline the GRN rate's cost
+  /// variance warning compares against. Null when there's no prior stock
+  /// row / cost yet for this product+location (nothing to compare against).
+  Future<double?> getProductLastCostPrice({
+    required String productId,
+    required String locationId,
+  }) async {
+    final res = await _dio.get('/rim_product_location', queryParameters: {
+      'product_id':  'eq.$productId',
+      'location_id': 'eq.$locationId',
+      'select':      'cost_price',
+      'limit':       '1',
+    });
+    final list = res.data as List;
+    if (list.isEmpty) return null;
+    final cost = (list.first as Map<String, dynamic>)['cost_price'] as num?;
+    if (cost == null || cost <= 0) return null;
+    return cost.toDouble();
   }
 
   /// Same barcode -> product+UOM matching PO uses. See that datasource's
@@ -417,7 +438,7 @@ class GrnRemoteDs {
       'barcode':    'eq.$barcode',
       'select':     'uom_id,conversion_factor,'
           'product:rim_products!product_id(id,product_code,product_name,base_uom_id,tracking_type,'
-          'last_purchase_cost,standard_cost,purchase_tax_group_id,is_active,is_deleted)',
+          'last_purchase_cost,standard_cost,allowed_cost_variance,purchase_tax_group_id,is_active,is_deleted)',
       'limit':      '1',
     });
     final list = res.data as List;

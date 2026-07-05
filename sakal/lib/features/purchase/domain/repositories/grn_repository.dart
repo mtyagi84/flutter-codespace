@@ -142,4 +142,12 @@ abstract class GrnRepository {
     required String toCurrency,
     required String rateDate,
   });
+
+  /// Product's moving-average cost at this location, in base currency —
+  /// baseline for the GRN rate cost-variance warning. Null if no prior
+  /// stock/cost exists yet for this product+location.
+  Future<double?> getProductLastCostPrice({
+    required String productId,
+    required String locationId,
+  });
 }

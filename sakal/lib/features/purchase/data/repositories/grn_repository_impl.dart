@@ -259,4 +259,10 @@ class GrnRepositoryImpl implements GrnRepository {
         companyId: companyId, locationId: locationId,
         fromCurrency: fromCurrency, toCurrency: toCurrency, rateDate: rateDate,
       );
+
+  @override
+  Future<double?> getProductLastCostPrice({
+    required String productId,
+    required String locationId,
+  }) => _remote.getProductLastCostPrice(productId: productId, locationId: locationId);
 }

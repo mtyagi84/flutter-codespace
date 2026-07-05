@@ -60,6 +60,13 @@ class _GrnLineRow {
   String? sourcePoOrderDate;
   int?    sourcePoLineSerial;
 
+  // Cost-variance warning — allowedCostVariance from rim_products
+  // (0 = not configured, check skipped); lastCostPrice from
+  // rim_product_location.cost_price at this GRN's location, in base
+  // currency (null = no prior stock/cost yet, nothing to compare against).
+  double  allowedCostVariance = 0;
+  double? lastCostPrice;
+
   final List<_GrnBatchRow>  batchRows  = [];
   final List<_GrnSerialRow> serialRows = [];
 
@@ -412,6 +419,20 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
   bool _isDuplicateProduct(String productId, {required _GrnLineRow excluding}) =>
       _lines.any((l) => l != excluding && l.productId == productId);
 
+  /// Cost-variance warning (advisory only — never blocks save/approve).
+  /// Compares this line's rate, converted to base currency with the
+  /// header's own rate_to_base, against the product's last moving-average
+  /// cost at this location. Null = nothing to show: either the product has
+  /// no allowed_cost_variance configured, or there's no prior cost/stock
+  /// yet at this location to compare against.
+  double? _costVariancePct(_GrnLineRow row) {
+    final lastCost = row.lastCostPrice;
+    if (lastCost == null || lastCost <= 0 || row.allowedCostVariance <= 0) return null;
+    final newCostBase = row.rate * _rateToBase;
+    final pct = ((newCostBase - lastCost).abs() / lastCost) * 100;
+    return pct > row.allowedCostVariance ? pct : null;
+  }
+
   Future<void> _onProductSelected(_GrnLineRow row, Map<String, dynamic> product, {bool fromBarcode = false}) async {
     final productId = product['id'] as String;
     if (_isDuplicateProduct(productId, excluding: row)) {
@@ -428,9 +449,22 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
         row.convFactorLocked = false;
       }
       row.taxGroupId     = product['purchase_tax_group_id'] as String?;
+      row.allowedCostVariance = (product['allowed_cost_variance'] as num? ?? 0).toDouble();
       final cost = (product['last_purchase_cost'] as num?) ?? (product['standard_cost'] as num?) ?? 0;
       row.rateCtrl.text  = cost.toString();
     });
+    await _loadLastCostPrice(row, productId);
+  }
+
+  /// Fetches this product's moving-average cost at the GRN's location, in
+  /// base currency — the baseline the cost-variance warning compares
+  /// against. No-op (leaves lastCostPrice null) until a location is picked.
+  Future<void> _loadLastCostPrice(_GrnLineRow row, String productId) async {
+    if (_locationId == null) return;
+    try {
+      final cost = await _ds.getProductLastCostPrice(productId: productId, locationId: _locationId!);
+      if (mounted) setState(() => row.lastCostPrice = cost);
+    } catch (_) { /* advisory only — a failed lookup just skips the warning */ }
   }
 
   Future<void> _onBarcodeSubmitted(_GrnLineRow row, String rawBarcode) async {
@@ -785,9 +819,11 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
             ..consumptionAreaId  = pl['consumption_area_id'] as String?
             ..sourcePoOrderNo    = orderNo
             ..sourcePoOrderDate  = orderDate
-            ..sourcePoLineSerial = pl['serial_no'] as int?;
+            ..sourcePoLineSerial = pl['serial_no'] as int?
+            ..allowedCostVariance = (product?['allowed_cost_variance'] as num? ?? 0).toDouble();
           row.descCtrl.text       = pl['item_description'] as String? ?? '';
           row.convFactorCtrl.text = convFactor.toString();
+          unawaited(_loadLastCostPrice(row, row.productId!));
           row.qtyPackCtrl.text    = convFactor > 0 ? (pending / convFactor).toStringAsFixed(4) : pending.toString();
           row.qtyLooseCtrl.text   = '0';
           row.rateCtrl.text       = (pl['rate'] as num? ?? 0).toString();
@@ -1671,12 +1707,28 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: dec.copyWith(labelText: 'Qty Loose'), style: const TextStyle(fontSize: 12),
                   onChanged: (_) => setState(() {}))),
-            SizedBox(width: 100, child: TextFormField(controller: row.rateCtrl, enabled: !locked && !row.isFromPo,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: dec.copyWith(labelText: 'Rate',
-                    suffixIcon: row.isFromPo ? const Icon(Icons.lock_outline, size: 14, color: AppColors.textSecondary) : null),
-                style: const TextStyle(fontSize: 12),
-                onChanged: (_) => setState(() {}))),
+            Builder(builder: (_) {
+              final variancePct = _costVariancePct(row);
+              final breached    = variancePct != null;
+              final warningIcon = breached ? Tooltip(
+                message: 'Last cost: ${row.lastCostPrice!.toStringAsFixed(4)} $_baseCurrency\n'
+                    '${variancePct!.toStringAsFixed(1)}% variance (allowed ${row.allowedCostVariance.toStringAsFixed(1)}%)',
+                child: const Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.negative),
+              ) : null;
+              return SizedBox(width: 100, child: TextFormField(controller: row.rateCtrl, enabled: !locked && !row.isFromPo,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: dec.copyWith(
+                      labelText: 'Rate',
+                      labelStyle: breached ? const TextStyle(color: AppColors.negative) : null,
+                      enabledBorder: breached
+                          ? const OutlineInputBorder(borderSide: BorderSide(color: AppColors.negative))
+                          : null,
+                      suffixIcon: breached
+                          ? warningIcon
+                          : (row.isFromPo ? const Icon(Icons.lock_outline, size: 14, color: AppColors.textSecondary) : null)),
+                  style: TextStyle(fontSize: 12, color: breached ? AppColors.negative : null),
+                  onChanged: (_) => setState(() {})));
+            }),
             SizedBox(width: 90, child: TextFormField(controller: row.discountPctCtrl, enabled: !locked && !row.isFromPo,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: dec.copyWith(labelText: 'Discount %'), style: const TextStyle(fontSize: 12),
