@@ -1025,6 +1025,8 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
             final f1 = field(DropdownButtonFormField<String>(
               decoration: dec.copyWith(labelText: 'PO Type *'),
               initialValue: _poType,
+              isDense: true,
+              itemHeight: null,
               items: const [
                 DropdownMenuItem(value: 'LOCAL',  child: Text('Local',  style: TextStyle(fontSize: 13))),
                 DropdownMenuItem(value: 'IMPORT', child: Text('Import', style: TextStyle(fontSize: 13))),
@@ -1076,6 +1078,8 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
               decoration: dec.copyWith(labelText: 'Location *'),
               initialValue: _locationId,
               isExpanded: true,
+              isDense: true,
+              itemHeight: null,
               items: _locations.map((l) => DropdownMenuItem(
                   value: l['id'] as String,
                   child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
@@ -1099,6 +1103,8 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
                   decoration: dec.copyWith(labelText: 'Currency *'),
                   initialValue: _poCurrencyId,
                   isExpanded: true,
+                  isDense: true,
+                  itemHeight: null,
                   items: currencies.map((c) => DropdownMenuItem(
                       value: c['id'] as String,
                       child: Text('${c['currency_id']} — ${c['currency_name']}',
@@ -1145,6 +1151,8 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
               decoration: dec.copyWith(labelText: 'Buyer'),
               initialValue: _buyerId,
               isExpanded: true,
+              isDense: true,
+              itemHeight: null,
               items: _users.map((u) => DropdownMenuItem(
                   value: u['id'] as String,
                   child: Text(u['full_name'] as String, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
