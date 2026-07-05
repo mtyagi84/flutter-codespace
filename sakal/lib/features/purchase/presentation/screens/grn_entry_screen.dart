@@ -1712,7 +1712,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
               final breached    = variancePct != null;
               final warningIcon = breached ? Tooltip(
                 message: 'Last cost: ${row.lastCostPrice!.toStringAsFixed(4)} $_baseCurrency\n'
-                    '${variancePct!.toStringAsFixed(1)}% variance (allowed ${row.allowedCostVariance.toStringAsFixed(1)}%)',
+                    '${variancePct.toStringAsFixed(1)}% variance (allowed ${row.allowedCostVariance.toStringAsFixed(1)}%)',
                 child: const Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.negative),
               ) : null;
               return SizedBox(width: 100, child: TextFormField(controller: row.rateCtrl, enabled: !locked && !row.isFromPo,

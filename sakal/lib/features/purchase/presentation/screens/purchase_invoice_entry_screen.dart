@@ -203,11 +203,13 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
     try {
       final defaults = await _ds.getGrnBillingDefaults(
         clientId: session.clientId, companyId: session.companyId, grnRefs: refs);
-      if (mounted) setState(() {
-        _taxableAmountCtrl.text = defaults['taxable_amount']!.toStringAsFixed(2);
-        _taxAmountCtrl.text     = defaults['tax_amount']!.toStringAsFixed(2);
-        _recomputing = false;
-      });
+      if (mounted) {
+        setState(() {
+          _taxableAmountCtrl.text = defaults['taxable_amount']!.toStringAsFixed(2);
+          _taxAmountCtrl.text     = defaults['tax_amount']!.toStringAsFixed(2);
+          _recomputing = false;
+        });
+      }
     } catch (e) {
       if (mounted) { setState(() => _recomputing = false); _showSnack('Could not compute totals: $e', color: AppColors.negative); }
     }

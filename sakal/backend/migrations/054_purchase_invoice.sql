@@ -394,7 +394,22 @@ BEGIN
     --    line across its tax_group's member taxes by rate weight — same
     --    weighting fn_approve_grn used before VAT deferral (049), now
     --    applied to the real figure instead of the estimate.
-    SELECT coalesce(sum(gl.tax_amount), 0), min(gl.product_id) INTO v_total_est_tax, v_anchor_product_id
+    --
+    -- Anchor product for the Exchange Gain/Loss resolution below — decoupled
+    -- from the tax-only query beneath it (not filtered to taxed lines), so a
+    -- bill whose GRN lines are entirely VAT-exempt still has an anchor.
+    SELECT gl.product_id INTO v_anchor_product_id
+    FROM rih_grn_headers g
+    JOIN rid_grn_lines gl
+      ON gl.client_id = g.client_id AND gl.company_id = g.company_id
+     AND gl.grn_no = g.grn_no AND gl.grn_date = g.grn_date
+     AND gl.is_deleted = false
+    WHERE g.client_id = p_client_id AND g.company_id = p_company_id
+      AND g.billed_invoice_no = p_invoice_no AND g.billed_invoice_date = p_invoice_date
+      AND g.is_deleted = false
+    LIMIT 1;
+
+    SELECT coalesce(sum(gl.tax_amount), 0) INTO v_total_est_tax
     FROM rih_grn_headers g
     JOIN rid_grn_lines gl
       ON gl.client_id = g.client_id AND gl.company_id = g.company_id
