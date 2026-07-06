@@ -59,6 +59,12 @@ class PurchaseReturnRepositoryImpl implements PurchaseReturnRepository {
   }) => _remote.getGrnsForSupplier(clientId: clientId, companyId: companyId, supplierId: supplierId);
 
   @override
+  Future<Set<String>> getFullyReturnedGrnKeys({
+    required String clientId,
+    required String companyId,
+  }) => _remote.getFullyReturnedGrnKeys(clientId: clientId, companyId: companyId);
+
+  @override
   Future<List<Map<String, dynamic>>> getGrnLines({
     required String clientId,
     required String companyId,

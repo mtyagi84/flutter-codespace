@@ -43,6 +43,11 @@ abstract class PurchaseReturnRepository {
     required String supplierId,
   });
 
+  Future<Set<String>> getFullyReturnedGrnKeys({
+    required String clientId,
+    required String companyId,
+  });
+
   Future<List<Map<String, dynamic>>> getGrnLines({
     required String clientId,
     required String companyId,

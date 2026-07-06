@@ -173,6 +173,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
   // ── GRN picker + lines/charges ────────────────────────────────────────────
   List<Map<String, dynamic>> _suppliers   = [];
   List<Map<String, dynamic>> _pendingGrns = [];
+  Set<String> _fullyReturnedGrnKeys = {};
   final Set<String> _selectedGrnKeys = {};
   final List<_ReturnLineRow> _lines = [];
   final List<_ReturnChargeRow> _charges = [];
@@ -247,6 +248,9 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
           if (_supplierId != null) {
             _pendingGrns = await _ds.getGrnsForSupplier(
               clientId: session.clientId, companyId: session.companyId, supplierId: _supplierId!,
+            );
+            _fullyReturnedGrnKeys = await _ds.getFullyReturnedGrnKeys(
+              clientId: session.clientId, companyId: session.companyId,
             );
           }
 
@@ -400,7 +404,10 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
       final rows = await _ds.getGrnsForSupplier(
         clientId: session.clientId, companyId: session.companyId, supplierId: _supplierId!,
       );
-      if (mounted) setState(() { _pendingGrns = rows; _loadingGrns = false; });
+      final fullyReturned = await _ds.getFullyReturnedGrnKeys(
+        clientId: session.clientId, companyId: session.companyId,
+      );
+      if (mounted) setState(() { _pendingGrns = rows; _fullyReturnedGrnKeys = fullyReturned; _loadingGrns = false; });
     } catch (e) {
       if (mounted) { setState(() => _loadingGrns = false); _showSnack('Could not load GRNs: $e', color: AppColors.negative); }
     }
@@ -776,9 +783,16 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
         await _init();
       }
     } on DioException catch (e) {
-      setState(() { _approving = false; _actionError = e.response?.data?['message'] ?? _serverError(e); });
+      setState(() { _actionError = e.response?.data?['message'] ?? _serverError(e); });
     } catch (e) {
-      setState(() { _approving = false; _actionError = 'Unexpected error: $e'; });
+      setState(() { _actionError = 'Unexpected error: $e'; });
+    } finally {
+      // Always reset, regardless of what happened above — previously this
+      // only reset inside the catch blocks, so a successful approve()
+      // followed by _init() failing internally (it swallows its own errors
+      // into _error) left the button spinning forever with no way out,
+      // since _status also never got refreshed off 'DRAFT' in that case.
+      if (mounted) setState(() => _approving = false);
     }
   }
 
@@ -1161,14 +1175,21 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
               final key = _grnKey(g);
               final currency = g['currency'] as Map<String, dynamic>?;
               final isBilled = g['billed_invoice_no'] != null;
+              final isSelected = _selectedGrnKeys.contains(key);
+              // Fully returned GRNs have nothing left to give — disabled
+              // going forward, but a GRN already picked onto THIS document
+              // (e.g. re-opening a draft that already fully returned it)
+              // stays interactive so the user can still remove it.
+              final isFullyReturned = _fullyReturnedGrnKeys.contains(key) && !isSelected;
               return CheckboxListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 controlAffinity: ListTileControlAffinity.leading,
-                value: _selectedGrnKeys.contains(key),
-                onChanged: locked ? null : (v) => _toggleGrn(g, v ?? false),
+                value: isSelected,
+                onChanged: (locked || isFullyReturned) ? null : (v) => _toggleGrn(g, v ?? false),
                 title: Row(children: [
-                  Text(g['grn_no'] as String, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                  Text(g['grn_no'] as String, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500,
+                      color: isFullyReturned ? AppColors.textDisabled : null)),
                   const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -1180,6 +1201,18 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
                         style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
                             color: isBilled ? AppColors.positive : AppColors.secondary)),
                   ),
+                  if (isFullyReturned) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.negative.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text('Fully Returned',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.negative)),
+                    ),
+                  ],
                 ]),
                 subtitle: Text(
                     '${g['grn_date']} · ${currency?['currency_id'] ?? ''}',

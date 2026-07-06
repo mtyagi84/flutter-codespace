@@ -142,6 +142,27 @@ class PurchaseReturnRemoteDs {
     return List<Map<String, dynamic>>.from(res.data as List);
   }
 
+  /// Which of this supplier's GRNs have already been returned IN FULL
+  /// (every line's total returned qty across every APPROVED return >= what
+  /// it originally received) — used to disable/flag them in the picker so
+  /// a GRN with nothing left to give doesn't keep inviting re-selection.
+  /// Partial returns are untouched: a GRN not fully returned yet stays
+  /// fully selectable, same as before.
+  Future<Set<String>> getFullyReturnedGrnKeys({
+    required String clientId,
+    required String companyId,
+  }) async {
+    final res = await _dio.get('/v_grn_return_status', queryParameters: {
+      'client_id':      'eq.$clientId',
+      'company_id':     'eq.$companyId',
+      'fully_returned': 'eq.true',
+      'select':         'grn_no,grn_date',
+    });
+    return (res.data as List)
+        .map((e) => '${(e as Map<String, dynamic>)['grn_no']}|${e['grn_date']}')
+        .toSet();
+  }
+
   /// A GRN's own lines — GRN qty pre-fills as the suggested (editable)
   /// return qty on the entry screen.
   Future<List<Map<String, dynamic>>> getGrnLines({
