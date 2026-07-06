@@ -52,6 +52,33 @@ class PrintFieldRegistry {
     PrintFieldDef('totals.grand_total', 'Grand Total', PrintDataFormat.currency),
   ];
 
+  static const _purchaseInvoiceScalarFields = [
+    PrintFieldDef('header.invoice_no', 'Bill Number'),
+    PrintFieldDef('header.invoice_date', 'Bill Date'),
+    PrintFieldDef('header.status', 'Status'),
+    PrintFieldDef('header.supplier_name', 'Supplier Name'),
+    PrintFieldDef('header.currency_code', 'Currency'),
+    PrintFieldDef('header.supplier_invoice_no', 'Supplier Invoice No'),
+    PrintFieldDef('header.supplier_invoice_date', 'Supplier Invoice Date'),
+    PrintFieldDef('header.remarks', 'Remarks'),
+    PrintFieldDef('totals.taxable_amount', 'Taxable Amount', PrintDataFormat.currency),
+    PrintFieldDef('totals.tax_amount', 'VAT / Tax Amount', PrintDataFormat.currency),
+    PrintFieldDef('totals.invoice_total', 'Invoice Total', PrintDataFormat.currency),
+  ];
+
+  static const _purchaseReturnScalarFields = [
+    PrintFieldDef('header.return_no', 'Return Number'),
+    PrintFieldDef('header.return_date', 'Return Date'),
+    PrintFieldDef('header.status', 'Status'),
+    PrintFieldDef('header.supplier_name', 'Supplier Name'),
+    PrintFieldDef('header.currency_code', 'Currency'),
+    PrintFieldDef('header.reason', 'Reason'),
+    PrintFieldDef('header.remarks', 'Remarks'),
+    PrintFieldDef('totals.taxable_amount', 'Taxable Amount', PrintDataFormat.currency),
+    PrintFieldDef('totals.tax_amount', 'VAT / Tax Amount', PrintDataFormat.currency),
+    PrintFieldDef('totals.return_total', 'Return Total', PrintDataFormat.currency),
+  ];
+
   static const _voucherScalarFields = [
     PrintFieldDef('header.voucher_type_label', 'Voucher Type'),
     PrintFieldDef('header.voucher_no', 'Voucher No'),
@@ -115,13 +142,33 @@ class PrintFieldRegistry {
     ],
   };
 
+  static const _purchaseInvoiceTableRowFields = {
+    'grns': [
+      PrintFieldDef('grn_no', 'GRN Number'),
+      PrintFieldDef('grn_date', 'GRN Date'),
+      PrintFieldDef('currency_code', 'Currency'),
+    ],
+  };
+
+  static const _purchaseReturnTableRowFields = {
+    'lines': [
+      PrintFieldDef('product_name', 'Item Name'),
+      PrintFieldDef('source_grn_no', 'Source GRN No'),
+      PrintFieldDef('return_qty', 'Return Quantity', PrintDataFormat.number),
+      PrintFieldDef('rate', 'Rate', PrintDataFormat.currency),
+      PrintFieldDef('final_amount', 'Amount', PrintDataFormat.currency),
+    ],
+  };
+
   /// Every scalar field (usable by text/field/image/barcode/watermark
   /// elements) available for a document type, company fields included.
   static List<PrintFieldDef> scalarFields(String documentType) => [
     ...switch (documentType) {
-      'PURCHASE_ORDER' => _poScalarFields,
-      'GRN'             => _grnScalarFields,
-      'VOUCHER'         => _voucherScalarFields,
+      'PURCHASE_ORDER'   => _poScalarFields,
+      'GRN'              => _grnScalarFields,
+      'PURCHASE_INVOICE' => _purchaseInvoiceScalarFields,
+      'PURCHASE_RETURN'  => _purchaseReturnScalarFields,
+      'VOUCHER'          => _voucherScalarFields,
       _ => const <PrintFieldDef>[],
     },
     ..._companyFields,
@@ -129,17 +176,21 @@ class PrintFieldRegistry {
 
   /// Which repeating lists (table `bind` values) exist for a document type.
   static List<String> tableNames(String documentType) => switch (documentType) {
-    'PURCHASE_ORDER' => const ['lines', 'charges', 'paymentTerms'],
-    'GRN'             => const ['lines', 'charges'],
-    'VOUCHER'         => const ['lines'],
+    'PURCHASE_ORDER'   => const ['lines', 'charges', 'paymentTerms'],
+    'GRN'              => const ['lines', 'charges'],
+    'PURCHASE_INVOICE' => const ['grns'],
+    'PURCHASE_RETURN'  => const ['lines'],
+    'VOUCHER'          => const ['lines'],
     _ => const [],
   };
 
   /// Columns available for a table bound to [tableName] within [documentType].
   static List<PrintFieldDef> rowFields(String documentType, String tableName) => switch (documentType) {
-    'PURCHASE_ORDER' => _poTableRowFields[tableName] ?? const [],
-    'GRN'             => _grnTableRowFields[tableName] ?? const [],
-    'VOUCHER'         => _voucherTableRowFields[tableName] ?? const [],
+    'PURCHASE_ORDER'   => _poTableRowFields[tableName] ?? const [],
+    'GRN'              => _grnTableRowFields[tableName] ?? const [],
+    'PURCHASE_INVOICE' => _purchaseInvoiceTableRowFields[tableName] ?? const [],
+    'PURCHASE_RETURN'  => _purchaseReturnTableRowFields[tableName] ?? const [],
+    'VOUCHER'          => _voucherTableRowFields[tableName] ?? const [],
     _ => const [],
   };
 
@@ -147,12 +198,14 @@ class PrintFieldRegistry {
   /// print_template_provider.dart's fallback registry — add a new type to
   /// both places (plus a *_default_template.dart and field entries here)
   /// when a new document's print support is built.
-  static const documentTypes = ['PURCHASE_ORDER', 'GRN', 'VOUCHER'];
+  static const documentTypes = ['PURCHASE_ORDER', 'GRN', 'PURCHASE_INVOICE', 'PURCHASE_RETURN', 'VOUCHER'];
 
   static String documentTypeLabel(String documentType) => switch (documentType) {
-    'PURCHASE_ORDER' => 'Purchase Order',
-    'GRN'             => 'Goods Receipt Note',
-    'VOUCHER'         => 'Finance Voucher',
+    'PURCHASE_ORDER'   => 'Purchase Order',
+    'GRN'              => 'Goods Receipt Note',
+    'PURCHASE_INVOICE' => 'Purchase Bill',
+    'PURCHASE_RETURN'  => 'Purchase Return',
+    'VOUCHER'          => 'Finance Voucher',
     _ => documentType,
   };
 }

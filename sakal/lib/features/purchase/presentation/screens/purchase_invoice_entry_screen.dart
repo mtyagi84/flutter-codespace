@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/printing/print_engine.dart';
+import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
@@ -66,6 +70,15 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
   bool    _loadingGrns = false;
   bool    _recomputing = false;
 
+  // ── Posted Journal Entries (GRN entry screen's own pattern) ───────────────
+  String? _postedVoucherNo;
+  String? _postedVoucherDate;
+  List<Map<String, dynamic>> _voucherLines = [];
+  bool    _loadingVoucherLines = false;
+
+  // ── Print ─────────────────────────────────────────────────────────────────
+  bool _printing = false;
+
   bool get _isNew => _invoiceNo == null;
 
   @override
@@ -114,6 +127,8 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
           _taxableAmountCtrl.text = header.taxableAmount.toString();
           _taxAmountCtrl.text     = header.taxAmount.toString();
           _remarksCtrl.text    = header.remarks ?? '';
+          _postedVoucherNo     = header.postedVoucherNo;
+          _postedVoucherDate   = header.postedVoucherDate;
 
           if (_supplierId != null) {
             _pendingGrns = await _ds.getPendingGrnsForSupplier(
@@ -127,8 +142,26 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
         }
       }
       if (mounted) setState(() => _loading = false);
+      if (_postedVoucherNo != null && _postedVoucherDate != null) {
+        unawaited(_loadPostedVoucherLines());
+      }
     } catch (e) {
       if (mounted) setState(() { _loading = false; _error = 'Could not load: $e'; });
+    }
+  }
+
+  Future<void> _loadPostedVoucherLines() async {
+    if (_postedVoucherNo == null || _postedVoucherDate == null) return;
+    setState(() => _loadingVoucherLines = true);
+    final session = ref.read(sessionProvider)!;
+    try {
+      final lines = await _ds.getPostedVoucherLines(
+        clientId: session.clientId, companyId: session.companyId,
+        voucherNo: _postedVoucherNo!, voucherDate: _postedVoucherDate!,
+      );
+      if (mounted) setState(() { _voucherLines = lines; _loadingVoucherLines = false; });
+    } catch (e) {
+      if (mounted) setState(() => _loadingVoucherLines = false);
     }
   }
 
@@ -264,6 +297,25 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
 
   Future<void> _approveInvoice() async {
     if (_invoiceNo == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Approve Purchase Bill'),
+        content: const Text('Once approved, the Purchase Accrual clearing, Input VAT and Supplier payable will be '
+            'posted to Finance and this bill can no longer be edited. Continue?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context, rootNavigator: true).pop(false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.of(context, rootNavigator: true).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.secondary),
+            child: const Text('Approve'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
     setState(() { _approving = true; _actionError = null; });
     final session = ref.read(sessionProvider)!;
     try {
@@ -287,6 +339,64 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
     if (data is Map && data['message'] is String) return data['message'] as String;
     return e.message ?? e.toString();
   }
+
+  // ── Print ─────────────────────────────────────────────────────────────────
+
+  Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) {
+    final linkedGrns = _pendingGrns.where((g) => _selectedGrnKeys.contains(_grnKey(g)));
+    return {
+      'company': company,
+      'header': {
+        'invoice_no':            _invoiceNo ?? '',
+        'invoice_date':          _displayDate(_invoiceDate),
+        'status':                _status,
+        'supplier_name':         _supplierDisplay ?? '',
+        'currency_code':         _invoiceCurrencyCode ?? '',
+        'supplier_invoice_no':   _supplierInvoiceNoCtrl.text,
+        'supplier_invoice_date': _displayDate(_supplierInvoiceDate),
+        'remarks':               _remarksCtrl.text,
+      },
+      'grns': linkedGrns.map((g) {
+        final currency = g['currency'] as Map<String, dynamic>?;
+        return {
+          'grn_no':        g['grn_no'] as String? ?? '',
+          'grn_date':      g['grn_date'] as String? ?? '',
+          'currency_code': currency?['currency_id'] as String? ?? '',
+        };
+      }).toList(),
+      'totals': {
+        'taxable_amount': _taxableAmount,
+        'tax_amount':     _taxAmount,
+        'invoice_total':  _taxableAmount + _taxAmount,
+      },
+    };
+  }
+
+  Future<void> _printInvoice() async {
+    if (_invoiceNo == null) return;
+    setState(() => _printing = true);
+    try {
+      final company  = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
+      final template = await ref.read(printTemplateProvider('PURCHASE_INVOICE').future);
+      final document = _buildPrintDocument(company);
+      await PrintEngine.printDocument(template: template, document: document, filename: '$_invoiceNo.pdf');
+    } catch (e) {
+      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } finally {
+      if (mounted) setState(() => _printing = false);
+    }
+  }
+
+  Widget _buildPrintButton() => Tooltip(
+    message: _printing ? 'Preparing PDF…' : 'Print / Save as PDF',
+    child: IconButton(
+      icon: _printing
+          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.print_outlined),
+      color: AppColors.primary,
+      onPressed: _printing ? null : _printInvoice,
+    ),
+  );
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -341,13 +451,17 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
           child: isMobile
               ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   _buildTitleBlock(),
-                  if (canSave || showApprove) ...[
+                  if (_invoiceNo != null || canSave || showApprove) ...[
                     const SizedBox(height: 10),
-                    _buildActionButtons(canSave: canSave, canApprove: showApprove),
+                    Row(children: [
+                      if (_invoiceNo != null) _buildPrintButton(),
+                      if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
+                    ]),
                   ],
                 ])
               : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(child: _buildTitleBlock()),
+                  if (_invoiceNo != null) _buildPrintButton(),
                   if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
                 ]),
         ),
@@ -371,6 +485,10 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
                           _buildGrnPickerCard(locked),
                           const SizedBox(height: 16),
                           _buildTotalsCard(locked),
+                          if (_status == 'APPROVED' && _postedVoucherNo != null) ...[
+                            const SizedBox(height: 16),
+                            _buildPostedVoucherSection(),
+                          ],
                         ],
                       ),
                     ),
@@ -692,6 +810,97 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
               decoration: dec.copyWith(labelText: 'Remarks'), style: const TextStyle(fontSize: 13)),
         ]),
       ),
+    );
+  }
+
+  // ── Posted Journal Entries — same pattern as GRN entry screen ────────────
+
+  Widget _buildPostedVoucherSection() {
+    Widget colHeader(String label, {TextAlign align = TextAlign.left}) => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Text(label, textAlign: align,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12)),
+    );
+    Widget cell(String text, {TextAlign align = TextAlign.left, bool bold = false}) => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Text(text, textAlign: align,
+          style: TextStyle(fontSize: 13, fontWeight: bold ? FontWeight.w700 : FontWeight.w400)),
+    );
+
+    double totalDebit = 0, totalCredit = 0;
+    for (final l in _voucherLines) {
+      final amount = (l['trans_amount'] as num? ?? 0).toDouble();
+      if (l['trans_nature'] == 'DR') { totalDebit += amount; } else { totalCredit += amount; }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          const Text('Posted Journal Entries',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(color: AppColors.positive.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+            child: Text(_postedVoucherNo ?? '', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.positive)),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        if (_loadingVoucherLines)
+          const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+        else if (_voucherLines.isEmpty)
+          const Padding(padding: EdgeInsets.all(16), child: Text('No journal entry lines found for this voucher.'))
+        else
+          Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
+            clipBehavior: Clip.antiAlias,
+            child: Column(children: [
+              Container(
+                color: AppColors.primary,
+                child: Row(children: [
+                  Expanded(flex: 3, child: colHeader('Voucher No')),
+                  Expanded(flex: 2, child: colHeader('Serial No')),
+                  Expanded(flex: 4, child: colHeader('Ledger Name')),
+                  Expanded(flex: 2, child: colHeader('Debit', align: TextAlign.right)),
+                  Expanded(flex: 2, child: colHeader('Credit', align: TextAlign.right)),
+                ]),
+              ),
+              for (var i = 0; i < _voucherLines.length; i++) Builder(builder: (_) {
+                final l = _voucherLines[i];
+                final account = l['account'] as Map<String, dynamic>?;
+                final ledgerName = account != null ? '[${account['account_code']}] ${account['account_name']}' : '—';
+                final amount = (l['trans_amount'] as num? ?? 0).toDouble();
+                final isDr = l['trans_nature'] == 'DR';
+                return Container(
+                  color: i.isEven ? Colors.white : AppColors.background,
+                  child: Row(children: [
+                    Expanded(flex: 3, child: cell(l['trans_no'] as String? ?? '')),
+                    Expanded(flex: 2, child: cell('${l['serial_no']}')),
+                    Expanded(flex: 4, child: cell(ledgerName)),
+                    Expanded(flex: 2, child: cell(isDr ? amount.toStringAsFixed(2) : '—', align: TextAlign.right)),
+                    Expanded(flex: 2, child: cell(!isDr ? amount.toStringAsFixed(2) : '—', align: TextAlign.right)),
+                  ]),
+                );
+              }),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.06),
+                  border: const Border(top: BorderSide(color: AppColors.border)),
+                ),
+                child: Row(children: [
+                  const Expanded(flex: 9, child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    child: Text('Total', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                  )),
+                  Expanded(flex: 2, child: cell(totalDebit.toStringAsFixed(2), align: TextAlign.right, bold: true)),
+                  Expanded(flex: 2, child: cell(totalCredit.toStringAsFixed(2), align: TextAlign.right, bold: true)),
+                ]),
+              ),
+            ]),
+          ),
+      ],
     );
   }
 }

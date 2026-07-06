@@ -1299,6 +1299,8 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         SizedBox(width: _termColWidth, height: 44, child: DropdownButtonFormField<String>(
           decoration: dec,
           isExpanded: true,
+          isDense: true,
+          itemHeight: null,
           initialValue: row.termId,
           items: _paymentTermMasters.map((t) => DropdownMenuItem(value: t['id'] as String,
               child: Text(t['description'] as String, style: const TextStyle(fontSize: 13)))).toList(),
@@ -1336,6 +1338,8 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
             Expanded(child: DropdownButtonFormField<String>(
               decoration: dec.copyWith(labelText: 'Term'),
               isExpanded: true,
+              isDense: true,
+              itemHeight: null,
               initialValue: row.termId,
               items: _paymentTermMasters.map((t) => DropdownMenuItem(value: t['id'] as String,
                   child: Text(t['description'] as String, style: const TextStyle(fontSize: 13)))).toList(),
@@ -1448,6 +1452,8 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
             SizedBox(width: 140, child: DropdownButtonFormField<String>(
               decoration: dec.copyWith(labelText: 'UOM'),
               isExpanded: true,
+              isDense: true,
+              itemHeight: null,
               initialValue: row.uomId,
               items: _uoms.map((u) => DropdownMenuItem(value: u['id'] as String,
                   child: Text(u['description'] as String, style: const TextStyle(fontSize: 12)))).toList(),
@@ -1482,6 +1488,8 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
             SizedBox(width: 170, child: DropdownButtonFormField<String?>(
               decoration: dec.copyWith(labelText: 'Tax Group'),
               isExpanded: true,
+              isDense: true,
+              itemHeight: null,
               initialValue: row.taxGroupId,
               items: [
                 const DropdownMenuItem(value: null, child: Text('No Tax', style: TextStyle(fontSize: 12))),
@@ -1493,6 +1501,8 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
             SizedBox(width: 170, child: DropdownButtonFormField<String?>(
               decoration: dec.copyWith(labelText: 'Department'),
               isExpanded: true,
+              isDense: true,
+              itemHeight: null,
               initialValue: row.departmentId,
               items: [
                 const DropdownMenuItem(value: null, child: Text('—', style: TextStyle(fontSize: 12))),
@@ -1504,6 +1514,8 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
             SizedBox(width: 170, child: DropdownButtonFormField<String?>(
               decoration: dec.copyWith(labelText: 'Consumption Area'),
               isExpanded: true,
+              isDense: true,
+              itemHeight: null,
               initialValue: row.consumptionAreaId,
               items: [
                 const DropdownMenuItem(value: null, child: Text('—', style: TextStyle(fontSize: 12))),
@@ -1596,6 +1608,8 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         Expanded(flex: 3, child: SizedBox(height: 44, child: DropdownButtonFormField<String>(
           decoration: dec,
           isExpanded: true,
+          isDense: true,
+          itemHeight: null,
           initialValue: row.chargeId,
           items: _additionalCharges.map((c) => DropdownMenuItem(value: c['id'] as String,
               child: Text(c['charge_name'] as String, style: const TextStyle(fontSize: 13)))).toList(),
@@ -1656,6 +1670,8 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
           SizedBox(width: 200, child: DropdownButtonFormField<String>(
             decoration: dec.copyWith(labelText: 'Charge Type'),
             isExpanded: true,
+            isDense: true,
+            itemHeight: null,
             initialValue: row.chargeId,
             items: _additionalCharges.map((c) => DropdownMenuItem(value: c['id'] as String,
                 child: Text(c['charge_name'] as String, style: const TextStyle(fontSize: 12)))).toList(),

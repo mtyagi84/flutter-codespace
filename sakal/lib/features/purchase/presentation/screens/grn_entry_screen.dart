@@ -1382,6 +1382,8 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
             final f1 = field(DropdownButtonFormField<String>(
               decoration: dec.copyWith(labelText: 'Receipt Mode *'),
               isExpanded: true,
+              isDense: true,
+              itemHeight: null,
               initialValue: _receiptMode,
               items: const [
                 DropdownMenuItem(value: 'DIRECT', child: Text('Direct', style: TextStyle(fontSize: 13))),
@@ -1444,6 +1446,8 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
               decoration: dec.copyWith(labelText: 'Location *'),
               initialValue: _locationId,
               isExpanded: true,
+              isDense: true,
+              itemHeight: null,
               items: _locations.map((l) => DropdownMenuItem(
                   value: l['id'] as String,
                   child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
@@ -1467,6 +1471,8 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
                   decoration: dec.copyWith(labelText: 'Currency *'),
                   initialValue: _grnCurrencyId,
                   isExpanded: true,
+                  isDense: true,
+                  itemHeight: null,
                   items: currencies.map((c) => DropdownMenuItem(
                       value: c['id'] as String,
                       child: Text('${c['currency_id']} — ${c['currency_name']}',
@@ -1684,6 +1690,8 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
             SizedBox(width: 140, child: DropdownButtonFormField<String>(
               decoration: dec.copyWith(labelText: 'UOM'),
               isExpanded: true,
+              isDense: true,
+              itemHeight: null,
               initialValue: row.uomId,
               items: _uoms.map((u) => DropdownMenuItem(value: u['id'] as String,
                   child: Text(u['description'] as String, style: const TextStyle(fontSize: 12)))).toList(),
@@ -1736,6 +1744,8 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
             SizedBox(width: 170, child: DropdownButtonFormField<String?>(
               decoration: dec.copyWith(labelText: 'Tax Group'),
               isExpanded: true,
+              isDense: true,
+              itemHeight: null,
               initialValue: row.taxGroupId,
               items: [
                 const DropdownMenuItem(value: null, child: Text('No Tax', style: TextStyle(fontSize: 12))),
@@ -1747,6 +1757,8 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
             SizedBox(width: 170, child: DropdownButtonFormField<String?>(
               decoration: dec.copyWith(labelText: 'Department'),
               isExpanded: true,
+              isDense: true,
+              itemHeight: null,
               initialValue: row.departmentId,
               items: [
                 const DropdownMenuItem(value: null, child: Text('—', style: TextStyle(fontSize: 12))),
@@ -1758,6 +1770,8 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
             SizedBox(width: 170, child: DropdownButtonFormField<String?>(
               decoration: dec.copyWith(labelText: 'Consumption Area'),
               isExpanded: true,
+              isDense: true,
+              itemHeight: null,
               initialValue: row.consumptionAreaId,
               items: [
                 const DropdownMenuItem(value: null, child: Text('—', style: TextStyle(fontSize: 12))),
@@ -1936,6 +1950,8 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
             : DropdownButtonFormField<String>(
                 decoration: dec,
                 isExpanded: true,
+                isDense: true,
+                itemHeight: null,
                 initialValue: row.chargeId,
                 items: _additionalCharges.map((c) => DropdownMenuItem(value: c['id'] as String,
                     child: Text(c['charge_name'] as String, style: const TextStyle(fontSize: 13)))).toList(),
@@ -2000,6 +2016,8 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
             SizedBox(width: 200, child: DropdownButtonFormField<String>(
               decoration: dec.copyWith(labelText: 'Charge Type'),
               isExpanded: true,
+              isDense: true,
+              itemHeight: null,
               initialValue: row.chargeId,
               items: _additionalCharges.map((c) => DropdownMenuItem(value: c['id'] as String,
                   child: Text(c['charge_name'] as String, style: const TextStyle(fontSize: 12)))).toList(),

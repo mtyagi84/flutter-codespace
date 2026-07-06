@@ -1,16 +1,20 @@
 -- ============================================================
 -- reset_test_transactions.sql
--- DEV/TEST ONLY. Wipes ALL Purchase Order, GRN, Finance Voucher,
--- Stock Ledger and Cost Price History data across every
--- client/company, so fresh test entries can be made from a clean
--- slate. Masters (products, accounts, customers/suppliers, tax,
--- COA, currencies, company/location setup, users) are untouched.
+-- DEV/TEST ONLY. Wipes ALL Purchase Order, GRN, Purchase Bill,
+-- Finance Voucher, Stock Ledger and Cost Price History data across
+-- every client/company, so fresh test entries can be made from a
+-- clean slate. Masters (products, accounts, customers/suppliers,
+-- tax, COA, currencies, company/location setup, users) are untouched.
 --
 -- Run in the Supabase SQL Editor. Wrapped in a transaction —
 -- if anything looks wrong, ROLLBACK instead of letting it commit.
 -- ============================================================
 
 BEGIN;
+
+-- ── Purchase Bills (no child table — billed_invoice_no/date on
+--    rih_grn_headers IS the linkage, wiped along with GRN below) ──
+DELETE FROM rih_purchase_invoices;
 
 -- ── GRN (children before parent) ──────────────────────────────
 DELETE FROM rid_grn_charge_lines;
@@ -46,7 +50,7 @@ SET current_stock       = 0,
 -- ── Reset document numbering so fresh entries start at 1 again ─
 -- (comment these two out if you'd rather keep numbering continuous)
 DELETE FROM ril_trans_no_seq WHERE voucher_type_code IN
-    ('GRN', 'CRV', 'BRV', 'CPV', 'BPV', 'JV', 'SDN', 'SCN', 'CDN', 'CCN', 'SIV');
+    ('GRN', 'PINV', 'PUR', 'CRV', 'BRV', 'CPV', 'BPV', 'JV', 'SDN', 'SCN', 'CDN', 'CCN', 'SIV');
 DELETE FROM ril_company_doc_no_seq WHERE voucher_type_code = 'PO';
 
 COMMIT;

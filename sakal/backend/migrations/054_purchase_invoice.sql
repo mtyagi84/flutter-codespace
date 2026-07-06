@@ -519,8 +519,11 @@ BEGIN
     v_cr_total := v_supplier_trans_amt * v_header.rate_to_base;
 
     -- 7. DR/CR Exchange Gain/Loss — whatever the above doesn't balance to.
-    --    Positive = loss (DR), negative = gain (CR). Anchored on any one
-    --    linked GRN line's product — EXCHANGE_GAIN_LOSS_ACCOUNT is a
+    --    v_fx_diff = dr_total - cr_total: negative (Cr > Dr, the real
+    --    payable at the bill's rate exceeds the accrual booked at the GRN's
+    --    rate) = a LOSS, posted DR to balance; positive (Dr > Cr) = a GAIN,
+    --    posted CR. Anchored on any one linked GRN line's product —
+    --    EXCHANGE_GAIN_LOSS_ACCOUNT is a
     --    document-level account, always configured at COMPANY granularity
     --    in practice, so the anchor choice is immaterial to the resolved
     --    account; fn_resolve_account_link's cache table just requires one.

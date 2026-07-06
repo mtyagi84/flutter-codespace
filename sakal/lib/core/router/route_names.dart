@@ -40,6 +40,8 @@ class RouteNames {
   static const String grnEntry         = '/purchase/grn-entry';
   static const String purchaseInvoices = '/purchase/invoices';
   static const String purchaseInvoiceEntry = '/purchase/invoice-entry';
+  static const String purchaseReturns = '/purchase/returns';
+  static const String purchaseReturnEntry = '/purchase/return-entry';
   static const String supplierPayment  = '/purchase/payments';
 
   // Inventory

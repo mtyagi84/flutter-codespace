@@ -39,6 +39,8 @@ import '../../features/purchase/presentation/screens/grn_list_screen.dart';
 import '../../features/purchase/presentation/screens/grn_entry_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_invoice_list_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_invoice_entry_screen.dart';
+import '../../features/purchase/presentation/screens/purchase_return_list_screen.dart';
+import '../../features/purchase/presentation/screens/purchase_return_entry_screen.dart';
 import '../../features/master/presentation/screens/product_list_screen.dart';
 import '../../features/master/presentation/screens/product_entry_screen.dart';
 import '../../features/setup/presentation/screens/category_levels_screen.dart';
@@ -222,6 +224,17 @@ final appRouter = GoRouter(
             return PurchaseInvoiceEntryScreen(
               editInvoiceNo:   extra?['invoiceNo']   as String?,
               editInvoiceDate: extra?['invoiceDate'] as String?,
+            );
+          },
+        ),
+        GoRoute(path: RouteNames.purchaseReturns, builder: (c, s) => const PurchaseReturnListScreen()),
+        GoRoute(
+          path: RouteNames.purchaseReturnEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return PurchaseReturnEntryScreen(
+              editReturnNo:   extra?['returnNo']   as String?,
+              editReturnDate: extra?['returnDate'] as String?,
             );
           },
         ),

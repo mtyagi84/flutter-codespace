@@ -3,6 +3,8 @@ import '../network/dio_client.dart';
 import '../providers/session_provider.dart';
 import 'default_templates/purchase_order_default_template.dart';
 import 'default_templates/grn_default_template.dart';
+import 'default_templates/purchase_invoice_default_template.dart';
+import 'default_templates/purchase_return_default_template.dart';
 import 'default_templates/voucher_default_template.dart';
 import 'print_models.dart';
 
@@ -39,8 +41,10 @@ final printTemplateProvider = FutureProvider.family<PrintTemplate, String>((ref,
 /// point for a brand-new template, so an admin edits a proven-good layout
 /// instead of a blank page.
 PrintTemplate defaultTemplateFor(String documentType) => switch (documentType) {
-  'PURCHASE_ORDER' => purchaseOrderDefaultTemplate,
-  'GRN'            => grnDefaultTemplate,
-  'VOUCHER'        => voucherDefaultTemplate,
+  'PURCHASE_ORDER'   => purchaseOrderDefaultTemplate,
+  'GRN'              => grnDefaultTemplate,
+  'PURCHASE_INVOICE' => purchaseInvoiceDefaultTemplate,
+  'PURCHASE_RETURN'  => purchaseReturnDefaultTemplate,
+  'VOUCHER'          => voucherDefaultTemplate,
   _ => throw ArgumentError('No default print template registered for document type "$documentType".'),
 };
