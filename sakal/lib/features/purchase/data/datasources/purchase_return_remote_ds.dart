@@ -158,12 +158,104 @@ class PurchaseReturnRemoteDs {
       'is_deleted': 'eq.false',
       'select':     'serial_no,product_id,uom_id,uom_conversion_factor,base_qty,rate,'
           'tax_group_id,gross_amount,tax_amount,final_amount,source_po_order_no,'
-          'product:rim_products!product_id(product_code,product_name),'
+          'product:rim_products!product_id(product_code,product_name,tracking_type),'
           'uom:rim_common_masters!uom_id(description),'
           'tax_group:rim_tax_groups!tax_group_id(group_name)',
       'order':      'serial_no.asc',
     });
     return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
+  /// The batches this specific GRN line originally received — candidates the
+  /// user can pick to return from. Actual returnability is capped by each
+  /// batch's CURRENT ledger balance (getBatchBalance below), not just what
+  /// was received here — some of it may have moved on since (sold, an
+  /// earlier partial return, etc).
+  Future<List<Map<String, dynamic>>> getGrnLineBatches({
+    required String clientId,
+    required String companyId,
+    required String grnNo,
+    required String grnDate,
+    required int    lineSerial,
+  }) async {
+    final res = await _dio.get('/rid_transaction_line_batches', queryParameters: {
+      'client_id':       'eq.$clientId',
+      'company_id':      'eq.$companyId',
+      'source_doc_type': 'eq.GRN',
+      'source_doc_no':   'eq.$grnNo',
+      'source_doc_date': 'eq.$grnDate',
+      'line_serial':     'eq.$lineSerial',
+      'select':          'batch_no,expiry_date,base_qty',
+      'order':           'batch_no.asc',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
+  /// The serials this specific GRN line originally received — same
+  /// candidate-list role as getGrnLineBatches above.
+  Future<List<Map<String, dynamic>>> getGrnLineSerials({
+    required String clientId,
+    required String companyId,
+    required String grnNo,
+    required String grnDate,
+    required int    lineSerial,
+  }) async {
+    final res = await _dio.get('/rid_transaction_line_serials', queryParameters: {
+      'client_id':       'eq.$clientId',
+      'company_id':      'eq.$companyId',
+      'source_doc_type': 'eq.GRN',
+      'source_doc_no':   'eq.$grnNo',
+      'source_doc_date': 'eq.$grnDate',
+      'line_serial':     'eq.$lineSerial',
+      'select':          'serial_no',
+      'order':           'serial_no.asc',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
+  /// Current remaining balance for one batch at this location — a UX hint
+  /// only ("Available: N"); the real enforcement is server-side, in
+  /// fn_post_stock_movement's strict per-batch check (migration 063).
+  Future<num> getBatchBalance({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String productId,
+    required String batchNo,
+  }) async {
+    final res = await _dio.get('/v_batch_stock_balance', queryParameters: {
+      'client_id':   'eq.$clientId',
+      'company_id':  'eq.$companyId',
+      'location_id': 'eq.$locationId',
+      'product_id':  'eq.$productId',
+      'batch_no':    'eq.$batchNo',
+      'select':      'balance',
+    });
+    final list = res.data as List;
+    if (list.isEmpty) return 0;
+    return (list.first as Map<String, dynamic>)['balance'] as num? ?? 0;
+  }
+
+  /// Current status (IN_STOCK / OUT) for one serial at this location — same
+  /// UX-hint role as getBatchBalance above.
+  Future<String> getSerialStatus({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String productId,
+    required String serialNo,
+  }) async {
+    final res = await _dio.get('/v_serial_stock_status', queryParameters: {
+      'client_id':   'eq.$clientId',
+      'company_id':  'eq.$companyId',
+      'location_id': 'eq.$locationId',
+      'product_id':  'eq.$productId',
+      'serial_no':   'eq.$serialNo',
+      'select':      'status',
+    });
+    final list = res.data as List;
+    if (list.isEmpty) return 'OUT';
+    return (list.first as Map<String, dynamic>)['status'] as String? ?? 'OUT';
   }
 
   /// A GRN's own additional charges — populate as editable defaults.
@@ -185,18 +277,136 @@ class PurchaseReturnRemoteDs {
     return List<Map<String, dynamic>>.from(res.data as List);
   }
 
+  // ── Reload an existing return's own lines/charges/allocations ────────────
+  // Needed both to re-open a DRAFT for further editing and to display an
+  // APPROVED return (view + print) — previously missing entirely, so both
+  // cases showed a blank Return Lines/Charges section.
+
+  Future<List<Map<String, dynamic>>> getReturnLines({
+    required String clientId,
+    required String companyId,
+    required String returnNo,
+    required String returnDate,
+  }) async {
+    final res = await _dio.get('/rid_purchase_return_lines', queryParameters: {
+      'client_id':   'eq.$clientId',
+      'company_id':  'eq.$companyId',
+      'return_no':   'eq.$returnNo',
+      'return_date': 'eq.$returnDate',
+      'is_deleted':  'eq.false',
+      'select':      'serial_no,source_grn_no,source_grn_date,source_grn_line_serial,product_id,base_qty',
+      'order':       'serial_no.asc',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
+  Future<List<Map<String, dynamic>>> getReturnCharges({
+    required String clientId,
+    required String companyId,
+    required String returnNo,
+    required String returnDate,
+  }) async {
+    final res = await _dio.get('/rid_purchase_return_charge_lines', queryParameters: {
+      'client_id':   'eq.$clientId',
+      'company_id':  'eq.$companyId',
+      'return_no':   'eq.$returnNo',
+      'return_date': 'eq.$returnDate',
+      'is_deleted':  'eq.false',
+      'select':      'serial_no,charge_id,charge_name,is_taxable,tax_id,nature,gl_account_id,amount,tax_amount,'
+          'source_grn_no,source_grn_date',
+      'order':       'serial_no.asc',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
+  /// This return line's own previously-saved batch allocation (as opposed to
+  /// getGrnLineBatches, which lists the GRN's ORIGINAL candidates) — used to
+  /// pre-select/pre-fill the picker when reopening a DRAFT or viewing an
+  /// APPROVED return.
+  Future<List<Map<String, dynamic>>> getReturnLineBatches({
+    required String clientId,
+    required String companyId,
+    required String returnNo,
+    required String returnDate,
+    required int    lineSerial,
+  }) async {
+    final res = await _dio.get('/rid_transaction_line_batches', queryParameters: {
+      'client_id':       'eq.$clientId',
+      'company_id':      'eq.$companyId',
+      'source_doc_type': 'eq.PURCHASE_RETURN',
+      'source_doc_no':   'eq.$returnNo',
+      'source_doc_date': 'eq.$returnDate',
+      'line_serial':     'eq.$lineSerial',
+      'select':          'batch_no,base_qty',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
+  /// This return line's own previously-saved serial allocation — same role
+  /// as getReturnLineBatches above.
+  Future<List<Map<String, dynamic>>> getReturnLineSerials({
+    required String clientId,
+    required String companyId,
+    required String returnNo,
+    required String returnDate,
+    required int    lineSerial,
+  }) async {
+    final res = await _dio.get('/rid_transaction_line_serials', queryParameters: {
+      'client_id':       'eq.$clientId',
+      'company_id':      'eq.$companyId',
+      'source_doc_type': 'eq.PURCHASE_RETURN',
+      'source_doc_no':   'eq.$returnNo',
+      'source_doc_date': 'eq.$returnDate',
+      'line_serial':     'eq.$lineSerial',
+      'select':          'serial_no',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
+  /// Common-master values for a given type_key (e.g. 'PURCHASE_RETURN_REASON')
+  /// — two-step lookup since rim_common_masters filters by type_id (UUID),
+  /// same pattern as grn_remote_ds.dart/purchase_order_remote_ds.dart.
+  Future<List<Map<String, dynamic>>> getCommonMastersByType({
+    required String clientId,
+    required String companyId,
+    required String typeKey,
+  }) async {
+    final typeRes = await _dio.get('/rim_common_master_types', queryParameters: {
+      'type_key': 'eq.$typeKey',
+      'select':   'id',
+      'limit':    '1',
+    });
+    final typeList = typeRes.data as List;
+    if (typeList.isEmpty) return [];
+    final typeId = (typeList.first as Map<String, dynamic>)['id'] as String;
+    final res = await _dio.get('/rim_common_masters', queryParameters: {
+      'type_id':    'eq.$typeId',
+      'client_id':  'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'is_deleted': 'eq.false',
+      'is_active':  'eq.true',
+      'select':     'id,description',
+      'order':      'sort_order.asc,description.asc',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
   // ── Save / Approve ────────────────────────────────────────────────────────────
 
   /// Returns the assigned return_no.
   Future<String> save({
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,
+    required List<Map<String, dynamic>> batches,
+    required List<Map<String, dynamic>> serials,
     required List<Map<String, dynamic>> charges,
     required String userId,
   }) async {
     final res = await _dio.post('/rpc/fn_save_purchase_return', data: {
       'p_header':  header,
       'p_lines':   lines,
+      'p_batches': batches,
+      'p_serials': serials,
       'p_charges': charges,
       'p_user_id': userId,
     });

@@ -304,7 +304,7 @@ BEGIN
       'uom_conversion_factor', 1, 'qty_pack', 3, 'qty_loose', 0, 'base_qty', 3, 'rate', 50,
       'gross_amount', 150, 'tax_amount', 0, 'final_amount', 150
     )),
-    '[]'::jsonb,
+    '[]'::jsonb, '[]'::jsonb, '[]'::jsonb,
     '00000000-0000-0000-0061-000000000004'
   );
   PERFORM set_config('pgtap.v_return_a_061', v_return_no, false);
@@ -375,7 +375,7 @@ BEGIN
       'tax_group_id', '00000000-0000-0000-0061-000000000016',
       'gross_amount', 100, 'tax_amount', 16, 'final_amount', 116
     )),
-    '[]'::jsonb,
+    '[]'::jsonb, '[]'::jsonb, '[]'::jsonb,
     '00000000-0000-0000-0061-000000000004'
   );
   PERFORM set_config('pgtap.v_return_b_061', v_return_no, false);
@@ -486,7 +486,7 @@ BEGIN
         'gross_amount', 50, 'tax_amount', 8, 'final_amount', 58
       )
     ),
-    '[]'::jsonb,
+    '[]'::jsonb, '[]'::jsonb, '[]'::jsonb,
     '00000000-0000-0000-0061-000000000004'
   );
   PERFORM set_config('pgtap.v_return_c_061', v_return_no, false);

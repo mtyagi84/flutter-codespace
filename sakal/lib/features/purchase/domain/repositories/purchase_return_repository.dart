@@ -57,10 +57,80 @@ abstract class PurchaseReturnRepository {
     required String grnDate,
   });
 
+  Future<List<Map<String, dynamic>>> getGrnLineBatches({
+    required String clientId,
+    required String companyId,
+    required String grnNo,
+    required String grnDate,
+    required int    lineSerial,
+  });
+
+  Future<List<Map<String, dynamic>>> getGrnLineSerials({
+    required String clientId,
+    required String companyId,
+    required String grnNo,
+    required String grnDate,
+    required int    lineSerial,
+  });
+
+  Future<num> getBatchBalance({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String productId,
+    required String batchNo,
+  });
+
+  Future<String> getSerialStatus({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String productId,
+    required String serialNo,
+  });
+
+  Future<List<Map<String, dynamic>>> getReturnLines({
+    required String clientId,
+    required String companyId,
+    required String returnNo,
+    required String returnDate,
+  });
+
+  Future<List<Map<String, dynamic>>> getReturnCharges({
+    required String clientId,
+    required String companyId,
+    required String returnNo,
+    required String returnDate,
+  });
+
+  Future<List<Map<String, dynamic>>> getReturnLineBatches({
+    required String clientId,
+    required String companyId,
+    required String returnNo,
+    required String returnDate,
+    required int    lineSerial,
+  });
+
+  Future<List<Map<String, dynamic>>> getReturnLineSerials({
+    required String clientId,
+    required String companyId,
+    required String returnNo,
+    required String returnDate,
+    required int    lineSerial,
+  });
+
+  Future<List<Map<String, dynamic>>> getCommonMastersByType({
+    required String clientId,
+    required String companyId,
+    required String typeKey,
+  });
+
   /// Returns the assigned return_no.
   Future<String> save({
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,
+    required List<Map<String, dynamic>> batches,
+    required List<Map<String, dynamic>> serials,
     required List<Map<String, dynamic>> charges,
     required String userId,
   });

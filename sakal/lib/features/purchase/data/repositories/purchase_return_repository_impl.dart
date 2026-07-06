@@ -75,12 +75,103 @@ class PurchaseReturnRepositoryImpl implements PurchaseReturnRepository {
   }) => _remote.getGrnCharges(clientId: clientId, companyId: companyId, grnNo: grnNo, grnDate: grnDate);
 
   @override
+  Future<List<Map<String, dynamic>>> getGrnLineBatches({
+    required String clientId,
+    required String companyId,
+    required String grnNo,
+    required String grnDate,
+    required int    lineSerial,
+  }) => _remote.getGrnLineBatches(
+        clientId: clientId, companyId: companyId, grnNo: grnNo, grnDate: grnDate, lineSerial: lineSerial,
+      );
+
+  @override
+  Future<List<Map<String, dynamic>>> getGrnLineSerials({
+    required String clientId,
+    required String companyId,
+    required String grnNo,
+    required String grnDate,
+    required int    lineSerial,
+  }) => _remote.getGrnLineSerials(
+        clientId: clientId, companyId: companyId, grnNo: grnNo, grnDate: grnDate, lineSerial: lineSerial,
+      );
+
+  @override
+  Future<num> getBatchBalance({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String productId,
+    required String batchNo,
+  }) => _remote.getBatchBalance(
+        clientId: clientId, companyId: companyId, locationId: locationId, productId: productId, batchNo: batchNo,
+      );
+
+  @override
+  Future<String> getSerialStatus({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String productId,
+    required String serialNo,
+  }) => _remote.getSerialStatus(
+        clientId: clientId, companyId: companyId, locationId: locationId, productId: productId, serialNo: serialNo,
+      );
+
+  @override
+  Future<List<Map<String, dynamic>>> getReturnLines({
+    required String clientId,
+    required String companyId,
+    required String returnNo,
+    required String returnDate,
+  }) => _remote.getReturnLines(clientId: clientId, companyId: companyId, returnNo: returnNo, returnDate: returnDate);
+
+  @override
+  Future<List<Map<String, dynamic>>> getReturnCharges({
+    required String clientId,
+    required String companyId,
+    required String returnNo,
+    required String returnDate,
+  }) => _remote.getReturnCharges(clientId: clientId, companyId: companyId, returnNo: returnNo, returnDate: returnDate);
+
+  @override
+  Future<List<Map<String, dynamic>>> getReturnLineBatches({
+    required String clientId,
+    required String companyId,
+    required String returnNo,
+    required String returnDate,
+    required int    lineSerial,
+  }) => _remote.getReturnLineBatches(
+        clientId: clientId, companyId: companyId, returnNo: returnNo, returnDate: returnDate, lineSerial: lineSerial,
+      );
+
+  @override
+  Future<List<Map<String, dynamic>>> getReturnLineSerials({
+    required String clientId,
+    required String companyId,
+    required String returnNo,
+    required String returnDate,
+    required int    lineSerial,
+  }) => _remote.getReturnLineSerials(
+        clientId: clientId, companyId: companyId, returnNo: returnNo, returnDate: returnDate, lineSerial: lineSerial,
+      );
+
+  @override
+  Future<List<Map<String, dynamic>>> getCommonMastersByType({
+    required String clientId,
+    required String companyId,
+    required String typeKey,
+  }) => _remote.getCommonMastersByType(clientId: clientId, companyId: companyId, typeKey: typeKey);
+
+  @override
   Future<String> save({
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,
+    required List<Map<String, dynamic>> batches,
+    required List<Map<String, dynamic>> serials,
     required List<Map<String, dynamic>> charges,
     required String userId,
-  }) => _remote.save(header: header, lines: lines, charges: charges, userId: userId);
+  }) => _remote.save(header: header, lines: lines, batches: batches, serials: serials, charges: charges, userId: userId);
 
   @override
   Future<void> approve({

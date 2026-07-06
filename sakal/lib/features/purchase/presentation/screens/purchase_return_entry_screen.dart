@@ -15,6 +15,34 @@ import '../../../../core/widgets/offline_banner.dart';
 import '../../domain/repositories/purchase_return_repository.dart';
 import '../providers/purchase_return_providers.dart';
 
+/// One batch this GRN line originally received — the user allocates however
+/// much of the line's return qty comes from this specific batch. Balance is
+/// a UX hint only; the real block is fn_post_stock_movement's strict
+/// per-batch check (migration 063) at Approve time.
+class _ReturnBatchCandidate {
+  final String batchNo;
+  final String? expiryDate;
+  final double receivedQty;
+  num availableBalance = 0;
+  final TextEditingController qtyCtrl = TextEditingController(text: '0');
+
+  _ReturnBatchCandidate({required this.batchNo, this.expiryDate, required this.receivedQty});
+
+  double get allocatedQty => double.tryParse(qtyCtrl.text) ?? 0;
+  void dispose() => qtyCtrl.dispose();
+}
+
+/// One serial this GRN line originally received — the user checks which
+/// exact units are going back. status is a UX hint only, same caveat as
+/// _ReturnBatchCandidate.
+class _ReturnSerialCandidate {
+  final String serialNo;
+  String status;
+  bool selected = false;
+
+  _ReturnSerialCandidate({required this.serialNo, this.status = 'IN_STOCK'});
+}
+
 class _ReturnLineRow {
   final String sourceGrnNo;
   final String sourceGrnDate;
@@ -30,7 +58,12 @@ class _ReturnLineRow {
   final double grnTaxAmount;   // the GRN line's own estimated tax (deferred at GRN time)
   final bool   isBilled;       // whether the source GRN has already been billed
   final bool   hasSourcePo;    // whether the source GRN line traces to a PO
+  final String trackingType;   // NONE / BATCH / BATCH_WITH_EXPIRY / SERIAL
+  final int?   existingLineSerialNo; // this line's own serial_no if reloaded from a saved return, else null (brand-new line)
   final TextEditingController qtyCtrl;
+  List<_ReturnBatchCandidate>  batchCandidates  = [];
+  List<_ReturnSerialCandidate> serialCandidates = [];
+  bool candidatesLoaded = false;
 
   _ReturnLineRow({
     required this.sourceGrnNo,
@@ -47,13 +80,24 @@ class _ReturnLineRow {
     this.grnTaxAmount = 0,
     required this.isBilled,
     required this.hasSourcePo,
-  }) : qtyCtrl = TextEditingController(text: grnQty.toStringAsFixed(2));
+    this.trackingType = 'NONE',
+    this.existingLineSerialNo,
+    double? initialReturnQty,
+  }) : qtyCtrl = TextEditingController(text: (initialReturnQty ?? grnQty).toStringAsFixed(2));
+
+  bool get isBatchTracked  => trackingType == 'BATCH' || trackingType == 'BATCH_WITH_EXPIRY';
+  bool get isSerialTracked => trackingType == 'SERIAL';
 
   double get returnQty => double.tryParse(qtyCtrl.text) ?? 0;
   double get grossAmount => returnQty * rate;
   double get suggestedTaxAmount => grnQty > 0 ? grnTaxAmount * (returnQty / grnQty) : 0;
+  double get batchQtySum => batchCandidates.fold(0.0, (s, b) => s + b.allocatedQty);
+  int    get selectedSerialCount => serialCandidates.where((s) => s.selected).length;
 
-  void dispose() => qtyCtrl.dispose();
+  void dispose() {
+    qtyCtrl.dispose();
+    for (final b in batchCandidates) { b.dispose(); }
+  }
 }
 
 class _ReturnChargeRow {
@@ -122,7 +166,8 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
   final _taxAmountCtrl     = TextEditingController(text: '0');
   double get _taxableAmount => double.tryParse(_taxableAmountCtrl.text) ?? 0;
   double get _taxAmount     => double.tryParse(_taxAmountCtrl.text) ?? 0;
-  final _reasonCtrl  = TextEditingController();
+  String? _reason;
+  List<String> _reasons = [];
   final _remarksCtrl = TextEditingController();
 
   // ── GRN picker + lines/charges ────────────────────────────────────────────
@@ -161,7 +206,6 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
     _rateToLocalCtrl.dispose();
     _taxableAmountCtrl.dispose();
     _taxAmountCtrl.dispose();
-    _reasonCtrl.dispose();
     _remarksCtrl.dispose();
     for (final l in _lines) { l.dispose(); }
     for (final c in _charges) { c.dispose(); }
@@ -175,6 +219,9 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
       _locationId = session.locationId;
       _suppliers = await _ds.getSuppliersWithApprovedGrns(
           clientId: session.clientId, companyId: session.companyId);
+      final reasonRows = await _ds.getCommonMastersByType(
+          clientId: session.clientId, companyId: session.companyId, typeKey: 'PURCHASE_RETURN_REASON');
+      _reasons = reasonRows.map((r) => r['description'] as String).toList();
 
       if (widget.editReturnNo != null) {
         final header = await _ds.getHeader(
@@ -194,7 +241,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
           _rateToLocalCtrl.text = header.rateToLocal.toString();
           _taxableAmountCtrl.text = header.taxableAmount.toString();
           _taxAmountCtrl.text     = header.taxAmount.toString();
-          _reasonCtrl.text    = header.reason ?? '';
+          _reason             = header.reason;
           _remarksCtrl.text   = header.remarks ?? '';
 
           if (_supplierId != null) {
@@ -202,6 +249,8 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
               clientId: session.clientId, companyId: session.companyId, supplierId: _supplierId!,
             );
           }
+
+          await _loadExistingLinesAndCharges(session);
         }
       }
       if (mounted) setState(() => _loading = false);
@@ -210,6 +259,95 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
       }
     } catch (e) {
       if (mounted) setState(() { _loading = false; _error = 'Could not load: $e'; });
+    }
+  }
+
+  /// Reloads this return's own previously-saved lines/charges — needed both
+  /// to re-open a DRAFT for further editing and to display an APPROVED
+  /// return (view + print). Each saved line only stores its own qty/product/
+  /// source-GRN reference (rid_purchase_return_lines) — the rest of the
+  /// display data (product name, UOM, rate, tax group, whether the GRN is
+  /// billed/traces to a PO) is looked up fresh from the source GRN's own
+  /// lines, same data getGrnLines already returns when a GRN is freshly
+  /// picked, so both code paths end up with an identically-shaped row.
+  Future<void> _loadExistingLinesAndCharges(UserSession session) async {
+    final savedLines = await _ds.getReturnLines(
+      clientId: session.clientId, companyId: session.companyId,
+      returnNo: _returnNo!, returnDate: _fmtDate(_returnDate),
+    );
+    if (savedLines.isEmpty) return;
+
+    final grnKeys = <String>{};
+    for (final l in savedLines) { grnKeys.add('${l['source_grn_no']}|${l['source_grn_date']}'); }
+
+    final grnLinesByKey = <String, List<Map<String, dynamic>>>{};
+    for (final key in grnKeys) {
+      final parts = key.split('|');
+      grnLinesByKey[key] = await _ds.getGrnLines(
+        clientId: session.clientId, companyId: session.companyId, grnNo: parts[0], grnDate: parts[1],
+      );
+    }
+
+    final newLines = <_ReturnLineRow>[];
+    for (final sl in savedLines) {
+      final grnNo   = sl['source_grn_no'] as String;
+      final grnDate = sl['source_grn_date'] as String;
+      final key     = '$grnNo|$grnDate';
+      final grn     = _pendingGrns.firstWhere(
+        (g) => g['grn_no'] == grnNo && g['grn_date'] == grnDate,
+        orElse: () => const {},
+      );
+      final isBilled = grn['billed_invoice_no'] != null;
+      final gl = (grnLinesByKey[key] ?? const []).firstWhere(
+        (g) => g['serial_no'] == sl['source_grn_line_serial'],
+        orElse: () => const {},
+      );
+      final product = gl['product'] as Map<String, dynamic>?;
+      final uom     = gl['uom'] as Map<String, dynamic>?;
+      final row = _ReturnLineRow(
+        sourceGrnNo: grnNo, sourceGrnDate: grnDate,
+        sourceGrnLineSerial: sl['source_grn_line_serial'] as int,
+        productId: sl['product_id'] as String,
+        productDisplay: product != null ? '[${product['product_code']}] ${product['product_name']}' : '',
+        uomId: gl['uom_id'] as String?,
+        uomLabel: uom?['description'] as String?,
+        uomConversionFactor: (gl['uom_conversion_factor'] as num? ?? 1).toDouble(),
+        grnQty: (gl['base_qty'] as num? ?? 0).toDouble(),
+        rate: (gl['rate'] as num? ?? 0).toDouble(),
+        taxGroupId: gl['tax_group_id'] as String?,
+        grnTaxAmount: (gl['tax_amount'] as num? ?? 0).toDouble(),
+        isBilled: isBilled,
+        hasSourcePo: gl['source_po_order_no'] != null,
+        trackingType: product?['tracking_type'] as String? ?? 'NONE',
+        existingLineSerialNo: sl['serial_no'] as int,
+        initialReturnQty: (sl['base_qty'] as num? ?? 0).toDouble(),
+      );
+      _lines.add(row);
+      newLines.add(row);
+      _selectedGrnKeys.add(key);
+    }
+
+    final savedCharges = await _ds.getReturnCharges(
+      clientId: session.clientId, companyId: session.companyId,
+      returnNo: _returnNo!, returnDate: _fmtDate(_returnDate),
+    );
+    for (final sc in savedCharges) {
+      _charges.add(_ReturnChargeRow(
+        sourceGrnNo: sc['source_grn_no'] as String? ?? '',
+        sourceGrnDate: sc['source_grn_date'] as String? ?? '',
+        chargeId: sc['charge_id'] as String,
+        chargeName: sc['charge_name'] as String,
+        isTaxable: sc['is_taxable'] as bool? ?? false,
+        taxId: sc['tax_id'] as String?,
+        nature: sc['nature'] as String? ?? 'ADD',
+        glAccountId: sc['gl_account_id'] as String?,
+        taxAmount: (sc['tax_amount'] as num? ?? 0).toDouble(),
+        initialAmount: (sc['amount'] as num? ?? 0).toDouble(),
+      ));
+    }
+
+    for (final row in newLines) {
+      if (row.isBatchTracked || row.isSerialTracked) unawaited(_loadCandidates(row));
     }
   }
 
@@ -293,11 +431,12 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
         final grnLines   = await _ds.getGrnLines(clientId: session.clientId, companyId: session.companyId, grnNo: grnNo, grnDate: grnDate);
         final grnCharges = await _ds.getGrnCharges(clientId: session.clientId, companyId: session.companyId, grnNo: grnNo, grnDate: grnDate);
         if (!mounted) return;
+        final newLines = <_ReturnLineRow>[];
         setState(() {
           for (final gl in grnLines) {
             final product = gl['product'] as Map<String, dynamic>?;
             final uom     = gl['uom'] as Map<String, dynamic>?;
-            _lines.add(_ReturnLineRow(
+            final row = _ReturnLineRow(
               sourceGrnNo: grnNo, sourceGrnDate: grnDate,
               sourceGrnLineSerial: gl['serial_no'] as int,
               productId: gl['product_id'] as String,
@@ -311,7 +450,10 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
               grnTaxAmount: (gl['tax_amount'] as num? ?? 0).toDouble(),
               isBilled: isBilled,
               hasSourcePo: gl['source_po_order_no'] != null,
-            ));
+              trackingType: product?['tracking_type'] as String? ?? 'NONE',
+            );
+            _lines.add(row);
+            newLines.add(row);
           }
           for (final gc in grnCharges) {
             _charges.add(_ReturnChargeRow(
@@ -328,6 +470,9 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
           }
         });
         _recomputeTotals();
+        for (final row in newLines) {
+          if (row.isBatchTracked || row.isSerialTracked) unawaited(_loadCandidates(row));
+        }
       } catch (e) {
         if (mounted) _showSnack('Could not load GRN lines: $e', color: AppColors.negative);
       }
@@ -345,6 +490,115 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
   void _removeLine(_ReturnLineRow row) {
     setState(() { _lines.remove(row); row.dispose(); });
     _recomputeTotals();
+  }
+
+  /// Fetches this line's batch/serial candidates (what the source GRN line
+  /// originally received) plus each one's CURRENT balance/status — a UX
+  /// hint only, so the user doesn't attempt an over-return that would just
+  /// fail server-side (fn_post_stock_movement's strict check, migration 063).
+  /// When row.existingLineSerialNo is set (reloading a saved return), also
+  /// pre-fills each candidate with what was actually saved before.
+  Future<void> _loadCandidates(_ReturnLineRow row) async {
+    final session = ref.read(sessionProvider)!;
+    try {
+      if (row.isBatchTracked) {
+        final rows = await _ds.getGrnLineBatches(
+          clientId: session.clientId, companyId: session.companyId,
+          grnNo: row.sourceGrnNo, grnDate: row.sourceGrnDate, lineSerial: row.sourceGrnLineSerial,
+        );
+        Map<String, num> savedByBatch = const {};
+        if (row.existingLineSerialNo != null) {
+          final saved = await _ds.getReturnLineBatches(
+            clientId: session.clientId, companyId: session.companyId,
+            returnNo: _returnNo!, returnDate: _fmtDate(_returnDate), lineSerial: row.existingLineSerialNo!,
+          );
+          savedByBatch = {for (final s in saved) (s['batch_no'] as String): (s['base_qty'] as num? ?? 0)};
+        }
+        final candidates = <_ReturnBatchCandidate>[];
+        for (final b in rows) {
+          final c = _ReturnBatchCandidate(
+            batchNo: b['batch_no'] as String,
+            expiryDate: b['expiry_date'] as String?,
+            receivedQty: (b['base_qty'] as num? ?? 0).toDouble(),
+          );
+          c.availableBalance = await _ds.getBatchBalance(
+            clientId: session.clientId, companyId: session.companyId,
+            locationId: _locationId!, productId: row.productId, batchNo: c.batchNo,
+          );
+          final saved = savedByBatch[c.batchNo];
+          if (saved != null) c.qtyCtrl.text = saved.toDouble().toStringAsFixed(2);
+          candidates.add(c);
+        }
+        if (mounted) setState(() { row.batchCandidates = candidates; row.candidatesLoaded = true; });
+      } else if (row.isSerialTracked) {
+        final rows = await _ds.getGrnLineSerials(
+          clientId: session.clientId, companyId: session.companyId,
+          grnNo: row.sourceGrnNo, grnDate: row.sourceGrnDate, lineSerial: row.sourceGrnLineSerial,
+        );
+        Set<String> savedSerials = const {};
+        if (row.existingLineSerialNo != null) {
+          final saved = await _ds.getReturnLineSerials(
+            clientId: session.clientId, companyId: session.companyId,
+            returnNo: _returnNo!, returnDate: _fmtDate(_returnDate), lineSerial: row.existingLineSerialNo!,
+          );
+          savedSerials = saved.map((s) => s['serial_no'] as String).toSet();
+        }
+        final candidates = <_ReturnSerialCandidate>[];
+        for (final s in rows) {
+          final serialNo = s['serial_no'] as String;
+          final status = await _ds.getSerialStatus(
+            clientId: session.clientId, companyId: session.companyId,
+            locationId: _locationId!, productId: row.productId, serialNo: serialNo,
+          );
+          candidates.add(_ReturnSerialCandidate(serialNo: serialNo, status: status)..selected = savedSerials.contains(serialNo));
+        }
+        if (mounted) setState(() { row.serialCandidates = candidates; row.candidatesLoaded = true; });
+      }
+    } catch (e) {
+      if (mounted) _showSnack('Could not load batch/serial data for "${row.productDisplay}": $e', color: AppColors.negative);
+    }
+  }
+
+  /// Unlike GRN's own _batchSerialError (which allows leaving a line
+  /// un-split at draft stage, since a GRN can still be edited later),
+  /// Purchase Return REQUIRES a full batch/serial allocation whenever
+  /// returnQty > 0 — a return's whole point is reversing a specific,
+  /// identifiable lot/unit, and leaving it unallocated would silently fall
+  /// through fn_approve_purchase_return's v_has_batches/v_has_serials check
+  /// into the plain aggregate stock movement, which is exactly the weaker,
+  /// flag-gated check the strict per-batch/serial rule (migration 063) was
+  /// built to bypass.
+  String? _batchSerialError(_ReturnLineRow row) {
+    if (row.returnQty <= 0) return null;
+    if (row.isBatchTracked) {
+      if (row.batchCandidates.isEmpty) return 'No batches found for "${row.productDisplay}" on GRN ${row.sourceGrnNo}.';
+      if ((row.batchQtySum - row.returnQty).abs() > 0.0001) {
+        return 'Batch quantities for "${row.productDisplay}" total ${row.batchQtySum.toStringAsFixed(2)} '
+            'but the return quantity is ${row.returnQty.toStringAsFixed(2)}.';
+      }
+    } else if (row.isSerialTracked) {
+      if (row.serialCandidates.isEmpty) return 'No serial numbers found for "${row.productDisplay}" on GRN ${row.sourceGrnNo}.';
+      if (row.selectedSerialCount != row.returnQty.round() || (row.returnQty - row.returnQty.roundToDouble()).abs() > 0.0001) {
+        return 'Serial numbers selected for "${row.productDisplay}" (${row.selectedSerialCount}) must match the return quantity '
+            '(${row.returnQty.toStringAsFixed(2)}).';
+      }
+    }
+    return null;
+  }
+
+  /// A line's return qty can never exceed what that GRN line originally
+  /// received — found live: the qty field had no upper bound at all.
+  /// This is a basic client-side sanity check only; the authoritative check
+  /// (cumulative across every other APPROVED return against the same GRN
+  /// line, not just this one document) is fn_approve_purchase_return's own
+  /// RETURN_QTY_EXCEEDS_RECEIVED, still enforced server-side at Approve.
+  String? _qtyError(_ReturnLineRow row) {
+    if (row.returnQty < 0) return 'Return qty for "${row.productDisplay}" cannot be negative.';
+    if (row.returnQty > row.grnQty + 0.0001) {
+      return 'Return qty for "${row.productDisplay}" (${row.returnQty.toStringAsFixed(2)}) '
+          'cannot exceed what GRN ${row.sourceGrnNo} received (${row.grnQty.toStringAsFixed(2)}).';
+    }
+    return null;
   }
 
   /// Suggested taxable/tax totals — computed fresh from the GRN lines' own
@@ -368,9 +622,40 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
     if (_supplierId == null) { _showSnack('Select a supplier.', color: AppColors.negative); return false; }
     if (_lines.where((l) => l.returnQty > 0).isEmpty) { _showSnack('Enter a return quantity for at least one line.', color: AppColors.negative); return false; }
 
+    for (final l in _lines) {
+      final qtyErr = _qtyError(l);
+      if (qtyErr != null) { _showSnack(qtyErr, color: AppColors.negative); return false; }
+      final err = _batchSerialError(l);
+      if (err != null) { _showSnack(err, color: AppColors.negative); return false; }
+    }
+
     setState(() { _saving = true; _actionError = null; });
     final session = ref.read(sessionProvider)!;
     try {
+      final returnableLines = _lines.where((l) => l.returnQty > 0).toList();
+      final batches = <Map<String, dynamic>>[];
+      final serials = <Map<String, dynamic>>[];
+      for (var i = 0; i < returnableLines.length; i++) {
+        final l = returnableLines[i];
+        final lineSerial = i + 1;
+        if (l.isBatchTracked) {
+          for (final b in l.batchCandidates.where((b) => b.allocatedQty > 0)) {
+            batches.add({
+              'line_serial': lineSerial,
+              'batch_no':    b.batchNo,
+              'expiry_date': b.expiryDate,
+              'qty_pack':    b.allocatedQty,
+              'qty_loose':   0,
+              'base_qty':    b.allocatedQty,
+            });
+          }
+        } else if (l.isSerialTracked) {
+          for (final s in l.serialCandidates.where((s) => s.selected)) {
+            serials.add({'line_serial': lineSerial, 'serial_no': s.serialNo});
+          }
+        }
+      }
+
       final returnNo = await _ds.save(
         header: {
           'client_id':           session.clientId,
@@ -385,26 +670,28 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
           'taxable_amount':      _taxableAmount,
           'tax_amount':          _taxAmount,
           'return_total':        _taxableAmount + _taxAmount,
-          'reason':              _reasonCtrl.text.trim(),
+          'reason':              _reason ?? '',
           'remarks':             _remarksCtrl.text.trim(),
         },
-        lines: _lines.where((l) => l.returnQty > 0).map((l) => {
-          'serial_no':              _lines.indexOf(l) + 1,
-          'source_grn_no':          l.sourceGrnNo,
-          'source_grn_date':        l.sourceGrnDate,
-          'source_grn_line_serial': l.sourceGrnLineSerial,
-          'product_id':             l.productId,
-          'uom_id':                 l.uomId,
-          'uom_conversion_factor':  l.uomConversionFactor,
-          'qty_pack':               l.returnQty,
+        lines: returnableLines.asMap().entries.map((e) => {
+          'serial_no':              e.key + 1,
+          'source_grn_no':          e.value.sourceGrnNo,
+          'source_grn_date':        e.value.sourceGrnDate,
+          'source_grn_line_serial': e.value.sourceGrnLineSerial,
+          'product_id':             e.value.productId,
+          'uom_id':                 e.value.uomId,
+          'uom_conversion_factor':  e.value.uomConversionFactor,
+          'qty_pack':               e.value.returnQty,
           'qty_loose':              0,
-          'base_qty':               l.returnQty,
-          'rate':                   l.rate,
-          'tax_group_id':           l.taxGroupId,
-          'gross_amount':           l.grossAmount,
-          'tax_amount':             l.suggestedTaxAmount,
-          'final_amount':           l.grossAmount + l.suggestedTaxAmount,
+          'base_qty':               e.value.returnQty,
+          'rate':                   e.value.rate,
+          'tax_group_id':           e.value.taxGroupId,
+          'gross_amount':           e.value.grossAmount,
+          'tax_amount':             e.value.suggestedTaxAmount,
+          'final_amount':           e.value.grossAmount + e.value.suggestedTaxAmount,
         }).toList(),
+        batches: batches,
+        serials: serials,
         charges: _charges.asMap().entries.map((e) => {
           'serial_no':     e.key + 1,
           'charge_id':     e.value.chargeId,
@@ -512,7 +799,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
         'status':       _status,
         'supplier_name': _supplierDisplay ?? '',
         'currency_code': _returnCurrencyCode ?? '',
-        'reason':       _reasonCtrl.text,
+        'reason':       _reason ?? '',
         'remarks':      _remarksCtrl.text,
       },
       'lines': _lines.where((l) => l.returnQty > 0).map((l) => {
@@ -821,10 +1108,19 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
                     selectedCurrency != null ? '${selectedCurrency['currency_id']} — ${selectedCurrency['currency_name']}' : '—',
                     style: const TextStyle(fontSize: 13)),
                 ));
-                final f2 = field(TextFormField(
-                  controller: _reasonCtrl, enabled: !locked,
-                  decoration: dec.copyWith(labelText: 'Reason', hintText: 'Defective, Wrong Item, ...'),
-                  style: const TextStyle(fontSize: 13),
+                final reasonOptions = <String>{
+                  ..._reasons,
+                  if (_reason != null && _reason!.isNotEmpty) _reason!,
+                }.toList();
+                final f2 = field(DropdownButtonFormField<String>(
+                  decoration: dec.copyWith(labelText: 'Reason'),
+                  isExpanded: true,
+                  isDense: true,
+                  itemHeight: null,
+                  initialValue: (_reason != null && _reason!.isNotEmpty) ? _reason : null,
+                  items: reasonOptions.map((r) => DropdownMenuItem(
+                      value: r, child: Text(r, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
+                  onChanged: locked ? null : (v) => setState(() => _reason = v),
                 ));
                 return isMobile
                     ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -922,39 +1218,129 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
               child: Padding(
                 padding: const EdgeInsets.all(10),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-                  Expanded(
-                    flex: 3,
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(row.productDisplay, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                      Text('GRN ${row.sourceGrnNo} · Received ${row.grnQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}',
-                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                    ]),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(width: 90, child: TextFormField(
-                    controller: row.qtyCtrl, enabled: !locked,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: dec.copyWith(labelText: 'Return Qty'),
-                    style: const TextStyle(fontSize: 12),
-                    onChanged: (_) => _recomputeTotals(),
-                  )),
-                  const SizedBox(width: 8),
-                  SizedBox(width: 90, child: Text('Rate: ${row.rate.toStringAsFixed(2)}',
-                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
-                  const SizedBox(width: 8),
-                  SizedBox(width: 90, child: Text('= ${row.grossAmount.toStringAsFixed(2)}',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
-                  if (!locked) IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
-                    onPressed: () => _removeLine(row),
-                  ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                    Expanded(
+                      flex: 3,
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(row.productDisplay, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text('GRN ${row.sourceGrnNo} · Received ${row.grnQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}',
+                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                        Text(
+                          row.suggestedTaxAmount > 0
+                              ? 'Taxable ${row.grossAmount.toStringAsFixed(2)} · VAT ${row.suggestedTaxAmount.toStringAsFixed(2)} '
+                                  '· Total ${(row.grossAmount + row.suggestedTaxAmount).toStringAsFixed(2)}'
+                              : (row.isBilled ? 'No VAT on this line' : 'Not yet billed — VAT deferred'),
+                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(width: 90, child: TextFormField(
+                      controller: row.qtyCtrl, enabled: !locked,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: dec.copyWith(labelText: 'Return Qty'),
+                      style: const TextStyle(fontSize: 12),
+                      onChanged: (_) => _recomputeTotals(),
+                    )),
+                    const SizedBox(width: 8),
+                    SizedBox(width: 90, child: Text('Rate: ${row.rate.toStringAsFixed(2)}',
+                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
+                    const SizedBox(width: 8),
+                    SizedBox(width: 90, child: Text('= ${(row.grossAmount + row.suggestedTaxAmount).toStringAsFixed(2)}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
+                    if (!locked) IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
+                      onPressed: () => _removeLine(row),
+                    ),
+                  ]),
+                  if (row.isBatchTracked || row.isSerialTracked) _buildBatchSerialEditor(row, locked),
                 ]),
               ),
             )),
         ]),
       ),
+    );
+  }
+
+  // ── Batch / Serial picker (per return line) ──────────────────────────────
+  // Unlike GRN's free-text batch/serial entry (a GRN is CREATING new
+  // batches/serials), this is a PICKER against what the source GRN line
+  // already received — the user allocates the return qty across known
+  // lots/units, never invents a new batch/serial number here.
+
+  Widget _buildBatchSerialEditor(_ReturnLineRow row, bool locked) {
+    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
+    final isBatch = row.isBatchTracked;
+
+    if (!row.candidatesLoaded) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 10),
+        child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text(isBatch ? 'Select Batches to Return' : 'Select Serial Numbers to Return',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+          const SizedBox(width: 10),
+          Text(isBatch
+              ? '${row.batchQtySum.toStringAsFixed(2)} / ${row.returnQty.toStringAsFixed(2)}'
+              : '${row.selectedSerialCount} / ${row.returnQty.toStringAsFixed(0)}',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                  color: (isBatch ? (row.batchQtySum - row.returnQty).abs() < 0.0001
+                                  : row.selectedSerialCount == row.returnQty.round())
+                      ? AppColors.positive : AppColors.negative)),
+        ]),
+        const SizedBox(height: 8),
+        if (isBatch && row.batchCandidates.isEmpty)
+          const Text('No batches found on the source GRN line.', style: TextStyle(fontSize: 11, color: AppColors.negative))
+        else if (!isBatch && row.serialCandidates.isEmpty)
+          const Text('No serial numbers found on the source GRN line.', style: TextStyle(fontSize: 11, color: AppColors.negative))
+        else if (isBatch)
+          ...row.batchCandidates.map((b) => Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Wrap(spacing: 10, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              SizedBox(width: 130, child: Text(b.batchNo, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
+              SizedBox(width: 130, child: Text(
+                  'Available: ${b.availableBalance.toStringAsFixed(2)}${b.expiryDate != null ? ' · Exp ${b.expiryDate}' : ''}',
+                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
+              SizedBox(width: 90, child: TextFormField(
+                controller: b.qtyCtrl, enabled: !locked,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: dec.copyWith(labelText: 'Return Qty'),
+                style: const TextStyle(fontSize: 12),
+                onChanged: (_) => setState(() {}),
+              )),
+            ]),
+          ))
+        else
+          ...row.serialCandidates.map((s) => Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: CheckboxListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: s.selected,
+              onChanged: (locked || s.status != 'IN_STOCK') ? null : (v) => setState(() => s.selected = v ?? false),
+              title: Text(s.serialNo, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+              subtitle: s.status != 'IN_STOCK'
+                  ? const Text('Not currently in stock — already sold, transferred, or returned', style: TextStyle(fontSize: 10, color: AppColors.negative))
+                  : null,
+            ),
+          )),
+      ]),
     );
   }
 
