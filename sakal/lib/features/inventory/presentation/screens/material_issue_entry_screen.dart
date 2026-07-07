@@ -5,10 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
+import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../domain/repositories/material_issue_repository.dart';
 import '../providers/material_issue_providers.dart';
 
@@ -331,40 +334,54 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
         }
       }
 
-      final issueNo = await _ds.save(
-        header: {
-          'client_id':   session.clientId,
-          'company_id':  session.companyId,
-          'location_id': _locationId,
-          'issue_no':    _issueNo,
-          'issue_date':  _fmtDate(_issueDate),
-          'remarks':     _remarksCtrl.text.trim(),
-        },
-        lines: issuableLines.asMap().entries.map((e) => {
-          'serial_no':                     e.key + 1,
-          'source_requisition_no':          e.value.sourceRequisitionNo,
-          'source_requisition_date':        e.value.sourceRequisitionDate,
-          'source_requisition_line_serial': e.value.sourceRequisitionLineSerial,
-          'product_id':                     e.value.productId,
-          'uom_id':                         e.value.uomId,
-          // Issue is entered directly in base units (no pack/loose split
-          // here, unlike Requisition/GRN) — conversion_factor is always 1
-          // on this line so qty_pack * factor + qty_loose == base_qty holds
-          // regardless of whatever factor the requisition line itself used.
-          'uom_conversion_factor':          1,
-          'qty_pack':                       e.value.issueQty,
-          'qty_loose':                      0,
-          'base_qty':                       e.value.issueQty,
-          'department_id':                  e.value.departmentId,
-          'consumption_area_id':            e.value.consumptionAreaId,
-        }).toList(),
-        batches: batches,
-        serials: serials,
-        userId: session.userId,
-      );
-      if (mounted) {
-        setState(() { _issueNo = issueNo; _saving = false; });
-        _showSnack('Material Issue $issueNo saved.', color: AppColors.positive);
+      final header = {
+        'client_id':   session.clientId,
+        'company_id':  session.companyId,
+        'location_id': _locationId,
+        'issue_no':    _issueNo,
+        'issue_date':  _fmtDate(_issueDate),
+        'remarks':     _remarksCtrl.text.trim(),
+      };
+      final lines = issuableLines.asMap().entries.map((e) => {
+        'serial_no':                     e.key + 1,
+        'source_requisition_no':          e.value.sourceRequisitionNo,
+        'source_requisition_date':        e.value.sourceRequisitionDate,
+        'source_requisition_line_serial': e.value.sourceRequisitionLineSerial,
+        'product_id':                     e.value.productId,
+        'uom_id':                         e.value.uomId,
+        // Issue is entered directly in base units (no pack/loose split
+        // here, unlike Requisition/GRN) — conversion_factor is always 1
+        // on this line so qty_pack * factor + qty_loose == base_qty holds
+        // regardless of whatever factor the requisition line itself used.
+        'uom_conversion_factor':          1,
+        'qty_pack':                       e.value.issueQty,
+        'qty_loose':                      0,
+        'base_qty':                       e.value.issueQty,
+        'department_id':                  e.value.departmentId,
+        'consumption_area_id':            e.value.consumptionAreaId,
+      }).toList();
+
+      if (session.offlineMode) {
+        final localId = generateLocalId();
+        await ref.read(syncEngineProvider).enqueue(
+          documentType: 'MATERIAL_ISSUE',
+          documentId:   localId,
+          endpoint:     '/rpc/fn_save_material_issue',
+          payload:      {'p_header': header, 'p_lines': lines, 'p_batches': batches, 'p_serials': serials, 'p_user_id': session.userId},
+        );
+        await _ds.cacheIssueLocally(effectiveIssueNo: localId, header: header, lines: lines, batches: batches, serials: serials);
+        if (mounted) {
+          setState(() { _issueNo = localId; _saving = false; });
+          _showSnack('Saved offline — will sync when online.', color: AppColors.secondary);
+          return true;
+        }
+      } else {
+        final issueNo = await _ds.save(header: header, lines: lines, batches: batches, serials: serials, userId: session.userId);
+        unawaited(_ds.cacheIssueLocally(effectiveIssueNo: issueNo, header: header, lines: lines, batches: batches, serials: serials));
+        if (mounted) {
+          setState(() { _issueNo = issueNo; _saving = false; });
+          _showSnack('Material Issue $issueNo saved.', color: AppColors.positive);
+        }
       }
       return true;
     } on DioException catch (e) {
@@ -453,7 +470,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
     final isOffline = session?.offlineMode ?? false;
     final isMobile  = Responsive.isMobile(context);
 
-    final canSave     = !isOffline && _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
+    final canSave     = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
     final locked      = _status != 'DRAFT';
 
@@ -502,8 +519,14 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
     Text(_issueNo != null ? 'Material Issue · $_issueNo' : 'New Material Issue',
         style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
     const SizedBox(height: 2),
-    _status == 'APPROVED' ? _statusChip(_status) : Text(_issueNo != null ? 'Draft' : 'Unsaved draft',
-        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+    Row(children: [
+      _status == 'APPROVED' ? _statusChip(_status) : Text(_issueNo != null ? 'Draft' : 'Unsaved draft',
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      if (_issueNo != null) ...[
+        const SizedBox(width: 8),
+        PendingSyncBadge(documentType: 'MATERIAL_ISSUE', documentId: _issueNo!),
+      ],
+    ]),
   ]);
 
   Widget _statusChip(String status) => Container(

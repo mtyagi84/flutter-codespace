@@ -1,10 +1,14 @@
+import 'dart:async';
 import '../../domain/repositories/material_requisition_repository.dart';
 import '../datasources/material_requisition_remote_ds.dart';
+import '../datasources/material_requisition_local_ds.dart';
 
 class MaterialRequisitionRepositoryImpl implements MaterialRequisitionRepository {
   final MaterialRequisitionRemoteDs _remote;
+  final MaterialRequisitionLocalDs? _local; // null on Flutter Web (no Drift)
+  final bool _isOffline;
 
-  MaterialRequisitionRepositoryImpl(this._remote);
+  MaterialRequisitionRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
   Future<List<Map<String, dynamic>>> listRequisitions({
@@ -14,9 +18,16 @@ class MaterialRequisitionRepositoryImpl implements MaterialRequisitionRepository
     String? status,
     int     limit  = 50,
     int     offset = 0,
-  }) => _remote.listRequisitions(
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.listRequisitions(
         clientId: clientId, companyId: companyId, search: search, status: status, limit: limit, offset: offset,
       );
+    }
+    return _remote.listRequisitions(
+      clientId: clientId, companyId: companyId, search: search, status: status, limit: limit, offset: offset,
+    );
+  }
 
   @override
   Future<Map<String, dynamic>?> getHeader({
@@ -24,7 +35,14 @@ class MaterialRequisitionRepositoryImpl implements MaterialRequisitionRepository
     required String companyId,
     required String requisitionNo,
     String? requisitionDate,
-  }) => _remote.getHeader(clientId: clientId, companyId: companyId, requisitionNo: requisitionNo, requisitionDate: requisitionDate);
+  }) async {
+    if (_isOffline && _local != null) {
+      return _local.getHeader(clientId: clientId, companyId: companyId, requisitionNo: requisitionNo, requisitionDate: requisitionDate);
+    }
+    final header = await _remote.getHeader(clientId: clientId, companyId: companyId, requisitionNo: requisitionNo, requisitionDate: requisitionDate);
+    if (header != null && _local != null) unawaited(_local.cacheHeader(header));
+    return header;
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getLines({
@@ -32,7 +50,14 @@ class MaterialRequisitionRepositoryImpl implements MaterialRequisitionRepository
     required String companyId,
     required String requisitionNo,
     required String requisitionDate,
-  }) => _remote.getLines(clientId: clientId, companyId: companyId, requisitionNo: requisitionNo, requisitionDate: requisitionDate);
+  }) async {
+    if (_isOffline && _local != null) {
+      return _local.getLines(clientId: clientId, companyId: companyId, requisitionNo: requisitionNo, requisitionDate: requisitionDate);
+    }
+    final lines = await _remote.getLines(clientId: clientId, companyId: companyId, requisitionNo: requisitionNo, requisitionDate: requisitionDate);
+    if (_local != null) unawaited(_local.cacheLines(clientId, companyId, requisitionNo, requisitionDate, lines));
+    return lines;
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getLocationsForIssue({
@@ -79,6 +104,13 @@ class MaterialRequisitionRepositoryImpl implements MaterialRequisitionRepository
     required List<Map<String, dynamic>> lines,
     required String userId,
   }) => _remote.save(header: header, lines: lines, userId: userId);
+
+  @override
+  Future<void> cacheRequisitionLocally({
+    required String effectiveRequisitionNo,
+    required Map<String, dynamic> header,
+    required List<Map<String, dynamic>> lines,
+  }) => _local?.cacheFromMaps(effectiveRequisitionNo, header, lines) ?? Future.value();
 
   @override
   Future<void> approve({

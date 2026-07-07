@@ -61,6 +61,14 @@ abstract class MaterialRequisitionRepository {
     required String userId,
   });
 
+  /// Caches a requisition locally for offline read-back. Called after every
+  /// online save and on every offline save (before enqueue).
+  Future<void> cacheRequisitionLocally({
+    required String effectiveRequisitionNo,
+    required Map<String, dynamic> header,
+    required List<Map<String, dynamic>> lines,
+  });
+
   Future<void> approve({
     required String clientId,
     required String companyId,

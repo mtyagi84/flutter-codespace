@@ -5,10 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
+import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../domain/repositories/stock_receipt_repository.dart';
 import '../providers/stock_receipt_providers.dart';
 
@@ -406,34 +409,48 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
         }
       }
 
-      final receiptNo = await _ds.save(
-        header: {
-          'client_id':            session.clientId,
-          'company_id':           session.companyId,
-          'receipt_no':           _receiptNo,
-          'receipt_date':         _fmtDate(_receiptDate),
-          'source_transfer_no':   _sourceTransferNo,
-          'source_transfer_date': _sourceTransferDate,
-          'remarks':              _remarksCtrl.text.trim(),
-        },
-        lines: _lines.asMap().entries.map((e) => {
-          'serial_no':                     e.key + 1,
-          'source_transfer_line_serial':    e.value.sourceTransferLineSerial,
-          'product_id':                      e.value.productId,
-          'uom_id':                            e.value.uomId,
-          'uom_conversion_factor':              e.value.uomConversionFactor,
-          'received_qty_pack':                   e.value.qtyPack,
-          'received_qty_loose':                   e.value.qtyLoose,
-          'received_base_qty':                      e.value.receivedQty,
-          'remarks':                                 e.value.remarksCtrl.text.trim(),
-        }).toList(),
-        batches: batches,
-        serials: serials,
-        userId: session.userId,
-      );
-      if (mounted) {
-        setState(() { _receiptNo = receiptNo; _saving = false; });
-        _showSnack('Stock Receipt $receiptNo saved.', color: AppColors.positive);
+      final header = {
+        'client_id':            session.clientId,
+        'company_id':           session.companyId,
+        'receipt_no':           _receiptNo,
+        'receipt_date':         _fmtDate(_receiptDate),
+        'source_transfer_no':   _sourceTransferNo,
+        'source_transfer_date': _sourceTransferDate,
+        'remarks':              _remarksCtrl.text.trim(),
+      };
+      final lines = _lines.asMap().entries.map((e) => {
+        'serial_no':                   e.key + 1,
+        'source_transfer_line_serial': e.value.sourceTransferLineSerial,
+        'product_id':                  e.value.productId,
+        'uom_id':                      e.value.uomId,
+        'uom_conversion_factor':       e.value.uomConversionFactor,
+        'received_qty_pack':           e.value.qtyPack,
+        'received_qty_loose':          e.value.qtyLoose,
+        'received_base_qty':           e.value.receivedQty,
+        'remarks':                     e.value.remarksCtrl.text.trim(),
+      }).toList();
+
+      if (session.offlineMode) {
+        final localId = generateLocalId();
+        await ref.read(syncEngineProvider).enqueue(
+          documentType: 'STOCK_RECEIPT',
+          documentId:   localId,
+          endpoint:     '/rpc/fn_save_stock_receipt',
+          payload:      {'p_header': header, 'p_lines': lines, 'p_batches': batches, 'p_serials': serials, 'p_user_id': session.userId},
+        );
+        await _ds.cacheReceiptLocally(effectiveReceiptNo: localId, header: header, lines: lines, batches: batches, serials: serials);
+        if (mounted) {
+          setState(() { _receiptNo = localId; _saving = false; });
+          _showSnack('Saved offline — will sync when online.', color: AppColors.secondary);
+          return true;
+        }
+      } else {
+        final receiptNo = await _ds.save(header: header, lines: lines, batches: batches, serials: serials, userId: session.userId);
+        unawaited(_ds.cacheReceiptLocally(effectiveReceiptNo: receiptNo, header: header, lines: lines, batches: batches, serials: serials));
+        if (mounted) {
+          setState(() { _receiptNo = receiptNo; _saving = false; });
+          _showSnack('Stock Receipt $receiptNo saved.', color: AppColors.positive);
+        }
       }
       return true;
     } on DioException catch (e) {
@@ -525,7 +542,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
     final isOffline = session?.offlineMode ?? false;
     final isMobile  = Responsive.isMobile(context);
 
-    final canSave     = !isOffline && _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
+    final canSave     = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
     final locked      = _status != 'DRAFT';
 
@@ -576,8 +593,14 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
     Text(_receiptNo != null ? 'Stock Receipt · $_receiptNo' : 'New Stock Receipt',
         style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
     const SizedBox(height: 2),
-    _status == 'APPROVED' ? _statusChip(_status) : Text(_receiptNo != null ? 'Draft' : 'Unsaved draft',
-        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+    Row(children: [
+      _status == 'APPROVED' ? _statusChip(_status) : Text(_receiptNo != null ? 'Draft' : 'Unsaved draft',
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      if (_receiptNo != null) ...[
+        const SizedBox(width: 8),
+        PendingSyncBadge(documentType: 'STOCK_RECEIPT', documentId: _receiptNo!),
+      ],
+    ]),
   ]);
 
   Widget _statusChip(String status) => Container(

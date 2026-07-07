@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
+import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/pending_sync_badge.dart';
 import '../providers/stock_receipt_providers.dart';
 
 class StockReceiptListScreen extends ConsumerStatefulWidget {
@@ -21,6 +23,7 @@ class _StockReceiptListScreenState extends ConsumerState<StockReceiptListScreen>
   @override String get screenName => RouteNames.stockReceipts;
 
   List<Map<String, dynamic>> _rows = [];
+  Set<String> _pendingIds = {};
   bool    _loading = true;
   String? _error;
   String? _filterStatus;
@@ -49,10 +52,19 @@ class _StockReceiptListScreenState extends ConsumerState<StockReceiptListScreen>
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
-      final rows = await ref.read(stockReceiptRepositoryProvider).listReceipts(
-        clientId: session.clientId, companyId: session.companyId, status: _filterStatus,
-      );
-      if (mounted) setState(() { _rows = rows; _loading = false; });
+      final results = await Future.wait([
+        ref.read(stockReceiptRepositoryProvider).listReceipts(
+          clientId: session.clientId, companyId: session.companyId, status: _filterStatus,
+        ),
+        ref.read(syncEngineProvider).pendingDocumentIds('STOCK_RECEIPT'),
+      ]);
+      if (mounted) {
+        setState(() {
+          _rows       = results[0] as List<Map<String, dynamic>>;
+          _pendingIds = results[1] as Set<String>;
+          _loading    = false;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() { _loading = false; _error = 'Could not load stock receipts: $e'; });
     }
@@ -99,7 +111,7 @@ class _StockReceiptListScreenState extends ConsumerState<StockReceiptListScreen>
               child: Text('Stock Receipt',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
             ),
-            if (canAdd && !isOffline)
+            if (canAdd)
               FilledButton.icon(
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text('New Receipt'),
@@ -231,7 +243,10 @@ class _StockReceiptListScreenState extends ConsumerState<StockReceiptListScreen>
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Text(r['source_transfer_no'] as String? ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: _statusBadge(r['status'] as String))),
+              child: Row(children: [
+                _statusBadge(r['status'] as String),
+                if (_pendingIds.contains(r['receipt_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+              ]))),
           Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
               child: IconButton(icon: const Icon(Icons.arrow_forward_ios, size: 14), color: AppColors.primary,
                   onPressed: () => _openEdit(r), tooltip: 'Open', padding: EdgeInsets.zero))),
@@ -254,6 +269,7 @@ class _StockReceiptListScreenState extends ConsumerState<StockReceiptListScreen>
             Expanded(child: Text(r['receipt_no'] as String,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
             _statusBadge(r['status'] as String),
+            if (_pendingIds.contains(r['receipt_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
           ]),
           const SizedBox(height: 6),
           Text('${from?['location_name'] ?? '—'} → ${to?['location_name'] ?? '—'}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),

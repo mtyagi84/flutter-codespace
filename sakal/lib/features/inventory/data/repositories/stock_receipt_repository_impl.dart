@@ -1,10 +1,14 @@
+import 'dart:async';
 import '../../domain/repositories/stock_receipt_repository.dart';
 import '../datasources/stock_receipt_remote_ds.dart';
+import '../datasources/stock_receipt_local_ds.dart';
 
 class StockReceiptRepositoryImpl implements StockReceiptRepository {
   final StockReceiptRemoteDs _remote;
+  final StockReceiptLocalDs? _local; // null on Flutter Web (no Drift)
+  final bool _isOffline;
 
-  StockReceiptRepositoryImpl(this._remote);
+  StockReceiptRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
   Future<List<Map<String, dynamic>>> listReceipts({
@@ -14,9 +18,16 @@ class StockReceiptRepositoryImpl implements StockReceiptRepository {
     String? status,
     int     limit  = 50,
     int     offset = 0,
-  }) => _remote.listReceipts(
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.listReceipts(
         clientId: clientId, companyId: companyId, search: search, status: status, limit: limit, offset: offset,
       );
+    }
+    return _remote.listReceipts(
+      clientId: clientId, companyId: companyId, search: search, status: status, limit: limit, offset: offset,
+    );
+  }
 
   @override
   Future<Map<String, dynamic>?> getHeader({
@@ -24,7 +35,14 @@ class StockReceiptRepositoryImpl implements StockReceiptRepository {
     required String companyId,
     required String receiptNo,
     String? receiptDate,
-  }) => _remote.getHeader(clientId: clientId, companyId: companyId, receiptNo: receiptNo, receiptDate: receiptDate);
+  }) async {
+    if (_isOffline && _local != null) {
+      return _local.getHeader(clientId: clientId, companyId: companyId, receiptNo: receiptNo, receiptDate: receiptDate);
+    }
+    final header = await _remote.getHeader(clientId: clientId, companyId: companyId, receiptNo: receiptNo, receiptDate: receiptDate);
+    if (header != null && _local != null) unawaited(_local.cacheHeader(header));
+    return header;
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getLines({
@@ -32,7 +50,14 @@ class StockReceiptRepositoryImpl implements StockReceiptRepository {
     required String companyId,
     required String receiptNo,
     required String receiptDate,
-  }) => _remote.getLines(clientId: clientId, companyId: companyId, receiptNo: receiptNo, receiptDate: receiptDate);
+  }) async {
+    if (_isOffline && _local != null) {
+      return _local.getLines(clientId: clientId, companyId: companyId, receiptNo: receiptNo, receiptDate: receiptDate);
+    }
+    final lines = await _remote.getLines(clientId: clientId, companyId: companyId, receiptNo: receiptNo, receiptDate: receiptDate);
+    if (_local != null) unawaited(_local.cacheLines(clientId, companyId, receiptNo, receiptDate, lines));
+    return lines;
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getReceivableTransfers({
@@ -93,6 +118,15 @@ class StockReceiptRepositoryImpl implements StockReceiptRepository {
     required List<Map<String, dynamic>> serials,
     required String userId,
   }) => _remote.save(header: header, lines: lines, batches: batches, serials: serials, userId: userId);
+
+  @override
+  Future<void> cacheReceiptLocally({
+    required String effectiveReceiptNo,
+    required Map<String, dynamic> header,
+    required List<Map<String, dynamic>> lines,
+    required List<Map<String, dynamic>> batches,
+    required List<Map<String, dynamic>> serials,
+  }) => _local?.cacheFromMaps(effectiveReceiptNo, header, lines, batches, serials) ?? Future.value();
 
   @override
   Future<void> approve({

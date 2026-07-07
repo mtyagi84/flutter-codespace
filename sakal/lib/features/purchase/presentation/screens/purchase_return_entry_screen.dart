@@ -8,10 +8,13 @@ import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
+import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../domain/repositories/purchase_return_repository.dart';
 import '../providers/purchase_return_providers.dart';
 
@@ -663,60 +666,74 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
         }
       }
 
-      final returnNo = await _ds.save(
-        header: {
-          'client_id':           session.clientId,
-          'company_id':          session.companyId,
-          'location_id':         _locationId,
-          'return_no':           _returnNo,
-          'return_date':         _fmtDate(_returnDate),
-          'supplier_id':         _supplierId,
-          'return_currency_id':  _returnCurrencyId,
-          'rate_to_base':        _rateToBase,
-          'rate_to_local':       _rateToLocal,
-          'taxable_amount':      _taxableAmount,
-          'tax_amount':          _taxAmount,
-          'return_total':        _taxableAmount + _taxAmount,
-          'reason':              _reason ?? '',
-          'remarks':             _remarksCtrl.text.trim(),
-        },
-        lines: returnableLines.asMap().entries.map((e) => {
-          'serial_no':              e.key + 1,
-          'source_grn_no':          e.value.sourceGrnNo,
-          'source_grn_date':        e.value.sourceGrnDate,
-          'source_grn_line_serial': e.value.sourceGrnLineSerial,
-          'product_id':             e.value.productId,
-          'uom_id':                 e.value.uomId,
-          'uom_conversion_factor':  e.value.uomConversionFactor,
-          'qty_pack':               e.value.returnQty,
-          'qty_loose':              0,
-          'base_qty':               e.value.returnQty,
-          'rate':                   e.value.rate,
-          'tax_group_id':           e.value.taxGroupId,
-          'gross_amount':           e.value.grossAmount,
-          'tax_amount':             e.value.suggestedTaxAmount,
-          'final_amount':           e.value.grossAmount + e.value.suggestedTaxAmount,
-        }).toList(),
-        batches: batches,
-        serials: serials,
-        charges: _charges.asMap().entries.map((e) => {
-          'serial_no':     e.key + 1,
-          'charge_id':     e.value.chargeId,
-          'charge_name':   e.value.chargeName,
-          'is_taxable':    e.value.isTaxable,
-          'tax_id':        e.value.taxId,
-          'nature':        e.value.nature,
-          'gl_account_id': e.value.glAccountId,
-          'amount':        e.value.amount,
-          'tax_amount':    e.value.taxAmount,
-          'source_grn_no':   e.value.sourceGrnNo,
-          'source_grn_date': e.value.sourceGrnDate,
-        }).toList(),
-        userId: session.userId,
-      );
-      if (mounted) {
-        setState(() { _returnNo = returnNo; _saving = false; });
-        _showSnack('Purchase Return $returnNo saved.', color: AppColors.positive);
+      final header = {
+        'client_id':           session.clientId,
+        'company_id':          session.companyId,
+        'location_id':         _locationId,
+        'return_no':           _returnNo,
+        'return_date':         _fmtDate(_returnDate),
+        'supplier_id':         _supplierId,
+        'return_currency_id':  _returnCurrencyId,
+        'rate_to_base':        _rateToBase,
+        'rate_to_local':       _rateToLocal,
+        'taxable_amount':      _taxableAmount,
+        'tax_amount':          _taxAmount,
+        'return_total':        _taxableAmount + _taxAmount,
+        'reason':              _reason ?? '',
+        'remarks':             _remarksCtrl.text.trim(),
+      };
+      final lines = returnableLines.asMap().entries.map((e) => {
+        'serial_no':              e.key + 1,
+        'source_grn_no':          e.value.sourceGrnNo,
+        'source_grn_date':        e.value.sourceGrnDate,
+        'source_grn_line_serial': e.value.sourceGrnLineSerial,
+        'product_id':             e.value.productId,
+        'uom_id':                 e.value.uomId,
+        'uom_conversion_factor':  e.value.uomConversionFactor,
+        'qty_pack':               e.value.returnQty,
+        'qty_loose':              0,
+        'base_qty':               e.value.returnQty,
+        'rate':                   e.value.rate,
+        'tax_group_id':           e.value.taxGroupId,
+        'gross_amount':           e.value.grossAmount,
+        'tax_amount':             e.value.suggestedTaxAmount,
+        'final_amount':           e.value.grossAmount + e.value.suggestedTaxAmount,
+      }).toList();
+      final charges = _charges.asMap().entries.map((e) => {
+        'serial_no':       e.key + 1,
+        'charge_id':       e.value.chargeId,
+        'charge_name':     e.value.chargeName,
+        'is_taxable':      e.value.isTaxable,
+        'tax_id':          e.value.taxId,
+        'nature':          e.value.nature,
+        'gl_account_id':   e.value.glAccountId,
+        'amount':          e.value.amount,
+        'tax_amount':      e.value.taxAmount,
+        'source_grn_no':   e.value.sourceGrnNo,
+        'source_grn_date': e.value.sourceGrnDate,
+      }).toList();
+
+      if (session.offlineMode) {
+        final localId = generateLocalId();
+        await ref.read(syncEngineProvider).enqueue(
+          documentType: 'PURCHASE_RETURN',
+          documentId:   localId,
+          endpoint:     '/rpc/fn_save_purchase_return',
+          payload:      {'p_header': header, 'p_lines': lines, 'p_batches': batches, 'p_serials': serials, 'p_charges': charges, 'p_user_id': session.userId},
+        );
+        await _ds.cacheReturnLocally(effectiveReturnNo: localId, header: header, lines: lines, batches: batches, serials: serials, charges: charges);
+        if (mounted) {
+          setState(() { _returnNo = localId; _saving = false; });
+          _showSnack('Saved offline — will sync when online.', color: AppColors.secondary);
+          return true;
+        }
+      } else {
+        final returnNo = await _ds.save(header: header, lines: lines, batches: batches, serials: serials, charges: charges, userId: session.userId);
+        unawaited(_ds.cacheReturnLocally(effectiveReturnNo: returnNo, header: header, lines: lines, batches: batches, serials: serials, charges: charges));
+        if (mounted) {
+          setState(() { _returnNo = returnNo; _saving = false; });
+          _showSnack('Purchase Return $returnNo saved.', color: AppColors.positive);
+        }
       }
       return true;
     } on DioException catch (e) {
@@ -896,7 +913,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
     final isOffline = session?.offlineMode ?? false;
     final isMobile  = Responsive.isMobile(context);
 
-    final canSave     = !isOffline && _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
+    final canSave     = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
     final locked      = _status != 'DRAFT';
 
@@ -930,52 +947,69 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
-              : isOffline
-                  ? _offlineNotice()
-                  : SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (_error != null) ...[_errorBanner(_error!, onRetry: _init), const SizedBox(height: 16)],
-                          if (_actionError != null) ...[_errorBanner(_actionError!), const SizedBox(height: 16)],
-                          _buildHeaderCard(locked, isMobile),
-                          const SizedBox(height: 16),
-                          _buildGrnPickerCard(locked),
-                          const SizedBox(height: 16),
-                          _buildLinesCard(locked),
-                          const SizedBox(height: 16),
-                          _buildChargesCard(locked),
-                          const SizedBox(height: 16),
-                          _buildTotalsCard(locked),
-                          if (_status == 'APPROVED' && _postedVouchers.isNotEmpty) ...[
-                            const SizedBox(height: 16),
-                            _buildPostedVouchersSection(),
-                          ],
-                        ],
-                      ),
-                    ),
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (_error != null) ...[_errorBanner(_error!, onRetry: _init), const SizedBox(height: 16)],
+                      if (_actionError != null) ...[_errorBanner(_actionError!), const SizedBox(height: 16)],
+                      if (isOffline && _isNew) ...[_offlineNewReturnNotice(), const SizedBox(height: 16)],
+                      _buildHeaderCard(locked, isMobile),
+                      const SizedBox(height: 16),
+                      _buildGrnPickerCard(locked),
+                      const SizedBox(height: 16),
+                      _buildLinesCard(locked),
+                      const SizedBox(height: 16),
+                      _buildChargesCard(locked),
+                      const SizedBox(height: 16),
+                      _buildTotalsCard(locked),
+                      if (_status == 'APPROVED' && _postedVouchers.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        _buildPostedVouchersSection(),
+                      ],
+                    ],
+                  ),
+                ),
         ),
       ],
     );
   }
 
-  Widget _offlineNotice() => const Center(
-    child: Padding(
-      padding: EdgeInsets.all(24),
-      child: Text('Purchase Return needs a live connection — it checks GRNs\' current status in real time.',
-          textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+  /// Starting a brand-new return needs a live supplier/GRN picker — this
+  /// module doesn't cache those (unlike its own header/lines, which DO work
+  /// offline once loaded). Shown only for a new, not-yet-saved return; an
+  /// already-loaded draft can still be edited and saved offline normally.
+  Widget _offlineNewReturnNotice() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    decoration: BoxDecoration(
+      color: AppColors.secondary.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
     ),
+    child: const Row(children: [
+      Icon(Icons.info_outline, color: AppColors.secondary, size: 18),
+      SizedBox(width: 10),
+      Expanded(child: Text(
+          'Starting a new return needs a live connection to pick a supplier/GRN — an already-loaded draft can still be edited and saved offline.',
+          style: TextStyle(fontSize: 12, color: AppColors.textSecondary))),
+    ]),
   );
 
   Widget _buildTitleBlock() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
     Text(_returnNo != null ? 'Purchase Return · $_returnNo' : 'New Purchase Return',
         style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
     const SizedBox(height: 2),
-    _status == 'APPROVED'
-        ? _statusChip(_status)
-        : Text(_returnNo != null ? 'Draft' : 'Unsaved draft',
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+    Row(children: [
+      _status == 'APPROVED'
+          ? _statusChip(_status)
+          : Text(_returnNo != null ? 'Draft' : 'Unsaved draft',
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      if (_returnNo != null) ...[
+        const SizedBox(width: 8),
+        PendingSyncBadge(documentType: 'PURCHASE_RETURN', documentId: _returnNo!),
+      ],
+    ]),
   ]);
 
   Widget _statusChip(String status) {

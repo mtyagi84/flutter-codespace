@@ -5,10 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
+import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../domain/repositories/stock_transfer_repository.dart';
 import '../providers/stock_transfer_providers.dart';
 
@@ -548,42 +551,55 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
         'amount_or_percent': 'AMOUNT', 'percent': null, 'amount': c.amount,
       }).toList();
 
-      final transferNo = await _ds.save(
-        header: {
-          'client_id':          session.clientId,
-          'company_id':         session.companyId,
-          'from_location_id':   _fromLocationId,
-          'to_location_id':     _toLocationId,
-          'transfer_no':        _transferNo,
-          'transfer_date':      _fmtDate(_transferDate),
-          'against_request':    _mode == 'AGAINST_REQUEST',
-          'source_request_no':  _sourceRequestNo,
-          'source_request_date': _sourceRequestDate,
-          'remarks':            _remarksCtrl.text.trim(),
-        },
-        lines: transferLines.asMap().entries.map((e) => {
-          'serial_no':                      e.key + 1,
-          'source_request_no':               _mode == 'AGAINST_REQUEST' ? _sourceRequestNo : null,
-          'source_request_date':              _mode == 'AGAINST_REQUEST' ? _sourceRequestDate : null,
-          'source_request_line_serial':        _mode == 'AGAINST_REQUEST' ? int.tryParse(e.value.sourceRequestLineSerial ?? '') : null,
-          'product_id':                          e.value.productId,
-          'uom_id':                                e.value.uomId,
-          'uom_conversion_factor':                  e.value.uomConversionFactor,
-          'qty_pack':                                 e.value.qtyPack,
-          'qty_loose':                                 e.value.qtyLoose,
-          'base_qty':                                   e.value.baseQty,
-          'sales_price':                                 _isLikelyInterEntity ? e.value.salesPrice : null,
-          'charge_amount':                                e.value.chargeAmount,
-          'remarks':                                       e.value.remarksCtrl.text.trim(),
-        }).toList(),
-        batches: batches,
-        serials: serials,
-        charges: charges,
-        userId: session.userId,
-      );
-      if (mounted) {
-        setState(() { _transferNo = transferNo; _saving = false; });
-        _showSnack('Stock Transfer $transferNo saved.', color: AppColors.positive);
+      final header = {
+        'client_id':          session.clientId,
+        'company_id':         session.companyId,
+        'from_location_id':   _fromLocationId,
+        'to_location_id':     _toLocationId,
+        'transfer_no':        _transferNo,
+        'transfer_date':      _fmtDate(_transferDate),
+        'against_request':    _mode == 'AGAINST_REQUEST',
+        'source_request_no':  _sourceRequestNo,
+        'source_request_date': _sourceRequestDate,
+        'remarks':            _remarksCtrl.text.trim(),
+      };
+      final lines = transferLines.asMap().entries.map((e) => {
+        'serial_no':                    e.key + 1,
+        'source_request_no':            _mode == 'AGAINST_REQUEST' ? _sourceRequestNo : null,
+        'source_request_date':          _mode == 'AGAINST_REQUEST' ? _sourceRequestDate : null,
+        'source_request_line_serial':   _mode == 'AGAINST_REQUEST' ? int.tryParse(e.value.sourceRequestLineSerial ?? '') : null,
+        'product_id':                   e.value.productId,
+        'uom_id':                       e.value.uomId,
+        'uom_conversion_factor':        e.value.uomConversionFactor,
+        'qty_pack':                     e.value.qtyPack,
+        'qty_loose':                    e.value.qtyLoose,
+        'base_qty':                     e.value.baseQty,
+        'sales_price':                  _isLikelyInterEntity ? e.value.salesPrice : null,
+        'charge_amount':                e.value.chargeAmount,
+        'remarks':                      e.value.remarksCtrl.text.trim(),
+      }).toList();
+
+      if (session.offlineMode) {
+        final localId = generateLocalId();
+        await ref.read(syncEngineProvider).enqueue(
+          documentType: 'STOCK_TRANSFER',
+          documentId:   localId,
+          endpoint:     '/rpc/fn_save_stock_transfer',
+          payload:      {'p_header': header, 'p_lines': lines, 'p_batches': batches, 'p_serials': serials, 'p_charges': charges, 'p_user_id': session.userId},
+        );
+        await _ds.cacheTransferLocally(effectiveTransferNo: localId, header: header, lines: lines, batches: batches, serials: serials, charges: charges);
+        if (mounted) {
+          setState(() { _transferNo = localId; _saving = false; });
+          _showSnack('Saved offline — will sync when online.', color: AppColors.secondary);
+          return true;
+        }
+      } else {
+        final transferNo = await _ds.save(header: header, lines: lines, batches: batches, serials: serials, charges: charges, userId: session.userId);
+        unawaited(_ds.cacheTransferLocally(effectiveTransferNo: transferNo, header: header, lines: lines, batches: batches, serials: serials, charges: charges));
+        if (mounted) {
+          setState(() { _transferNo = transferNo; _saving = false; });
+          _showSnack('Stock Transfer $transferNo saved.', color: AppColors.positive);
+        }
       }
       return true;
     } on DioException catch (e) {
@@ -673,7 +689,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
     final isMobile  = Responsive.isMobile(context);
     final showLooseQty = (session?.qtyEntryMode ?? 'PACK_AND_LOOSE') != 'PACK_ONLY';
 
-    final canSave     = !isOffline && _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
+    final canSave     = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
     final locked      = _status != 'DRAFT';
 
@@ -726,8 +742,14 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
     Text(_transferNo != null ? 'Stock Transfer · $_transferNo' : 'New Stock Transfer',
         style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
     const SizedBox(height: 2),
-    _status != 'DRAFT' ? _statusChip(_status) : Text(_transferNo != null ? 'Draft' : 'Unsaved draft',
-        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+    Row(children: [
+      _status != 'DRAFT' ? _statusChip(_status) : Text(_transferNo != null ? 'Draft' : 'Unsaved draft',
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      if (_transferNo != null) ...[
+        const SizedBox(width: 8),
+        PendingSyncBadge(documentType: 'STOCK_TRANSFER', documentId: _transferNo!),
+      ],
+    ]),
   ]);
 
   Widget _statusChip(String status) {

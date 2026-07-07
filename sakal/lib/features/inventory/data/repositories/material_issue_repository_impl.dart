@@ -1,10 +1,14 @@
+import 'dart:async';
 import '../../domain/repositories/material_issue_repository.dart';
 import '../datasources/material_issue_remote_ds.dart';
+import '../datasources/material_issue_local_ds.dart';
 
 class MaterialIssueRepositoryImpl implements MaterialIssueRepository {
   final MaterialIssueRemoteDs _remote;
+  final MaterialIssueLocalDs? _local; // null on Flutter Web (no Drift)
+  final bool _isOffline;
 
-  MaterialIssueRepositoryImpl(this._remote);
+  MaterialIssueRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
   Future<List<Map<String, dynamic>>> listIssues({
@@ -14,7 +18,12 @@ class MaterialIssueRepositoryImpl implements MaterialIssueRepository {
     String? status,
     int     limit  = 50,
     int     offset = 0,
-  }) => _remote.listIssues(clientId: clientId, companyId: companyId, search: search, status: status, limit: limit, offset: offset);
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.listIssues(clientId: clientId, companyId: companyId, search: search, status: status, limit: limit, offset: offset);
+    }
+    return _remote.listIssues(clientId: clientId, companyId: companyId, search: search, status: status, limit: limit, offset: offset);
+  }
 
   @override
   Future<Map<String, dynamic>?> getHeader({
@@ -22,7 +31,14 @@ class MaterialIssueRepositoryImpl implements MaterialIssueRepository {
     required String companyId,
     required String issueNo,
     String? issueDate,
-  }) => _remote.getHeader(clientId: clientId, companyId: companyId, issueNo: issueNo, issueDate: issueDate);
+  }) async {
+    if (_isOffline && _local != null) {
+      return _local.getHeader(clientId: clientId, companyId: companyId, issueNo: issueNo, issueDate: issueDate);
+    }
+    final header = await _remote.getHeader(clientId: clientId, companyId: companyId, issueNo: issueNo, issueDate: issueDate);
+    if (header != null && _local != null) unawaited(_local.cacheHeader(header));
+    return header;
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getPostedVouchers({
@@ -105,6 +121,15 @@ class MaterialIssueRepositoryImpl implements MaterialIssueRepository {
     required List<Map<String, dynamic>> serials,
     required String userId,
   }) => _remote.save(header: header, lines: lines, batches: batches, serials: serials, userId: userId);
+
+  @override
+  Future<void> cacheIssueLocally({
+    required String effectiveIssueNo,
+    required Map<String, dynamic> header,
+    required List<Map<String, dynamic>> lines,
+    required List<Map<String, dynamic>> batches,
+    required List<Map<String, dynamic>> serials,
+  }) => _local?.cacheFromMaps(effectiveIssueNo, header, lines, batches, serials) ?? Future.value();
 
   @override
   Future<void> approve({

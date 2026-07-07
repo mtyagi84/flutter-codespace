@@ -39,6 +39,14 @@ abstract class StockTransferRequestRepository {
     required String userId,
   });
 
+  /// Caches a request locally for offline read-back. Called after every
+  /// online save and on every offline save (before enqueue).
+  Future<void> cacheRequestLocally({
+    required String effectiveRequestNo,
+    required Map<String, dynamic> header,
+    required List<Map<String, dynamic>> lines,
+  });
+
   Future<void> approve({
     required String clientId,
     required String companyId,

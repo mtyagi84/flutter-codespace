@@ -1,10 +1,14 @@
+import 'dart:async';
 import '../../domain/repositories/stock_transfer_request_repository.dart';
 import '../datasources/stock_transfer_request_remote_ds.dart';
+import '../datasources/stock_transfer_request_local_ds.dart';
 
 class StockTransferRequestRepositoryImpl implements StockTransferRequestRepository {
   final StockTransferRequestRemoteDs _remote;
+  final StockTransferRequestLocalDs? _local; // null on Flutter Web (no Drift)
+  final bool _isOffline;
 
-  StockTransferRequestRepositoryImpl(this._remote);
+  StockTransferRequestRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
   Future<List<Map<String, dynamic>>> listRequests({
@@ -14,9 +18,16 @@ class StockTransferRequestRepositoryImpl implements StockTransferRequestReposito
     String? status,
     int     limit  = 50,
     int     offset = 0,
-  }) => _remote.listRequests(
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.listRequests(
         clientId: clientId, companyId: companyId, search: search, status: status, limit: limit, offset: offset,
       );
+    }
+    return _remote.listRequests(
+      clientId: clientId, companyId: companyId, search: search, status: status, limit: limit, offset: offset,
+    );
+  }
 
   @override
   Future<Map<String, dynamic>?> getHeader({
@@ -24,7 +35,14 @@ class StockTransferRequestRepositoryImpl implements StockTransferRequestReposito
     required String companyId,
     required String requestNo,
     String? requestDate,
-  }) => _remote.getHeader(clientId: clientId, companyId: companyId, requestNo: requestNo, requestDate: requestDate);
+  }) async {
+    if (_isOffline && _local != null) {
+      return _local.getHeader(clientId: clientId, companyId: companyId, requestNo: requestNo, requestDate: requestDate);
+    }
+    final header = await _remote.getHeader(clientId: clientId, companyId: companyId, requestNo: requestNo, requestDate: requestDate);
+    if (header != null && _local != null) unawaited(_local.cacheHeader(header));
+    return header;
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getLines({
@@ -32,7 +50,14 @@ class StockTransferRequestRepositoryImpl implements StockTransferRequestReposito
     required String companyId,
     required String requestNo,
     required String requestDate,
-  }) => _remote.getLines(clientId: clientId, companyId: companyId, requestNo: requestNo, requestDate: requestDate);
+  }) async {
+    if (_isOffline && _local != null) {
+      return _local.getLines(clientId: clientId, companyId: companyId, requestNo: requestNo, requestDate: requestDate);
+    }
+    final lines = await _remote.getLines(clientId: clientId, companyId: companyId, requestNo: requestNo, requestDate: requestDate);
+    if (_local != null) unawaited(_local.cacheLines(clientId, companyId, requestNo, requestDate, lines));
+    return lines;
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getLocations({
@@ -53,6 +78,13 @@ class StockTransferRequestRepositoryImpl implements StockTransferRequestReposito
     required List<Map<String, dynamic>> lines,
     required String userId,
   }) => _remote.save(header: header, lines: lines, userId: userId);
+
+  @override
+  Future<void> cacheRequestLocally({
+    required String effectiveRequestNo,
+    required Map<String, dynamic> header,
+    required List<Map<String, dynamic>> lines,
+  }) => _local?.cacheFromMaps(effectiveRequestNo, header, lines) ?? Future.value();
 
   @override
   Future<void> approve({

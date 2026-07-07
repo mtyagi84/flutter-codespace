@@ -1,12 +1,17 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
+import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../domain/repositories/stock_transfer_request_repository.dart';
 import '../providers/stock_transfer_request_providers.dart';
 
@@ -164,31 +169,47 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
     setState(() { _saving = true; _actionError = null; });
     final session = ref.read(sessionProvider)!;
     try {
-      final requestNo = await _ds.save(
-        header: {
-          'client_id':        session.clientId,
-          'company_id':       session.companyId,
-          'from_location_id': _fromLocationId,
-          'to_location_id':   _toLocationId,
-          'request_no':       _requestNo,
-          'request_date':     _fmtDate(_requestDate),
-          'remarks':          _remarksCtrl.text.trim(),
-        },
-        lines: validLines.asMap().entries.map((e) => {
-          'serial_no':              e.key + 1,
-          'product_id':             e.value.productId,
-          'uom_id':                 e.value.uomId,
-          'uom_conversion_factor':  e.value.uomConversionFactor,
-          'qty_pack':               e.value.qtyPack,
-          'qty_loose':              e.value.qtyLoose,
-          'base_qty':               e.value.baseQty,
-          'remarks':                e.value.remarksCtrl.text.trim(),
-        }).toList(),
-        userId: session.userId,
-      );
-      if (mounted) {
-        setState(() { _requestNo = requestNo; _saving = false; });
-        _showSnack('Stock Transfer Request $requestNo saved.', color: AppColors.positive);
+      final header = {
+        'client_id':        session.clientId,
+        'company_id':       session.companyId,
+        'from_location_id': _fromLocationId,
+        'to_location_id':   _toLocationId,
+        'request_no':       _requestNo,
+        'request_date':     _fmtDate(_requestDate),
+        'remarks':          _remarksCtrl.text.trim(),
+      };
+      final lines = validLines.asMap().entries.map((e) => {
+        'serial_no':              e.key + 1,
+        'product_id':             e.value.productId,
+        'uom_id':                 e.value.uomId,
+        'uom_conversion_factor':  e.value.uomConversionFactor,
+        'qty_pack':               e.value.qtyPack,
+        'qty_loose':              e.value.qtyLoose,
+        'base_qty':               e.value.baseQty,
+        'remarks':                e.value.remarksCtrl.text.trim(),
+      }).toList();
+
+      if (session.offlineMode) {
+        final localId = generateLocalId();
+        await ref.read(syncEngineProvider).enqueue(
+          documentType: 'STOCK_TRANSFER_REQUEST',
+          documentId:   localId,
+          endpoint:     '/rpc/fn_save_stock_transfer_request',
+          payload:      {'p_header': header, 'p_lines': lines, 'p_user_id': session.userId},
+        );
+        await _ds.cacheRequestLocally(effectiveRequestNo: localId, header: header, lines: lines);
+        if (mounted) {
+          setState(() { _requestNo = localId; _saving = false; });
+          _showSnack('Saved offline — will sync when online.', color: AppColors.secondary);
+          return true;
+        }
+      } else {
+        final requestNo = await _ds.save(header: header, lines: lines, userId: session.userId);
+        unawaited(_ds.cacheRequestLocally(effectiveRequestNo: requestNo, header: header, lines: lines));
+        if (mounted) {
+          setState(() { _requestNo = requestNo; _saving = false; });
+          _showSnack('Stock Transfer Request $requestNo saved.', color: AppColors.positive);
+        }
       }
       return true;
     } on DioException catch (e) {
@@ -280,7 +301,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
     final isMobile  = Responsive.isMobile(context);
     final showLooseQty = (session?.qtyEntryMode ?? 'PACK_AND_LOOSE') != 'PACK_ONLY';
 
-    final canSave     = !isOffline && _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
+    final canSave     = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
     final locked      = _status != 'DRAFT';
 
@@ -326,8 +347,14 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
     Text(_requestNo != null ? 'Stock Transfer Request · $_requestNo' : 'New Stock Transfer Request',
         style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
     const SizedBox(height: 2),
-    _status != 'DRAFT' ? _statusChip(_status) : Text(_requestNo != null ? 'Draft' : 'Unsaved draft',
-        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+    Row(children: [
+      _status != 'DRAFT' ? _statusChip(_status) : Text(_requestNo != null ? 'Draft' : 'Unsaved draft',
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      if (_requestNo != null) ...[
+        const SizedBox(width: 8),
+        PendingSyncBadge(documentType: 'STOCK_TRANSFER_REQUEST', documentId: _requestNo!),
+      ],
+    ]),
   ]);
 
   Widget _statusChip(String status) {

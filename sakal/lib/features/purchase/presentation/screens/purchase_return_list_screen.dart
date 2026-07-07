@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
+import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../data/models/purchase_return_model.dart';
 import '../providers/purchase_return_providers.dart';
 
@@ -22,6 +24,7 @@ class _PurchaseReturnListScreenState extends ConsumerState<PurchaseReturnListScr
   @override String get screenName => RouteNames.purchaseReturns;
 
   List<PurchaseReturnModel> _returns = [];
+  Set<String> _pendingIds = {};
   bool    _loading = true;
   String? _error;
   String? _filterStatus;
@@ -50,12 +53,21 @@ class _PurchaseReturnListScreenState extends ConsumerState<PurchaseReturnListScr
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
-      final rows = await ref.read(purchaseReturnRepositoryProvider).listPurchaseReturns(
-        clientId:  session.clientId,
-        companyId: session.companyId,
-        status:    _filterStatus,
-      );
-      if (mounted) setState(() { _returns = rows; _loading = false; });
+      final results = await Future.wait([
+        ref.read(purchaseReturnRepositoryProvider).listPurchaseReturns(
+          clientId:  session.clientId,
+          companyId: session.companyId,
+          status:    _filterStatus,
+        ),
+        ref.read(syncEngineProvider).pendingDocumentIds('PURCHASE_RETURN'),
+      ]);
+      if (mounted) {
+        setState(() {
+          _returns    = results[0] as List<PurchaseReturnModel>;
+          _pendingIds = results[1] as Set<String>;
+          _loading    = false;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() { _loading = false; _error = 'Could not load purchase returns: $e'; });
     }
@@ -111,7 +123,7 @@ class _PurchaseReturnListScreenState extends ConsumerState<PurchaseReturnListScr
               child: Text('Purchase Return',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
             ),
-            if (canAdd && !isOffline)
+            if (canAdd)
               FilledButton.icon(
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text('New Purchase Return'),
@@ -271,7 +283,10 @@ class _PurchaseReturnListScreenState extends ConsumerState<PurchaseReturnListScr
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)))),
           Expanded(flex: 2, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: _statusBadge(p.status))),
+            child: Row(children: [
+              _statusBadge(p.status),
+              if (_pendingIds.contains(p.returnNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+            ]))),
           Expanded(flex: 1, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: IconButton(
@@ -303,6 +318,7 @@ class _PurchaseReturnListScreenState extends ConsumerState<PurchaseReturnListScr
             Expanded(child: Text(p.returnNo,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
             _statusBadge(p.status),
+            if (_pendingIds.contains(p.returnNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
           ]),
           const SizedBox(height: 6),
           Text('${p.reason ?? '—'} · ${_displayDate(p.returnDate)}',

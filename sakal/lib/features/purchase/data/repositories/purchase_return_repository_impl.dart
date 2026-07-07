@@ -1,11 +1,15 @@
+import 'dart:async';
 import '../../domain/repositories/purchase_return_repository.dart';
 import '../datasources/purchase_return_remote_ds.dart';
+import '../datasources/purchase_return_local_ds.dart';
 import '../models/purchase_return_model.dart';
 
 class PurchaseReturnRepositoryImpl implements PurchaseReturnRepository {
   final PurchaseReturnRemoteDs _remote;
+  final PurchaseReturnLocalDs? _local; // null on Flutter Web (no Drift)
+  final bool _isOffline;
 
-  PurchaseReturnRepositoryImpl(this._remote);
+  PurchaseReturnRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
   Future<List<PurchaseReturnModel>> listPurchaseReturns({
@@ -15,10 +19,17 @@ class PurchaseReturnRepositoryImpl implements PurchaseReturnRepository {
     String? status,
     int     limit  = 50,
     int     offset = 0,
-  }) => _remote.listPurchaseReturns(
-        clientId: clientId, companyId: companyId, search: search, status: status,
-        limit: limit, offset: offset,
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.listPurchaseReturns(
+        clientId: clientId, companyId: companyId, search: search, status: status, limit: limit, offset: offset,
       );
+    }
+    return _remote.listPurchaseReturns(
+      clientId: clientId, companyId: companyId, search: search, status: status,
+      limit: limit, offset: offset,
+    );
+  }
 
   @override
   Future<PurchaseReturnModel?> getHeader({
@@ -26,7 +37,14 @@ class PurchaseReturnRepositoryImpl implements PurchaseReturnRepository {
     required String companyId,
     required String returnNo,
     String? returnDate,
-  }) => _remote.getHeader(clientId: clientId, companyId: companyId, returnNo: returnNo, returnDate: returnDate);
+  }) async {
+    if (_isOffline && _local != null) {
+      return _local.getHeader(clientId: clientId, companyId: companyId, returnNo: returnNo, returnDate: returnDate);
+    }
+    final header = await _remote.getHeader(clientId: clientId, companyId: companyId, returnNo: returnNo, returnDate: returnDate);
+    if (header != null && _local != null) unawaited(_local.cacheHeader(header));
+    return header;
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getPostedVouchers({
@@ -130,7 +148,14 @@ class PurchaseReturnRepositoryImpl implements PurchaseReturnRepository {
     required String companyId,
     required String returnNo,
     required String returnDate,
-  }) => _remote.getReturnLines(clientId: clientId, companyId: companyId, returnNo: returnNo, returnDate: returnDate);
+  }) async {
+    if (_isOffline && _local != null) {
+      return _local.getReturnLines(clientId: clientId, companyId: companyId, returnNo: returnNo, returnDate: returnDate);
+    }
+    final lines = await _remote.getReturnLines(clientId: clientId, companyId: companyId, returnNo: returnNo, returnDate: returnDate);
+    if (_local != null) unawaited(_local.cacheLines(clientId, companyId, returnNo, returnDate, lines));
+    return lines;
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getReturnCharges({
@@ -138,7 +163,14 @@ class PurchaseReturnRepositoryImpl implements PurchaseReturnRepository {
     required String companyId,
     required String returnNo,
     required String returnDate,
-  }) => _remote.getReturnCharges(clientId: clientId, companyId: companyId, returnNo: returnNo, returnDate: returnDate);
+  }) async {
+    if (_isOffline && _local != null) {
+      return _local.getReturnCharges(clientId: clientId, companyId: companyId, returnNo: returnNo, returnDate: returnDate);
+    }
+    final charges = await _remote.getReturnCharges(clientId: clientId, companyId: companyId, returnNo: returnNo, returnDate: returnDate);
+    if (_local != null) unawaited(_local.cacheCharges(clientId, companyId, returnNo, returnDate, charges));
+    return charges;
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getReturnLineBatches({
@@ -178,6 +210,16 @@ class PurchaseReturnRepositoryImpl implements PurchaseReturnRepository {
     required List<Map<String, dynamic>> charges,
     required String userId,
   }) => _remote.save(header: header, lines: lines, batches: batches, serials: serials, charges: charges, userId: userId);
+
+  @override
+  Future<void> cacheReturnLocally({
+    required String effectiveReturnNo,
+    required Map<String, dynamic> header,
+    required List<Map<String, dynamic>> lines,
+    required List<Map<String, dynamic>> batches,
+    required List<Map<String, dynamic>> serials,
+    required List<Map<String, dynamic>> charges,
+  }) => _local?.cacheFromMaps(effectiveReturnNo, header, lines, batches, serials, charges) ?? Future.value();
 
   @override
   Future<void> approve({

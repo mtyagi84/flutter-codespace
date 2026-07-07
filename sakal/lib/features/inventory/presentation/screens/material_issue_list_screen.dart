@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
+import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/pending_sync_badge.dart';
 import '../providers/material_issue_providers.dart';
 
 class MaterialIssueListScreen extends ConsumerStatefulWidget {
@@ -21,6 +23,7 @@ class _MaterialIssueListScreenState extends ConsumerState<MaterialIssueListScree
   @override String get screenName => RouteNames.materialIssues;
 
   List<Map<String, dynamic>> _rows = [];
+  Set<String> _pendingIds = {};
   bool    _loading = true;
   String? _error;
   String? _filterStatus;
@@ -46,10 +49,19 @@ class _MaterialIssueListScreenState extends ConsumerState<MaterialIssueListScree
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
-      final rows = await ref.read(materialIssueRepositoryProvider).listIssues(
-        clientId: session.clientId, companyId: session.companyId, status: _filterStatus,
-      );
-      if (mounted) setState(() { _rows = rows; _loading = false; });
+      final results = await Future.wait([
+        ref.read(materialIssueRepositoryProvider).listIssues(
+          clientId: session.clientId, companyId: session.companyId, status: _filterStatus,
+        ),
+        ref.read(syncEngineProvider).pendingDocumentIds('MATERIAL_ISSUE'),
+      ]);
+      if (mounted) {
+        setState(() {
+          _rows       = results[0] as List<Map<String, dynamic>>;
+          _pendingIds = results[1] as Set<String>;
+          _loading    = false;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() { _loading = false; _error = 'Could not load material issues: $e'; });
     }
@@ -92,7 +104,7 @@ class _MaterialIssueListScreenState extends ConsumerState<MaterialIssueListScree
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
           child: Row(children: [
             const Expanded(child: Text('Material Issue', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary))),
-            if (canAdd && !isOffline)
+            if (canAdd)
               FilledButton.icon(icon: const Icon(Icons.add, size: 16), label: const Text('New Material Issue'), onPressed: _openNew),
           ]),
         ),
@@ -199,7 +211,10 @@ class _MaterialIssueListScreenState extends ConsumerState<MaterialIssueListScree
               child: Text(_displayDate(r['issue_date'] as String), style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 3, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Text(location?['location_name'] as String? ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
-          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: _statusBadge(r['status'] as String))),
+          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Row(children: [
+            _statusBadge(r['status'] as String),
+            if (_pendingIds.contains(r['issue_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+          ]))),
           Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
               child: IconButton(icon: const Icon(Icons.arrow_forward_ios, size: 14), color: AppColors.primary,
                   onPressed: () => _openEdit(r), tooltip: 'Open', padding: EdgeInsets.zero))),
@@ -220,6 +235,7 @@ class _MaterialIssueListScreenState extends ConsumerState<MaterialIssueListScree
           Row(children: [
             Expanded(child: Text(r['issue_no'] as String, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
             _statusBadge(r['status'] as String),
+            if (_pendingIds.contains(r['issue_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
           ]),
           const SizedBox(height: 6),
           Text(_displayDate(r['issue_date'] as String), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),

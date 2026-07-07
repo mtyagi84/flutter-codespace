@@ -5,10 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
+import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../domain/repositories/material_requisition_repository.dart';
 import '../providers/material_requisition_providers.dart';
 
@@ -218,34 +221,50 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
     setState(() { _saving = true; _actionError = null; });
     final session = ref.read(sessionProvider)!;
     try {
-      final requisitionNo = await _ds.save(
-        header: {
-          'client_id':       session.clientId,
-          'company_id':      session.companyId,
-          'location_id':     _locationId,
-          'requisition_no':  _requisitionNo,
-          'requisition_date': _fmtDate(_requisitionDate),
-          'requested_by':    _requestedByCtrl.text.trim(),
-          'reason':          _reasonCtrl.text.trim(),
-          'remarks':         _remarksCtrl.text.trim(),
-        },
-        lines: validLines.asMap().entries.map((e) => {
-          'serial_no':              e.key + 1,
-          'product_id':             e.value.productId,
-          'uom_id':                 e.value.uomId,
-          'uom_conversion_factor':  e.value.uomConversionFactor,
-          'qty_pack':               e.value.qtyPack,
-          'qty_loose':              e.value.qtyLoose,
-          'base_qty':               e.value.baseQty,
-          'department_id':          e.value.departmentId,
-          'consumption_area_id':    e.value.consumptionAreaId,
-          'remarks':                e.value.remarksCtrl.text.trim(),
-        }).toList(),
-        userId: session.userId,
-      );
-      if (mounted) {
-        setState(() { _requisitionNo = requisitionNo; _saving = false; });
-        _showSnack('Material Requisition $requisitionNo saved.', color: AppColors.positive);
+      final header = {
+        'client_id':       session.clientId,
+        'company_id':      session.companyId,
+        'location_id':     _locationId,
+        'requisition_no':  _requisitionNo,
+        'requisition_date': _fmtDate(_requisitionDate),
+        'requested_by':    _requestedByCtrl.text.trim(),
+        'reason':          _reasonCtrl.text.trim(),
+        'remarks':         _remarksCtrl.text.trim(),
+      };
+      final lines = validLines.asMap().entries.map((e) => {
+        'serial_no':              e.key + 1,
+        'product_id':             e.value.productId,
+        'uom_id':                 e.value.uomId,
+        'uom_conversion_factor':  e.value.uomConversionFactor,
+        'qty_pack':               e.value.qtyPack,
+        'qty_loose':              e.value.qtyLoose,
+        'base_qty':               e.value.baseQty,
+        'department_id':          e.value.departmentId,
+        'consumption_area_id':    e.value.consumptionAreaId,
+        'remarks':                e.value.remarksCtrl.text.trim(),
+      }).toList();
+
+      if (session.offlineMode) {
+        final localId = generateLocalId();
+        await ref.read(syncEngineProvider).enqueue(
+          documentType: 'MATERIAL_REQUISITION',
+          documentId:   localId,
+          endpoint:     '/rpc/fn_save_material_requisition',
+          payload:      {'p_header': header, 'p_lines': lines, 'p_user_id': session.userId},
+        );
+        await _ds.cacheRequisitionLocally(effectiveRequisitionNo: localId, header: header, lines: lines);
+        if (mounted) {
+          setState(() { _requisitionNo = localId; _saving = false; });
+          _showSnack('Saved offline — will sync when online.', color: AppColors.secondary);
+          return true;
+        }
+      } else {
+        final requisitionNo = await _ds.save(header: header, lines: lines, userId: session.userId);
+        unawaited(_ds.cacheRequisitionLocally(effectiveRequisitionNo: requisitionNo, header: header, lines: lines));
+        if (mounted) {
+          setState(() { _requisitionNo = requisitionNo; _saving = false; });
+          _showSnack('Material Requisition $requisitionNo saved.', color: AppColors.positive);
+        }
       }
       return true;
     } on DioException catch (e) {
@@ -345,7 +364,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
     final isMobile  = Responsive.isMobile(context);
     final showLooseQty = (session?.qtyEntryMode ?? 'PACK_AND_LOOSE') != 'PACK_ONLY';
 
-    final canSave     = !isOffline && _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
+    final canSave     = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
     final locked      = _status != 'DRAFT';
 
@@ -391,8 +410,14 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
     Text(_requisitionNo != null ? 'Material Requisition · $_requisitionNo' : 'New Material Requisition',
         style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
     const SizedBox(height: 2),
-    _status != 'DRAFT' ? _statusChip(_status) : Text(_requisitionNo != null ? 'Draft' : 'Unsaved draft',
-        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+    Row(children: [
+      _status != 'DRAFT' ? _statusChip(_status) : Text(_requisitionNo != null ? 'Draft' : 'Unsaved draft',
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      if (_requisitionNo != null) ...[
+        const SizedBox(width: 8),
+        PendingSyncBadge(documentType: 'MATERIAL_REQUISITION', documentId: _requisitionNo!),
+      ],
+    ]),
   ]);
 
   Widget _statusChip(String status) {

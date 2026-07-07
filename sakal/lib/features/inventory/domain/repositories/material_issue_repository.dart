@@ -87,6 +87,16 @@ abstract class MaterialIssueRepository {
     required String userId,
   });
 
+  /// Caches an issue locally for offline read-back. Called after every
+  /// online save and on every offline save (before enqueue).
+  Future<void> cacheIssueLocally({
+    required String effectiveIssueNo,
+    required Map<String, dynamic> header,
+    required List<Map<String, dynamic>> lines,
+    required List<Map<String, dynamic>> batches,
+    required List<Map<String, dynamic>> serials,
+  });
+
   Future<void> approve({
     required String clientId,
     required String companyId,

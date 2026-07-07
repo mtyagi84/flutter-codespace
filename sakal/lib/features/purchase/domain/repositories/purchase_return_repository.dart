@@ -1,7 +1,13 @@
 import '../../data/models/purchase_return_model.dart';
 
-/// Always online — same reasoning as Purchase Bill/GRN's own Against-PO
-/// consolidation: this screen checks live GRN/billed-status state.
+/// listPurchaseReturns/getHeader/getReturnLines/getReturnCharges read from the
+/// local cache when offline (and `save` can enqueue for later sync); every
+/// other method — GRN/supplier picker, batch/serial candidates — stays
+/// online-only, since those check live GRN/billed-status state the same way
+/// Purchase Bill/GRN's own Against-PO consolidation does. In practice this
+/// means an already-loaded return can be edited and saved offline, but a
+/// brand-new return can't be meaningfully started fully offline (no cached
+/// supplier/GRN candidates to pick from).
 abstract class PurchaseReturnRepository {
   Future<List<PurchaseReturnModel>> listPurchaseReturns({
     required String clientId,
@@ -138,6 +144,17 @@ abstract class PurchaseReturnRepository {
     required List<Map<String, dynamic>> serials,
     required List<Map<String, dynamic>> charges,
     required String userId,
+  });
+
+  /// Caches a return locally for offline read-back. Called after every
+  /// online save and on every offline save (before enqueue).
+  Future<void> cacheReturnLocally({
+    required String effectiveReturnNo,
+    required Map<String, dynamic> header,
+    required List<Map<String, dynamic>> lines,
+    required List<Map<String, dynamic>> batches,
+    required List<Map<String, dynamic>> serials,
+    required List<Map<String, dynamic>> charges,
   });
 
   Future<void> approve({

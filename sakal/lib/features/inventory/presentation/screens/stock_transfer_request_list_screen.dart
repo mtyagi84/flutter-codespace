@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
+import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/pending_sync_badge.dart';
 import '../providers/stock_transfer_request_providers.dart';
 
 class StockTransferRequestListScreen extends ConsumerStatefulWidget {
@@ -21,6 +23,7 @@ class _StockTransferRequestListScreenState extends ConsumerState<StockTransferRe
   @override String get screenName => RouteNames.stockTransferRequests;
 
   List<Map<String, dynamic>> _rows = [];
+  Set<String> _pendingIds = {};
   bool    _loading = true;
   String? _error;
   String? _filterStatus;
@@ -51,10 +54,19 @@ class _StockTransferRequestListScreenState extends ConsumerState<StockTransferRe
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
-      final rows = await ref.read(stockTransferRequestRepositoryProvider).listRequests(
-        clientId: session.clientId, companyId: session.companyId, status: _filterStatus,
-      );
-      if (mounted) setState(() { _rows = rows; _loading = false; });
+      final results = await Future.wait([
+        ref.read(stockTransferRequestRepositoryProvider).listRequests(
+          clientId: session.clientId, companyId: session.companyId, status: _filterStatus,
+        ),
+        ref.read(syncEngineProvider).pendingDocumentIds('STOCK_TRANSFER_REQUEST'),
+      ]);
+      if (mounted) {
+        setState(() {
+          _rows       = results[0] as List<Map<String, dynamic>>;
+          _pendingIds = results[1] as Set<String>;
+          _loading    = false;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() { _loading = false; _error = 'Could not load stock transfer requests: $e'; });
     }
@@ -109,7 +121,7 @@ class _StockTransferRequestListScreenState extends ConsumerState<StockTransferRe
               child: Text('Stock Transfer Request',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
             ),
-            if (canAdd && !isOffline)
+            if (canAdd)
               FilledButton.icon(
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text('New Request'),
@@ -238,7 +250,10 @@ class _StockTransferRequestListScreenState extends ConsumerState<StockTransferRe
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Text(to?['location_name'] as String? ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: _statusBadge(r['status'] as String))),
+              child: Row(children: [
+                _statusBadge(r['status'] as String),
+                if (_pendingIds.contains(r['request_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+              ]))),
           Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
               child: IconButton(icon: const Icon(Icons.arrow_forward_ios, size: 14), color: AppColors.primary,
                   onPressed: () => _openEdit(r), tooltip: 'Open', padding: EdgeInsets.zero))),
@@ -261,6 +276,7 @@ class _StockTransferRequestListScreenState extends ConsumerState<StockTransferRe
             Expanded(child: Text(r['request_no'] as String,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
             _statusBadge(r['status'] as String),
+            if (_pendingIds.contains(r['request_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
           ]),
           const SizedBox(height: 6),
           Text('${from?['location_name'] ?? '—'} → ${to?['location_name'] ?? '—'}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),

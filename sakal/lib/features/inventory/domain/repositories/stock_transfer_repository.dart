@@ -109,6 +109,17 @@ abstract class StockTransferRepository {
     required String userId,
   });
 
+  /// Caches a transfer locally for offline read-back. Called after every
+  /// online save and on every offline save (before enqueue).
+  Future<void> cacheTransferLocally({
+    required String effectiveTransferNo,
+    required Map<String, dynamic> header,
+    required List<Map<String, dynamic>> lines,
+    required List<Map<String, dynamic>> batches,
+    required List<Map<String, dynamic>> serials,
+    required List<Map<String, dynamic>> charges,
+  });
+
   Future<void> approve({
     required String clientId,
     required String companyId,
