@@ -165,7 +165,7 @@ Every transaction stores exchange rate → all 3 currencies derived automaticall
 | Users & Permissions | Pending |
 | Sales (invoices, receipts, returns) | Pending |
 | Purchase (PO, GRN, invoices, payments) | Pending |
-| Inventory (stock, transfers, adjustments) | Material Requisition + Material Issue for Consumption done; Stock Transfer/Adjustment still pending |
+| Inventory (stock, transfers, adjustments) | Material Requisition/Issue, Stock Transfer (Request/Transfer/Receipt), and Stock Adjustment all done. Barcode traceability + company-config field gating (Pack/Loose Qty, Barcode) audited complete app-wide |
 | Finance (double-entry, trial balance, P&L, balance sheet) | Pending |
 | Dashboard | Placeholder only |
 | Reports | Pending |
@@ -309,13 +309,27 @@ Every transaction document a user can save (PO, GRN, Purchase Invoice, Purchase 
 5. The entry screen itself — `_buildPrintDocument()` (map the screen's own state into the registry's field names), `_print<Doc>()` (fetch company + template, call `PrintEngine.printDocument`), `_buildPrintButton()` (icon button, `Tooltip`, spinner while `_printing`), wired into `build()`'s header row (both mobile and desktop branches) guarded by `<docNo> != null` (no button until the document has been saved at least once) — same placement as the Save/Approve buttons above, see any of the Inventory module screens as a template.
 Template: `lib/features/inventory/presentation/screens/stock_transfer_entry_screen.dart` (has the fullest shape: header + lines + charges + totals).
 
+### Company-configurable line fields (Pack/Loose Qty, Barcode) — every screen with a product/item line
+Two company-level settings must be respected by every screen that has a product/item code line, computed once in `build()` and threaded down to the line-rendering method(s) as plain bool params — never re-read per-row:
+```dart
+final showLooseQty = (session?.qtyEntryMode ?? 'PACK_AND_LOOSE') != 'PACK_ONLY';
+final showBarcode  = session?.enableBarcode ?? false;
+...
+_buildLinesCard(locked, showLooseQty, showBarcode);
+```
+- **`showLooseQty`** (`ric_companies.qty_entry_mode`, migration 034) — gates whether a "Qty Loose" field renders next to "Qty Pack". When hidden, the Pack field's label switches to the bare unit name (`showLooseQty ? 'Qty Pack' : 'Quantity'`) rather than staying labeled "Qty Pack" with no counterpart. Applies to every NEW-lot quantity entry (a document's main line, and a `+`-direction batch/serial sub-row entering a fresh lot) — never to a candidate picker confirming/allocating against an already-known EXISTING lot (that field has no conversion-factor context and stays single-quantity, same reasoning as every `allocatedQty`-style picker in the app: Material Issue's/Stock Adjustment's/Purchase Return's/Stock Receipt's batch or serial candidate rows).
+- **`showBarcode`** (`ric_companies.enable_barcode`, migration 027, locked once products exist) — gates the barcode scan `TextFormField` itself, not just its usefulness. Never render it unconditionally.
+- **Real gap found and fixed (2026-07-08)**: both settings already existed and were correctly wired in GRN/Purchase Order from day one, but four more screens (Material Requisition, Stock Transfer Request, Stock Transfer, Stock Adjustment) grew their own barcode field later without this gating, and two screens (Stock Adjustment, Stock Receipt) had the Loose Qty *controller* in their row model but never rendered the *field*. A full-app audit was needed to find every offender — before considering a new screen's line entry complete, grep for `qtyPackCtrl`/`qtyLooseCtrl`/`barcodeCtrl` in the file and confirm `qtyEntryMode`/`enableBarcode` gates each one.
+- **Batch/Serial is intentionally NOT part of this pattern.** `rim_products.tracking_type` (`NONE`/`BATCH`/`SERIAL`/`BATCH_WITH_EXPIRY`) is a per-PRODUCT attribute, never a company-level toggle — there is no `ric_companies` column for it and none should be added. Every transaction screen already branches correctly on each line's own product's tracking_type (`isBatchTracked`/`isSerialTracked` getters) — nothing to gate beyond that.
+
 ### Definition of complete (every new transaction screen)
-Before considering a new entry/list screen pair done, check all five:
+Before considering a new entry/list screen pair done, check all six:
 1. **Permissions** — `ScreenPermissionMixin`, `canAdd`/`canEdit`/`canApprove` gate the right buttons.
 2. **Security** — RLS policy follows the `auth_rw_<table>` convention, no permissive dev-style policy.
 3. **Responsiveness** — `SakalAdaptiveList` on the list screen, mobile/desktop branches on the entry screen.
 4. **Offline support** — Drift local cache + `<module>_local_ds.dart` + `SyncEngine` enqueue on save; Approve stays online-only.
 5. **Print support** — see above.
+6. **Company-configurable line fields** — `showLooseQty`/`showBarcode` gating on every product/item line, see above.
 
 ### PostgREST save (INSERT or UPDATE)
 - No `Prefer: return=representation` header (causes 401 with RLS)
@@ -450,6 +464,20 @@ Requisition mirrors PO's role relative to GRN (pure intent, no stock/GL effect);
 
 ### Finance-line traceability — every auto-posted GL line must be findable back to its source
 `rid_finance_lines` has `source_line_type`/`source_line_no` (migration 050) alongside the header's existing `source_doc_type/no/date` (037) — the header tells you *which document* posted a voucher, the line tells you *which line of that document* generated *this specific* Dr/Cr row. `fn_post_voucher`/`fn_save_finance_voucher` already pass through whatever extra keys a caller puts on a line object, so this is free for every future auto-posting module — just add `'source_line_type', '<TAG>', 'source_line_no', <the originating line's serial_no>` to each `jsonb_build_object(...)` a `fn_approve_*`/`fn_post_*` function builds. GRN's tags: `STOCK`/`ACCRUAL` (per item line, keyed by that line's own `serial_no`), `CHARGE` (per charge line, keyed by that charge's own `serial_no`). Keep tags short and generic (no per-doc-type prefix) — the header's `source_doc_type` already disambiguates which document a voucher came from.
+
+### Barcode traceability — every transaction line table (migration 075)
+`rim_products.barcode` and `rim_product_uom.barcode` (per-pack-size barcode — a carton and a piece of the same product can each carry their own) are product-master data; no transaction line table persisted WHICH barcode built that line until migration 075 added a `barcode TEXT` column to all 8 (GRN, PO, Material Requisition/Issue, Stock Transfer/Request/Receipt, Purchase Return — `rid_purchase_order_lines` already had it from day one). Every `fn_save_*` reads it identically: `nullif(v_line->>'barcode', '')` — one more optional JSONB key, no signature change.
+- **Origin documents** (free product entry: GRN, PO, Material Requisition, Stock Transfer Request, Stock Transfer's DIRECT mode, Stock Adjustment) get a fresh per-row barcode-scan `TextFormField` + `_onBarcodeSubmitted` calling `getProductByBarcode` (needed on both the remote datasource AND the repository — `_ds` in every entry screen is the repository, not the raw datasource, so both layers need the method added). MUST be gated by `session.enableBarcode` — see "Company-configurable line fields" above.
+- **Consolidation documents** (lines copied from a prior document: Material Issue ← Requisition, Purchase Return ← GRN, Stock Receipt ← Transfer, Stock Transfer's AGAINST_REQUEST ← Request) have no independent product-selection step — their barcode is **carried forward from the source line**'s own saved `barcode` column, never freshly scanned. No `enableBarcode` gating needed there since there's no UI control to gate, just a value threaded through the save payload (and the source line's own `getLines`-equivalent `select` must actually include `barcode`, or there's nothing to carry).
+- **Real bug found live**: GRN, PO, and Material Requisition's scan flow already existed, but `_onBarcodeSubmitted` resolved the match then unconditionally called `row.barcodeCtrl.clear()` **before** the save payload was ever built — the scanned value was silently discarded on every save. Fix: store the resolved value into a separate `matchedBarcode` field on the row (sibling to `uomId`) before clearing the visible text field, and read `matchedBarcode` (not the now-empty controller) when building the payload.
+
+### Stock Adjustment (migration 076) — increase/decrease stock at a location with a reason
+Deliberately NOT combined with Stock Take/physical count — a fully separate future module, no shared `adjustment_type` column or other hook.
+- **Cost is NEVER user-entered.** A `+` line's `unit_cost`/`unit_cost_specific` are fetched from `rim_product_location` at Approve time (same row lock `fn_post_stock_movement` re-acquires internally) and persisted onto the line for reporting — blending "current average" into itself is mathematically a no-op on cost, only quantity moves. A `+` line on a product/location with no established cost yet (`cost_price` NULL or 0 — never received via GRN) is a hard block: `COST_NOT_ESTABLISHED`, never a silent zero-value post. A `-` line is never blocked on this — it just records whatever cost is currently there, same as every other outward-movement precedent in this schema.
+- **Batch/serial is dual-direction**, a first for this schema: a `+` line gets a GRN-style NEW-lot entry UI (user types a fresh batch_no/expiry/serial); a `-` line gets a Material-Issue-style EXISTING-lot candidate picker (`v_batch_stock_balance`/`v_serial_stock_status`). Both reuse the generic `rid_transaction_line_batches`/`rid_transaction_line_serials` tables unchanged — direction lives on the parent line's `adjust_flag`, never on the batch/serial row itself, so `fn_save_stock_adjustment`'s batch/serial handling is identical regardless of direction; only `fn_approve_stock_adjustment` branches on it.
+- **GL**: `+` → Dr Stock Account / Cr Stock Adjustment Account; `-` → Dr Stock Adjustment Account / Cr Stock Account. `STOCK_ADJUSTMENT_ACCOUNT` link type was seeded back in migration 032 but never consumed until this module. `ADJUSTMENT_IN`/`ADJUSTMENT_OUT` were likewise already-valid `ril_stock_ledger.trans_type` values since migration 036, unused until now — no CHECK-constraint migration needed this time (unlike Material Issue's 069/070 gap for `MATERIAL_ISSUE`).
+- **`ADJ`/`ADJV` voucher split** — same numbering-code-vs-posting-code separation as `PINV`/`PUR` and `MREQ`+`MISS`/`MIC`, for the same reason (`ril_trans_no_seq` keys its counter on `(company, location, voucher_type_code)` alone).
+- **`IN-ADJ` menu entry** (`/inventory/adjustments`) already existed since the very first menu seed (migration 005) as a placeholder — same situation migration 071 documented for `IN-TRF`/Stock Transfer. **Always check `ric_master_menus` for an existing placeholder row before assuming a new module needs a menu-seed migration** — swapping the Flutter placeholder route for the real screen may be the only wiring needed.
 
 ---
 
