@@ -6,8 +6,13 @@
 -- HOW TO RUN (Supabase SQL Editor):
 --   1. CREATE EXTENSION IF NOT EXISTS pgtap;
 --   2. Paste and run entire file.
---   3. All rows show "ok N — ..." with no "not ok" lines.
---   4. finish() returns no rows = all passed.
+--   3. Supabase's SQL editor only displays the LAST statement's result
+--      grid, discarding each individual SELECT ok(...)'s own row along
+--      the way — so every assertion result is captured into a temp table
+--      (test_results) instead, and the final query at the bottom of this
+--      file dumps them all in one grid. Look for any row NOT starting
+--      with "ok " (i.e. starting with "not ok ") — that's your failure,
+--      with pgTAP's own expected/actual diagnostic text right below it.
 --
 -- Fixture: one UNTRACKED product (via GRN, 10 units @ 20 = 200) and one
 -- BATCH-tracked product (via GRN, 6 units as LOT-A). Department "Cutting"
@@ -17,6 +22,8 @@
 -- ============================================================
 
 BEGIN;
+
+CREATE TEMP TABLE test_results (n SERIAL PRIMARY KEY, result TEXT);
 
 DO $$
 DECLARE
@@ -164,7 +171,7 @@ $$ LANGUAGE plpgsql;
 
 SELECT plan(20);
 
-SELECT ok(
+INSERT INTO test_results (result) SELECT ok(
   (SELECT cost_price FROM rim_product_location
    WHERE client_id = '00000000-0000-0000-0068-000000000001' AND product_id = '00000000-0000-0000-0068-000000000011') = 20,
   'ok 1 — untracked product cost_price = 20 after its GRN'
@@ -200,7 +207,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-SELECT ok(
+INSERT INTO test_results (result) SELECT ok(
   (SELECT status FROM rih_material_requisition_headers WHERE requisition_no = current_setting('pgtap.v_req_a_068')) = 'APPROVED',
   'ok 2 — Requisition A approved (department/area pair valid)'
 );
@@ -227,7 +234,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-SELECT throws_ok(
+INSERT INTO test_results (result) SELECT throws_ok(
   $$ SELECT fn_approve_material_requisition(
        '00000000-0000-0000-0068-000000000001', '00000000-0000-0000-0068-000000000002',
        current_setting('pgtap.v_req_b_068'), '2026-06-05'::date, '00000000-0000-0000-0068-000000000004'
@@ -238,15 +245,20 @@ SELECT throws_ok(
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Requisition C: future-dated — Approve must reject with FUTURE_DATE_NOT_ALLOWED.
+-- Deliberately just 30 days ahead of CURRENT_DATE (not a hardcoded far-future
+-- literal like 2099-01-01) — it must stay INSIDE the fixture's own FY
+-- TEST068 window (2020-01-01..2030-12-31), or fn_check_period_open rejects
+-- it with FY_CLOSED before the future-date check ever gets a chance to fire
+-- (period/backdate checks correctly run first, matching every other module).
 -- ══════════════════════════════════════════════════════════════════════════════
 DO $$
-DECLARE v_req_no text;
+DECLARE v_req_no text; v_future_date date := current_date + 30;
 BEGIN
   v_req_no := fn_save_material_requisition(
     jsonb_build_object(
       'client_id', '00000000-0000-0000-0068-000000000001', 'company_id', '00000000-0000-0000-0068-000000000002',
       'location_id', '00000000-0000-0000-0068-000000000003',
-      'requisition_no', NULL, 'requisition_date', '2099-01-01', 'requested_by', 'Floor Supervisor'
+      'requisition_no', NULL, 'requisition_date', v_future_date, 'requested_by', 'Floor Supervisor'
     ),
     jsonb_build_array(jsonb_build_object('serial_no', 1, 'product_id', '00000000-0000-0000-0068-000000000011',
       'uom_conversion_factor', 1, 'qty_pack', 1, 'qty_loose', 0, 'base_qty', 1,
@@ -254,13 +266,14 @@ BEGIN
     '00000000-0000-0000-0068-000000000004'
   );
   PERFORM set_config('pgtap.v_req_c_068', v_req_no, false);
+  PERFORM set_config('pgtap.v_future_date_068', v_future_date::text, false);
 END;
 $$ LANGUAGE plpgsql;
 
-SELECT throws_ok(
+INSERT INTO test_results (result) SELECT throws_ok(
   $$ SELECT fn_approve_material_requisition(
        '00000000-0000-0000-0068-000000000001', '00000000-0000-0000-0068-000000000002',
-       current_setting('pgtap.v_req_c_068'), '2099-01-01'::date, '00000000-0000-0000-0068-000000000004'
+       current_setting('pgtap.v_req_c_068'), current_setting('pgtap.v_future_date_068')::date, '00000000-0000-0000-0068-000000000004'
      ) $$,
   'FUTURE_DATE_NOT_ALLOWED',
   'ok 4 — a future-dated requisition is rejected at Approve time'
@@ -301,70 +314,70 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-SELECT ok(
+INSERT INTO test_results (result) SELECT ok(
   (SELECT status FROM rih_material_issue_headers WHERE issue_no = current_setting('pgtap.v_issue_a_068')) = 'APPROVED',
   'ok 5 — Material Issue A approved'
 );
 
-SELECT ok(
+INSERT INTO test_results (result) SELECT ok(
   (SELECT current_stock FROM rim_product_location
    WHERE client_id = '00000000-0000-0000-0068-000000000001' AND product_id = '00000000-0000-0000-0068-000000000011') = 8,
   'ok 6 — untracked product stock drops 10 -> 8 (issued 2)'
 );
 
-SELECT ok(
+INSERT INTO test_results (result) SELECT ok(
   (SELECT current_stock FROM rim_product_location
    WHERE client_id = '00000000-0000-0000-0068-000000000001' AND product_id = '00000000-0000-0000-0068-000000000012') = 0,
   'ok 7 — batch product stock drops 6 -> 0 (issued all 6, all from LOT-A)'
 );
 
-SELECT ok(
+INSERT INTO test_results (result) SELECT ok(
   (SELECT balance FROM v_batch_stock_balance
    WHERE client_id = '00000000-0000-0000-0068-000000000001' AND product_id = '00000000-0000-0000-0068-000000000012' AND batch_no = 'LOT-A') = 0,
   'ok 8 — LOT-A balance is exactly 0 after the batch issue'
 );
 
-SELECT ok(
+INSERT INTO test_results (result) SELECT ok(
   (SELECT voucher_type_code FROM rih_finance_headers
    WHERE trans_no = (SELECT posted_voucher_no FROM rih_material_issue_headers WHERE issue_no = current_setting('pgtap.v_issue_a_068'))) = 'MIC',
   'ok 9 — posts a dedicated MIC voucher, not JV'
 );
 
-SELECT ok(
+INSERT INTO test_results (result) SELECT ok(
   (SELECT count(*) FROM rid_finance_lines
    WHERE trans_no = (SELECT posted_voucher_no FROM rih_material_issue_headers WHERE issue_no = current_setting('pgtap.v_issue_a_068'))
      AND is_deleted = false) = 4,
   'ok 10 — 4 lines total: Dr Expense + Cr Stock, once per issue line (2 lines x 2)'
 );
 
-SELECT ok(
+INSERT INTO test_results (result) SELECT ok(
   (SELECT sum(trans_amount) FROM rid_finance_lines
    WHERE trans_no = (SELECT posted_voucher_no FROM rih_material_issue_headers WHERE issue_no = current_setting('pgtap.v_issue_a_068'))
      AND source_line_type = 'CONSUMPTION_EXPENSE' AND source_line_no = 1) = 40,
   'ok 11 — untracked line Dr Expense = 2 units x cost_price 20 = 40'
 );
 
-SELECT ok(
+INSERT INTO test_results (result) SELECT ok(
   (SELECT account_id FROM rid_finance_lines
    WHERE trans_no = (SELECT posted_voucher_no FROM rih_material_issue_headers WHERE issue_no = current_setting('pgtap.v_issue_a_068'))
      AND source_line_type = 'CONSUMPTION_EXPENSE' AND source_line_no = 1) = '00000000-0000-0000-0068-000000000008',
   'ok 12 — Dr posts to the resolved Consumption Expense account for Cutting/Machine Floor'
 );
 
-SELECT ok(
+INSERT INTO test_results (result) SELECT ok(
   (SELECT trans_amount FROM rid_finance_lines
    WHERE trans_no = (SELECT posted_voucher_no FROM rih_material_issue_headers WHERE issue_no = current_setting('pgtap.v_issue_a_068'))
      AND source_line_type = 'CONSUMPTION_EXPENSE' AND source_line_no = 2) = 300,
   'ok 13 — batch line Dr Expense = 6 units x cost_price 50 = 300'
 );
 
-SELECT ok(
+INSERT INTO test_results (result) SELECT ok(
   (SELECT sum(CASE WHEN trans_nature = 'DR' THEN base_amount ELSE -base_amount END) FROM rid_finance_lines
    WHERE trans_no = (SELECT posted_voucher_no FROM rih_material_issue_headers WHERE issue_no = current_setting('pgtap.v_issue_a_068'))) = 0,
   'ok 14 — MIC voucher balances exactly on its own'
 );
 
-SELECT ok(
+INSERT INTO test_results (result) SELECT ok(
   (SELECT issued_qty FROM rid_material_requisition_lines
    WHERE requisition_no = current_setting('pgtap.v_req_a_068') AND serial_no = 1) = 2
   AND
@@ -373,7 +386,7 @@ SELECT ok(
   'ok 15 — requisition lines'' issued_qty rolled up correctly (2 and 6)'
 );
 
-SELECT ok(
+INSERT INTO test_results (result) SELECT ok(
   (SELECT status FROM rih_material_requisition_headers WHERE requisition_no = current_setting('pgtap.v_req_a_068')) = 'PARTIALLY_ISSUED',
   'ok 16 — requisition status is PARTIALLY_ISSUED (line 1 only 2 of 4 issued)'
 );
@@ -402,7 +415,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-SELECT throws_ok(
+INSERT INTO test_results (result) SELECT throws_ok(
   $$ SELECT fn_approve_material_issue(
        '00000000-0000-0000-0068-000000000001', '00000000-0000-0000-0068-000000000002',
        current_setting('pgtap.v_issue_b_068'), '2026-06-11'::date, '00000000-0000-0000-0068-000000000004'
@@ -438,12 +451,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-SELECT ok(
+INSERT INTO test_results (result) SELECT ok(
   (SELECT status FROM rih_material_requisition_headers WHERE requisition_no = current_setting('pgtap.v_req_a_068')) = 'CLOSED',
   'ok 18 — requisition status flips to CLOSED once fully issued (4 of 4)'
 );
 
-SELECT ok(
+INSERT INTO test_results (result) SELECT ok(
   (SELECT current_stock FROM rim_product_location
    WHERE client_id = '00000000-0000-0000-0068-000000000001' AND product_id = '00000000-0000-0000-0068-000000000011') = 6,
   'ok 19 — untracked product stock drops further 8 -> 6'
@@ -492,7 +505,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-SELECT throws_ok(
+INSERT INTO test_results (result) SELECT throws_ok(
   $$ SELECT fn_approve_material_issue(
        '00000000-0000-0000-0068-000000000001', '00000000-0000-0000-0068-000000000002',
        current_setting('pgtap.v_issue_d_068'), '2026-06-14'::date, '00000000-0000-0000-0068-000000000004'
@@ -501,5 +514,9 @@ SELECT throws_ok(
   'ok 20 — issuing from an empty batch (LOT-A) is rejected by the shared per-batch check, proven through this new caller'
 );
 
-SELECT * FROM finish();
+-- Final result: every one of the 20 assertions, in order. Look for any row
+-- NOT starting with "ok " — that's the failing one, with pgTAP's own
+-- expected-vs-actual diagnostic text right below it in the same column.
+SELECT n, result FROM test_results ORDER BY n;
+
 ROLLBACK;
