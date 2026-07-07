@@ -64,7 +64,8 @@ class _ReturnLineRow {
   final String? barcode;       // carried forward from the source GRN line, if any
   final String trackingType;   // NONE / BATCH / BATCH_WITH_EXPIRY / SERIAL
   final int?   existingLineSerialNo; // this line's own serial_no if reloaded from a saved return, else null (brand-new line)
-  final TextEditingController qtyCtrl;
+  final TextEditingController qtyPackCtrl;
+  final TextEditingController qtyLooseCtrl;
   List<_ReturnBatchCandidate>  batchCandidates  = [];
   List<_ReturnSerialCandidate> serialCandidates = [];
   bool candidatesLoaded = false;
@@ -87,20 +88,25 @@ class _ReturnLineRow {
     this.barcode,
     this.trackingType = 'NONE',
     this.existingLineSerialNo,
-    double? initialReturnQty,
-  }) : qtyCtrl = TextEditingController(text: (initialReturnQty ?? grnQty).toStringAsFixed(2));
+    double? initialQtyPack,
+    double initialQtyLoose = 0,
+  }) : qtyPackCtrl = TextEditingController(text: (initialQtyPack ?? grnQty).toStringAsFixed(2)),
+       qtyLooseCtrl = TextEditingController(text: initialQtyLoose.toStringAsFixed(2));
 
   bool get isBatchTracked  => trackingType == 'BATCH' || trackingType == 'BATCH_WITH_EXPIRY';
   bool get isSerialTracked => trackingType == 'SERIAL';
 
-  double get returnQty => double.tryParse(qtyCtrl.text) ?? 0;
+  double get qtyPack  => double.tryParse(qtyPackCtrl.text) ?? 0;
+  double get qtyLoose => double.tryParse(qtyLooseCtrl.text) ?? 0;
+  double get returnQty => qtyPack * uomConversionFactor + qtyLoose;
   double get grossAmount => returnQty * rate;
   double get suggestedTaxAmount => grnQty > 0 ? grnTaxAmount * (returnQty / grnQty) : 0;
   double get batchQtySum => batchCandidates.fold(0.0, (s, b) => s + b.allocatedQty);
   int    get selectedSerialCount => serialCandidates.where((s) => s.selected).length;
 
   void dispose() {
-    qtyCtrl.dispose();
+    qtyPackCtrl.dispose();
+    qtyLooseCtrl.dispose();
     for (final b in batchCandidates) { b.dispose(); }
   }
 }
@@ -330,7 +336,8 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
         barcode: gl['barcode'] as String?,
         trackingType: product?['tracking_type'] as String? ?? 'NONE',
         existingLineSerialNo: sl['serial_no'] as int,
-        initialReturnQty: (sl['base_qty'] as num? ?? 0).toDouble(),
+        initialQtyPack: (sl['qty_pack'] as num? ?? sl['base_qty'] as num? ?? 0).toDouble(),
+        initialQtyLoose: (sl['qty_loose'] as num? ?? 0).toDouble(),
       );
       _lines.add(row);
       newLines.add(row);
@@ -694,8 +701,8 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
         'product_id':             e.value.productId,
         'uom_id':                 e.value.uomId,
         'uom_conversion_factor':  e.value.uomConversionFactor,
-        'qty_pack':               e.value.returnQty,
-        'qty_loose':              0,
+        'qty_pack':               e.value.qtyPack,
+        'qty_loose':              e.value.qtyLoose,
         'base_qty':               e.value.returnQty,
         'rate':                   e.value.rate,
         'tax_group_id':           e.value.taxGroupId,
@@ -917,6 +924,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
     final session   = ref.watch(sessionProvider);
     final isOffline = session?.offlineMode ?? false;
     final isMobile  = Responsive.isMobile(context);
+    final showLooseQty = (session?.qtyEntryMode ?? 'PACK_AND_LOOSE') != 'PACK_ONLY';
 
     final canSave     = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
@@ -964,7 +972,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
                       const SizedBox(height: 16),
                       _buildGrnPickerCard(locked),
                       const SizedBox(height: 16),
-                      _buildLinesCard(locked),
+                      _buildLinesCard(locked, showLooseQty),
                       const SizedBox(height: 16),
                       _buildChargesCard(locked),
                       const SizedBox(height: 16),
@@ -1265,7 +1273,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
 
   // ── Lines card ────────────────────────────────────────────────────────────
 
-  Widget _buildLinesCard(bool locked) {
+  Widget _buildLinesCard(bool locked, bool showLooseQty) {
     const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
         contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
     return Card(
@@ -1310,12 +1318,22 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
                     ),
                     const SizedBox(width: 8),
                     SizedBox(width: 90, child: TextFormField(
-                      controller: row.qtyCtrl, enabled: !locked,
+                      controller: row.qtyPackCtrl, enabled: !locked,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: 'Return Qty'),
+                      decoration: dec.copyWith(labelText: showLooseQty ? 'Return Qty Pack' : 'Return Qty'),
                       style: const TextStyle(fontSize: 12),
                       onChanged: (_) => _recomputeTotals(),
                     )),
+                    if (showLooseQty) ...[
+                      const SizedBox(width: 8),
+                      SizedBox(width: 90, child: TextFormField(
+                        controller: row.qtyLooseCtrl, enabled: !locked,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: dec.copyWith(labelText: 'Return Qty Loose'),
+                        style: const TextStyle(fontSize: 12),
+                        onChanged: (_) => _recomputeTotals(),
+                      )),
+                    ],
                     const SizedBox(width: 8),
                     SizedBox(width: 90, child: Text('Rate: ${row.rate.toStringAsFixed(2)}',
                         style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),

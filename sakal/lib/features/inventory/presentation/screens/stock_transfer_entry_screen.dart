@@ -776,6 +776,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
     final isOffline = session?.offlineMode ?? false;
     final isMobile  = Responsive.isMobile(context);
     final showLooseQty = (session?.qtyEntryMode ?? 'PACK_AND_LOOSE') != 'PACK_ONLY';
+    final showBarcode  = session?.enableBarcode ?? false;
 
     final canSave     = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
@@ -819,7 +820,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
                       _buildRequestPickerCard(locked),
                       const SizedBox(height: 16),
                     ],
-                    _buildLinesCard(locked, showLooseQty),
+                    _buildLinesCard(locked, showLooseQty, showBarcode),
                     const SizedBox(height: 16),
                     _buildChargesCard(locked, isMobile),
                     if (_status == 'APPROVED' && _postedVouchers.isNotEmpty) ...[
@@ -994,7 +995,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
     );
   }
 
-  Widget _buildLinesCard(bool locked, bool showLooseQty) {
+  Widget _buildLinesCard(bool locked, bool showLooseQty, bool showBarcode) {
     const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
     return Card(
       elevation: 0,
@@ -1066,7 +1067,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
                         Text('Remaining ${row.requestRemainingQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}',
                             style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                       ])),
-                    if (_mode == 'DIRECT')
+                    if (_mode == 'DIRECT' && showBarcode)
                       SizedBox(width: 140, height: 48, child: TextFormField(
                         controller: row.barcodeCtrl, enabled: !locked,
                         decoration: dec.copyWith(labelText: 'Scan/Enter Barcode'),

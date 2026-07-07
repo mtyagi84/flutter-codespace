@@ -315,7 +315,7 @@ class PurchaseReturnRemoteDs {
       'return_no':   'eq.$returnNo',
       'return_date': 'eq.$returnDate',
       'is_deleted':  'eq.false',
-      'select':      'serial_no,source_grn_no,source_grn_date,source_grn_line_serial,product_id,base_qty',
+      'select':      'serial_no,source_grn_no,source_grn_date,source_grn_line_serial,product_id,qty_pack,qty_loose,base_qty',
       'order':       'serial_no.asc',
     });
     return List<Map<String, dynamic>>.from(res.data as List);

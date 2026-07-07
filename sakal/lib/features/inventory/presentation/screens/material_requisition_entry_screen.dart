@@ -423,6 +423,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
     final isOffline = session?.offlineMode ?? false;
     final isMobile  = Responsive.isMobile(context);
     final showLooseQty = (session?.qtyEntryMode ?? 'PACK_AND_LOOSE') != 'PACK_ONLY';
+    final showBarcode  = session?.enableBarcode ?? false;
 
     final canSave     = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
@@ -462,7 +463,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
                     if (_actionError != null) ...[_errorBanner(_actionError!), const SizedBox(height: 16)],
                     _buildHeaderCard(locked, isMobile),
                     const SizedBox(height: 16),
-                    _buildLinesCard(locked, showLooseQty),
+                    _buildLinesCard(locked, showLooseQty, showBarcode),
                   ]),
                 ),
         ),
@@ -609,7 +610,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
     );
   }
 
-  Widget _buildLinesCard(bool locked, bool showLooseQty) {
+  Widget _buildLinesCard(bool locked, bool showLooseQty, bool showBarcode) {
     const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
         contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
     return Card(
@@ -676,7 +677,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
                       ),
                     ),
                   ),
-                  SizedBox(width: 130, child: TextFormField(
+                  if (showBarcode) SizedBox(width: 130, child: TextFormField(
                     controller: row.barcodeCtrl, enabled: !locked,
                     decoration: dec.copyWith(labelText: 'Barcode'),
                     style: const TextStyle(fontSize: 13),

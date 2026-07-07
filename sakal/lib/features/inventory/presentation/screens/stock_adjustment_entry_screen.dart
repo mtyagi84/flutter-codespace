@@ -665,6 +665,8 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
     final session   = ref.watch(sessionProvider);
     final isOffline = session?.offlineMode ?? false;
     final isMobile  = Responsive.isMobile(context);
+    final showLooseQty = (session?.qtyEntryMode ?? 'PACK_AND_LOOSE') != 'PACK_ONLY';
+    final showBarcode  = session?.enableBarcode ?? false;
 
     final canSave     = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
@@ -704,7 +706,7 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
                     if (_actionError != null) ...[_errorBanner(_actionError!), const SizedBox(height: 16)],
                     _buildHeaderCard(locked, isMobile),
                     const SizedBox(height: 16),
-                    _buildLinesCard(locked),
+                    _buildLinesCard(locked, showLooseQty, showBarcode),
                     if (_status == 'APPROVED' && _postedVouchers.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       _buildPostedVouchersSection(),
@@ -826,7 +828,7 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
     );
   }
 
-  Widget _buildLinesCard(bool locked) {
+  Widget _buildLinesCard(bool locked, bool showLooseQty, bool showBarcode) {
     const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
     return Card(
       elevation: 0,
@@ -892,7 +894,7 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
                         ),
                       ),
                     ),
-                    SizedBox(width: 140, height: 48, child: TextFormField(
+                    if (showBarcode) SizedBox(width: 140, height: 48, child: TextFormField(
                       controller: row.barcodeCtrl, enabled: !locked,
                       decoration: dec.copyWith(labelText: 'Scan/Enter Barcode'),
                       style: const TextStyle(fontSize: 12),
@@ -914,7 +916,14 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
                     SizedBox(width: 90, child: TextFormField(
                       controller: row.qtyPackCtrl, enabled: !locked,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: 'Quantity'),
+                      decoration: dec.copyWith(labelText: showLooseQty ? 'Qty Pack' : 'Quantity'),
+                      style: const TextStyle(fontSize: 12),
+                      onChanged: (_) => setState(() {}),
+                    )),
+                    if (showLooseQty) SizedBox(width: 90, child: TextFormField(
+                      controller: row.qtyLooseCtrl, enabled: !locked,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: dec.copyWith(labelText: 'Qty Loose'),
                       style: const TextStyle(fontSize: 12),
                       onChanged: (_) => setState(() {}),
                     )),
@@ -931,7 +940,7 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
                     )),
                     if (!locked) IconButton(icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative), onPressed: () => _removeLine(row)),
                   ]),
-                  if (row.isBatchTracked || row.isSerialTracked) _buildBatchSerialEditor(row, locked),
+                  if (row.isBatchTracked || row.isSerialTracked) _buildBatchSerialEditor(row, locked, showLooseQty),
                 ]),
               ),
             )),
@@ -940,7 +949,7 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
     );
   }
 
-  Widget _buildBatchSerialEditor(_AdjLineRow row, bool locked) {
+  Widget _buildBatchSerialEditor(_AdjLineRow row, bool locked, bool showLooseQty) {
     const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
     final isBatch = row.isBatchTracked;
 
@@ -981,7 +990,11 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
                 )),
                 SizedBox(width: 90, child: TextFormField(controller: b.qtyPackCtrl, enabled: !locked,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: dec.copyWith(labelText: 'Qty'), style: const TextStyle(fontSize: 12),
+                    decoration: dec.copyWith(labelText: showLooseQty ? 'Qty Pack' : 'Qty'), style: const TextStyle(fontSize: 12),
+                    onChanged: (_) => setState(() {}))),
+                if (showLooseQty) SizedBox(width: 90, child: TextFormField(controller: b.qtyLooseCtrl, enabled: !locked,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: dec.copyWith(labelText: 'Qty Loose'), style: const TextStyle(fontSize: 12),
                     onChanged: (_) => setState(() {}))),
                 if (!locked) IconButton(icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.negative), onPressed: () => _removeNewBatchRow(row, b)),
               ]),

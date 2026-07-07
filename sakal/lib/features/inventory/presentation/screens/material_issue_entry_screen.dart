@@ -57,7 +57,8 @@ class _IssueLineRow {
   final String? consumptionAreaLabel;
   final String? barcode; // carried forward from the source requisition line, if any
   final String trackingType;
-  final TextEditingController qtyCtrl;
+  final TextEditingController qtyPackCtrl;
+  final TextEditingController qtyLooseCtrl;
   List<_IssueBatchCandidate>  batchCandidates  = [];
   List<_IssueSerialCandidate> serialCandidates = [];
   bool candidatesLoaded = false;
@@ -78,17 +79,21 @@ class _IssueLineRow {
     this.consumptionAreaLabel,
     this.barcode,
     this.trackingType = 'NONE',
-  }) : qtyCtrl = TextEditingController(text: requisitionRemainingQty.toStringAsFixed(2));
+  }) : qtyPackCtrl = TextEditingController(text: requisitionRemainingQty.toStringAsFixed(2)),
+       qtyLooseCtrl = TextEditingController(text: '0');
 
   bool get isBatchTracked  => trackingType == 'BATCH' || trackingType == 'BATCH_WITH_EXPIRY';
   bool get isSerialTracked => trackingType == 'SERIAL';
 
-  double get issueQty => double.tryParse(qtyCtrl.text) ?? 0;
+  double get qtyPack  => double.tryParse(qtyPackCtrl.text) ?? 0;
+  double get qtyLoose => double.tryParse(qtyLooseCtrl.text) ?? 0;
+  double get baseQty  => qtyPack * uomConversionFactor + qtyLoose;
   double get batchQtySum => batchCandidates.fold(0.0, (s, b) => s + b.allocatedQty);
   int    get selectedSerialCount => serialCandidates.where((s) => s.selected).length;
 
   void dispose() {
-    qtyCtrl.dispose();
+    qtyPackCtrl.dispose();
+    qtyLooseCtrl.dispose();
     for (final b in batchCandidates) { b.dispose(); }
   }
 }
@@ -290,32 +295,32 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
   /// fn_approve_material_issue's v_has_batches/v_has_serials check into the
   /// plain aggregate movement, bypassing the strict per-batch/serial check.
   String? _batchSerialError(_IssueLineRow row) {
-    if (row.issueQty <= 0) return null;
+    if (row.baseQty <= 0) return null;
     if (row.isBatchTracked) {
       if (row.batchCandidates.isEmpty) return 'No batches currently in stock for "${row.productDisplay}".';
-      if ((row.batchQtySum - row.issueQty).abs() > 0.0001) {
-        return 'Batch quantities for "${row.productDisplay}" total ${row.batchQtySum.toStringAsFixed(2)} but the issue quantity is ${row.issueQty.toStringAsFixed(2)}.';
+      if ((row.batchQtySum - row.baseQty).abs() > 0.0001) {
+        return 'Batch quantities for "${row.productDisplay}" total ${row.batchQtySum.toStringAsFixed(2)} but the issue quantity is ${row.baseQty.toStringAsFixed(2)}.';
       }
     } else if (row.isSerialTracked) {
       if (row.serialCandidates.isEmpty) return 'No serial numbers currently in stock for "${row.productDisplay}".';
-      if (row.selectedSerialCount != row.issueQty.round() || (row.issueQty - row.issueQty.roundToDouble()).abs() > 0.0001) {
-        return 'Serial numbers selected for "${row.productDisplay}" (${row.selectedSerialCount}) must match the issue quantity (${row.issueQty.toStringAsFixed(2)}).';
+      if (row.selectedSerialCount != row.baseQty.round() || (row.baseQty - row.baseQty.roundToDouble()).abs() > 0.0001) {
+        return 'Serial numbers selected for "${row.productDisplay}" (${row.selectedSerialCount}) must match the issue quantity (${row.baseQty.toStringAsFixed(2)}).';
       }
     }
     return null;
   }
 
   String? _qtyError(_IssueLineRow row) {
-    if (row.issueQty < 0) return 'Issue qty for "${row.productDisplay}" cannot be negative.';
-    if (row.issueQty > row.requisitionRemainingQty + 0.0001) {
-      return 'Issue qty for "${row.productDisplay}" (${row.issueQty.toStringAsFixed(2)}) cannot exceed the requisition\'s remaining qty (${row.requisitionRemainingQty.toStringAsFixed(2)}).';
+    if (row.baseQty < 0) return 'Issue qty for "${row.productDisplay}" cannot be negative.';
+    if (row.baseQty > row.requisitionRemainingQty + 0.0001) {
+      return 'Issue qty for "${row.productDisplay}" (${row.baseQty.toStringAsFixed(2)}) cannot exceed the requisition\'s remaining qty (${row.requisitionRemainingQty.toStringAsFixed(2)}).';
     }
     return null;
   }
 
   Future<bool> _saveDraft() async {
     if (_locationId == null) { _showSnack('Select a From Location.', color: AppColors.negative); return false; }
-    final issuableLines = _lines.where((l) => l.issueQty > 0).toList();
+    final issuableLines = _lines.where((l) => l.baseQty > 0).toList();
     if (issuableLines.isEmpty) { _showSnack('Enter an issue quantity for at least one line.', color: AppColors.negative); return false; }
     for (final l in _lines) {
       final qtyErr = _qtyError(l);
@@ -358,14 +363,10 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
         'source_requisition_line_serial': e.value.sourceRequisitionLineSerial,
         'product_id':                     e.value.productId,
         'uom_id':                         e.value.uomId,
-        // Issue is entered directly in base units (no pack/loose split
-        // here, unlike Requisition/GRN) — conversion_factor is always 1
-        // on this line so qty_pack * factor + qty_loose == base_qty holds
-        // regardless of whatever factor the requisition line itself used.
-        'uom_conversion_factor':          1,
-        'qty_pack':                       e.value.issueQty,
-        'qty_loose':                      0,
-        'base_qty':                       e.value.issueQty,
+        'uom_conversion_factor':          e.value.uomConversionFactor,
+        'qty_pack':                       e.value.qtyPack,
+        'qty_loose':                      e.value.qtyLoose,
+        'base_qty':                       e.value.baseQty,
         'department_id':                  e.value.departmentId,
         'consumption_area_id':            e.value.consumptionAreaId,
         'barcode':                        e.value.barcode ?? '',
@@ -468,7 +469,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
     'lines': _lines.map((l) => {
       'product_name':          l.productDisplay.contains('] ') ? l.productDisplay.split('] ').last : l.productDisplay,
       'source_requisition_no': l.sourceRequisitionNo,
-      'issue_qty':             l.issueQty,
+      'issue_qty':             l.baseQty,
       'department_name':       l.departmentLabel ?? '',
       'area_name':             l.consumptionAreaLabel ?? '',
     }).toList(),
@@ -523,6 +524,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
     final session   = ref.watch(sessionProvider);
     final isOffline = session?.offlineMode ?? false;
     final isMobile  = Responsive.isMobile(context);
+    final showLooseQty = (session?.qtyEntryMode ?? 'PACK_AND_LOOSE') != 'PACK_ONLY';
 
     final canSave     = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
@@ -564,7 +566,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
                     const SizedBox(height: 16),
                     _buildRequisitionPickerCard(locked),
                     const SizedBox(height: 16),
-                    _buildLinesCard(locked),
+                    _buildLinesCard(locked, showLooseQty),
                     if (_status == 'APPROVED' && _postedVouchers.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       _buildPostedVouchersSection(),
@@ -689,7 +691,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
     );
   }
 
-  Widget _buildLinesCard(bool locked) {
+  Widget _buildLinesCard(bool locked, bool showLooseQty) {
     const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
     return Card(
       elevation: 0,
@@ -723,12 +725,22 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
                     ])),
                     const SizedBox(width: 8),
                     SizedBox(width: 100, child: TextFormField(
-                      controller: row.qtyCtrl, enabled: !locked,
+                      controller: row.qtyPackCtrl, enabled: !locked,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: 'Issue Qty'),
+                      decoration: dec.copyWith(labelText: showLooseQty ? 'Issue Qty Pack' : 'Issue Qty'),
                       style: const TextStyle(fontSize: 12),
                       onChanged: (_) => setState(() {}),
                     )),
+                    if (showLooseQty) ...[
+                      const SizedBox(width: 8),
+                      SizedBox(width: 100, child: TextFormField(
+                        controller: row.qtyLooseCtrl, enabled: !locked,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: dec.copyWith(labelText: 'Issue Qty Loose'),
+                        style: const TextStyle(fontSize: 12),
+                        onChanged: (_) => setState(() {}),
+                      )),
+                    ],
                     if (!locked) IconButton(icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative), onPressed: () => _removeLine(row)),
                   ]),
                   if (row.isBatchTracked || row.isSerialTracked) _buildBatchSerialEditor(row, locked),
@@ -757,9 +769,9 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
           Text(isBatch ? 'Select Batches to Issue' : 'Select Serial Numbers to Issue',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
           const SizedBox(width: 10),
-          Text(isBatch ? '${row.batchQtySum.toStringAsFixed(2)} / ${row.issueQty.toStringAsFixed(2)}' : '${row.selectedSerialCount} / ${row.issueQty.toStringAsFixed(0)}',
+          Text(isBatch ? '${row.batchQtySum.toStringAsFixed(2)} / ${row.baseQty.toStringAsFixed(2)}' : '${row.selectedSerialCount} / ${row.baseQty.toStringAsFixed(0)}',
               style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                  color: (isBatch ? (row.batchQtySum - row.issueQty).abs() < 0.0001 : row.selectedSerialCount == row.issueQty.round()) ? AppColors.positive : AppColors.negative)),
+                  color: (isBatch ? (row.batchQtySum - row.baseQty).abs() < 0.0001 : row.selectedSerialCount == row.baseQty.round()) ? AppColors.positive : AppColors.negative)),
         ]),
         const SizedBox(height: 8),
         if (isBatch && row.batchCandidates.isEmpty)

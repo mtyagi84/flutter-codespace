@@ -596,6 +596,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
     final session   = ref.watch(sessionProvider);
     final isOffline = session?.offlineMode ?? false;
     final isMobile  = Responsive.isMobile(context);
+    final showLooseQty = (session?.qtyEntryMode ?? 'PACK_AND_LOOSE') != 'PACK_ONLY';
 
     final canSave     = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
@@ -639,7 +640,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
                       _buildTransferPickerCard(locked),
                       const SizedBox(height: 16),
                     ],
-                    if (_lines.isNotEmpty) _buildLinesCard(locked),
+                    if (_lines.isNotEmpty) _buildLinesCard(locked, showLooseQty),
                     if (_status == 'APPROVED' && _postedVouchers.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       _buildPostedVouchersSection(),
@@ -783,7 +784,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
     );
   }
 
-  Widget _buildLinesCard(bool locked) {
+  Widget _buildLinesCard(bool locked, bool showLooseQty) {
     const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
     return Card(
       elevation: 0,
@@ -816,10 +817,20 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
                   SizedBox(width: 100, child: TextFormField(
                     controller: row.qtyPackCtrl, enabled: !locked,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: dec.copyWith(labelText: 'Received Qty'),
+                    decoration: dec.copyWith(labelText: showLooseQty ? 'Received Qty Pack' : 'Received Qty'),
                     style: const TextStyle(fontSize: 12),
                     onChanged: (_) => setState(() {}),
                   )),
+                  if (showLooseQty) ...[
+                    const SizedBox(width: 8),
+                    SizedBox(width: 100, child: TextFormField(
+                      controller: row.qtyLooseCtrl, enabled: !locked,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: dec.copyWith(labelText: 'Received Qty Loose'),
+                      style: const TextStyle(fontSize: 12),
+                      onChanged: (_) => setState(() {}),
+                    )),
+                  ],
                 ]),
                 if (row.isBatchTracked || row.isSerialTracked) _buildBatchSerialEditor(row, locked),
               ]),
