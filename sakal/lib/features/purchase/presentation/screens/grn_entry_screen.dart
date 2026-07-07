@@ -42,6 +42,7 @@ class _GrnLineRow {
   String  productDisplay = '';
   String  trackingType   = 'NONE'; // NONE / BATCH / SERIAL / BATCH_WITH_EXPIRY
   final TextEditingController barcodeCtrl = TextEditingController();
+  String? matchedBarcode; // the exact barcode string that resolved this line's product/UOM
   bool    descExpanded = false;
   final TextEditingController descCtrl = TextEditingController();
   String? uomId;
@@ -493,6 +494,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
         row.uomId               = matchedProduct['matched_uom_id'] as String? ?? row.uomId;
         row.convFactorCtrl.text = (matchedProduct['matched_uom_conversion_factor'] as num? ?? 1).toString();
         row.convFactorLocked    = true;
+        row.matchedBarcode      = barcode;
         row.barcodeCtrl.clear();
       });
     }
@@ -1014,6 +1016,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
           'landed_amount':          l.landedAmount,
           'department_id':          l.departmentId ?? '',
           'consumption_area_id':    l.consumptionAreaId ?? '',
+          'barcode':                l.matchedBarcode ?? '',
         });
         for (final b in l.batchRows) {
           batches.add({

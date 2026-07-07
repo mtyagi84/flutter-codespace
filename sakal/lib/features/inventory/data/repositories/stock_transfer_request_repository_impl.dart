@@ -73,6 +73,13 @@ class StockTransferRequestRepositoryImpl implements StockTransferRequestReposito
   }) => _remote.getProductsForPicker(clientId: clientId, companyId: companyId, search: search);
 
   @override
+  Future<Map<String, dynamic>?> getProductByBarcode({
+    required String clientId,
+    required String companyId,
+    required String barcode,
+  }) => _remote.getProductByBarcode(clientId: clientId, companyId: companyId, barcode: barcode);
+
+  @override
   Future<String> save({
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,

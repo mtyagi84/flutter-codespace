@@ -22,6 +22,7 @@ class _RequisitionLineRow {
   String? productId;
   String  productDisplay = '';
   final TextEditingController barcodeCtrl = TextEditingController();
+  String? matchedBarcode; // the exact barcode string that resolved this line's product/UOM
   String? uomId;
   String? uomLabel;
   double  uomConversionFactor = 1;
@@ -206,6 +207,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
       setState(() {
         row.uomId = matchedProduct['matched_uom_id'] as String? ?? row.uomId;
         row.uomConversionFactor = (matchedProduct['matched_uom_conversion_factor'] as num? ?? 1).toDouble();
+        row.matchedBarcode = barcode;
         row.barcodeCtrl.clear();
       });
     }
@@ -245,6 +247,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
         'base_qty':               e.value.baseQty,
         'department_id':          e.value.departmentId,
         'consumption_area_id':    e.value.consumptionAreaId,
+        'barcode':                e.value.matchedBarcode ?? '',
         'remarks':                e.value.remarksCtrl.text.trim(),
       }).toList();
 

@@ -33,6 +33,12 @@ abstract class StockTransferRequestRepository {
     String? search,
   });
 
+  Future<Map<String, dynamic>?> getProductByBarcode({
+    required String clientId,
+    required String companyId,
+    required String barcode,
+  });
+
   Future<String> save({
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,

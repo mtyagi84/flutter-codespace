@@ -1,5 +1,5 @@
-abstract class StockTransferRepository {
-  Future<List<Map<String, dynamic>>> listTransfers({
+abstract class StockAdjustmentRepository {
+  Future<List<Map<String, dynamic>>> listAdjustments({
     required String clientId,
     required String companyId,
     String? search,
@@ -11,22 +11,31 @@ abstract class StockTransferRepository {
   Future<Map<String, dynamic>?> getHeader({
     required String clientId,
     required String companyId,
-    required String transferNo,
-    String? transferDate,
+    required String adjustmentNo,
+    String? adjustmentDate,
   });
 
   Future<List<Map<String, dynamic>>> getLines({
     required String clientId,
     required String companyId,
-    required String transferNo,
-    required String transferDate,
+    required String adjustmentNo,
+    required String adjustmentDate,
   });
 
-  Future<List<Map<String, dynamic>>> getCharges({
+  Future<List<Map<String, dynamic>>> getLineBatches({
     required String clientId,
     required String companyId,
-    required String transferNo,
-    required String transferDate,
+    required String adjustmentNo,
+    required String adjustmentDate,
+    required int    lineSerial,
+  });
+
+  Future<List<Map<String, dynamic>>> getLineSerials({
+    required String clientId,
+    required String companyId,
+    required String adjustmentNo,
+    required String adjustmentDate,
+    required int    lineSerial,
   });
 
   Future<List<Map<String, dynamic>>> getLocations({
@@ -34,22 +43,9 @@ abstract class StockTransferRepository {
     required String companyId,
   });
 
-  Future<String> getInterLocationModel({
+  Future<List<Map<String, dynamic>>> getReasons({
     required String clientId,
     required String companyId,
-  });
-
-  Future<List<Map<String, dynamic>>> getFulfillableRequests({
-    required String clientId,
-    required String companyId,
-    required String fromLocationId,
-  });
-
-  Future<List<Map<String, dynamic>>> getRequestLines({
-    required String clientId,
-    required String companyId,
-    required String requestNo,
-    required String requestDate,
   });
 
   Future<List<Map<String, dynamic>>> getProductsForPicker({
@@ -58,9 +54,20 @@ abstract class StockTransferRepository {
     String? search,
   });
 
-  Future<List<Map<String, dynamic>>> getAdditionalCharges({
+  Future<Map<String, dynamic>?> getProductByBarcode({
     required String clientId,
     required String companyId,
+    required String barcode,
+  });
+
+  /// Current on-hand quantity for a product at this location — used only
+  /// as the system_qty display hint next to whatever the user enters, and
+  /// pre-filled on the row when a product is first selected.
+  Future<num> getCurrentStock({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String productId,
   });
 
   Future<List<Map<String, dynamic>>> getAvailableBatches({
@@ -77,67 +84,36 @@ abstract class StockTransferRepository {
     required String productId,
   });
 
-  Future<List<Map<String, dynamic>>> getTransferLineBatches({
-    required String clientId,
-    required String companyId,
-    required String transferNo,
-    required String transferDate,
-    required int    lineSerial,
-  });
-
-  Future<List<Map<String, dynamic>>> getTransferLineSerials({
-    required String clientId,
-    required String companyId,
-    required String transferNo,
-    required String transferDate,
-    required int    lineSerial,
-  });
-
-  Future<Map<String, num>> getCostPrices({
-    required String clientId,
-    required String companyId,
-    required String locationId,
-    required List<String> productIds,
-  });
-
-  Future<Map<String, dynamic>?> getProductByBarcode({
-    required String clientId,
-    required String companyId,
-    required String barcode,
-  });
-
   Future<String> save({
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,
     required List<Map<String, dynamic>> batches,
     required List<Map<String, dynamic>> serials,
-    required List<Map<String, dynamic>> charges,
     required String userId,
   });
 
-  /// Caches a transfer locally for offline read-back. Called after every
+  /// Caches an adjustment locally for offline read-back. Called after every
   /// online save and on every offline save (before enqueue).
-  Future<void> cacheTransferLocally({
-    required String effectiveTransferNo,
+  Future<void> cacheAdjustmentLocally({
+    required String effectiveAdjustmentNo,
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,
     required List<Map<String, dynamic>> batches,
     required List<Map<String, dynamic>> serials,
-    required List<Map<String, dynamic>> charges,
   });
 
   Future<void> approve({
     required String clientId,
     required String companyId,
-    required String transferNo,
-    required String transferDate,
+    required String adjustmentNo,
+    required String adjustmentDate,
     required String approvedBy,
   });
 
   Future<List<Map<String, dynamic>>> getPostedVouchers({
     required String clientId,
     required String companyId,
-    required String transferNo,
+    required String adjustmentNo,
   });
 
   Future<List<Map<String, dynamic>>> getPostedVoucherLines({

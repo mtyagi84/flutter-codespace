@@ -61,6 +61,7 @@ class _ReturnLineRow {
   final double grnTaxAmount;   // the GRN line's own estimated tax (deferred at GRN time)
   final bool   isBilled;       // whether the source GRN has already been billed
   final bool   hasSourcePo;    // whether the source GRN line traces to a PO
+  final String? barcode;       // carried forward from the source GRN line, if any
   final String trackingType;   // NONE / BATCH / BATCH_WITH_EXPIRY / SERIAL
   final int?   existingLineSerialNo; // this line's own serial_no if reloaded from a saved return, else null (brand-new line)
   final TextEditingController qtyCtrl;
@@ -83,6 +84,7 @@ class _ReturnLineRow {
     this.grnTaxAmount = 0,
     required this.isBilled,
     required this.hasSourcePo,
+    this.barcode,
     this.trackingType = 'NONE',
     this.existingLineSerialNo,
     double? initialReturnQty,
@@ -325,6 +327,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
         grnTaxAmount: (gl['tax_amount'] as num? ?? 0).toDouble(),
         isBilled: isBilled,
         hasSourcePo: gl['source_po_order_no'] != null,
+        barcode: gl['barcode'] as String?,
         trackingType: product?['tracking_type'] as String? ?? 'NONE',
         existingLineSerialNo: sl['serial_no'] as int,
         initialReturnQty: (sl['base_qty'] as num? ?? 0).toDouble(),
@@ -460,6 +463,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
               grnTaxAmount: (gl['tax_amount'] as num? ?? 0).toDouble(),
               isBilled: isBilled,
               hasSourcePo: gl['source_po_order_no'] != null,
+              barcode: gl['barcode'] as String?,
               trackingType: product?['tracking_type'] as String? ?? 'NONE',
             );
             _lines.add(row);
@@ -698,6 +702,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
         'gross_amount':           e.value.grossAmount,
         'tax_amount':             e.value.suggestedTaxAmount,
         'final_amount':           e.value.grossAmount + e.value.suggestedTaxAmount,
+        'barcode':                e.value.barcode ?? '',
       }).toList();
       final charges = _charges.asMap().entries.map((e) => {
         'serial_no':       e.key + 1,

@@ -178,7 +178,7 @@ class PurchaseReturnRemoteDs {
       'grn_date':   'eq.$grnDate',
       'is_deleted': 'eq.false',
       'select':     'serial_no,product_id,uom_id,uom_conversion_factor,base_qty,rate,'
-          'tax_group_id,gross_amount,tax_amount,final_amount,source_po_order_no,'
+          'tax_group_id,gross_amount,tax_amount,final_amount,source_po_order_no,barcode,'
           'product:rim_products!product_id(product_code,product_name,tracking_type),'
           'uom:rim_common_masters!uom_id(description),'
           'tax_group:rim_tax_groups!tax_group_id(group_name)',

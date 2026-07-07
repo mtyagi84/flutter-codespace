@@ -24,6 +24,7 @@ class _POLineRow {
   String? productId;
   String  productDisplay = '';
   final TextEditingController barcodeCtrl  = TextEditingController();
+  String? matchedBarcode; // the exact barcode string that resolved this line's product/UOM
   bool    descExpanded  = false;
   final TextEditingController descCtrl      = TextEditingController();
   String? uomId;
@@ -454,6 +455,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         row.uomId               = matchedProduct['matched_uom_id'] as String? ?? row.uomId;
         row.convFactorCtrl.text = (matchedProduct['matched_uom_conversion_factor'] as num? ?? 1).toString();
         row.convFactorLocked    = true;
+        row.matchedBarcode      = barcode;
         row.barcodeCtrl.clear();
       });
     }
@@ -603,7 +605,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         'serial_no':              serial++,
         'product_id':             l.productId,
         'item_description':       l.descCtrl.text,
-        'barcode':                l.barcodeCtrl.text,
+        'barcode':                l.matchedBarcode ?? '',
         'uom_id':                 l.uomId,
         'uom_conversion_factor':  l.convFactor,
         'qty_pack':               l.qtyPack,

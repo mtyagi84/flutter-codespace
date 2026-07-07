@@ -157,6 +157,13 @@ class StockTransferRepositoryImpl implements StockTransferRepository {
   }) => _remote.getCostPrices(clientId: clientId, companyId: companyId, locationId: locationId, productIds: productIds);
 
   @override
+  Future<Map<String, dynamic>?> getProductByBarcode({
+    required String clientId,
+    required String companyId,
+    required String barcode,
+  }) => _remote.getProductByBarcode(clientId: clientId, companyId: companyId, barcode: barcode);
+
+  @override
   Future<String> save({
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,

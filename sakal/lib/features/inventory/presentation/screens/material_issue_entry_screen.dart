@@ -55,6 +55,7 @@ class _IssueLineRow {
   final String? departmentLabel;
   final String? consumptionAreaId;
   final String? consumptionAreaLabel;
+  final String? barcode; // carried forward from the source requisition line, if any
   final String trackingType;
   final TextEditingController qtyCtrl;
   List<_IssueBatchCandidate>  batchCandidates  = [];
@@ -75,6 +76,7 @@ class _IssueLineRow {
     this.departmentLabel,
     this.consumptionAreaId,
     this.consumptionAreaLabel,
+    this.barcode,
     this.trackingType = 'NONE',
   }) : qtyCtrl = TextEditingController(text: requisitionRemainingQty.toStringAsFixed(2));
 
@@ -232,6 +234,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
               departmentLabel: department?['description'] as String?,
               consumptionAreaId: rl['consumption_area_id'] as String?,
               consumptionAreaLabel: area?['description'] as String?,
+              barcode: rl['barcode'] as String?,
               trackingType: product?['tracking_type'] as String? ?? 'NONE',
             );
             _lines.add(row);
@@ -365,6 +368,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
         'base_qty':                       e.value.issueQty,
         'department_id':                  e.value.departmentId,
         'consumption_area_id':            e.value.consumptionAreaId,
+        'barcode':                        e.value.barcode ?? '',
       }).toList();
 
       if (session.offlineMode) {

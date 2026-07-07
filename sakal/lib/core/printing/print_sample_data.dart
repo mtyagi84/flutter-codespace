@@ -171,6 +171,21 @@ class PrintSampleData {
         {'product_name': 'Sample Item A', 'dispatched_qty': 10, 'received_qty': 9, 'shortfall_qty': 1},
       ],
     },
+    'STOCK_ADJUSTMENT' => {
+      'company': _company(),
+      'header': {
+        'adjustment_no':   'ADJ/2026/00001',
+        'adjustment_date': '10 Jul 2026',
+        'status':          'DRAFT',
+        'location_name':   'Main Warehouse',
+        'reason':          'Physical Count Variance',
+        'remarks':         'Sample remarks for preview.',
+      },
+      'lines': [
+        {'product_name': 'Sample Item A', 'direction': 'Increase', 'base_qty': 5, 'system_qty': 45},
+        {'product_name': 'Sample Item B', 'direction': 'Decrease', 'base_qty': 2, 'system_qty': 20},
+      ],
+    },
     _ => {'company': _company(), 'header': {}, 'lines': [], 'totals': {}},
   };
 }

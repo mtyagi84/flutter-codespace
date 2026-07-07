@@ -11,6 +11,7 @@ import 'default_templates/material_issue_default_template.dart';
 import 'default_templates/stock_transfer_request_default_template.dart';
 import 'default_templates/stock_transfer_default_template.dart';
 import 'default_templates/stock_receipt_default_template.dart';
+import 'default_templates/stock_adjustment_default_template.dart';
 import 'print_models.dart';
 
 /// Fetches the company's active default template for a document type, or
@@ -56,5 +57,6 @@ PrintTemplate defaultTemplateFor(String documentType) => switch (documentType) {
   'STOCK_TRANSFER_REQUEST'  => stockTransferRequestDefaultTemplate,
   'STOCK_TRANSFER'          => stockTransferDefaultTemplate,
   'STOCK_RECEIPT'           => stockReceiptDefaultTemplate,
+  'STOCK_ADJUSTMENT'        => stockAdjustmentDefaultTemplate,
   _ => throw ArgumentError('No default print template registered for document type "$documentType".'),
 };

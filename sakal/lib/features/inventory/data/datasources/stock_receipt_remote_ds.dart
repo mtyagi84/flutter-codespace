@@ -106,7 +106,7 @@ class StockReceiptRemoteDs {
       'transfer_no':   'eq.$transferNo',
       'transfer_date': 'eq.$transferDate',
       'is_deleted':    'eq.false',
-      'select':        'serial_no,product_id,uom_id,uom_conversion_factor,base_qty,'
+      'select':        'serial_no,product_id,uom_id,uom_conversion_factor,base_qty,barcode,'
           'product:rim_products!product_id(product_code,product_name,tracking_type),'
           'uom:rim_common_masters!uom_id(description)',
       'order':         'serial_no.asc',

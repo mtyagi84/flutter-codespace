@@ -48,6 +48,7 @@ class _ReceiptLineRow {
   final String? uomLabel;
   final double uomConversionFactor;
   final double dispatchedQty; // ceiling — the transfer line's own base_qty
+  final String? barcode; // carried forward from the source transfer line, if any
   final String trackingType;
   final TextEditingController qtyPackCtrl;
   final TextEditingController qtyLooseCtrl;
@@ -64,6 +65,7 @@ class _ReceiptLineRow {
     this.uomLabel,
     this.uomConversionFactor = 1,
     required this.dispatchedQty,
+    this.barcode,
     this.trackingType = 'NONE',
     double initialQtyPack = 0,
     double initialQtyLoose = 0,
@@ -171,6 +173,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
             transferNo: _sourceTransferNo!, transferDate: _sourceTransferDate!,
           );
           final dispatchedQtyBySerial = { for (final tl in transferLines) tl['serial_no'] as int: (tl['base_qty'] as num? ?? 0).toDouble() };
+          final barcodeBySerial = { for (final tl in transferLines) tl['serial_no'] as int: tl['barcode'] as String? };
 
           final savedLines = await _ds.getLines(
             clientId: session.clientId, companyId: session.companyId,
@@ -189,6 +192,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
               uomLabel: uom?['description'] as String?,
               uomConversionFactor: (sl['uom_conversion_factor'] as num? ?? 1).toDouble(),
               dispatchedQty: dispatchedQtyBySerial[sourceSerial] ?? 0,
+              barcode: barcodeBySerial[sourceSerial],
               trackingType: product?['tracking_type'] as String? ?? 'NONE',
               initialQtyPack: (sl['received_qty_pack'] as num? ?? 0).toDouble(),
               initialQtyLoose: (sl['received_qty_loose'] as num? ?? 0).toDouble(),
@@ -256,6 +260,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
             uomLabel: uom?['description'] as String?,
             uomConversionFactor: (tl['uom_conversion_factor'] as num? ?? 1).toDouble(),
             dispatchedQty: (tl['base_qty'] as num? ?? 0).toDouble(),
+            barcode: tl['barcode'] as String?,
             trackingType: product?['tracking_type'] as String? ?? 'NONE',
             // Default to fully received — user reduces to record a shortfall.
             initialQtyPack: (tl['base_qty'] as num? ?? 0).toDouble(),
@@ -431,6 +436,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
         'received_qty_pack':           e.value.qtyPack,
         'received_qty_loose':          e.value.qtyLoose,
         'received_base_qty':           e.value.receivedQty,
+        'barcode':                     e.value.barcode ?? '',
         'remarks':                     e.value.remarksCtrl.text.trim(),
       }).toList();
 

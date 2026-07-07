@@ -38,6 +38,8 @@ import '../../features/inventory/presentation/screens/material_requisition_list_
 import '../../features/inventory/presentation/screens/material_requisition_entry_screen.dart';
 import '../../features/inventory/presentation/screens/material_issue_list_screen.dart';
 import '../../features/inventory/presentation/screens/material_issue_entry_screen.dart';
+import '../../features/inventory/presentation/screens/stock_adjustment_list_screen.dart';
+import '../../features/inventory/presentation/screens/stock_adjustment_entry_screen.dart';
 import '../../features/inventory/presentation/screens/stock_transfer_request_list_screen.dart';
 import '../../features/inventory/presentation/screens/stock_transfer_request_entry_screen.dart';
 import '../../features/inventory/presentation/screens/stock_transfer_list_screen.dart';
@@ -264,7 +266,17 @@ final appRouter = GoRouter(
             );
           },
         ),
-        GoRoute(path: RouteNames.stockAdjustments, builder: (c, s) => const _Placeholder('Stock Adjustment')),
+        GoRoute(path: RouteNames.stockAdjustments, builder: (c, s) => const StockAdjustmentListScreen()),
+        GoRoute(
+          path: RouteNames.stockAdjustmentEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return StockAdjustmentEntryScreen(
+              editAdjustmentNo:   extra?['adjustmentNo']   as String?,
+              editAdjustmentDate: extra?['adjustmentDate'] as String?,
+            );
+          },
+        ),
         GoRoute(path: RouteNames.departmentConsumptionAreas, builder: (c, s) => const DepartmentConsumptionAreaScreen()),
         GoRoute(path: RouteNames.materialRequisitions, builder: (c, s) => const MaterialRequisitionListScreen()),
         GoRoute(

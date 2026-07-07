@@ -119,7 +119,7 @@ class MaterialIssueRemoteDs {
       'requisition_date': 'eq.$requisitionDate',
       'is_deleted':       'eq.false',
       'select':           'serial_no,product_id,uom_id,uom_conversion_factor,base_qty,issued_qty,'
-          'department_id,consumption_area_id,'
+          'department_id,consumption_area_id,barcode,'
           'product:rim_products!product_id(product_code,product_name,tracking_type),'
           'uom:rim_common_masters!uom_id(description),'
           'department:rim_common_masters!department_id(description),'

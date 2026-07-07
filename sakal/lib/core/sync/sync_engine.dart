@@ -223,6 +223,15 @@ class SyncEngine {
               ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.receiptNo.equals(oldId)))
             .write(StockReceiptLinesCacheCompanion(receiptNo: Value(newId)));
         break;
+
+      case 'STOCK_ADJUSTMENT':
+        await (db.update(db.stockAdjustmentHeadersCache)
+              ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.adjustmentNo.equals(oldId)))
+            .write(StockAdjustmentHeadersCacheCompanion(adjustmentNo: Value(newId)));
+        await (db.update(db.stockAdjustmentLinesCache)
+              ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.adjustmentNo.equals(oldId)))
+            .write(StockAdjustmentLinesCacheCompanion(adjustmentNo: Value(newId)));
+        break;
     }
   }
 

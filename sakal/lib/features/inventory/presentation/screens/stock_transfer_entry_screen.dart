@@ -47,6 +47,8 @@ class _TransferLineRow {
   final TextEditingController qtyLooseCtrl;
   final TextEditingController salesPriceCtrl = TextEditingController();
   final TextEditingController remarksCtrl = TextEditingController();
+  final TextEditingController barcodeCtrl = TextEditingController();
+  String? matchedBarcode; // the exact barcode string that resolved this line's product/UOM (DIRECT mode only)
   num costPriceHint = 0;
   double chargeAmount = 0; // computed by apportionment, not user-editable
   List<_TransferBatchCandidate>  batchCandidates  = [];
@@ -81,6 +83,7 @@ class _TransferLineRow {
     qtyLooseCtrl.dispose();
     salesPriceCtrl.dispose();
     remarksCtrl.dispose();
+    barcodeCtrl.dispose();
     for (final b in batchCandidates) { b.dispose(); }
   }
 }
@@ -381,7 +384,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
             requestRemainingQty: remaining,
             trackingType: product?['tracking_type'] as String? ?? 'NONE',
             initialQtyPack: remaining,
-          );
+          )..matchedBarcode = rl['barcode'] as String?;
           _lines.add(row);
           newRows.add(row);
         }
@@ -420,6 +423,31 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
     });
     if (row.isBatchTracked || row.isSerialTracked) unawaited(_loadCandidatesForNewLine(row));
     unawaited(_refreshCostPrices());
+  }
+
+  Future<void> _onBarcodeSubmitted(_TransferLineRow row, String rawBarcode) async {
+    final barcode = rawBarcode.trim();
+    if (barcode.isEmpty) return;
+    final session = ref.read(sessionProvider)!;
+    Map<String, dynamic>? match;
+    try {
+      match = await _ds.getProductByBarcode(clientId: session.clientId, companyId: session.companyId, barcode: barcode);
+    } catch (e) {
+      if (mounted) _showSnack('Barcode lookup failed: $e', color: AppColors.negative);
+      return;
+    }
+    if (!mounted) return;
+    if (match == null) { _showSnack('No product found for barcode "$barcode".', color: AppColors.negative); return; }
+    final matchedProduct = match;
+    await _onProductSelected(row, matchedProduct);
+    if (mounted && row.productId == matchedProduct['id']) {
+      setState(() {
+        row.uomId = matchedProduct['matched_uom_id'] as String? ?? row.uomId;
+        row.uomConversionFactor = (matchedProduct['matched_uom_conversion_factor'] as num? ?? 1).toDouble();
+        row.matchedBarcode = barcode;
+        row.barcodeCtrl.clear();
+      });
+    }
   }
 
   Future<void> _loadCandidatesForNewLine(_TransferLineRow row) async {
@@ -580,6 +608,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
         'base_qty':                     e.value.baseQty,
         'sales_price':                  _isLikelyInterEntity ? e.value.salesPrice : null,
         'charge_amount':                e.value.chargeAmount,
+        'barcode':                      e.value.matchedBarcode ?? '',
         'remarks':                      e.value.remarksCtrl.text.trim(),
       }).toList();
 
@@ -1037,6 +1066,13 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
                         Text('Remaining ${row.requestRemainingQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}',
                             style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                       ])),
+                    if (_mode == 'DIRECT')
+                      SizedBox(width: 140, height: 48, child: TextFormField(
+                        controller: row.barcodeCtrl, enabled: !locked,
+                        decoration: dec.copyWith(labelText: 'Scan/Enter Barcode'),
+                        style: const TextStyle(fontSize: 12),
+                        onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
+                      )),
                     SizedBox(width: 90, child: TextFormField(
                       controller: row.qtyPackCtrl, enabled: !locked,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),

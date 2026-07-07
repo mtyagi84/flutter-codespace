@@ -21,6 +21,8 @@ import '../providers/stock_transfer_request_providers.dart';
 class _RequestLineRow {
   String? productId;
   String  productDisplay = '';
+  final TextEditingController barcodeCtrl = TextEditingController();
+  String? matchedBarcode; // the exact barcode string that resolved this line's product/UOM
   String? uomId;
   String? uomLabel;
   double  uomConversionFactor = 1;
@@ -34,6 +36,7 @@ class _RequestLineRow {
   double get baseQty  => qtyPack * uomConversionFactor + qtyLoose;
 
   void dispose() {
+    barcodeCtrl.dispose();
     qtyPackCtrl.dispose();
     qtyLooseCtrl.dispose();
     remarksCtrl.dispose();
@@ -158,6 +161,31 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
     });
   }
 
+  Future<void> _onBarcodeSubmitted(_RequestLineRow row, String rawBarcode) async {
+    final barcode = rawBarcode.trim();
+    if (barcode.isEmpty) return;
+    final session = ref.read(sessionProvider)!;
+    Map<String, dynamic>? match;
+    try {
+      match = await _ds.getProductByBarcode(clientId: session.clientId, companyId: session.companyId, barcode: barcode);
+    } catch (e) {
+      if (mounted) _showSnack('Barcode lookup failed: $e', color: AppColors.negative);
+      return;
+    }
+    if (!mounted) return;
+    if (match == null) { _showSnack('No product found for barcode "$barcode".', color: AppColors.negative); return; }
+    final matchedProduct = match;
+    await _onProductSelected(row, matchedProduct);
+    if (mounted && row.productId == matchedProduct['id']) {
+      setState(() {
+        row.uomId = matchedProduct['matched_uom_id'] as String? ?? row.uomId;
+        row.uomConversionFactor = (matchedProduct['matched_uom_conversion_factor'] as num? ?? 1).toDouble();
+        row.matchedBarcode = barcode;
+        row.barcodeCtrl.clear();
+      });
+    }
+  }
+
   Future<bool> _saveDraft() async {
     if (_fromLocationId == null || _toLocationId == null) {
       _showSnack('Select both From Location and To Location.', color: AppColors.negative);
@@ -190,6 +218,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
         'qty_pack':               e.value.qtyPack,
         'qty_loose':              e.value.qtyLoose,
         'base_qty':               e.value.baseQty,
+        'barcode':                e.value.matchedBarcode ?? '',
         'remarks':                e.value.remarksCtrl.text.trim(),
       }).toList();
 
@@ -594,6 +623,12 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
                       ),
                     ),
                   ),
+                  SizedBox(width: 140, height: 48, child: TextFormField(
+                    controller: row.barcodeCtrl, enabled: !locked,
+                    decoration: dec.copyWith(labelText: 'Scan/Enter Barcode'),
+                    style: const TextStyle(fontSize: 12),
+                    onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
+                  )),
                   SizedBox(width: 90, child: TextFormField(
                     controller: row.qtyPackCtrl, enabled: !locked,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),

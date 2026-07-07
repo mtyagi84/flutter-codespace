@@ -152,7 +152,7 @@ class StockTransferRemoteDs {
       'request_no':   'eq.$requestNo',
       'request_date': 'eq.$requestDate',
       'is_deleted':   'eq.false',
-      'select':       'serial_no,product_id,uom_id,uom_conversion_factor,base_qty,transferred_qty,'
+      'select':       'serial_no,product_id,uom_id,uom_conversion_factor,base_qty,transferred_qty,barcode,'
           'product:rim_products!product_id(product_code,product_name,tracking_type),'
           'uom:rim_common_masters!uom_id(description)',
       'order':        'serial_no.asc',
@@ -326,6 +326,31 @@ class StockTransferRemoteDs {
       'select':          'serial_no',
     });
     return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
+  Future<Map<String, dynamic>?> getProductByBarcode({
+    required String clientId,
+    required String companyId,
+    required String barcode,
+  }) async {
+    final res = await _dio.get('/rim_product_uom', queryParameters: {
+      'client_id':  'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'barcode':    'eq.$barcode',
+      'select':     'uom_id,conversion_factor,'
+          'product:rim_products!product_id(id,product_code,product_name,base_uom_id,tracking_type,is_active,is_deleted)',
+      'limit':      '1',
+    });
+    final list = res.data as List;
+    if (list.isEmpty) return null;
+    final row = list.first as Map<String, dynamic>;
+    final product = row['product'] as Map<String, dynamic>?;
+    if (product == null || product['is_deleted'] == true || product['is_active'] == false) return null;
+    return {
+      ...product,
+      'matched_uom_id': row['uom_id'],
+      'matched_uom_conversion_factor': row['conversion_factor'],
+    };
   }
 
   Future<String> save({
