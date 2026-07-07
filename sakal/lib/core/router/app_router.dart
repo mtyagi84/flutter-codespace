@@ -38,6 +38,12 @@ import '../../features/inventory/presentation/screens/material_requisition_list_
 import '../../features/inventory/presentation/screens/material_requisition_entry_screen.dart';
 import '../../features/inventory/presentation/screens/material_issue_list_screen.dart';
 import '../../features/inventory/presentation/screens/material_issue_entry_screen.dart';
+import '../../features/inventory/presentation/screens/stock_transfer_request_list_screen.dart';
+import '../../features/inventory/presentation/screens/stock_transfer_request_entry_screen.dart';
+import '../../features/inventory/presentation/screens/stock_transfer_list_screen.dart';
+import '../../features/inventory/presentation/screens/stock_transfer_entry_screen.dart';
+import '../../features/inventory/presentation/screens/stock_receipt_list_screen.dart';
+import '../../features/inventory/presentation/screens/stock_receipt_entry_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_list_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_entry_screen.dart';
 import '../../features/purchase/presentation/screens/grn_list_screen.dart';
@@ -247,7 +253,17 @@ final appRouter = GoRouter(
 
         // Inventory
         GoRoute(path: RouteNames.stockList,        builder: (c, s) => const _Placeholder('Stock List')),
-        GoRoute(path: RouteNames.stockTransfers,   builder: (c, s) => const _Placeholder('Stock Transfer')),
+        GoRoute(path: RouteNames.stockTransfers,   builder: (c, s) => const StockTransferListScreen()),
+        GoRoute(
+          path: RouteNames.stockTransferEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return StockTransferEntryScreen(
+              editTransferNo:   extra?['transferNo']   as String?,
+              editTransferDate: extra?['transferDate'] as String?,
+            );
+          },
+        ),
         GoRoute(path: RouteNames.stockAdjustments, builder: (c, s) => const _Placeholder('Stock Adjustment')),
         GoRoute(path: RouteNames.departmentConsumptionAreas, builder: (c, s) => const DepartmentConsumptionAreaScreen()),
         GoRoute(path: RouteNames.materialRequisitions, builder: (c, s) => const MaterialRequisitionListScreen()),
@@ -269,6 +285,28 @@ final appRouter = GoRouter(
             return MaterialIssueEntryScreen(
               editIssueNo:   extra?['issueNo']   as String?,
               editIssueDate: extra?['issueDate'] as String?,
+            );
+          },
+        ),
+        GoRoute(path: RouteNames.stockTransferRequests, builder: (c, s) => const StockTransferRequestListScreen()),
+        GoRoute(
+          path: RouteNames.stockTransferRequestEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return StockTransferRequestEntryScreen(
+              editRequestNo:   extra?['requestNo']   as String?,
+              editRequestDate: extra?['requestDate'] as String?,
+            );
+          },
+        ),
+        GoRoute(path: RouteNames.stockReceipts, builder: (c, s) => const StockReceiptListScreen()),
+        GoRoute(
+          path: RouteNames.stockReceiptEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return StockReceiptEntryScreen(
+              editReceiptNo:   extra?['receiptNo']   as String?,
+              editReceiptDate: extra?['receiptDate'] as String?,
             );
           },
         ),
