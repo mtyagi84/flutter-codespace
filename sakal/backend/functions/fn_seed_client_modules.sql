@@ -96,7 +96,10 @@ begin
     values
         (p_client_id, p_company_id, v_in, 'IN-STK', 'Stock List',       '/inventory/stock',       0, 'IN-OPS', 'Operations', 0, false, false, false),
         (p_client_id, p_company_id, v_in, 'IN-TRF', 'Stock Transfer',   '/inventory/transfers',   1, 'IN-OPS', 'Operations', 0, true,  false, false),
-        (p_client_id, p_company_id, v_in, 'IN-ADJ', 'Stock Adjustment', '/inventory/adjustments', 2, 'IN-OPS', 'Operations', 0, true,  false, false)
+        (p_client_id, p_company_id, v_in, 'IN-ADJ', 'Stock Adjustment', '/inventory/adjustments', 2, 'IN-OPS', 'Operations', 0, true,  false, false),
+        (p_client_id, p_company_id, v_in, 'IN-MRQ', 'Material Requisition', '/inventory/requisitions',    3, 'IN-OPS',  'Operations', 0, true,  false, false),
+        (p_client_id, p_company_id, v_in, 'IN-MIS', 'Material Issue',       '/inventory/material-issue',  4, 'IN-OPS',  'Operations', 0, true,  false, false),
+        (p_client_id, p_company_id, v_in, 'IN-DCA', 'Consumption Area Setup', '/inventory/department-consumption-areas', 0, 'IN-SETG', 'Setup', 1, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set group_code      = excluded.group_code,
             group_name      = excluded.group_name,

@@ -48,6 +48,11 @@ class RouteNames {
   static const String stockList       = '/inventory/stock';
   static const String stockTransfers  = '/inventory/transfers';
   static const String stockAdjustments = '/inventory/adjustments';
+  static const String departmentConsumptionAreas = '/inventory/department-consumption-areas';
+  static const String materialRequisitions      = '/inventory/requisitions';
+  static const String materialRequisitionEntry  = '/inventory/requisition-entry';
+  static const String materialIssues            = '/inventory/material-issue';
+  static const String materialIssueEntry        = '/inventory/material-issue-entry';
 
   // Accounting admin (Setup group)
   static const String accountingSetup  = '/setup/accounting';

@@ -498,6 +498,7 @@ class _LocationDialogState extends ConsumerState<_LocationDialog> {
   String? _responsibleUserId;
   String? _cityId;
   bool    _negativeStockAllowed = false;
+  bool    _issueAllowed = true;
   bool    _saving = false;
   String? _error;
 
@@ -522,6 +523,7 @@ class _LocationDialogState extends ConsumerState<_LocationDialog> {
       _responsibleUserId = d['responsible_user_id'] as String?;
       _cityId          = d['city_id']        as String?;
       _negativeStockAllowed = d['is_negative_stock_allowed'] as bool? ?? false;
+      _issueAllowed = d['is_issue_allowed'] as bool? ?? true;
       if (_locationType != null && !_locationTypes.contains(_locationType)) {
         _locationType = null;
       }
@@ -568,6 +570,7 @@ class _LocationDialogState extends ConsumerState<_LocationDialog> {
       'tax_reg_number':            _taxRegCtrl.text.trim(),
       'server_url':                _serverCtrl.text.trim(),
       'is_negative_stock_allowed': _negativeStockAllowed,
+      'is_issue_allowed':          _issueAllowed,
     };
 
     try {
@@ -866,6 +869,15 @@ class _LocationDialogState extends ConsumerState<_LocationDialog> {
                             style: TextStyle(fontSize: 12)),
                         value: _negativeStockAllowed,
                         onChanged: (v) => setState(() => _negativeStockAllowed = v),
+                        activeThumbColor: AppColors.positive,
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Allow Material Issue', style: TextStyle(fontSize: 14)),
+                        subtitle: const Text('Whether this location can be a Material Requisition\'s From Location',
+                            style: TextStyle(fontSize: 12)),
+                        value: _issueAllowed,
+                        onChanged: (v) => setState(() => _issueAllowed = v),
                         activeThumbColor: AppColors.positive,
                       ),
                     ],

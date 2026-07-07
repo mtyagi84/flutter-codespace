@@ -33,6 +33,11 @@ import '../../features/master/presentation/screens/additional_charges_screen.dar
 import '../../features/master/presentation/screens/account_link_setup_screen.dart';
 import '../../features/master/presentation/screens/account_link_configure_screen.dart';
 import '../../features/master/presentation/screens/item_account_links_screen.dart';
+import '../../features/inventory/presentation/screens/department_consumption_area_screen.dart';
+import '../../features/inventory/presentation/screens/material_requisition_list_screen.dart';
+import '../../features/inventory/presentation/screens/material_requisition_entry_screen.dart';
+import '../../features/inventory/presentation/screens/material_issue_list_screen.dart';
+import '../../features/inventory/presentation/screens/material_issue_entry_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_list_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_entry_screen.dart';
 import '../../features/purchase/presentation/screens/grn_list_screen.dart';
@@ -244,6 +249,29 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.stockList,        builder: (c, s) => const _Placeholder('Stock List')),
         GoRoute(path: RouteNames.stockTransfers,   builder: (c, s) => const _Placeholder('Stock Transfer')),
         GoRoute(path: RouteNames.stockAdjustments, builder: (c, s) => const _Placeholder('Stock Adjustment')),
+        GoRoute(path: RouteNames.departmentConsumptionAreas, builder: (c, s) => const DepartmentConsumptionAreaScreen()),
+        GoRoute(path: RouteNames.materialRequisitions, builder: (c, s) => const MaterialRequisitionListScreen()),
+        GoRoute(
+          path: RouteNames.materialRequisitionEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return MaterialRequisitionEntryScreen(
+              editRequisitionNo:   extra?['requisitionNo']   as String?,
+              editRequisitionDate: extra?['requisitionDate'] as String?,
+            );
+          },
+        ),
+        GoRoute(path: RouteNames.materialIssues, builder: (c, s) => const MaterialIssueListScreen()),
+        GoRoute(
+          path: RouteNames.materialIssueEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return MaterialIssueEntryScreen(
+              editIssueNo:   extra?['issueNo']   as String?,
+              editIssueDate: extra?['issueDate'] as String?,
+            );
+          },
+        ),
 
         // Finance
         GoRoute(path: RouteNames.exchangeRates, builder: (c, s) => const ExchangeRateScreen()),

@@ -12,6 +12,14 @@
 
 BEGIN;
 
+-- ── Material Issue / Material Requisition (children before parent) ──
+DELETE FROM rid_transaction_line_batches WHERE source_doc_type = 'MATERIAL_ISSUE';
+DELETE FROM rid_transaction_line_serials WHERE source_doc_type = 'MATERIAL_ISSUE';
+DELETE FROM rid_material_issue_lines;
+DELETE FROM rih_material_issue_headers;
+DELETE FROM rid_material_requisition_lines;
+DELETE FROM rih_material_requisition_headers;
+
 -- ── Purchase Returns (children before parent) — must precede GRN's own
 --    delete below purely for readability of this script; no FK forces the
 --    order (source_grn_no/date on rid_purchase_return_lines is a plain
@@ -61,7 +69,7 @@ SET current_stock       = 0,
 -- ── Reset document numbering so fresh entries start at 1 again ─
 -- (comment these two out if you'd rather keep numbering continuous)
 DELETE FROM ril_trans_no_seq WHERE voucher_type_code IN
-    ('GRN', 'PINV', 'PUR', 'PRET', 'CRV', 'BRV', 'CPV', 'BPV', 'JV', 'SDN', 'SCN', 'CDN', 'CCN', 'SIV');
+    ('GRN', 'PINV', 'PUR', 'PRET', 'MREQ', 'MISS', 'MIC', 'CRV', 'BRV', 'CPV', 'BPV', 'JV', 'SDN', 'SCN', 'CDN', 'CCN', 'SIV');
 DELETE FROM ril_company_doc_no_seq WHERE voucher_type_code = 'PO';
 
 COMMIT;
