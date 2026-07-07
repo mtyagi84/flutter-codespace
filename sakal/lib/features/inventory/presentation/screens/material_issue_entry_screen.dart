@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/printing/print_engine.dart';
+import '../../../../core/printing/print_template_provider.dart';
+import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
@@ -107,6 +110,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
   DateTime _issueDate = DateTime.now();
   String   _status = 'DRAFT';
   String?  _locationId;
+  String?  _locationName;
   final _remarksCtrl = TextEditingController();
 
   List<Map<String, dynamic>> _pendingRequisitions = [];
@@ -119,6 +123,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
   String? _actionError;
   bool    _saving = false;
   bool    _approving = false;
+  bool    _printing = false;
 
   List<Map<String, dynamic>> _postedVouchers = [];
   final Map<String, List<Map<String, dynamic>>> _voucherLines = {};
@@ -157,6 +162,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
           _issueDate  = DateTime.parse(header['issue_date'] as String);
           _status     = header['status'] as String;
           _locationId = header['location_id'] as String?;
+          _locationName = (header['location'] as Map<String, dynamic>?)?['location_name'] as String?;
           _remarksCtrl.text = header['remarks'] as String? ?? '';
         }
       }
@@ -446,6 +452,50 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
     return e.message ?? e.toString();
   }
 
+  Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) => {
+    'company': company,
+    'header': {
+      'issue_no':      _issueNo ?? '',
+      'issue_date':    _displayDate(_issueDate),
+      'status':        _status,
+      'location_name': _locationName ?? '',
+      'remarks':       _remarksCtrl.text,
+    },
+    'lines': _lines.map((l) => {
+      'product_name':          l.productDisplay.contains('] ') ? l.productDisplay.split('] ').last : l.productDisplay,
+      'source_requisition_no': l.sourceRequisitionNo,
+      'issue_qty':             l.issueQty,
+      'department_name':       l.departmentLabel ?? '',
+      'area_name':             l.consumptionAreaLabel ?? '',
+    }).toList(),
+  };
+
+  Future<void> _printIssue() async {
+    if (_issueNo == null) return;
+    setState(() => _printing = true);
+    try {
+      final company  = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
+      final template = await ref.read(printTemplateProvider('MATERIAL_ISSUE').future);
+      final document = _buildPrintDocument(company);
+      await PrintEngine.printDocument(template: template, document: document, filename: '$_issueNo.pdf');
+    } catch (e) {
+      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } finally {
+      if (mounted) setState(() => _printing = false);
+    }
+  }
+
+  Widget _buildPrintButton() => Tooltip(
+    message: _printing ? 'Preparing PDF…' : 'Print / Save as PDF',
+    child: IconButton(
+      icon: _printing
+          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.print_outlined),
+      color: AppColors.primary,
+      onPressed: _printing ? null : _printIssue,
+    ),
+  );
+
   String _fmtDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   String _displayDate(DateTime? d) {
@@ -483,10 +533,17 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
           child: isMobile
               ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   _buildTitleBlock(),
-                  if (canSave || showApprove) ...[const SizedBox(height: 10), _buildActionButtons(canSave: canSave, canApprove: showApprove)],
+                  if (_issueNo != null || canSave || showApprove) ...[
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      if (_issueNo != null) _buildPrintButton(),
+                      if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
+                    ]),
+                  ],
                 ])
               : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(child: _buildTitleBlock()),
+                  if (_issueNo != null) _buildPrintButton(),
                   if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
                 ]),
         ),

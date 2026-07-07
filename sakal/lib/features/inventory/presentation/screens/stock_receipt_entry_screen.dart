@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/printing/print_engine.dart';
+import '../../../../core/printing/print_template_provider.dart';
+import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
@@ -118,6 +121,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
   String? _actionError;
   bool    _saving = false;
   bool    _approving = false;
+  bool    _printing = false;
 
   List<Map<String, dynamic>> _postedVouchers = [];
   final Map<String, List<Map<String, dynamic>>> _voucherLines = {};
@@ -518,6 +522,51 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
     return e.message ?? e.toString();
   }
 
+  Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) => {
+    'company': company,
+    'header': {
+      'receipt_no':          _receiptNo ?? '',
+      'receipt_date':        _displayDate(_receiptDate),
+      'status':              _status,
+      'source_transfer_no':  _sourceTransferNo ?? '',
+      'from_location_name':  _fromLocationName ?? '',
+      'to_location_name':    _toLocationName ?? '',
+      'remarks':             _remarksCtrl.text,
+    },
+    'lines': _lines.map((l) => {
+      'product_name':    l.productDisplay.contains('] ') ? l.productDisplay.split('] ').last : l.productDisplay,
+      'dispatched_qty':  l.dispatchedQty,
+      'received_qty':    l.receivedQty,
+      'shortfall_qty':   l.shortfallQty,
+    }).toList(),
+  };
+
+  Future<void> _printReceipt() async {
+    if (_receiptNo == null) return;
+    setState(() => _printing = true);
+    try {
+      final company  = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
+      final template = await ref.read(printTemplateProvider('STOCK_RECEIPT').future);
+      final document = _buildPrintDocument(company);
+      await PrintEngine.printDocument(template: template, document: document, filename: '$_receiptNo.pdf');
+    } catch (e) {
+      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } finally {
+      if (mounted) setState(() => _printing = false);
+    }
+  }
+
+  Widget _buildPrintButton() => Tooltip(
+    message: _printing ? 'Preparing PDF…' : 'Print / Save as PDF',
+    child: IconButton(
+      icon: _printing
+          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.print_outlined),
+      color: AppColors.primary,
+      onPressed: _printing ? null : _printReceipt,
+    ),
+  );
+
   String _fmtDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   String _displayDate(DateTime? d) {
@@ -555,10 +604,17 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
           child: isMobile
               ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   _buildTitleBlock(),
-                  if (canSave || showApprove) ...[const SizedBox(height: 10), _buildActionButtons(canSave: canSave, canApprove: showApprove)],
+                  if (_receiptNo != null || canSave || showApprove) ...[
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      if (_receiptNo != null) _buildPrintButton(),
+                      if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
+                    ]),
+                  ],
                 ])
               : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(child: _buildTitleBlock()),
+                  if (_receiptNo != null) _buildPrintButton(),
                   if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
                 ]),
         ),

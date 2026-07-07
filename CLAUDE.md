@@ -300,6 +300,23 @@ Every entry screen places its primary action buttons (`Save Draft`, `Approve`, `
 Template: `lib/features/purchase/presentation/screens/purchase_order_entry_screen.dart`.
 This supersedes the earlier bottom-of-form placement used by Finance Voucher Entry — retrofit older screens opportunistically, don't leave the two conventions coexisting long-term.
 
+### Print / PDF support (every entry screen that produces a saved document)
+Every transaction document a user can save (PO, GRN, Purchase Invoice, Purchase Return, Material Requisition, Material Issue, Stock Transfer Request, Stock Transfer, Stock Receipt, Finance Voucher, ...) must be printable. The underlying system (`lib/core/printing/` — `PrintEngine`, `PrintTemplate`/`PrintElement`, `PrintFieldRegistry`) is fully generic; adding print support to a new module is additive-only, never a change to the engine:
+1. `print_field_registry.dart` — add the module's scalar fields, table name(s), row fields to all 4 switches (`scalarFields`, `tableNames`, `rowFields`, `documentTypeLabel`) and to the `documentTypes` list.
+2. `default_templates/<module>_default_template.dart` — a hardcoded fallback template mirroring an existing one of the same shape (e.g. `purchase_return_default_template.dart` for a header+lines+charges+totals document).
+3. `print_template_provider.dart` — one `defaultTemplateFor()` switch case.
+4. `print_sample_data.dart` — one `forDocumentType()` case with placeholder data, for the template designer's Preview button.
+5. The entry screen itself — `_buildPrintDocument()` (map the screen's own state into the registry's field names), `_print<Doc>()` (fetch company + template, call `PrintEngine.printDocument`), `_buildPrintButton()` (icon button, `Tooltip`, spinner while `_printing`), wired into `build()`'s header row (both mobile and desktop branches) guarded by `<docNo> != null` (no button until the document has been saved at least once) — same placement as the Save/Approve buttons above, see any of the Inventory module screens as a template.
+Template: `lib/features/inventory/presentation/screens/stock_transfer_entry_screen.dart` (has the fullest shape: header + lines + charges + totals).
+
+### Definition of complete (every new transaction screen)
+Before considering a new entry/list screen pair done, check all five:
+1. **Permissions** — `ScreenPermissionMixin`, `canAdd`/`canEdit`/`canApprove` gate the right buttons.
+2. **Security** — RLS policy follows the `auth_rw_<table>` convention, no permissive dev-style policy.
+3. **Responsiveness** — `SakalAdaptiveList` on the list screen, mobile/desktop branches on the entry screen.
+4. **Offline support** — Drift local cache + `<module>_local_ds.dart` + `SyncEngine` enqueue on save; Approve stays online-only.
+5. **Print support** — see above.
+
 ### PostgREST save (INSERT or UPDATE)
 - No `Prefer: return=representation` header (causes 401 with RLS)
 - PATCH uses `?id=eq.<id>` filter

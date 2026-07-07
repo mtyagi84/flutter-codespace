@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/printing/print_engine.dart';
+import '../../../../core/printing/print_template_provider.dart';
+import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
@@ -67,6 +70,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
   String? _actionError;
   bool    _saving = false;
   bool    _approving = false;
+  bool    _printing = false;
 
   bool get _isNew => _requestNo == null;
 
@@ -275,6 +279,53 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
     return e.message ?? e.toString();
   }
 
+  String _locationLabel(String? id) =>
+      _locations.firstWhere((l) => l['id'] == id, orElse: () => const {})['location_name'] as String? ?? '';
+
+  Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) => {
+    'company': company,
+    'header': {
+      'request_no':        _requestNo ?? '',
+      'request_date':      _displayDate(_requestDate),
+      'status':            _status,
+      'from_location_name': _locationLabel(_fromLocationId),
+      'to_location_name':   _locationLabel(_toLocationId),
+      'remarks':            _remarksCtrl.text,
+    },
+    'lines': _lines.where((l) => l.productId != null && l.baseQty > 0).map((l) => {
+      'product_name': l.productDisplay.contains('] ') ? l.productDisplay.split('] ').last : l.productDisplay,
+      'uom_label':    l.uomLabel ?? '',
+      'base_qty':     l.baseQty,
+      'remarks':      l.remarksCtrl.text,
+    }).toList(),
+  };
+
+  Future<void> _printRequest() async {
+    if (_requestNo == null) return;
+    setState(() => _printing = true);
+    try {
+      final company  = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
+      final template = await ref.read(printTemplateProvider('STOCK_TRANSFER_REQUEST').future);
+      final document = _buildPrintDocument(company);
+      await PrintEngine.printDocument(template: template, document: document, filename: '$_requestNo.pdf');
+    } catch (e) {
+      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } finally {
+      if (mounted) setState(() => _printing = false);
+    }
+  }
+
+  Widget _buildPrintButton() => Tooltip(
+    message: _printing ? 'Preparing PDF…' : 'Print / Save as PDF',
+    child: IconButton(
+      icon: _printing
+          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.print_outlined),
+      color: AppColors.primary,
+      onPressed: _printing ? null : _printRequest,
+    ),
+  );
+
   String _fmtDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   String _displayDate(DateTime? d) {
@@ -314,13 +365,17 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
           child: isMobile
               ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   _buildTitleBlock(),
-                  if (canSave || showApprove) ...[
+                  if (_requestNo != null || canSave || showApprove) ...[
                     const SizedBox(height: 10),
-                    _buildActionButtons(canSave: canSave, canApprove: showApprove),
+                    Row(children: [
+                      if (_requestNo != null) _buildPrintButton(),
+                      if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
+                    ]),
                   ],
                 ])
               : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(child: _buildTitleBlock()),
+                  if (_requestNo != null) _buildPrintButton(),
                   if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
                 ]),
         ),

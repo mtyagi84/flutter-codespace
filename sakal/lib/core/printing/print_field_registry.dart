@@ -94,6 +94,54 @@ class PrintFieldRegistry {
     PrintFieldDef('signatures.authorised_by', 'Authorised By'),
   ];
 
+  static const _materialRequisitionScalarFields = [
+    PrintFieldDef('header.requisition_no', 'Requisition Number'),
+    PrintFieldDef('header.requisition_date', 'Requisition Date'),
+    PrintFieldDef('header.status', 'Status'),
+    PrintFieldDef('header.location_name', 'Location'),
+    PrintFieldDef('header.requested_by', 'Requested By'),
+    PrintFieldDef('header.reason', 'Reason'),
+    PrintFieldDef('header.remarks', 'Remarks'),
+  ];
+
+  static const _materialIssueScalarFields = [
+    PrintFieldDef('header.issue_no', 'Issue Number'),
+    PrintFieldDef('header.issue_date', 'Issue Date'),
+    PrintFieldDef('header.status', 'Status'),
+    PrintFieldDef('header.location_name', 'Location'),
+    PrintFieldDef('header.remarks', 'Remarks'),
+  ];
+
+  static const _stockTransferRequestScalarFields = [
+    PrintFieldDef('header.request_no', 'Request Number'),
+    PrintFieldDef('header.request_date', 'Request Date'),
+    PrintFieldDef('header.status', 'Status'),
+    PrintFieldDef('header.from_location_name', 'From Location'),
+    PrintFieldDef('header.to_location_name', 'To Location'),
+    PrintFieldDef('header.remarks', 'Remarks'),
+  ];
+
+  static const _stockTransferScalarFields = [
+    PrintFieldDef('header.transfer_no', 'Transfer Number'),
+    PrintFieldDef('header.transfer_date', 'Transfer Date'),
+    PrintFieldDef('header.status', 'Status'),
+    PrintFieldDef('header.from_location_name', 'From Location'),
+    PrintFieldDef('header.to_location_name', 'To Location'),
+    PrintFieldDef('header.mode_label', 'Mode'),
+    PrintFieldDef('header.remarks', 'Remarks'),
+    PrintFieldDef('totals.charges_amount', 'Charges', PrintDataFormat.currency),
+  ];
+
+  static const _stockReceiptScalarFields = [
+    PrintFieldDef('header.receipt_no', 'Receipt Number'),
+    PrintFieldDef('header.receipt_date', 'Receipt Date'),
+    PrintFieldDef('header.status', 'Status'),
+    PrintFieldDef('header.source_transfer_no', 'Source Transfer No'),
+    PrintFieldDef('header.from_location_name', 'From Location'),
+    PrintFieldDef('header.to_location_name', 'To Location'),
+    PrintFieldDef('header.remarks', 'Remarks'),
+  ];
+
   static const _companyFields = [
     PrintFieldDef('company.company_name', 'Company Name'),
     PrintFieldDef('company.address', 'Company Address'),
@@ -160,15 +208,72 @@ class PrintFieldRegistry {
     ],
   };
 
+  static const _materialRequisitionTableRowFields = {
+    'lines': [
+      PrintFieldDef('product_name', 'Item Name'),
+      PrintFieldDef('uom_label', 'UOM'),
+      PrintFieldDef('base_qty', 'Quantity', PrintDataFormat.number),
+      PrintFieldDef('department_name', 'Department'),
+      PrintFieldDef('area_name', 'Consumption Area'),
+      PrintFieldDef('remarks', 'Remarks'),
+    ],
+  };
+
+  static const _materialIssueTableRowFields = {
+    'lines': [
+      PrintFieldDef('product_name', 'Item Name'),
+      PrintFieldDef('source_requisition_no', 'Source Requisition No'),
+      PrintFieldDef('issue_qty', 'Issued Quantity', PrintDataFormat.number),
+      PrintFieldDef('department_name', 'Department'),
+      PrintFieldDef('area_name', 'Consumption Area'),
+    ],
+  };
+
+  static const _stockTransferRequestTableRowFields = {
+    'lines': [
+      PrintFieldDef('product_name', 'Item Name'),
+      PrintFieldDef('uom_label', 'UOM'),
+      PrintFieldDef('base_qty', 'Quantity', PrintDataFormat.number),
+      PrintFieldDef('remarks', 'Remarks'),
+    ],
+  };
+
+  static const _stockTransferTableRowFields = {
+    'lines': [
+      PrintFieldDef('product_name', 'Item Name'),
+      PrintFieldDef('base_qty', 'Quantity', PrintDataFormat.number),
+      PrintFieldDef('unit_value', 'Unit Value', PrintDataFormat.currency),
+      PrintFieldDef('charge_amount', 'Charges', PrintDataFormat.currency),
+    ],
+    'charges': [
+      PrintFieldDef('charge_name', 'Charge Name'),
+      PrintFieldDef('amount', 'Amount', PrintDataFormat.currency),
+    ],
+  };
+
+  static const _stockReceiptTableRowFields = {
+    'lines': [
+      PrintFieldDef('product_name', 'Item Name'),
+      PrintFieldDef('dispatched_qty', 'Dispatched Quantity', PrintDataFormat.number),
+      PrintFieldDef('received_qty', 'Received Quantity', PrintDataFormat.number),
+      PrintFieldDef('shortfall_qty', 'Shortfall', PrintDataFormat.number),
+    ],
+  };
+
   /// Every scalar field (usable by text/field/image/barcode/watermark
   /// elements) available for a document type, company fields included.
   static List<PrintFieldDef> scalarFields(String documentType) => [
     ...switch (documentType) {
-      'PURCHASE_ORDER'   => _poScalarFields,
-      'GRN'              => _grnScalarFields,
-      'PURCHASE_INVOICE' => _purchaseInvoiceScalarFields,
-      'PURCHASE_RETURN'  => _purchaseReturnScalarFields,
-      'VOUCHER'          => _voucherScalarFields,
+      'PURCHASE_ORDER'          => _poScalarFields,
+      'GRN'                     => _grnScalarFields,
+      'PURCHASE_INVOICE'        => _purchaseInvoiceScalarFields,
+      'PURCHASE_RETURN'         => _purchaseReturnScalarFields,
+      'VOUCHER'                 => _voucherScalarFields,
+      'MATERIAL_REQUISITION'    => _materialRequisitionScalarFields,
+      'MATERIAL_ISSUE'          => _materialIssueScalarFields,
+      'STOCK_TRANSFER_REQUEST'  => _stockTransferRequestScalarFields,
+      'STOCK_TRANSFER'          => _stockTransferScalarFields,
+      'STOCK_RECEIPT'           => _stockReceiptScalarFields,
       _ => const <PrintFieldDef>[],
     },
     ..._companyFields,
@@ -176,21 +281,31 @@ class PrintFieldRegistry {
 
   /// Which repeating lists (table `bind` values) exist for a document type.
   static List<String> tableNames(String documentType) => switch (documentType) {
-    'PURCHASE_ORDER'   => const ['lines', 'charges', 'paymentTerms'],
-    'GRN'              => const ['lines', 'charges'],
-    'PURCHASE_INVOICE' => const ['grns'],
-    'PURCHASE_RETURN'  => const ['lines'],
-    'VOUCHER'          => const ['lines'],
+    'PURCHASE_ORDER'          => const ['lines', 'charges', 'paymentTerms'],
+    'GRN'                     => const ['lines', 'charges'],
+    'PURCHASE_INVOICE'        => const ['grns'],
+    'PURCHASE_RETURN'         => const ['lines'],
+    'VOUCHER'                 => const ['lines'],
+    'MATERIAL_REQUISITION'    => const ['lines'],
+    'MATERIAL_ISSUE'          => const ['lines'],
+    'STOCK_TRANSFER_REQUEST'  => const ['lines'],
+    'STOCK_TRANSFER'          => const ['lines', 'charges'],
+    'STOCK_RECEIPT'           => const ['lines'],
     _ => const [],
   };
 
   /// Columns available for a table bound to [tableName] within [documentType].
   static List<PrintFieldDef> rowFields(String documentType, String tableName) => switch (documentType) {
-    'PURCHASE_ORDER'   => _poTableRowFields[tableName] ?? const [],
-    'GRN'              => _grnTableRowFields[tableName] ?? const [],
-    'PURCHASE_INVOICE' => _purchaseInvoiceTableRowFields[tableName] ?? const [],
-    'PURCHASE_RETURN'  => _purchaseReturnTableRowFields[tableName] ?? const [],
-    'VOUCHER'          => _voucherTableRowFields[tableName] ?? const [],
+    'PURCHASE_ORDER'          => _poTableRowFields[tableName] ?? const [],
+    'GRN'                     => _grnTableRowFields[tableName] ?? const [],
+    'PURCHASE_INVOICE'        => _purchaseInvoiceTableRowFields[tableName] ?? const [],
+    'PURCHASE_RETURN'         => _purchaseReturnTableRowFields[tableName] ?? const [],
+    'VOUCHER'                 => _voucherTableRowFields[tableName] ?? const [],
+    'MATERIAL_REQUISITION'    => _materialRequisitionTableRowFields[tableName] ?? const [],
+    'MATERIAL_ISSUE'          => _materialIssueTableRowFields[tableName] ?? const [],
+    'STOCK_TRANSFER_REQUEST'  => _stockTransferRequestTableRowFields[tableName] ?? const [],
+    'STOCK_TRANSFER'          => _stockTransferTableRowFields[tableName] ?? const [],
+    'STOCK_RECEIPT'           => _stockReceiptTableRowFields[tableName] ?? const [],
     _ => const [],
   };
 
@@ -198,14 +313,22 @@ class PrintFieldRegistry {
   /// print_template_provider.dart's fallback registry — add a new type to
   /// both places (plus a *_default_template.dart and field entries here)
   /// when a new document's print support is built.
-  static const documentTypes = ['PURCHASE_ORDER', 'GRN', 'PURCHASE_INVOICE', 'PURCHASE_RETURN', 'VOUCHER'];
+  static const documentTypes = [
+    'PURCHASE_ORDER', 'GRN', 'PURCHASE_INVOICE', 'PURCHASE_RETURN', 'VOUCHER',
+    'MATERIAL_REQUISITION', 'MATERIAL_ISSUE', 'STOCK_TRANSFER_REQUEST', 'STOCK_TRANSFER', 'STOCK_RECEIPT',
+  ];
 
   static String documentTypeLabel(String documentType) => switch (documentType) {
-    'PURCHASE_ORDER'   => 'Purchase Order',
-    'GRN'              => 'Goods Receipt Note',
-    'PURCHASE_INVOICE' => 'Purchase Bill',
-    'PURCHASE_RETURN'  => 'Purchase Return',
-    'VOUCHER'          => 'Finance Voucher',
+    'PURCHASE_ORDER'          => 'Purchase Order',
+    'GRN'                     => 'Goods Receipt Note',
+    'PURCHASE_INVOICE'        => 'Purchase Bill',
+    'PURCHASE_RETURN'         => 'Purchase Return',
+    'VOUCHER'                 => 'Finance Voucher',
+    'MATERIAL_REQUISITION'    => 'Material Requisition',
+    'MATERIAL_ISSUE'          => 'Material Issue',
+    'STOCK_TRANSFER_REQUEST'  => 'Stock Transfer Request',
+    'STOCK_TRANSFER'          => 'Stock Transfer',
+    'STOCK_RECEIPT'           => 'Stock Receipt',
     _ => documentType,
   };
 }

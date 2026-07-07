@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/printing/print_engine.dart';
+import '../../../../core/printing/print_template_provider.dart';
+import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
@@ -75,6 +78,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
   String? _actionError;
   bool    _saving = false;
   bool    _approving = false;
+  bool    _printing = false;
 
   bool get _isNew => _requisitionNo == null;
 
@@ -330,6 +334,59 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
     return e.message ?? e.toString();
   }
 
+  String _deptLabel(String? id) =>
+      _departments.firstWhere((d) => d['id'] == id, orElse: () => const {})['description'] as String? ?? '';
+  String _areaLabel(_RequisitionLineRow row) =>
+      row.areaOptions.firstWhere((a) => a['id'] == row.consumptionAreaId, orElse: () => const {})['description'] as String? ?? '';
+  String _locationLabel(String? id) =>
+      _locations.firstWhere((l) => l['id'] == id, orElse: () => const {})['location_name'] as String? ?? '';
+
+  Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) => {
+    'company': company,
+    'header': {
+      'requisition_no':   _requisitionNo ?? '',
+      'requisition_date': _displayDate(_requisitionDate),
+      'status':           _status,
+      'location_name':    _locationLabel(_locationId),
+      'requested_by':     _requestedByCtrl.text,
+      'reason':           _reasonCtrl.text,
+      'remarks':          _remarksCtrl.text,
+    },
+    'lines': _lines.where((l) => l.productId != null && l.baseQty > 0).map((l) => {
+      'product_name':    l.productDisplay.contains('] ') ? l.productDisplay.split('] ').last : l.productDisplay,
+      'uom_label':       l.uomLabel ?? '',
+      'base_qty':        l.baseQty,
+      'department_name': _deptLabel(l.departmentId),
+      'area_name':       _areaLabel(l),
+    }).toList(),
+  };
+
+  Future<void> _printRequisition() async {
+    if (_requisitionNo == null) return;
+    setState(() => _printing = true);
+    try {
+      final company  = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
+      final template = await ref.read(printTemplateProvider('MATERIAL_REQUISITION').future);
+      final document = _buildPrintDocument(company);
+      await PrintEngine.printDocument(template: template, document: document, filename: '$_requisitionNo.pdf');
+    } catch (e) {
+      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } finally {
+      if (mounted) setState(() => _printing = false);
+    }
+  }
+
+  Widget _buildPrintButton() => Tooltip(
+    message: _printing ? 'Preparing PDF…' : 'Print / Save as PDF',
+    child: IconButton(
+      icon: _printing
+          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.print_outlined),
+      color: AppColors.primary,
+      onPressed: _printing ? null : _printRequisition,
+    ),
+  );
+
   String _fmtDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   String _displayDate(DateTime? d) {
@@ -377,13 +434,17 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
           child: isMobile
               ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   _buildTitleBlock(),
-                  if (canSave || showApprove) ...[
+                  if (_requisitionNo != null || canSave || showApprove) ...[
                     const SizedBox(height: 10),
-                    _buildActionButtons(canSave: canSave, canApprove: showApprove),
+                    Row(children: [
+                      if (_requisitionNo != null) _buildPrintButton(),
+                      if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
+                    ]),
                   ],
                 ])
               : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(child: _buildTitleBlock()),
+                  if (_requisitionNo != null) _buildPrintButton(),
                   if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
                 ]),
         ),
