@@ -28,10 +28,11 @@ DECLARE
   v_supplier_id     uuid := '00000000-0000-0000-0068-000000000006';
   v_stock_acc_id    uuid := '00000000-0000-0000-0068-000000000007';
   v_expense_acc_id  uuid := '00000000-0000-0000-0068-000000000008';
+  v_accrual_acc_id  uuid := '00000000-0000-0000-0068-000000000009';
   v_product_id      uuid := '00000000-0000-0000-0068-000000000011';
   v_batch_product_id uuid := '00000000-0000-0000-0068-000000000012';
   v_fy_id           uuid := '00000000-0000-0000-0068-000000000013';
-  v_stock_link_type uuid;
+  v_stock_link_type uuid; v_accrual_link_type uuid;
   v_dept_type_id uuid; v_area_type_id uuid;
   v_dept_id uuid := '00000000-0000-0000-0068-000000000021';
   v_area_linked_id uuid := '00000000-0000-0000-0068-000000000022';
@@ -60,7 +61,8 @@ BEGIN
   VALUES
     (v_supplier_id,    v_client_id, v_company_id, '5068', 'Test068 Supplier', 'Supplier', 'OHADA', true, true, false, now()),
     (v_stock_acc_id,   v_client_id, v_company_id, '1368', 'Stock Account',    'General',  'OHADA', true, true, false, now()),
-    (v_expense_acc_id, v_client_id, v_company_id, '6068', 'Consumption Expense - Cutting', 'General', 'OHADA', true, true, false, now())
+    (v_expense_acc_id, v_client_id, v_company_id, '6068', 'Consumption Expense - Cutting', 'General', 'OHADA', true, true, false, now()),
+    (v_accrual_acc_id, v_client_id, v_company_id, '2268', 'Purchase Accrual', 'General',  'OHADA', true, true, false, now())
   ON CONFLICT (id) DO NOTHING;
 
   INSERT INTO rim_products (id, client_id, company_id, product_code, product_name, cost_currency_id, tracking_type, created_by)
@@ -75,14 +77,19 @@ BEGIN
   VALUES (v_fy_id, v_client_id, v_company_id, 'FY TEST068', '2020-01-01', '2030-12-31', true, false)
   ON CONFLICT (id) DO NOTHING;
 
-  SELECT id INTO v_stock_link_type FROM rim_account_link_types WHERE link_key = 'STOCK_ACCOUNT';
+  SELECT id INTO v_stock_link_type   FROM rim_account_link_types WHERE link_key = 'STOCK_ACCOUNT';
+  SELECT id INTO v_accrual_link_type FROM rim_account_link_types WHERE link_key = 'PURCHASE_ACCRUAL_ACCOUNT';
 
   INSERT INTO rim_account_link_setup (client_id, company_id, link_type_id, link_type)
-  VALUES (v_client_id, v_company_id, v_stock_link_type, 'COMPANY')
+  VALUES
+    (v_client_id, v_company_id, v_stock_link_type, 'COMPANY'),
+    (v_client_id, v_company_id, v_accrual_link_type, 'COMPANY')
   ON CONFLICT (client_id, company_id, link_type_id) DO NOTHING;
 
   INSERT INTO rim_account_link_defaults (client_id, company_id, link_type_id, link_key_id, account_id)
-  VALUES (v_client_id, v_company_id, v_stock_link_type, NULL, v_stock_acc_id)
+  VALUES
+    (v_client_id, v_company_id, v_stock_link_type, NULL, v_stock_acc_id),
+    (v_client_id, v_company_id, v_accrual_link_type, NULL, v_accrual_acc_id)
   ON CONFLICT DO NOTHING;
 
   -- Department + Consumption Areas (066)
