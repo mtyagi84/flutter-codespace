@@ -1074,17 +1074,17 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
                         style: const TextStyle(fontSize: 12),
                         onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
                       )),
-                    SizedBox(width: 90, child: TextFormField(
+                    SizedBox(width: 100, child: TextFormField(
                       controller: row.qtyPackCtrl, enabled: !locked,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: showLooseQty ? 'Qty Pack' : 'Quantity'),
+                      decoration: dec.copyWith(labelText: showLooseQty ? 'Qty Pack' : 'Quantity', suffixText: row.uomLabel),
                       style: const TextStyle(fontSize: 12),
                       onChanged: (_) { setState(() {}); unawaited(_refreshCostPrices()); },
                     )),
-                    if (showLooseQty) SizedBox(width: 90, child: TextFormField(
+                    if (showLooseQty) SizedBox(width: 100, child: TextFormField(
                       controller: row.qtyLooseCtrl, enabled: !locked,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: 'Qty Loose'),
+                      decoration: dec.copyWith(labelText: 'Qty Loose', suffixText: row.uomLabel),
                       style: const TextStyle(fontSize: 12),
                       onChanged: (_) { setState(() {}); unawaited(_refreshCostPrices()); },
                     )),
@@ -1143,10 +1143,10 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
               SizedBox(width: 130, child: Text(b.batchNo, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
               SizedBox(width: 150, child: Text('Available: ${b.availableBalance.toStringAsFixed(2)}${b.expiryDate != null ? ' · Exp ${b.expiryDate}' : ''}',
                   style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
-              SizedBox(width: 90, child: TextFormField(
+              SizedBox(width: 100, child: TextFormField(
                 controller: b.qtyCtrl, enabled: !locked,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: dec.copyWith(labelText: 'Qty'),
+                decoration: dec.copyWith(labelText: 'Qty', suffixText: row.uomLabel),
                 style: const TextStyle(fontSize: 12),
                 onChanged: (_) => setState(() {}),
               )),

@@ -727,7 +727,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
                     SizedBox(width: 100, child: TextFormField(
                       controller: row.qtyPackCtrl, enabled: !locked,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: showLooseQty ? 'Issue Qty Pack' : 'Issue Qty'),
+                      decoration: dec.copyWith(labelText: showLooseQty ? 'Issue Qty Pack' : 'Issue Qty', suffixText: row.uomLabel),
                       style: const TextStyle(fontSize: 12),
                       onChanged: (_) => setState(() {}),
                     )),
@@ -736,7 +736,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
                       SizedBox(width: 100, child: TextFormField(
                         controller: row.qtyLooseCtrl, enabled: !locked,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: dec.copyWith(labelText: 'Issue Qty Loose'),
+                        decoration: dec.copyWith(labelText: 'Issue Qty Loose', suffixText: row.uomLabel),
                         style: const TextStyle(fontSize: 12),
                         onChanged: (_) => setState(() {}),
                       )),
@@ -785,10 +785,10 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
               SizedBox(width: 130, child: Text(b.batchNo, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
               SizedBox(width: 150, child: Text('Available: ${b.availableBalance.toStringAsFixed(2)}${b.expiryDate != null ? ' · Exp ${b.expiryDate}' : ''}',
                   style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
-              SizedBox(width: 90, child: TextFormField(
+              SizedBox(width: 100, child: TextFormField(
                 controller: b.qtyCtrl, enabled: !locked,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: dec.copyWith(labelText: 'Issue Qty'),
+                decoration: dec.copyWith(labelText: 'Issue Qty', suffixText: row.uomLabel),
                 style: const TextStyle(fontSize: 12),
                 onChanged: (_) => setState(() {}),
               )),

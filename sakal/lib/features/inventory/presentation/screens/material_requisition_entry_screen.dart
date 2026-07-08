@@ -683,17 +683,17 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
                     style: const TextStyle(fontSize: 13),
                     onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
                   )),
-                  SizedBox(width: 90, child: TextFormField(
+                  SizedBox(width: 100, child: TextFormField(
                     controller: row.qtyPackCtrl, enabled: !locked,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: dec.copyWith(labelText: showLooseQty ? 'Qty Pack' : 'Quantity'),
+                    decoration: dec.copyWith(labelText: showLooseQty ? 'Qty Pack' : 'Quantity', suffixText: row.uomLabel),
                     style: const TextStyle(fontSize: 13),
                     onChanged: (_) => setState(() {}),
                   )),
-                  if (showLooseQty) SizedBox(width: 90, child: TextFormField(
+                  if (showLooseQty) SizedBox(width: 100, child: TextFormField(
                     controller: row.qtyLooseCtrl, enabled: !locked,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: dec.copyWith(labelText: 'Qty Loose'),
+                    decoration: dec.copyWith(labelText: 'Qty Loose', suffixText: row.uomLabel),
                     style: const TextStyle(fontSize: 13),
                     onChanged: (_) => setState(() {}),
                   )),

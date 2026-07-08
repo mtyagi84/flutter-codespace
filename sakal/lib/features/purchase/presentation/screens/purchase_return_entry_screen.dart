@@ -1317,19 +1317,19 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
                       ]),
                     ),
                     const SizedBox(width: 8),
-                    SizedBox(width: 90, child: TextFormField(
+                    SizedBox(width: 100, child: TextFormField(
                       controller: row.qtyPackCtrl, enabled: !locked,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: showLooseQty ? 'Return Qty Pack' : 'Return Qty'),
+                      decoration: dec.copyWith(labelText: showLooseQty ? 'Return Qty Pack' : 'Return Qty', suffixText: row.uomLabel),
                       style: const TextStyle(fontSize: 12),
                       onChanged: (_) => _recomputeTotals(),
                     )),
                     if (showLooseQty) ...[
                       const SizedBox(width: 8),
-                      SizedBox(width: 90, child: TextFormField(
+                      SizedBox(width: 100, child: TextFormField(
                         controller: row.qtyLooseCtrl, enabled: !locked,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: dec.copyWith(labelText: 'Return Qty Loose'),
+                        decoration: dec.copyWith(labelText: 'Return Qty Loose', suffixText: row.uomLabel),
                         style: const TextStyle(fontSize: 12),
                         onChanged: (_) => _recomputeTotals(),
                       )),
@@ -1406,10 +1406,10 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
               SizedBox(width: 130, child: Text(
                   'Available: ${b.availableBalance.toStringAsFixed(2)}${b.expiryDate != null ? ' · Exp ${b.expiryDate}' : ''}',
                   style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
-              SizedBox(width: 90, child: TextFormField(
+              SizedBox(width: 100, child: TextFormField(
                 controller: b.qtyCtrl, enabled: !locked,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: dec.copyWith(labelText: 'Return Qty'),
+                decoration: dec.copyWith(labelText: 'Return Qty', suffixText: row.uomLabel),
                 style: const TextStyle(fontSize: 12),
                 onChanged: (_) => setState(() {}),
               )),

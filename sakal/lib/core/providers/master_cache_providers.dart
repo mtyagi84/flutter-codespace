@@ -162,6 +162,20 @@ final accountsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async 
   });
   final accounts = List<Map<String, dynamic>>.from(res.data as List);
 
+  // Defensive normalization: a to-one PostgREST embed (parent/rim_currencies)
+  // is expected to come back as an object or null, but returns a LIST if the
+  // embed relationship becomes ambiguous (e.g. a second FK added between the
+  // same two tables elsewhere in the schema). Sanitize once here, at the
+  // source, so every current and future consumer of this shared provider
+  // gets a guaranteed Map-or-null — never has to defensively re-check this
+  // itself, and never crashes on an unguarded `as Map<String, dynamic>?`.
+  for (final a in accounts) {
+    final parentRel = a['parent'];
+    if (parentRel is List) a['parent'] = parentRel.isNotEmpty ? parentRel.first as Map<String, dynamic>? : null;
+    final currRel = a['rim_currencies'];
+    if (currRel is List) a['rim_currencies'] = currRel.isNotEmpty ? currRel.first as Map<String, dynamic>? : null;
+  }
+
   if (!kIsWeb) {
     final db  = ref.read(appDatabaseProvider);
     final now = DateTime.now();

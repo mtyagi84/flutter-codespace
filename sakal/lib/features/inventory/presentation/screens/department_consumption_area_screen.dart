@@ -318,7 +318,8 @@ class _DepartmentConsumptionAreaScreenState extends ConsumerState<DepartmentCons
                           itemCount: opts.length,
                           itemBuilder: (context, idx) {
                             final a = opts.elementAt(idx);
-                            final parent = a['parent'] as Map<String, dynamic>?;
+                            final parentRaw = a['parent'];
+                            final parent = parentRaw is Map<String, dynamic> ? parentRaw : null;
                             return InkWell(
                               onTap: () => onSel(a),
                               child: Padding(
