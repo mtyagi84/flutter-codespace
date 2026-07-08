@@ -48,6 +48,10 @@ import '../../features/inventory/presentation/screens/stock_receipt_list_screen.
 import '../../features/inventory/presentation/screens/stock_receipt_entry_screen.dart';
 import '../../features/inventory/presentation/screens/opening_stock_list_screen.dart';
 import '../../features/inventory/presentation/screens/opening_stock_entry_screen.dart';
+import '../../features/inventory/presentation/screens/stock_count_list_screen.dart';
+import '../../features/inventory/presentation/screens/stock_count_entry_screen.dart';
+import '../../features/inventory/presentation/screens/stock_count_review_list_screen.dart';
+import '../../features/inventory/presentation/screens/stock_count_review_entry_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_list_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_entry_screen.dart';
 import '../../features/purchase/presentation/screens/grn_list_screen.dart';
@@ -332,6 +336,28 @@ final appRouter = GoRouter(
             return OpeningStockEntryScreen(
               editOpeningNo:   extra?['openingNo']   as String?,
               editOpeningDate: extra?['openingDate'] as String?,
+            );
+          },
+        ),
+        GoRoute(path: RouteNames.stockCount, builder: (c, s) => const StockCountListScreen()),
+        GoRoute(
+          path: RouteNames.stockCountEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return StockCountEntryScreen(
+              editCountNo:   extra?['countNo']   as String?,
+              editCountDate: extra?['countDate'] as String?,
+            );
+          },
+        ),
+        GoRoute(path: RouteNames.stockCountReview, builder: (c, s) => const StockCountReviewListScreen()),
+        GoRoute(
+          path: RouteNames.stockCountReviewEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return StockCountReviewEntryScreen(
+              editReviewNo:   extra?['reviewNo']   as String?,
+              editReviewDate: extra?['reviewDate'] as String?,
             );
           },
         ),

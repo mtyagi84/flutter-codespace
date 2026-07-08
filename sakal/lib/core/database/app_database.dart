@@ -18,6 +18,7 @@ import 'tables/stock_transfer_cache_tables.dart';
 import 'tables/stock_receipt_cache_tables.dart';
 import 'tables/stock_adjustment_cache_tables.dart';
 import 'tables/opening_stock_cache_tables.dart';
+import 'tables/stock_count_cache_tables.dart';
 
 part 'app_database.g.dart';
 
@@ -56,12 +57,14 @@ part 'app_database.g.dart';
   StockAdjustmentLinesCache,
   OpeningStockHeadersCache,
   OpeningStockLinesCache,
+  StockCountHeadersCache,
+  StockCountLinesCache,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'sakal_local'));
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -117,6 +120,10 @@ class AppDatabase extends _$AppDatabase {
           if (from < 13) {
             await m.createTable(openingStockHeadersCache);
             await m.createTable(openingStockLinesCache);
+          }
+          if (from < 14) {
+            await m.createTable(stockCountHeadersCache);
+            await m.createTable(stockCountLinesCache);
           }
         },
       );

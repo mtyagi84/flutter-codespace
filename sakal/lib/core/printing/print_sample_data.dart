@@ -200,6 +200,37 @@ class PrintSampleData {
         {'product_name': 'Sample Item B', 'batch_no': 'B001', 'serial_no': '', 'base_qty': 6, 'unit_cost': 8.0, 'amount': 48.0},
       ],
     },
+    'STOCK_COUNT' => {
+      'company': _company(),
+      'header': {
+        'count_no':      'CNT/2026/00001',
+        'count_date':    '10 Jul 2026',
+        'status':        'SUBMITTED',
+        'location_name': 'Main Warehouse',
+        'category':      'Grocery › Snacks',
+        'remarks':       'Sample remarks for preview.',
+      },
+      'lines': [
+        {'product_name': 'Sample Item A', 'counted_qty': 42},
+        {'product_name': 'Sample Item B', 'counted_qty': 15},
+      ],
+    },
+    'STOCK_COUNT_REVIEW' => {
+      'company': _company(),
+      'header': {
+        'review_no':             'CNTR/2026/00001',
+        'review_date':           '11 Jul 2026',
+        'as_of_date':            '10 Jul 2026',
+        'status':                'APPROVED',
+        'location_name':         'Main Warehouse',
+        'posted_adjustment_no':  'ADJ/2026/00003',
+        'remarks':               'Sample remarks for preview.',
+      },
+      'lines': [
+        {'product_name': 'Sample Item A', 'batch_no': '', 'serial_no': '', 'counted_qty': 42, 'system_qty': 40, 'variance_qty': 2, 'adjust_flag': '+'},
+        {'product_name': 'Sample Item B', 'batch_no': 'B001', 'serial_no': '', 'counted_qty': 15, 'system_qty': 18, 'variance_qty': -3, 'adjust_flag': '-'},
+      ],
+    },
     _ => {'company': _company(), 'header': {}, 'lines': [], 'totals': {}},
   };
 }

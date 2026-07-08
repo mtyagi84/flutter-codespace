@@ -159,6 +159,25 @@ class PrintFieldRegistry {
     PrintFieldDef('header.remarks', 'Remarks'),
   ];
 
+  static const _stockCountScalarFields = [
+    PrintFieldDef('header.count_no', 'Count Number'),
+    PrintFieldDef('header.count_date', 'Count Date'),
+    PrintFieldDef('header.status', 'Status'),
+    PrintFieldDef('header.location_name', 'Location'),
+    PrintFieldDef('header.category', 'Category'),
+    PrintFieldDef('header.remarks', 'Remarks'),
+  ];
+
+  static const _stockCountReviewScalarFields = [
+    PrintFieldDef('header.review_no', 'Review Number'),
+    PrintFieldDef('header.review_date', 'Review Date'),
+    PrintFieldDef('header.as_of_date', 'As Of Date'),
+    PrintFieldDef('header.status', 'Status'),
+    PrintFieldDef('header.location_name', 'Location'),
+    PrintFieldDef('header.posted_adjustment_no', 'Posted Stock Adjustment No'),
+    PrintFieldDef('header.remarks', 'Remarks'),
+  ];
+
   static const _companyFields = [
     PrintFieldDef('company.company_name', 'Company Name'),
     PrintFieldDef('company.address', 'Company Address'),
@@ -297,6 +316,25 @@ class PrintFieldRegistry {
     ],
   };
 
+  static const _stockCountTableRowFields = {
+    'lines': [
+      PrintFieldDef('product_name', 'Item Name'),
+      PrintFieldDef('counted_qty', 'Counted Quantity', PrintDataFormat.number),
+    ],
+  };
+
+  static const _stockCountReviewTableRowFields = {
+    'lines': [
+      PrintFieldDef('product_name', 'Item Name'),
+      PrintFieldDef('batch_no', 'Batch No'),
+      PrintFieldDef('serial_no', 'Serial No'),
+      PrintFieldDef('counted_qty', 'Counted Quantity', PrintDataFormat.number),
+      PrintFieldDef('system_qty', 'System Quantity', PrintDataFormat.number),
+      PrintFieldDef('variance_qty', 'Variance Quantity', PrintDataFormat.number),
+      PrintFieldDef('adjust_flag', 'Direction'),
+    ],
+  };
+
   /// Every scalar field (usable by text/field/image/barcode/watermark
   /// elements) available for a document type, company fields included.
   static List<PrintFieldDef> scalarFields(String documentType) => [
@@ -313,6 +351,8 @@ class PrintFieldRegistry {
       'STOCK_RECEIPT'           => _stockReceiptScalarFields,
       'STOCK_ADJUSTMENT'        => _stockAdjustmentScalarFields,
       'OPENING_STOCK'           => _openingStockScalarFields,
+      'STOCK_COUNT'             => _stockCountScalarFields,
+      'STOCK_COUNT_REVIEW'      => _stockCountReviewScalarFields,
       _ => const <PrintFieldDef>[],
     },
     ..._companyFields,
@@ -332,6 +372,8 @@ class PrintFieldRegistry {
     'STOCK_RECEIPT'           => const ['lines'],
     'STOCK_ADJUSTMENT'        => const ['lines'],
     'OPENING_STOCK'           => const ['lines'],
+    'STOCK_COUNT'             => const ['lines'],
+    'STOCK_COUNT_REVIEW'      => const ['lines'],
     _ => const [],
   };
 
@@ -349,6 +391,8 @@ class PrintFieldRegistry {
     'STOCK_RECEIPT'           => _stockReceiptTableRowFields[tableName] ?? const [],
     'STOCK_ADJUSTMENT'        => _stockAdjustmentTableRowFields[tableName] ?? const [],
     'OPENING_STOCK'           => _openingStockTableRowFields[tableName] ?? const [],
+    'STOCK_COUNT'             => _stockCountTableRowFields[tableName] ?? const [],
+    'STOCK_COUNT_REVIEW'      => _stockCountReviewTableRowFields[tableName] ?? const [],
     _ => const [],
   };
 
@@ -359,7 +403,7 @@ class PrintFieldRegistry {
   static const documentTypes = [
     'PURCHASE_ORDER', 'GRN', 'PURCHASE_INVOICE', 'PURCHASE_RETURN', 'VOUCHER',
     'MATERIAL_REQUISITION', 'MATERIAL_ISSUE', 'STOCK_TRANSFER_REQUEST', 'STOCK_TRANSFER', 'STOCK_RECEIPT',
-    'STOCK_ADJUSTMENT', 'OPENING_STOCK',
+    'STOCK_ADJUSTMENT', 'OPENING_STOCK', 'STOCK_COUNT', 'STOCK_COUNT_REVIEW',
   ];
 
   static String documentTypeLabel(String documentType) => switch (documentType) {
@@ -375,6 +419,8 @@ class PrintFieldRegistry {
     'STOCK_RECEIPT'           => 'Stock Receipt',
     'STOCK_ADJUSTMENT'        => 'Stock Adjustment',
     'OPENING_STOCK'           => 'Opening Stock',
+    'STOCK_COUNT'             => 'Stock Count',
+    'STOCK_COUNT_REVIEW'      => 'Stock Count Review',
     _ => documentType,
   };
 }

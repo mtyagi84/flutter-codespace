@@ -13,6 +13,8 @@ import 'default_templates/stock_transfer_default_template.dart';
 import 'default_templates/stock_receipt_default_template.dart';
 import 'default_templates/stock_adjustment_default_template.dart';
 import 'default_templates/opening_stock_default_template.dart';
+import 'default_templates/stock_count_default_template.dart';
+import 'default_templates/stock_count_review_default_template.dart';
 import 'print_models.dart';
 
 /// Fetches the company's active default template for a document type, or
@@ -60,5 +62,7 @@ PrintTemplate defaultTemplateFor(String documentType) => switch (documentType) {
   'STOCK_RECEIPT'           => stockReceiptDefaultTemplate,
   'STOCK_ADJUSTMENT'        => stockAdjustmentDefaultTemplate,
   'OPENING_STOCK'           => openingStockDefaultTemplate,
+  'STOCK_COUNT'             => stockCountDefaultTemplate,
+  'STOCK_COUNT_REVIEW'      => stockCountReviewDefaultTemplate,
   _ => throw ArgumentError('No default print template registered for document type "$documentType".'),
 };
