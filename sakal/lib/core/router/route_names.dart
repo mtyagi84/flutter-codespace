@@ -57,6 +57,8 @@ class RouteNames {
   static const String materialIssueEntry        = '/inventory/material-issue-entry';
   static const String stockTransferRequests     = '/inventory/stock-transfer-requests';
   static const String stockTransferRequestEntry = '/inventory/stock-transfer-request-entry';
+  static const String openingStock              = '/inventory/opening-stock';
+  static const String openingStockEntry         = '/inventory/opening-stock-entry';
   static const String stockReceipts             = '/inventory/stock-receipts';
   static const String stockReceiptEntry         = '/inventory/stock-receipt-entry';
 

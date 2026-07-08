@@ -24,6 +24,7 @@ mixin ScreenPermissionMixin<T extends ConsumerStatefulWidget> on ConsumerState<T
               'can_edit':    item.editAllowed,
               'can_approve': item.approveAllowed,
               'can_copy':    item.copyAllowed,
+              'can_excel_upload': item.excelUploadAllowed,
             };
           }
         }
@@ -36,6 +37,7 @@ mixin ScreenPermissionMixin<T extends ConsumerStatefulWidget> on ConsumerState<T
   bool get canEdit    => (_findFeature()?['can_edit']    as bool?) ?? true;
   bool get canApprove => (_findFeature()?['can_approve'] as bool?) ?? false;
   bool get canCopy    => (_findFeature()?['can_copy']    as bool?) ?? false;
+  bool get canExcelUpload => (_findFeature()?['can_excel_upload'] as bool?) ?? false;
 
   /// Call once after load (e.g. at end of _load()) to print permission state.
   /// Output appears in browser DevTools console or Codespace flutter run terminal.

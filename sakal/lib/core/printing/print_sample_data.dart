@@ -186,6 +186,20 @@ class PrintSampleData {
         {'product_name': 'Sample Item B', 'direction': 'Decrease', 'base_qty': 2, 'system_qty': 20},
       ],
     },
+    'OPENING_STOCK' => {
+      'company': _company(),
+      'header': {
+        'opening_no':    'OPST/2026/00001',
+        'opening_date':  '10 Jul 2026',
+        'status':        'DRAFT',
+        'location_name': 'Main Warehouse',
+        'remarks':       'Sample remarks for preview.',
+      },
+      'lines': [
+        {'product_name': 'Sample Item A', 'batch_no': '', 'serial_no': '', 'base_qty': 20, 'unit_cost': 5.0, 'amount': 100.0},
+        {'product_name': 'Sample Item B', 'batch_no': 'B001', 'serial_no': '', 'base_qty': 6, 'unit_cost': 8.0, 'amount': 48.0},
+      ],
+    },
     _ => {'company': _company(), 'header': {}, 'lines': [], 'totals': {}},
   };
 }

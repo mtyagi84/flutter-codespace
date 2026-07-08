@@ -46,6 +46,8 @@ import '../../features/inventory/presentation/screens/stock_transfer_list_screen
 import '../../features/inventory/presentation/screens/stock_transfer_entry_screen.dart';
 import '../../features/inventory/presentation/screens/stock_receipt_list_screen.dart';
 import '../../features/inventory/presentation/screens/stock_receipt_entry_screen.dart';
+import '../../features/inventory/presentation/screens/opening_stock_list_screen.dart';
+import '../../features/inventory/presentation/screens/opening_stock_entry_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_list_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_entry_screen.dart';
 import '../../features/purchase/presentation/screens/grn_list_screen.dart';
@@ -319,6 +321,17 @@ final appRouter = GoRouter(
             return StockReceiptEntryScreen(
               editReceiptNo:   extra?['receiptNo']   as String?,
               editReceiptDate: extra?['receiptDate'] as String?,
+            );
+          },
+        ),
+        GoRoute(path: RouteNames.openingStock, builder: (c, s) => const OpeningStockListScreen()),
+        GoRoute(
+          path: RouteNames.openingStockEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return OpeningStockEntryScreen(
+              editOpeningNo:   extra?['openingNo']   as String?,
+              editOpeningDate: extra?['openingDate'] as String?,
             );
           },
         ),

@@ -151,6 +151,14 @@ class PrintFieldRegistry {
     PrintFieldDef('header.remarks', 'Remarks'),
   ];
 
+  static const _openingStockScalarFields = [
+    PrintFieldDef('header.opening_no', 'Opening Number'),
+    PrintFieldDef('header.opening_date', 'Opening Date'),
+    PrintFieldDef('header.status', 'Status'),
+    PrintFieldDef('header.location_name', 'Location'),
+    PrintFieldDef('header.remarks', 'Remarks'),
+  ];
+
   static const _companyFields = [
     PrintFieldDef('company.company_name', 'Company Name'),
     PrintFieldDef('company.address', 'Company Address'),
@@ -278,6 +286,17 @@ class PrintFieldRegistry {
     ],
   };
 
+  static const _openingStockTableRowFields = {
+    'lines': [
+      PrintFieldDef('product_name', 'Item Name'),
+      PrintFieldDef('batch_no', 'Batch No'),
+      PrintFieldDef('serial_no', 'Serial No'),
+      PrintFieldDef('base_qty', 'Quantity', PrintDataFormat.number),
+      PrintFieldDef('unit_cost', 'Unit Cost', PrintDataFormat.currency),
+      PrintFieldDef('amount', 'Amount', PrintDataFormat.currency),
+    ],
+  };
+
   /// Every scalar field (usable by text/field/image/barcode/watermark
   /// elements) available for a document type, company fields included.
   static List<PrintFieldDef> scalarFields(String documentType) => [
@@ -293,6 +312,7 @@ class PrintFieldRegistry {
       'STOCK_TRANSFER'          => _stockTransferScalarFields,
       'STOCK_RECEIPT'           => _stockReceiptScalarFields,
       'STOCK_ADJUSTMENT'        => _stockAdjustmentScalarFields,
+      'OPENING_STOCK'           => _openingStockScalarFields,
       _ => const <PrintFieldDef>[],
     },
     ..._companyFields,
@@ -311,6 +331,7 @@ class PrintFieldRegistry {
     'STOCK_TRANSFER'          => const ['lines', 'charges'],
     'STOCK_RECEIPT'           => const ['lines'],
     'STOCK_ADJUSTMENT'        => const ['lines'],
+    'OPENING_STOCK'           => const ['lines'],
     _ => const [],
   };
 
@@ -327,6 +348,7 @@ class PrintFieldRegistry {
     'STOCK_TRANSFER'          => _stockTransferTableRowFields[tableName] ?? const [],
     'STOCK_RECEIPT'           => _stockReceiptTableRowFields[tableName] ?? const [],
     'STOCK_ADJUSTMENT'        => _stockAdjustmentTableRowFields[tableName] ?? const [],
+    'OPENING_STOCK'           => _openingStockTableRowFields[tableName] ?? const [],
     _ => const [],
   };
 
@@ -337,7 +359,7 @@ class PrintFieldRegistry {
   static const documentTypes = [
     'PURCHASE_ORDER', 'GRN', 'PURCHASE_INVOICE', 'PURCHASE_RETURN', 'VOUCHER',
     'MATERIAL_REQUISITION', 'MATERIAL_ISSUE', 'STOCK_TRANSFER_REQUEST', 'STOCK_TRANSFER', 'STOCK_RECEIPT',
-    'STOCK_ADJUSTMENT',
+    'STOCK_ADJUSTMENT', 'OPENING_STOCK',
   ];
 
   static String documentTypeLabel(String documentType) => switch (documentType) {
@@ -352,6 +374,7 @@ class PrintFieldRegistry {
     'STOCK_TRANSFER'          => 'Stock Transfer',
     'STOCK_RECEIPT'           => 'Stock Receipt',
     'STOCK_ADJUSTMENT'        => 'Stock Adjustment',
+    'OPENING_STOCK'           => 'Opening Stock',
     _ => documentType,
   };
 }

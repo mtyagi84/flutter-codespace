@@ -48,6 +48,11 @@ dependencies:
   freezed_annotation: ^2.4.4
   json_annotation: ^4.9.0
 
+  # Excel upload (Opening Stock one-time legacy data import) — pure Dart,
+  # no native/CDN dependency, consistent with the offline-first rule.
+  file_picker: ^8.1.2
+  excel: ^4.0.6
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
