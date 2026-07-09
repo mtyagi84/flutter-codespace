@@ -82,7 +82,6 @@ class _DepartmentConsumptionAreaScreenState extends ConsumerState<DepartmentCons
       if (!mounted) return;
       setState(() {
         _rows.addAll(rows.map((r) {
-          final area    = r['area'] as Map<String, dynamic>?;
           final account = r['account'] as Map<String, dynamic>?;
           return _LinkRow(
             id: r['id'] as String,

@@ -545,6 +545,7 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
       final saved = await _saveDraft();
       if (!saved) return;
     }
+    if (!mounted) return;
     if (_adjustmentDate.isAfter(DateTime.now())) {
       _showSnack('Adjustment date cannot be in the future.', color: AppColors.negative);
       return;

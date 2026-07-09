@@ -653,6 +653,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
       final saved = await _saveDraft();
       if (!saved) return;
     }
+    if (!mounted) return;
     if (_transferDate.isAfter(DateTime.now())) {
       _showSnack('Transfer date cannot be in the future.', color: AppColors.negative);
       return;

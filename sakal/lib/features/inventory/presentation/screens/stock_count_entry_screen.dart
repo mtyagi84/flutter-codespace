@@ -439,6 +439,7 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
   Future<void> _submitCount() async {
     final saved = await _saveDraft(showSnack: false);
     if (!saved || _countNo == null) return;
+    if (!mounted) return;
 
     final confirmed = await showDialog<bool>(
       context: context,

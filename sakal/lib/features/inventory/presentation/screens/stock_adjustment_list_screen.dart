@@ -116,10 +116,10 @@ class _StockAdjustmentListScreenState extends ConsumerState<StockAdjustmentListS
               value: _filterStatus,
               hint: const Text('All Status', style: TextStyle(fontSize: 13)),
               isDense: true, underline: const SizedBox.shrink(),
-              items: [
-                const DropdownMenuItem(value: null, child: Text('All Status', style: TextStyle(fontSize: 13))),
-                const DropdownMenuItem(value: 'DRAFT', child: Text('Draft', style: TextStyle(fontSize: 13))),
-                const DropdownMenuItem(value: 'APPROVED', child: Text('Approved', style: TextStyle(fontSize: 13))),
+              items: const [
+                DropdownMenuItem(value: null, child: Text('All Status', style: TextStyle(fontSize: 13))),
+                DropdownMenuItem(value: 'DRAFT', child: Text('Draft', style: TextStyle(fontSize: 13))),
+                DropdownMenuItem(value: 'APPROVED', child: Text('Approved', style: TextStyle(fontSize: 13))),
               ],
               onChanged: (v) { setState(() => _filterStatus = v); _load(); },
             ),

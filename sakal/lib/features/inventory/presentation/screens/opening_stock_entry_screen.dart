@@ -459,6 +459,7 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
       final saved = await _saveDraft();
       if (!saved) return;
     }
+    if (!mounted) return;
     if (_openingDate.isAfter(DateTime.now())) {
       _showSnack('Opening date cannot be in the future.', color: AppColors.negative);
       return;

@@ -479,6 +479,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
       final saved = await _saveDraft();
       if (!saved) return;
     }
+    if (!mounted) return;
     if (_receiptDate.isAfter(DateTime.now())) {
       _showSnack('Receipt date cannot be in the future.', color: AppColors.negative);
       return;

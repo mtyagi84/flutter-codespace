@@ -126,7 +126,6 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
   final List<_IssueLineRow> _lines = [];
 
   bool    _loading = true;
-  bool    _loadingRequisitions = false;
   String? _error;
   String? _actionError;
   bool    _saving = false;
@@ -411,6 +410,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
       final saved = await _saveDraft();
       if (!saved) return;
     }
+    if (!mounted) return;
     if (_issueDate.isAfter(DateTime.now())) {
       _showSnack('Issue date cannot be in the future.', color: AppColors.negative);
       return;
@@ -672,8 +672,6 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
           const SizedBox(height: 12),
           if (_locationId == null)
             const Text('Set a From Location first.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary))
-          else if (_loadingRequisitions)
-            const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
           else if (_pendingRequisitions.isEmpty)
             const Text('No fulfillable requisitions at this location.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary))
           else

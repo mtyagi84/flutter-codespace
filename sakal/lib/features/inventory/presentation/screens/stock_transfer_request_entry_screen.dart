@@ -259,6 +259,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
       final saved = await _saveDraft();
       if (!saved) return;
     }
+    if (!mounted) return;
     if (_requestDate.isAfter(DateTime.now())) {
       _showSnack('Request date cannot be in the future.', color: AppColors.negative);
       return;

@@ -765,6 +765,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
       final saved = await _saveDraft();
       if (!saved) return;
     }
+    if (!mounted) return;
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -783,6 +784,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
       ),
     );
     if (confirmed != true) return;
+    if (!mounted) return;
 
     var reopenPo = false;
     if (_lines.any((l) => l.hasSourcePo)) {
@@ -1101,7 +1103,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
                 onSelected: (s) => _onSupplierSelected(s),
                 fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
                   controller: textCtrl, focusNode: focusNode, enabled: !supplierLocked,
-                  decoration: dec.copyWith(labelText: 'Supplier *',
+                  decoration: dec.copyWith(label: _req('Supplier'),
                       helperText: supplierLocked && !locked ? 'Locked once a GRN is picked' : null,
                       helperStyle: const TextStyle(fontSize: 10)),
                   style: const TextStyle(fontSize: 13),
@@ -1141,7 +1143,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
             final f3 = field(InkWell(
               onTap: locked ? null : () => _pickDate(_returnDate, (d) => setState(() => _returnDate = d)),
               child: InputDecorator(
-                decoration: dec.copyWith(labelText: 'Return Date *',
+                decoration: dec.copyWith(label: _req('Return Date'),
                     suffixIcon: Icon(Icons.calendar_today_outlined, size: 15,
                         color: locked ? AppColors.textDisabled : AppColors.primary)),
                 child: Text(_displayDate(_returnDate), style: const TextStyle(fontSize: 13)),

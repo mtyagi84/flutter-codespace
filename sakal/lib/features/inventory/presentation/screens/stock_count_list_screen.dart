@@ -116,11 +116,11 @@ class _StockCountListScreenState extends ConsumerState<StockCountListScreen>
               value: _filterStatus,
               hint: const Text('All Status', style: TextStyle(fontSize: 13)),
               isDense: true, underline: const SizedBox.shrink(),
-              items: [
-                const DropdownMenuItem(value: null, child: Text('All Status', style: TextStyle(fontSize: 13))),
-                const DropdownMenuItem(value: 'DRAFT', child: Text('Draft', style: TextStyle(fontSize: 13))),
-                const DropdownMenuItem(value: 'SUBMITTED', child: Text('Submitted', style: TextStyle(fontSize: 13))),
-                const DropdownMenuItem(value: 'CONSOLIDATED', child: Text('Consolidated', style: TextStyle(fontSize: 13))),
+              items: const [
+                DropdownMenuItem(value: null, child: Text('All Status', style: TextStyle(fontSize: 13))),
+                DropdownMenuItem(value: 'DRAFT', child: Text('Draft', style: TextStyle(fontSize: 13))),
+                DropdownMenuItem(value: 'SUBMITTED', child: Text('Submitted', style: TextStyle(fontSize: 13))),
+                DropdownMenuItem(value: 'CONSOLIDATED', child: Text('Consolidated', style: TextStyle(fontSize: 13))),
               ],
               onChanged: (v) { setState(() => _filterStatus = v); _load(); },
             ),

@@ -288,6 +288,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
       final saved = await _saveDraft();
       if (!saved) return;
     }
+    if (!mounted) return;
     if (_requisitionDate.isAfter(DateTime.now())) {
       _showSnack('Requisition date cannot be in the future.', color: AppColors.negative);
       return;
@@ -541,7 +542,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
         child: Column(children: [
           Builder(builder: (_) {
             final f1 = field(DropdownButtonFormField<String>(
-              decoration: dec.copyWith(labelText: 'From Location *'),
+              decoration: dec.copyWith(label: _req('From Location')),
               isExpanded: true, isDense: true, itemHeight: null,
               initialValue: _locationId,
               items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
@@ -556,7 +557,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
             final f3 = field(InkWell(
               onTap: locked ? null : () => _pickDate(_requisitionDate, (d) => setState(() => _requisitionDate = d)),
               child: InputDecorator(
-                decoration: dec.copyWith(labelText: 'Requisition Date *',
+                decoration: dec.copyWith(label: _req('Requisition Date'),
                     suffixIcon: Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary)),
                 child: Text(_displayDate(_requisitionDate), style: const TextStyle(fontSize: 13)),
               ),
