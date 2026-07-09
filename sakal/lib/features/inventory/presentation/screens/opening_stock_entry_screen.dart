@@ -36,6 +36,7 @@ class _OpeningLineRow {
   final TextEditingController qtyLooseCtrl = TextEditingController(text: '0');
   final TextEditingController batchNoCtrl  = TextEditingController();
   DateTime? expiryDate;
+  DateTime? manufacturingDate;
   final TextEditingController serialNoCtrl  = TextEditingController();
   final TextEditingController unitCostCtrl  = TextEditingController(text: '0');
   final TextEditingController remarksCtrl   = TextEditingController();
@@ -146,7 +147,8 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
               ..uomLabel = uom?['description'] as String?
               ..uomConversionFactor = (sl['uom_conversion_factor'] as num? ?? 1).toDouble()
               ..matchedBarcode = sl['barcode'] as String?
-              ..expiryDate = (sl['expiry_date'] as String?)?.isNotEmpty == true ? DateTime.tryParse(sl['expiry_date'] as String) : null;
+              ..expiryDate = (sl['expiry_date'] as String?)?.isNotEmpty == true ? DateTime.tryParse(sl['expiry_date'] as String) : null
+              ..manufacturingDate = (sl['manufacturing_date'] as String?)?.isNotEmpty == true ? DateTime.tryParse(sl['manufacturing_date'] as String) : null;
             row.qtyPackCtrl.text = ((sl['pack_qty'] as num?) ?? 0).toString();
             row.qtyLooseCtrl.text = ((sl['loose_qty'] as num?) ?? 0).toString();
             row.batchNoCtrl.text = sl['batch_no'] as String? ?? '';
@@ -195,6 +197,7 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
     String? matchedCode,
     String? batchNo,
     String? expiryDateStr,
+    String? manufacturingDateStr,
     String? serialNo,
     double? packQty,
     double? looseQty,
@@ -211,6 +214,7 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
     row.uomLabel = uom?['description'] as String?;
     if (batchNo != null && batchNo.isNotEmpty) row.batchNoCtrl.text = batchNo;
     if (expiryDateStr != null && expiryDateStr.isNotEmpty) row.expiryDate = DateTime.tryParse(expiryDateStr);
+    if (manufacturingDateStr != null && manufacturingDateStr.isNotEmpty) row.manufacturingDate = DateTime.tryParse(manufacturingDateStr);
     if (serialNo != null && serialNo.isNotEmpty) row.serialNoCtrl.text = serialNo;
     if (packQty != null) row.qtyPackCtrl.text = packQty.toString();
     if (looseQty != null) row.qtyLooseCtrl.text = looseQty.toString();
@@ -298,6 +302,7 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
       final idxCode    = col('product_code');
       final idxBatch   = col('batch_no');
       final idxExpiry  = col('expiry_date');
+      final idxMfgDate = col('manufacturing_date');
       final idxSerial  = col('serial_no');
       final idxPack    = col('pack_qty');
       final idxLoose   = col('loose_qty');
@@ -329,6 +334,7 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
           product,
           batchNo: idxBatch == -1 ? null : cellStr(row, idxBatch),
           expiryDateStr: idxExpiry == -1 ? null : cellStr(row, idxExpiry),
+          manufacturingDateStr: idxMfgDate == -1 ? null : cellStr(row, idxMfgDate),
           serialNo: idxSerial == -1 ? null : cellStr(row, idxSerial),
           packQty: packQty, looseQty: looseQty, unitCost: cost,
           remarks: idxRemarks == -1 ? null : cellStr(row, idxRemarks),
@@ -364,7 +370,7 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
     final workbook = xls.Excel.createExcel();
     final sheetName = workbook.getDefaultSheet()!;
     final sheet = workbook[sheetName];
-    const headers = ['product_code', 'batch_no', 'expiry_date', 'serial_no', 'pack_qty', 'loose_qty', 'unit_cost', 'remarks'];
+    const headers = ['product_code', 'batch_no', 'expiry_date', 'manufacturing_date', 'serial_no', 'pack_qty', 'loose_qty', 'unit_cost', 'remarks'];
     sheet.appendRow(headers.map((h) => xls.TextCellValue(h)).toList());
     final bytes = workbook.encode();
     if (bytes == null) return;
@@ -409,6 +415,7 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
         'base_qty':              e.value.baseQty,
         'batch_no':              e.value.isBatchTracked ? e.value.batchNoCtrl.text.trim() : null,
         'expiry_date':           e.value.isBatchTracked && e.value.expiryDate != null ? _fmtDate(e.value.expiryDate!) : null,
+        'manufacturing_date':    e.value.isBatchTracked && e.value.manufacturingDate != null ? _fmtDate(e.value.manufacturingDate!) : null,
         'serial_no':             e.value.isSerialTracked ? e.value.serialNoCtrl.text.trim() : null,
         'unit_cost':             e.value.unitCost,
         'barcode':                e.value.matchedBarcode ?? '',
@@ -828,6 +835,11 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
                       onTap: locked ? null : () => _pickDate(row.expiryDate, (d) => setState(() => row.expiryDate = d)),
                       child: InputDecorator(decoration: dec.copyWith(labelText: 'Expiry Date'),
                           child: Text(row.expiryDate != null ? _displayDate(row.expiryDate) : '—', style: const TextStyle(fontSize: 12))),
+                    )),
+                    if (row.isBatchTracked) SizedBox(width: 140, height: 48, child: InkWell(
+                      onTap: locked ? null : () => _pickDate(row.manufacturingDate, (d) => setState(() => row.manufacturingDate = d)),
+                      child: InputDecorator(decoration: dec.copyWith(labelText: 'Manufacturing Date'),
+                          child: Text(row.manufacturingDate != null ? _displayDate(row.manufacturingDate) : '—', style: const TextStyle(fontSize: 12))),
                     )),
                     if (row.isSerialTracked) SizedBox(width: 150, height: 48, child: TextFormField(
                       controller: row.serialNoCtrl, enabled: !locked,

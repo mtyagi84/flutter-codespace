@@ -21,9 +21,10 @@ import '../providers/stock_transfer_providers.dart';
 class _TransferBatchCandidate {
   final String batchNo;
   final String? expiryDate;
+  final String? manufacturingDate;
   num availableBalance;
   final TextEditingController qtyCtrl = TextEditingController(text: '0');
-  _TransferBatchCandidate({required this.batchNo, this.expiryDate, required this.availableBalance});
+  _TransferBatchCandidate({required this.batchNo, this.expiryDate, this.manufacturingDate, required this.availableBalance});
   double get allocatedQty => double.tryParse(qtyCtrl.text) ?? 0;
   void dispose() => qtyCtrl.dispose();
 }
@@ -271,12 +272,15 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
         final candidates = <String, _TransferBatchCandidate>{};
         for (final b in available) {
           candidates[b['batch_no'] as String] = _TransferBatchCandidate(
-            batchNo: b['batch_no'] as String, expiryDate: b['expiry_date'] as String?, availableBalance: b['balance'] as num? ?? 0,
+            batchNo: b['batch_no'] as String, expiryDate: b['expiry_date'] as String?,
+            manufacturingDate: b['manufacturing_date'] as String?, availableBalance: b['balance'] as num? ?? 0,
           );
         }
         for (final s in saved) {
           final key = s['batch_no'] as String;
-          candidates.putIfAbsent(key, () => _TransferBatchCandidate(batchNo: key, expiryDate: s['expiry_date'] as String?, availableBalance: 0));
+          candidates.putIfAbsent(key, () => _TransferBatchCandidate(
+            batchNo: key, expiryDate: s['expiry_date'] as String?,
+            manufacturingDate: s['manufacturing_date'] as String?, availableBalance: 0));
           candidates[key]!.qtyCtrl.text = (s['base_qty'] as num? ?? 0).toString();
         }
         if (mounted) setState(() { row.batchCandidates = candidates.values.toList(); row.candidatesLoaded = true; });
@@ -456,7 +460,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
     try {
       if (row.isBatchTracked) {
         final rows = await _ds.getAvailableBatches(clientId: session.clientId, companyId: session.companyId, locationId: _fromLocationId!, productId: row.productId!);
-        final candidates = rows.map((b) => _TransferBatchCandidate(batchNo: b['batch_no'] as String, expiryDate: b['expiry_date'] as String?, availableBalance: b['balance'] as num? ?? 0)).toList();
+        final candidates = rows.map((b) => _TransferBatchCandidate(batchNo: b['batch_no'] as String, expiryDate: b['expiry_date'] as String?, manufacturingDate: b['manufacturing_date'] as String?, availableBalance: b['balance'] as num? ?? 0)).toList();
         if (mounted) setState(() { row.batchCandidates = candidates; row.candidatesLoaded = true; });
       } else if (row.isSerialTracked) {
         final rows = await _ds.getAvailableSerials(clientId: session.clientId, companyId: session.companyId, locationId: _fromLocationId!, productId: row.productId!);
@@ -567,7 +571,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
         final lineSerial = i + 1;
         if (l.isBatchTracked) {
           for (final b in l.batchCandidates.where((b) => b.allocatedQty > 0)) {
-            batches.add({'line_serial': lineSerial, 'batch_no': b.batchNo, 'expiry_date': b.expiryDate, 'qty_pack': b.allocatedQty, 'qty_loose': 0, 'base_qty': b.allocatedQty});
+            batches.add({'line_serial': lineSerial, 'batch_no': b.batchNo, 'expiry_date': b.expiryDate, 'manufacturing_date': b.manufacturingDate, 'qty_pack': b.allocatedQty, 'qty_loose': 0, 'base_qty': b.allocatedQty});
           }
         } else if (l.isSerialTracked) {
           for (final s in l.serialCandidates.where((s) => s.selected)) {

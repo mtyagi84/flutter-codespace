@@ -41,6 +41,7 @@ class OpeningStockLinesCache extends Table {
   RealColumn get baseQty             => real().withDefault(const Constant(0.0))();
   TextColumn get batchNo             => text().withDefault(const Constant(''))();
   TextColumn get expiryDate          => text().withDefault(const Constant(''))();
+  TextColumn get manufacturingDate   => text().withDefault(const Constant(''))();
   TextColumn get serialNo            => text().withDefault(const Constant(''))();
   RealColumn get unitCost            => real().withDefault(const Constant(0.0))();
   RealColumn get unitCostSpecific    => real().nullable()();

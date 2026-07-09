@@ -125,7 +125,7 @@ class StockReceiptRemoteDs {
       'client_id': 'eq.$clientId', 'company_id': 'eq.$companyId',
       'source_doc_type': 'eq.STOCK_TRANSFER', 'source_doc_no': 'eq.$transferNo', 'source_doc_date': 'eq.$transferDate',
       'line_serial': 'eq.$lineSerial',
-      'select': 'batch_no,expiry_date,base_qty',
+      'select': 'batch_no,expiry_date,manufacturing_date,base_qty',
     });
     return List<Map<String, dynamic>>.from(res.data as List);
   }
@@ -157,7 +157,7 @@ class StockReceiptRemoteDs {
       'client_id': 'eq.$clientId', 'company_id': 'eq.$companyId',
       'source_doc_type': 'eq.STOCK_RECEIPT', 'source_doc_no': 'eq.$receiptNo', 'source_doc_date': 'eq.$receiptDate',
       'line_serial': 'eq.$lineSerial',
-      'select': 'batch_no,expiry_date,base_qty',
+      'select': 'batch_no,expiry_date,manufacturing_date,base_qty',
     });
     return List<Map<String, dynamic>>.from(res.data as List);
   }

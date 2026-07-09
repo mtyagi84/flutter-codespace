@@ -29,6 +29,7 @@ import '../providers/stock_count_providers.dart';
 class _NewBatchEntry {
   final TextEditingController batchNoCtrl = TextEditingController();
   DateTime? expiryDate;
+  DateTime? manufacturingDate;
   final TextEditingController qtyPackCtrl  = TextEditingController(text: '0');
   final TextEditingController qtyLooseCtrl = TextEditingController(text: '0');
 
@@ -234,7 +235,8 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
         final rows = saved.map((b) {
           final r = _NewBatchEntry()
             ..batchNoCtrl.text = b['batch_no'] as String? ?? ''
-            ..expiryDate = b['expiry_date'] != null ? DateTime.tryParse(b['expiry_date'] as String) : null;
+            ..expiryDate = b['expiry_date'] != null ? DateTime.tryParse(b['expiry_date'] as String) : null
+            ..manufacturingDate = b['manufacturing_date'] != null ? DateTime.tryParse(b['manufacturing_date'] as String) : null;
           r.qtyPackCtrl.text = ((b['qty_pack'] as num?) ?? 0).toString();
           r.qtyLooseCtrl.text = ((b['qty_loose'] as num?) ?? 0).toString();
           return r;
@@ -369,6 +371,7 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
             batches.add({
               'line_serial': lineSerial, 'batch_no': b.batchNoCtrl.text.trim(),
               'expiry_date': b.expiryDate != null ? _fmtDate(b.expiryDate!) : null,
+              'manufacturing_date': b.manufacturingDate != null ? _fmtDate(b.manufacturingDate!) : null,
               'qty_pack': b.qtyPack, 'qty_loose': b.qtyLoose, 'base_qty': b.qtyPack * l.uomConversionFactor + b.qtyLoose,
             });
           }
@@ -871,6 +874,11 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
                 onTap: locked ? null : () => _pickDate(b.expiryDate, (d) => setState(() => b.expiryDate = d)),
                 child: InputDecorator(decoration: dec.copyWith(labelText: 'Expiry Date'),
                     child: Text(b.expiryDate != null ? _displayDate(b.expiryDate) : '—', style: const TextStyle(fontSize: 12))),
+              )),
+              SizedBox(width: 150, child: InkWell(
+                onTap: locked ? null : () => _pickDate(b.manufacturingDate, (d) => setState(() => b.manufacturingDate = d)),
+                child: InputDecorator(decoration: dec.copyWith(labelText: 'Manufacturing Date'),
+                    child: Text(b.manufacturingDate != null ? _displayDate(b.manufacturingDate) : '—', style: const TextStyle(fontSize: 12))),
               )),
               SizedBox(width: 100, child: TextFormField(controller: b.qtyPackCtrl, enabled: !locked,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),

@@ -26,9 +26,10 @@ import '../providers/stock_receipt_providers.dart';
 class _ReceiptBatchCandidate {
   final String batchNo;
   final String? expiryDate;
+  final String? manufacturingDate;
   final num dispatchedQty;
   final TextEditingController qtyCtrl;
-  _ReceiptBatchCandidate({required this.batchNo, this.expiryDate, required this.dispatchedQty})
+  _ReceiptBatchCandidate({required this.batchNo, this.expiryDate, this.manufacturingDate, required this.dispatchedQty})
       : qtyCtrl = TextEditingController(text: dispatchedQty.toStringAsFixed(2));
   double get allocatedQty => double.tryParse(qtyCtrl.text) ?? 0;
   void dispose() => qtyCtrl.dispose();
@@ -286,7 +287,8 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
           transferNo: _sourceTransferNo!, transferDate: _sourceTransferDate!, lineSerial: row.sourceTransferLineSerial,
         );
         final candidates = rows.map((b) => _ReceiptBatchCandidate(
-          batchNo: b['batch_no'] as String, expiryDate: b['expiry_date'] as String?, dispatchedQty: b['base_qty'] as num? ?? 0,
+          batchNo: b['batch_no'] as String, expiryDate: b['expiry_date'] as String?,
+          manufacturingDate: b['manufacturing_date'] as String?, dispatchedQty: b['base_qty'] as num? ?? 0,
         )).toList();
         if (mounted) setState(() { row.batchCandidates = candidates; row.candidatesLoaded = true; });
       } else if (row.isSerialTracked) {
@@ -317,7 +319,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
         final savedMap = { for (final s in saved) s['batch_no'] as String: s['base_qty'] as num? ?? 0 };
         final candidates = dispatched.map((b) {
           final batchNo = b['batch_no'] as String;
-          final c = _ReceiptBatchCandidate(batchNo: batchNo, expiryDate: b['expiry_date'] as String?, dispatchedQty: b['base_qty'] as num? ?? 0);
+          final c = _ReceiptBatchCandidate(batchNo: batchNo, expiryDate: b['expiry_date'] as String?, manufacturingDate: b['manufacturing_date'] as String?, dispatchedQty: b['base_qty'] as num? ?? 0);
           if (savedMap.containsKey(batchNo)) c.qtyCtrl.text = savedMap[batchNo].toString();
           return c;
         }).toList();
@@ -409,7 +411,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
         final lineSerial = i + 1;
         if (l.isBatchTracked) {
           for (final b in l.batchCandidates.where((b) => b.allocatedQty > 0)) {
-            batches.add({'line_serial': lineSerial, 'batch_no': b.batchNo, 'expiry_date': b.expiryDate, 'qty_pack': b.allocatedQty, 'qty_loose': 0, 'base_qty': b.allocatedQty});
+            batches.add({'line_serial': lineSerial, 'batch_no': b.batchNo, 'expiry_date': b.expiryDate, 'manufacturing_date': b.manufacturingDate, 'qty_pack': b.allocatedQty, 'qty_loose': 0, 'base_qty': b.allocatedQty});
           }
         } else if (l.isSerialTracked) {
           for (final s in l.serialCandidates.where((s) => s.selected)) {

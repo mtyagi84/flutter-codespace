@@ -206,7 +206,7 @@ class PurchaseReturnRemoteDs {
       'source_doc_no':   'eq.$grnNo',
       'source_doc_date': 'eq.$grnDate',
       'line_serial':     'eq.$lineSerial',
-      'select':          'batch_no,expiry_date,base_qty',
+      'select':          'batch_no,expiry_date,manufacturing_date,base_qty',
       'order':           'batch_no.asc',
     });
     return List<Map<String, dynamic>>.from(res.data as List);

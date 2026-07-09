@@ -64,7 +64,7 @@ class OpeningStockRemoteDs {
       'opening_date': 'eq.$openingDate',
       'is_deleted':   'eq.false',
       'select':       'line_no,product_id,uom_id,uom_conversion_factor,pack_qty,loose_qty,base_qty,'
-          'batch_no,expiry_date,serial_no,unit_cost,unit_cost_specific,barcode,remarks,'
+          'batch_no,expiry_date,manufacturing_date,serial_no,unit_cost,unit_cost_specific,barcode,remarks,'
           'product:rim_products!product_id(product_code,product_name,tracking_type),'
           'uom:rim_common_masters!uom_id(description)',
       'order':        'line_no.asc',

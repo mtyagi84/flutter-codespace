@@ -25,11 +25,12 @@ import '../providers/purchase_return_providers.dart';
 class _ReturnBatchCandidate {
   final String batchNo;
   final String? expiryDate;
+  final String? manufacturingDate;
   final double receivedQty;
   num availableBalance = 0;
   final TextEditingController qtyCtrl = TextEditingController(text: '0');
 
-  _ReturnBatchCandidate({required this.batchNo, this.expiryDate, required this.receivedQty});
+  _ReturnBatchCandidate({required this.batchNo, this.expiryDate, this.manufacturingDate, required this.receivedQty});
 
   double get allocatedQty => double.tryParse(qtyCtrl.text) ?? 0;
   void dispose() => qtyCtrl.dispose();
@@ -540,6 +541,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
           final c = _ReturnBatchCandidate(
             batchNo: b['batch_no'] as String,
             expiryDate: b['expiry_date'] as String?,
+            manufacturingDate: b['manufacturing_date'] as String?,
             receivedQty: (b['base_qty'] as num? ?? 0).toDouble(),
           );
           c.availableBalance = await _ds.getBatchBalance(
@@ -665,6 +667,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
               'line_serial': lineSerial,
               'batch_no':    b.batchNo,
               'expiry_date': b.expiryDate,
+              'manufacturing_date': b.manufacturingDate,
               'qty_pack':    b.allocatedQty,
               'qty_loose':   0,
               'base_qty':    b.allocatedQty,

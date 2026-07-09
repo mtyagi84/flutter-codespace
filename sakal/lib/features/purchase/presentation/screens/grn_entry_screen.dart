@@ -23,6 +23,7 @@ import '../providers/grn_providers.dart';
 class _GrnBatchRow {
   final TextEditingController batchNoCtrl = TextEditingController();
   DateTime? expiryDate;
+  DateTime? manufacturingDate;
   final TextEditingController qtyPackCtrl  = TextEditingController(text: '0');
   final TextEditingController qtyLooseCtrl = TextEditingController(text: '0');
 
@@ -315,7 +316,9 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
         row.rateCtrl.text        = l.rate.toString();
         row.discountPctCtrl.text = l.discountPercent.toString();
         for (final b in l.batches) {
-          final br = _GrnBatchRow()..expiryDate = DateTime.tryParse(b.expiryDate ?? '');
+          final br = _GrnBatchRow()
+            ..expiryDate = DateTime.tryParse(b.expiryDate ?? '')
+            ..manufacturingDate = DateTime.tryParse(b.manufacturingDate ?? '');
           br.batchNoCtrl.text  = b.batchNo;
           br.qtyPackCtrl.text  = b.qtyPack.toString();
           br.qtyLooseCtrl.text = b.qtyLoose.toString();
@@ -1023,6 +1026,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
             'line_serial': lineSerial,
             'batch_no':    b.batchNoCtrl.text,
             'expiry_date': b.expiryDate != null ? _fmtDate(b.expiryDate!) : '',
+            'manufacturing_date': b.manufacturingDate != null ? _fmtDate(b.manufacturingDate!) : '',
             'qty_pack':    b.qtyPack,
             'qty_loose':   b.qtyLoose,
             'base_qty':    b.qtyPack * l.convFactor + b.qtyLoose,
@@ -1851,6 +1855,13 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
           child: InputDecorator(
             decoration: dec.copyWith(labelText: 'Expiry Date'),
             child: Text(_displayDate(b.expiryDate), style: const TextStyle(fontSize: 12)),
+          ),
+        )),
+        SizedBox(width: 150, child: InkWell(
+          onTap: locked ? null : () => _pickDate(b.manufacturingDate, (d) => setState(() => b.manufacturingDate = d)),
+          child: InputDecorator(
+            decoration: dec.copyWith(labelText: 'Manufacturing Date'),
+            child: Text(_displayDate(b.manufacturingDate), style: const TextStyle(fontSize: 12)),
           ),
         )),
         SizedBox(width: 90, child: TextFormField(controller: b.qtyPackCtrl, enabled: !locked,

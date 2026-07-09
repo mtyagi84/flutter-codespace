@@ -370,6 +370,28 @@ BEGIN
           AND review_no = v_review_no AND review_date = v_old_review_date;
     END IF;
 
+    -- Header must exist BEFORE any rid_stock_count_review_sources row is
+    -- inserted below — that table's FK references
+    -- rih_stock_count_review_headers(client_id, company_id, review_no,
+    -- review_date), so for a brand-new review the header row has to be
+    -- created first, not after the reservation loop.
+    IF v_is_new THEN
+        INSERT INTO rih_stock_count_review_headers (
+            client_id, company_id, location_id, review_no, review_date, as_of_date, reason_id, remarks, created_by, updated_by
+        ) VALUES (
+            v_client_id, v_company_id, v_location_id, v_review_no, v_review_date,
+            (p_header->>'as_of_date')::date, nullif(p_header->>'reason_id', '')::uuid,
+            nullif(p_header->>'remarks', ''), p_user_id, p_user_id
+        );
+    ELSE
+        UPDATE rih_stock_count_review_headers SET
+            location_id = v_location_id, review_date = v_review_date, as_of_date = (p_header->>'as_of_date')::date,
+            reason_id = nullif(p_header->>'reason_id', '')::uuid, remarks = nullif(p_header->>'remarks', ''),
+            updated_at = now(), updated_by = p_user_id
+        WHERE client_id = v_client_id AND company_id = v_company_id
+          AND review_no = v_review_no AND status = 'DRAFT' AND is_deleted = false;
+    END IF;
+
     -- Lock + validate + reserve each referenced count, one row per
     -- statement in a fixed sort order (deadlock-avoidance rule, 036/038 —
     -- SELECT ... ORDER BY ... FOR UPDATE does NOT guarantee lock-acquisition
@@ -408,23 +430,6 @@ BEGIN
             v_client_id, v_company_id, v_review_no, v_review_date, v_count.count_no, v_count.count_date, p_user_id
         );
     END LOOP;
-
-    IF v_is_new THEN
-        INSERT INTO rih_stock_count_review_headers (
-            client_id, company_id, location_id, review_no, review_date, as_of_date, reason_id, remarks, created_by, updated_by
-        ) VALUES (
-            v_client_id, v_company_id, v_location_id, v_review_no, v_review_date,
-            (p_header->>'as_of_date')::date, nullif(p_header->>'reason_id', '')::uuid,
-            nullif(p_header->>'remarks', ''), p_user_id, p_user_id
-        );
-    ELSE
-        UPDATE rih_stock_count_review_headers SET
-            location_id = v_location_id, review_date = v_review_date, as_of_date = (p_header->>'as_of_date')::date,
-            reason_id = nullif(p_header->>'reason_id', '')::uuid, remarks = nullif(p_header->>'remarks', ''),
-            updated_at = now(), updated_by = p_user_id
-        WHERE client_id = v_client_id AND company_id = v_company_id
-          AND review_no = v_review_no AND status = 'DRAFT' AND is_deleted = false;
-    END IF;
 
     RETURN v_review_no;
 END;

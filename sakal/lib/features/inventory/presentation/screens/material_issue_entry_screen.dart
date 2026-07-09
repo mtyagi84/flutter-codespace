@@ -26,10 +26,11 @@ import '../providers/material_issue_providers.dart';
 class _IssueBatchCandidate {
   final String batchNo;
   final String? expiryDate;
+  final String? manufacturingDate;
   num availableBalance;
   final TextEditingController qtyCtrl = TextEditingController(text: '0');
 
-  _IssueBatchCandidate({required this.batchNo, this.expiryDate, required this.availableBalance});
+  _IssueBatchCandidate({required this.batchNo, this.expiryDate, this.manufacturingDate, required this.availableBalance});
 
   double get allocatedQty => double.tryParse(qtyCtrl.text) ?? 0;
   void dispose() => qtyCtrl.dispose();
@@ -275,6 +276,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
         final candidates = rows.map((b) => _IssueBatchCandidate(
           batchNo: b['batch_no'] as String,
           expiryDate: b['expiry_date'] as String?,
+          manufacturingDate: b['manufacturing_date'] as String?,
           availableBalance: b['balance'] as num? ?? 0,
         )).toList();
         if (mounted) setState(() { row.batchCandidates = candidates; row.candidatesLoaded = true; });
@@ -339,7 +341,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
         final lineSerial = i + 1;
         if (l.isBatchTracked) {
           for (final b in l.batchCandidates.where((b) => b.allocatedQty > 0)) {
-            batches.add({'line_serial': lineSerial, 'batch_no': b.batchNo, 'expiry_date': b.expiryDate, 'qty_pack': b.allocatedQty, 'qty_loose': 0, 'base_qty': b.allocatedQty});
+            batches.add({'line_serial': lineSerial, 'batch_no': b.batchNo, 'expiry_date': b.expiryDate, 'manufacturing_date': b.manufacturingDate, 'qty_pack': b.allocatedQty, 'qty_loose': 0, 'base_qty': b.allocatedQty});
           }
         } else if (l.isSerialTracked) {
           for (final s in l.serialCandidates.where((s) => s.selected)) {

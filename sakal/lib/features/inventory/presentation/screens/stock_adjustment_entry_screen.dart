@@ -25,6 +25,7 @@ import '../providers/stock_adjustment_providers.dart';
 class _AdjNewBatchRow {
   final TextEditingController batchNoCtrl = TextEditingController();
   DateTime? expiryDate;
+  DateTime? manufacturingDate;
   final TextEditingController qtyPackCtrl  = TextEditingController(text: '0');
   final TextEditingController qtyLooseCtrl = TextEditingController(text: '0');
 
@@ -45,10 +46,11 @@ class _AdjNewSerialRow {
 class _AdjBatchCandidate {
   final String batchNo;
   final String? expiryDate;
+  final String? manufacturingDate;
   num availableBalance;
   final TextEditingController qtyCtrl = TextEditingController(text: '0');
 
-  _AdjBatchCandidate({required this.batchNo, this.expiryDate, required this.availableBalance});
+  _AdjBatchCandidate({required this.batchNo, this.expiryDate, this.manufacturingDate, required this.availableBalance});
 
   double get allocatedQty => double.tryParse(qtyCtrl.text) ?? 0;
   void dispose() => qtyCtrl.dispose();
@@ -230,7 +232,8 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
           final rows = saved.map((b) {
             final r = _AdjNewBatchRow()
               ..batchNoCtrl.text = b['batch_no'] as String? ?? ''
-              ..expiryDate = b['expiry_date'] != null ? DateTime.tryParse(b['expiry_date'] as String) : null;
+              ..expiryDate = b['expiry_date'] != null ? DateTime.tryParse(b['expiry_date'] as String) : null
+              ..manufacturingDate = b['manufacturing_date'] != null ? DateTime.tryParse(b['manufacturing_date'] as String) : null;
             r.qtyPackCtrl.text = ((b['qty_pack'] as num?) ?? 0).toString();
             r.qtyLooseCtrl.text = ((b['qty_loose'] as num?) ?? 0).toString();
             return r;
@@ -241,7 +244,8 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
             clientId: session.clientId, companyId: session.companyId, locationId: _locationId!, productId: row.productId!,
           );
           final candidates = available.map((b) => _AdjBatchCandidate(
-            batchNo: b['batch_no'] as String, expiryDate: b['expiry_date'] as String?, availableBalance: b['balance'] as num? ?? 0,
+            batchNo: b['batch_no'] as String, expiryDate: b['expiry_date'] as String?,
+            manufacturingDate: b['manufacturing_date'] as String?, availableBalance: b['balance'] as num? ?? 0,
           )).toList();
           for (final saved1 in saved) {
             final match = candidates.where((c) => c.batchNo == saved1['batch_no']).toList();
@@ -249,7 +253,8 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
             if (match.isNotEmpty) {
               match.first.qtyCtrl.text = qty.toString();
             } else {
-              candidates.add(_AdjBatchCandidate(batchNo: saved1['batch_no'] as String, expiryDate: saved1['expiry_date'] as String?, availableBalance: qty)
+              candidates.add(_AdjBatchCandidate(batchNo: saved1['batch_no'] as String, expiryDate: saved1['expiry_date'] as String?,
+                manufacturingDate: saved1['manufacturing_date'] as String?, availableBalance: qty)
                 ..qtyCtrl.text = qty.toString());
             }
           }
@@ -388,7 +393,8 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
           clientId: session.clientId, companyId: session.companyId, locationId: _locationId!, productId: row.productId!,
         );
         final candidates = rows.map((b) => _AdjBatchCandidate(
-          batchNo: b['batch_no'] as String, expiryDate: b['expiry_date'] as String?, availableBalance: b['balance'] as num? ?? 0,
+          batchNo: b['batch_no'] as String, expiryDate: b['expiry_date'] as String?,
+          manufacturingDate: b['manufacturing_date'] as String?, availableBalance: b['balance'] as num? ?? 0,
         )).toList();
         if (mounted) setState(() { row.batchCandidates = candidates; row.candidatesLoaded = true; });
       } else {
@@ -456,12 +462,13 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
               batches.add({
                 'line_serial': lineSerial, 'batch_no': b.batchNoCtrl.text.trim(),
                 'expiry_date': b.expiryDate != null ? _fmtDate(b.expiryDate!) : null,
+                'manufacturing_date': b.manufacturingDate != null ? _fmtDate(b.manufacturingDate!) : null,
                 'qty_pack': b.qtyPack, 'qty_loose': b.qtyLoose, 'base_qty': b.qtyPack * l.uomConversionFactor + b.qtyLoose,
               });
             }
           } else {
             for (final b in l.batchCandidates.where((b) => b.allocatedQty > 0)) {
-              batches.add({'line_serial': lineSerial, 'batch_no': b.batchNo, 'expiry_date': b.expiryDate, 'qty_pack': b.allocatedQty, 'qty_loose': 0, 'base_qty': b.allocatedQty});
+              batches.add({'line_serial': lineSerial, 'batch_no': b.batchNo, 'expiry_date': b.expiryDate, 'manufacturing_date': b.manufacturingDate, 'qty_pack': b.allocatedQty, 'qty_loose': 0, 'base_qty': b.allocatedQty});
             }
           }
         } else if (l.isSerialTracked) {
@@ -987,6 +994,11 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
                   onTap: locked ? null : () => _pickDate(b.expiryDate, (d) => setState(() => b.expiryDate = d)),
                   child: InputDecorator(decoration: dec.copyWith(labelText: 'Expiry Date'),
                       child: Text(_displayDate(b.expiryDate), style: const TextStyle(fontSize: 12))),
+                )),
+                SizedBox(width: 150, child: InkWell(
+                  onTap: locked ? null : () => _pickDate(b.manufacturingDate, (d) => setState(() => b.manufacturingDate = d)),
+                  child: InputDecorator(decoration: dec.copyWith(labelText: 'Manufacturing Date'),
+                      child: Text(_displayDate(b.manufacturingDate), style: const TextStyle(fontSize: 12))),
                 )),
                 SizedBox(width: 100, child: TextFormField(controller: b.qtyPackCtrl, enabled: !locked,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),

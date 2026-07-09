@@ -162,7 +162,7 @@ class MaterialIssueRemoteDs {
       'client_id': 'eq.$clientId', 'company_id': 'eq.$companyId',
       'location_id': 'eq.$locationId', 'product_id': 'eq.$productId',
       'balance': 'gt.0',
-      'select': 'batch_no,expiry_date,balance',
+      'select': 'batch_no,expiry_date,manufacturing_date,balance',
       'order': 'batch_no.asc',
     });
     return List<Map<String, dynamic>>.from(res.data as List);

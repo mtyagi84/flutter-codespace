@@ -223,11 +223,17 @@ INSERT INTO test_results (result) SELECT ok(
   'ok 10 — Stock Count with at least one counted line submits and locks'
 );
 
+-- throws_ok(sql, errcode, errmsg, description) — NULL errmsg means "don't
+-- check message text" (see 002_exchange_rates_test.sql / 003_finance_
+-- voucher_test.sql). Needed here because these two RAISE EXCEPTIONs embed
+-- the dynamic count_no/status into the message rather than a fixed short
+-- code, so throws_ok's exact-match requirement can never be satisfied by
+-- a hardcoded substring.
 INSERT INTO test_results (result) SELECT throws_ok(
   format($$ SELECT fn_submit_stock_count(%L::uuid, %L::uuid, %L, '2026-07-15'::date, %L::uuid) $$,
     current_setting('pgtap.v_client'), current_setting('pgtap.v_company'),
     current_setting('pgtap.v_count_no'), current_setting('pgtap.v_user')),
-  'cannot be submitted again',
+  'P0001', NULL,
   'ok 11 — Submitting an already-SUBMITTED count a second time is rejected'
 );
 
@@ -239,7 +245,7 @@ INSERT INTO test_results (result) SELECT throws_ok(
     '[]'::jsonb, '[]'::jsonb, %L::uuid
   ) $$, current_setting('pgtap.v_client'), current_setting('pgtap.v_company'), current_setting('pgtap.v_loc'),
        current_setting('pgtap.v_count_no'), current_setting('pgtap.v_prod_snack'), current_setting('pgtap.v_user')),
-  'cannot be edited',
+  'P0001', NULL,
   'ok 12 — Editing an already-SUBMITTED Stock Count is rejected'
 );
 

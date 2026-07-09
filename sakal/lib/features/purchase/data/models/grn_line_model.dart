@@ -3,6 +3,7 @@
 class GrnBatchModel {
   final String  batchNo;
   final String? expiryDate;
+  final String? manufacturingDate;
   final double  qtyPack;
   final double  qtyLoose;
   final double  baseQty;
@@ -10,6 +11,7 @@ class GrnBatchModel {
   const GrnBatchModel({
     required this.batchNo,
     this.expiryDate,
+    this.manufacturingDate,
     this.qtyPack = 0,
     this.qtyLoose = 0,
     this.baseQty = 0,
@@ -18,6 +20,7 @@ class GrnBatchModel {
   factory GrnBatchModel.fromJson(Map<String, dynamic> j) => GrnBatchModel(
     batchNo:    j['batch_no'] as String,
     expiryDate: j['expiry_date'] as String?,
+    manufacturingDate: j['manufacturing_date'] as String?,
     qtyPack:    (j['qty_pack'] as num? ?? 0).toDouble(),
     qtyLoose:   (j['qty_loose'] as num? ?? 0).toDouble(),
     baseQty:    (j['base_qty'] as num? ?? 0).toDouble(),
@@ -26,6 +29,7 @@ class GrnBatchModel {
   Map<String, dynamic> toJson() => {
     'batch_no': batchNo,
     'expiry_date': expiryDate ?? '',
+    'manufacturing_date': manufacturingDate ?? '',
     'qty_pack': qtyPack,
     'qty_loose': qtyLoose,
     'base_qty': baseQty,

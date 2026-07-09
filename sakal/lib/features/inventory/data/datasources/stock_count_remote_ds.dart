@@ -83,7 +83,7 @@ class StockCountRemoteDs {
       'client_id': 'eq.$clientId', 'company_id': 'eq.$companyId',
       'source_doc_type': 'eq.STOCK_COUNT', 'source_doc_no': 'eq.$countNo', 'source_doc_date': 'eq.$countDate',
       'line_serial': 'eq.$lineSerial',
-      'select': 'batch_no,expiry_date,qty_pack,qty_loose,base_qty',
+      'select': 'batch_no,expiry_date,manufacturing_date,qty_pack,qty_loose,base_qty',
     });
     return List<Map<String, dynamic>>.from(res.data as List);
   }

@@ -85,7 +85,7 @@ class StockAdjustmentRemoteDs {
       'client_id': 'eq.$clientId', 'company_id': 'eq.$companyId',
       'source_doc_type': 'eq.STOCK_ADJUSTMENT', 'source_doc_no': 'eq.$adjustmentNo', 'source_doc_date': 'eq.$adjustmentDate',
       'line_serial': 'eq.$lineSerial',
-      'select': 'batch_no,expiry_date,base_qty',
+      'select': 'batch_no,expiry_date,manufacturing_date,base_qty',
     });
     return List<Map<String, dynamic>>.from(res.data as List);
   }
@@ -221,7 +221,7 @@ class StockAdjustmentRemoteDs {
       'client_id': 'eq.$clientId', 'company_id': 'eq.$companyId',
       'location_id': 'eq.$locationId', 'product_id': 'eq.$productId',
       'balance': 'gt.0',
-      'select': 'batch_no,expiry_date,balance',
+      'select': 'batch_no,expiry_date,manufacturing_date,balance',
       'order': 'batch_no.asc',
     });
     return List<Map<String, dynamic>>.from(res.data as List);

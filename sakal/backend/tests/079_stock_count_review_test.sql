@@ -113,27 +113,27 @@ BEGIN
     (v_prod_batch_neg,  v_client, v_company, 'CNR-BNG', 'Review Test BatchNeg',  v_usd, 'BATCH',  v_user)
   ON CONFLICT (id) DO NOTHING;
 
-  -- Opening stock, all dated 2026-07-01
+  -- Opening stock, all dated 2026-05-20
   PERFORM fn_post_stock_movement(v_client, v_company, v_loc, v_prod_asof,
-    '2026-07-01'::date, 'OPENING_STOCK', 100, 10, 10, NULL, NULL, NULL, 'OPENING_BALANCE', 'OB-079-001', '2026-07-01'::date, v_user);
+    '2026-05-20'::date, 'OPENING_STOCK', 100, 10, 10, NULL, NULL, NULL, 'OPENING_BALANCE', 'OB-079-001', '2026-05-20'::date, v_user);
   PERFORM fn_post_stock_movement(v_client, v_company, v_loc, v_prod_uncounted,
-    '2026-07-01'::date, 'OPENING_STOCK', 30, 8, 8, NULL, NULL, NULL, 'OPENING_BALANCE', 'OB-079-002', '2026-07-01'::date, v_user);
+    '2026-05-20'::date, 'OPENING_STOCK', 30, 8, 8, NULL, NULL, NULL, 'OPENING_BALANCE', 'OB-079-002', '2026-05-20'::date, v_user);
   PERFORM fn_post_stock_movement(v_client, v_company, v_loc, v_prod_batch_net,
-    '2026-07-01'::date, 'OPENING_STOCK', 20, 5, 5, 'BN1', NULL, NULL, 'OPENING_BALANCE', 'OB-079-003', '2026-07-01'::date, v_user);
+    '2026-05-20'::date, 'OPENING_STOCK', 20, 5, 5, 'BN1', NULL, NULL, 'OPENING_BALANCE', 'OB-079-003', '2026-05-20'::date, v_user);
   PERFORM fn_post_stock_movement(v_client, v_company, v_loc, v_prod_serial_dup,
-    '2026-07-01'::date, 'OPENING_STOCK', 1, 20, 20, NULL, NULL, 'SD-1', 'OPENING_BALANCE', 'OB-079-004', '2026-07-01'::date, v_user);
+    '2026-05-20'::date, 'OPENING_STOCK', 1, 20, 20, NULL, NULL, 'SD-1', 'OPENING_BALANCE', 'OB-079-004', '2026-05-20'::date, v_user);
   PERFORM fn_post_stock_movement(v_client, v_company, v_loc, v_prod_serial_dup,
-    '2026-07-01'::date, 'OPENING_STOCK', 1, 20, 20, NULL, NULL, 'SD-2', 'OPENING_BALANCE', 'OB-079-005', '2026-07-01'::date, v_user);
+    '2026-05-20'::date, 'OPENING_STOCK', 1, 20, 20, NULL, NULL, 'SD-2', 'OPENING_BALANCE', 'OB-079-005', '2026-05-20'::date, v_user);
   PERFORM fn_post_stock_movement(v_client, v_company, v_loc, v_prod_zero,
-    '2026-07-01'::date, 'OPENING_STOCK', 40, 6, 6, NULL, NULL, NULL, 'OPENING_BALANCE', 'OB-079-006', '2026-07-01'::date, v_user);
+    '2026-05-20'::date, 'OPENING_STOCK', 40, 6, 6, NULL, NULL, NULL, 'OPENING_BALANCE', 'OB-079-006', '2026-05-20'::date, v_user);
   PERFORM fn_post_stock_movement(v_client, v_company, v_loc, v_prod_batch_neg,
-    '2026-07-01'::date, 'OPENING_STOCK', 20, 5, 5, 'BNEG', NULL, NULL, 'OPENING_BALANCE', 'OB-079-007', '2026-07-01'::date, v_user);
+    '2026-05-20'::date, 'OPENING_STOCK', 20, 5, 5, 'BNEG', NULL, NULL, 'OPENING_BALANCE', 'OB-079-007', '2026-05-20'::date, v_user);
 
-  -- A later transaction on v_prod_asof, AFTER as-of-date 2026-07-10, proving
+  -- A later transaction on v_prod_asof, AFTER as-of-date 2026-05-29, proving
   -- the review's variance computation stays pinned to the as-of-date and is
   -- immune to what happens afterward.
   PERFORM fn_post_stock_movement(v_client, v_company, v_loc, v_prod_asof,
-    '2026-07-12'::date, 'ADJUSTMENT_IN', 50, 10, 10, NULL, NULL, NULL, 'TEST_LATER_TXN', 'LATER-001', '2026-07-12'::date, v_user);
+    '2026-05-31'::date, 'ADJUSTMENT_IN', 50, 10, 10, NULL, NULL, NULL, 'TEST_LATER_TXN', 'LATER-001', '2026-05-31'::date, v_user);
 
   PERFORM set_config('pgtap.v_client', v_client::text, false);
   PERFORM set_config('pgtap.v_company', v_company::text, false);
@@ -163,7 +163,7 @@ DECLARE v_a text; v_b text;
 BEGIN
   v_a := fn_save_stock_count(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
-      'location_id', current_setting('pgtap.v_loc'), 'count_no', NULL, 'count_date', '2026-07-05'),
+      'location_id', current_setting('pgtap.v_loc'), 'count_no', NULL, 'count_date', '2026-05-24'),
     jsonb_build_array(
       jsonb_build_object('serial_no', 1, 'product_id', current_setting('pgtap.v_prod_asof'),
         'uom_conversion_factor', 1, 'is_counted', true, 'counted_qty_pack', 100, 'counted_qty_loose', 0, 'counted_base_qty', 100),
@@ -183,12 +183,12 @@ BEGIN
     ),
     current_setting('pgtap.v_user')::uuid
   );
-  PERFORM fn_submit_stock_count(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, v_a, '2026-07-05'::date, current_setting('pgtap.v_user')::uuid);
+  PERFORM fn_submit_stock_count(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, v_a, '2026-05-24'::date, current_setting('pgtap.v_user')::uuid);
   PERFORM set_config('pgtap.v_count_a', v_a, false);
 
   v_b := fn_save_stock_count(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
-      'location_id', current_setting('pgtap.v_loc'), 'count_no', NULL, 'count_date', '2026-07-06'),
+      'location_id', current_setting('pgtap.v_loc'), 'count_no', NULL, 'count_date', '2026-05-25'),
     jsonb_build_array(
       jsonb_build_object('serial_no', 1, 'product_id', current_setting('pgtap.v_prod_batch_net'),
         'uom_conversion_factor', 1, 'is_counted', true, 'counted_qty_pack', 9, 'counted_qty_loose', 0, 'counted_base_qty', 9),
@@ -202,7 +202,7 @@ BEGIN
     ),
     current_setting('pgtap.v_user')::uuid
   );
-  PERFORM fn_submit_stock_count(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, v_b, '2026-07-06'::date, current_setting('pgtap.v_user')::uuid);
+  PERFORM fn_submit_stock_count(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, v_b, '2026-05-25'::date, current_setting('pgtap.v_user')::uuid);
   PERFORM set_config('pgtap.v_count_b', v_b, false);
 END;
 $$ LANGUAGE plpgsql;
@@ -213,10 +213,10 @@ BEGIN
   v_rev := fn_save_stock_count_review(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
       'location_id', current_setting('pgtap.v_loc'), 'review_no', NULL, 'review_date', '2026-07-20',
-      'as_of_date', '2026-07-10', 'reason_id', current_setting('pgtap.v_reason'), 'remarks', 'REV1'),
+      'as_of_date', '2026-05-29', 'reason_id', current_setting('pgtap.v_reason'), 'remarks', 'REV1'),
     jsonb_build_array(
-      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_a'), 'source_count_date', '2026-07-05'),
-      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_b'), 'source_count_date', '2026-07-06')
+      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_a'), 'source_count_date', '2026-05-24'),
+      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_b'), 'source_count_date', '2026-05-25')
     ),
     current_setting('pgtap.v_user')::uuid
   );
@@ -235,7 +235,7 @@ INSERT INTO test_results (result) SELECT ok(
 INSERT INTO test_results (result) SELECT ok(
   (SELECT system_qty FROM fn_compute_stock_count_variance(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, current_setting('pgtap.v_rev1'), '2026-07-20'::date)
    WHERE product_id = current_setting('pgtap.v_prod_asof')::uuid) = 100,
-  'ok 2 — as_of_date=2026-07-10 (before the later +50 txn dated 07-12): system_qty=100'
+  'ok 2 — as_of_date=2026-05-29 (before the later +50 txn dated 05-31): system_qty=100'
 );
 
 DO $$
@@ -243,10 +243,10 @@ BEGIN
   PERFORM fn_save_stock_count_review(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
       'location_id', current_setting('pgtap.v_loc'), 'review_no', current_setting('pgtap.v_rev1'), 'review_date', '2026-07-20',
-      'as_of_date', '2026-07-13', 'reason_id', current_setting('pgtap.v_reason'), 'remarks', 'REV1'),
+      'as_of_date', '2026-06-01', 'reason_id', current_setting('pgtap.v_reason'), 'remarks', 'REV1'),
     jsonb_build_array(
-      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_a'), 'source_count_date', '2026-07-05'),
-      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_b'), 'source_count_date', '2026-07-06')
+      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_a'), 'source_count_date', '2026-05-24'),
+      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_b'), 'source_count_date', '2026-05-25')
     ),
     current_setting('pgtap.v_user')::uuid
   );
@@ -256,7 +256,7 @@ $$ LANGUAGE plpgsql;
 INSERT INTO test_results (result) SELECT ok(
   (SELECT system_qty FROM fn_compute_stock_count_variance(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, current_setting('pgtap.v_rev1'), '2026-07-20'::date)
    WHERE product_id = current_setting('pgtap.v_prod_asof')::uuid) = 150,
-  'ok 3 — re-saved as_of_date=2026-07-13 (after the +50 txn): system_qty now 150 — proves as-of-date sensitivity, not a cached/stale figure'
+  'ok 3 — re-saved as_of_date=2026-06-01 (after the +50 txn): system_qty now 150 — proves as-of-date sensitivity, not a cached/stale figure'
 );
 
 INSERT INTO test_results (result) SELECT ok(
@@ -299,38 +299,38 @@ DECLARE v_d text; v_h text; v_i text; v_e text; v_c text;
 BEGIN
   v_d := fn_save_stock_count(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
-      'location_id', current_setting('pgtap.v_loc'), 'count_no', NULL, 'count_date', '2026-07-05'),
+      'location_id', current_setting('pgtap.v_loc'), 'count_no', NULL, 'count_date', '2026-05-24'),
     jsonb_build_array(jsonb_build_object('serial_no', 1, 'product_id', current_setting('pgtap.v_prod_zero'),
       'uom_conversion_factor', 1, 'is_counted', true, 'counted_qty_pack', 1, 'counted_qty_loose', 0, 'counted_base_qty', 1)),
     '[]'::jsonb, '[]'::jsonb, current_setting('pgtap.v_user')::uuid
   );
-  PERFORM fn_submit_stock_count(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, v_d, '2026-07-05'::date, current_setting('pgtap.v_user')::uuid);
+  PERFORM fn_submit_stock_count(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, v_d, '2026-05-24'::date, current_setting('pgtap.v_user')::uuid);
   PERFORM set_config('pgtap.v_count_d', v_d, false);
 
   v_h := fn_save_stock_count(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
-      'location_id', current_setting('pgtap.v_loc'), 'count_no', NULL, 'count_date', '2026-07-05'),
+      'location_id', current_setting('pgtap.v_loc'), 'count_no', NULL, 'count_date', '2026-05-24'),
     jsonb_build_array(jsonb_build_object('serial_no', 1, 'product_id', current_setting('pgtap.v_prod_zero'),
       'uom_conversion_factor', 1, 'is_counted', true, 'counted_qty_pack', 1, 'counted_qty_loose', 0, 'counted_base_qty', 1)),
     '[]'::jsonb, '[]'::jsonb, current_setting('pgtap.v_user')::uuid
   );
-  PERFORM fn_submit_stock_count(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, v_h, '2026-07-05'::date, current_setting('pgtap.v_user')::uuid);
+  PERFORM fn_submit_stock_count(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, v_h, '2026-05-24'::date, current_setting('pgtap.v_user')::uuid);
   PERFORM set_config('pgtap.v_count_h', v_h, false);
 
   v_i := fn_save_stock_count(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
-      'location_id', current_setting('pgtap.v_loc'), 'count_no', NULL, 'count_date', '2026-07-05'),
+      'location_id', current_setting('pgtap.v_loc'), 'count_no', NULL, 'count_date', '2026-05-24'),
     jsonb_build_array(jsonb_build_object('serial_no', 1, 'product_id', current_setting('pgtap.v_prod_zero'),
       'uom_conversion_factor', 1, 'is_counted', true, 'counted_qty_pack', 1, 'counted_qty_loose', 0, 'counted_base_qty', 1)),
     '[]'::jsonb, '[]'::jsonb, current_setting('pgtap.v_user')::uuid
   );
-  PERFORM fn_submit_stock_count(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, v_i, '2026-07-05'::date, current_setting('pgtap.v_user')::uuid);
+  PERFORM fn_submit_stock_count(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, v_i, '2026-05-24'::date, current_setting('pgtap.v_user')::uuid);
   PERFORM set_config('pgtap.v_count_i', v_i, false);
 
   -- DRAFT (never submitted) — for the "must be Submitted first" guard.
   v_e := fn_save_stock_count(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
-      'location_id', current_setting('pgtap.v_loc'), 'count_no', NULL, 'count_date', '2026-07-05'),
+      'location_id', current_setting('pgtap.v_loc'), 'count_no', NULL, 'count_date', '2026-05-24'),
     jsonb_build_array(jsonb_build_object('serial_no', 1, 'product_id', current_setting('pgtap.v_prod_zero'),
       'uom_conversion_factor', 1, 'is_counted', false)),
     '[]'::jsonb, '[]'::jsonb, current_setting('pgtap.v_user')::uuid
@@ -340,12 +340,12 @@ BEGIN
   -- At the OTHER location — for the location-mismatch guard.
   v_c := fn_save_stock_count(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
-      'location_id', current_setting('pgtap.v_loc2'), 'count_no', NULL, 'count_date', '2026-07-05'),
+      'location_id', current_setting('pgtap.v_loc2'), 'count_no', NULL, 'count_date', '2026-05-24'),
     jsonb_build_array(jsonb_build_object('serial_no', 1, 'product_id', current_setting('pgtap.v_prod_zero'),
       'uom_conversion_factor', 1, 'is_counted', true, 'counted_qty_pack', 1, 'counted_qty_loose', 0, 'counted_base_qty', 1)),
     '[]'::jsonb, '[]'::jsonb, current_setting('pgtap.v_user')::uuid
   );
-  PERFORM fn_submit_stock_count(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, v_c, '2026-07-05'::date, current_setting('pgtap.v_user')::uuid);
+  PERFORM fn_submit_stock_count(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, v_c, '2026-05-24'::date, current_setting('pgtap.v_user')::uuid);
   PERFORM set_config('pgtap.v_count_c', v_c, false);
 END;
 $$ LANGUAGE plpgsql;
@@ -356,10 +356,10 @@ BEGIN
   v_x := fn_save_stock_count_review(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
       'location_id', current_setting('pgtap.v_loc'), 'review_no', NULL, 'review_date', '2026-07-21',
-      'as_of_date', '2026-07-05', 'reason_id', current_setting('pgtap.v_reason'), 'remarks', 'REV_X'),
+      'as_of_date', '2026-05-24', 'reason_id', current_setting('pgtap.v_reason'), 'remarks', 'REV_X'),
     jsonb_build_array(
-      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_d'), 'source_count_date', '2026-07-05'),
-      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_h'), 'source_count_date', '2026-07-05')
+      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_d'), 'source_count_date', '2026-05-24'),
+      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_h'), 'source_count_date', '2026-05-24')
     ),
     current_setting('pgtap.v_user')::uuid
   );
@@ -370,8 +370,8 @@ $$ LANGUAGE plpgsql;
 INSERT INTO test_results (result) SELECT throws_ok(
   format($$ SELECT fn_save_stock_count_review(
     jsonb_build_object('client_id', %L, 'company_id', %L, 'location_id', %L, 'review_no', NULL, 'review_date', '2026-07-22',
-      'as_of_date', '2026-07-05', 'reason_id', %L),
-    jsonb_build_array(jsonb_build_object('source_count_no', %L, 'source_count_date', '2026-07-05')),
+      'as_of_date', '2026-05-24', 'reason_id', %L),
+    jsonb_build_array(jsonb_build_object('source_count_no', %L, 'source_count_date', '2026-05-24')),
     %L::uuid
   ) $$, current_setting('pgtap.v_client'), current_setting('pgtap.v_company'), current_setting('pgtap.v_loc'),
        current_setting('pgtap.v_reason'), current_setting('pgtap.v_count_d'), current_setting('pgtap.v_user')),
@@ -385,8 +385,8 @@ BEGIN
   PERFORM fn_save_stock_count_review(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
       'location_id', current_setting('pgtap.v_loc'), 'review_no', current_setting('pgtap.v_rev_x'), 'review_date', '2026-07-21',
-      'as_of_date', '2026-07-05', 'reason_id', current_setting('pgtap.v_reason'), 'remarks', 'REV_X'),
-    jsonb_build_array(jsonb_build_object('source_count_no', current_setting('pgtap.v_count_h'), 'source_count_date', '2026-07-05')),
+      'as_of_date', '2026-05-24', 'reason_id', current_setting('pgtap.v_reason'), 'remarks', 'REV_X'),
+    jsonb_build_array(jsonb_build_object('source_count_no', current_setting('pgtap.v_count_h'), 'source_count_date', '2026-05-24')),
     current_setting('pgtap.v_user')::uuid
   );
 END;
@@ -397,8 +397,8 @@ INSERT INTO test_results (result) SELECT ok(
   AND (SELECT fn_save_stock_count_review(
         jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
           'location_id', current_setting('pgtap.v_loc'), 'review_no', NULL, 'review_date', '2026-07-22',
-          'as_of_date', '2026-07-05', 'reason_id', current_setting('pgtap.v_reason')),
-        jsonb_build_array(jsonb_build_object('source_count_no', current_setting('pgtap.v_count_d'), 'source_count_date', '2026-07-05')),
+          'as_of_date', '2026-05-24', 'reason_id', current_setting('pgtap.v_reason')),
+        jsonb_build_array(jsonb_build_object('source_count_no', current_setting('pgtap.v_count_d'), 'source_count_date', '2026-05-24')),
         current_setting('pgtap.v_user')::uuid
       )) IS NOT NULL,
   'ok 9 — un-picking Count D from REV_X''s draft frees its reservation, and a new Review Y can now pick it'
@@ -407,10 +407,10 @@ INSERT INTO test_results (result) SELECT ok(
 INSERT INTO test_results (result) SELECT throws_ok(
   format($$ SELECT fn_save_stock_count_review(
     jsonb_build_object('client_id', %L, 'company_id', %L, 'location_id', %L, 'review_no', NULL, 'review_date', '2026-07-23',
-      'as_of_date', '2026-07-05', 'reason_id', %L),
+      'as_of_date', '2026-05-24', 'reason_id', %L),
     jsonb_build_array(
-      jsonb_build_object('source_count_no', %L, 'source_count_date', '2026-07-05'),
-      jsonb_build_object('source_count_no', %L, 'source_count_date', '2026-07-05')
+      jsonb_build_object('source_count_no', %L, 'source_count_date', '2026-05-24'),
+      jsonb_build_object('source_count_no', %L, 'source_count_date', '2026-05-24')
     ),
     %L::uuid
   ) $$, current_setting('pgtap.v_client'), current_setting('pgtap.v_company'), current_setting('pgtap.v_loc'),
@@ -422,8 +422,8 @@ INSERT INTO test_results (result) SELECT throws_ok(
 INSERT INTO test_results (result) SELECT throws_ok(
   format($$ SELECT fn_save_stock_count_review(
     jsonb_build_object('client_id', %L, 'company_id', %L, 'location_id', %L, 'review_no', NULL, 'review_date', '2026-07-24',
-      'as_of_date', '2026-07-05', 'reason_id', %L),
-    jsonb_build_array(jsonb_build_object('source_count_no', %L, 'source_count_date', '2026-07-05')),
+      'as_of_date', '2026-05-24', 'reason_id', %L),
+    jsonb_build_array(jsonb_build_object('source_count_no', %L, 'source_count_date', '2026-05-24')),
     %L::uuid
   ) $$, current_setting('pgtap.v_client'), current_setting('pgtap.v_company'), current_setting('pgtap.v_loc'),
        current_setting('pgtap.v_reason'), current_setting('pgtap.v_count_e'), current_setting('pgtap.v_user')),
@@ -442,8 +442,8 @@ BEGIN
       'location_id', current_setting('pgtap.v_loc'), 'review_no', current_setting('pgtap.v_rev1'), 'review_date', '2026-07-20',
       'as_of_date', (CURRENT_DATE + 1)::text, 'reason_id', current_setting('pgtap.v_reason'), 'remarks', 'REV1'),
     jsonb_build_array(
-      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_a'), 'source_count_date', '2026-07-05'),
-      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_b'), 'source_count_date', '2026-07-06')
+      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_a'), 'source_count_date', '2026-05-24'),
+      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_b'), 'source_count_date', '2026-05-25')
     ),
     current_setting('pgtap.v_user')::uuid
   );
@@ -464,10 +464,10 @@ BEGIN
   PERFORM fn_save_stock_count_review(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
       'location_id', current_setting('pgtap.v_loc'), 'review_no', current_setting('pgtap.v_rev1'), 'review_date', '2026-07-20',
-      'as_of_date', '2026-07-13', 'reason_id', current_setting('pgtap.v_reason'), 'remarks', 'REV1'),
+      'as_of_date', '2026-06-01', 'reason_id', current_setting('pgtap.v_reason'), 'remarks', 'REV1'),
     jsonb_build_array(
-      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_a'), 'source_count_date', '2026-07-05'),
-      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_b'), 'source_count_date', '2026-07-06')
+      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_a'), 'source_count_date', '2026-05-24'),
+      jsonb_build_object('source_count_no', current_setting('pgtap.v_count_b'), 'source_count_date', '2026-05-25')
     ),
     current_setting('pgtap.v_user')::uuid
   );
@@ -527,25 +527,25 @@ DECLARE v_g text; v_rev_neg text;
 BEGIN
   PERFORM fn_post_stock_movement(
     current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, current_setting('pgtap.v_loc')::uuid,
-    current_setting('pgtap.v_prod_batch_neg')::uuid, '2026-07-06'::date, 'ADJUSTMENT_OUT', -16,
-    NULL, NULL, 'BNEG', NULL, NULL, 'TEST_DRAIN', 'DRAIN-001', '2026-07-06'::date, current_setting('pgtap.v_user')::uuid
+    current_setting('pgtap.v_prod_batch_neg')::uuid, '2026-05-25'::date, 'ADJUSTMENT_OUT', -16,
+    NULL, NULL, 'BNEG', NULL, NULL, 'TEST_DRAIN', 'DRAIN-001', '2026-05-25'::date, current_setting('pgtap.v_user')::uuid
   );
 
   v_g := fn_save_stock_count(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
-      'location_id', current_setting('pgtap.v_loc'), 'count_no', NULL, 'count_date', '2026-07-05'),
+      'location_id', current_setting('pgtap.v_loc'), 'count_no', NULL, 'count_date', '2026-05-24'),
     jsonb_build_array(jsonb_build_object('serial_no', 1, 'product_id', current_setting('pgtap.v_prod_batch_neg'),
       'uom_conversion_factor', 1, 'is_counted', true, 'counted_qty_pack', 5, 'counted_qty_loose', 0, 'counted_base_qty', 5)),
     jsonb_build_array(jsonb_build_object('line_serial', 1, 'batch_no', 'BNEG', 'expiry_date', NULL, 'qty_pack', 5, 'qty_loose', 0, 'base_qty', 5)),
     '[]'::jsonb, current_setting('pgtap.v_user')::uuid
   );
-  PERFORM fn_submit_stock_count(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, v_g, '2026-07-05'::date, current_setting('pgtap.v_user')::uuid);
+  PERFORM fn_submit_stock_count(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, v_g, '2026-05-24'::date, current_setting('pgtap.v_user')::uuid);
 
   v_rev_neg := fn_save_stock_count_review(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
       'location_id', current_setting('pgtap.v_loc'), 'review_no', NULL, 'review_date', '2026-07-25',
-      'as_of_date', '2026-07-05', 'reason_id', current_setting('pgtap.v_reason'), 'remarks', 'REV_NEG'),
-    jsonb_build_array(jsonb_build_object('source_count_no', v_g, 'source_count_date', '2026-07-05')),
+      'as_of_date', '2026-05-24', 'reason_id', current_setting('pgtap.v_reason'), 'remarks', 'REV_NEG'),
+    jsonb_build_array(jsonb_build_object('source_count_no', v_g, 'source_count_date', '2026-05-24')),
     current_setting('pgtap.v_user')::uuid
   );
   PERFORM set_config('pgtap.v_rev_neg', v_rev_neg, false);
@@ -566,18 +566,18 @@ DECLARE v_f text; v_rev_cost text;
 BEGIN
   v_f := fn_save_stock_count(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
-      'location_id', current_setting('pgtap.v_loc'), 'count_no', NULL, 'count_date', '2026-07-05'),
+      'location_id', current_setting('pgtap.v_loc'), 'count_no', NULL, 'count_date', '2026-05-24'),
     jsonb_build_array(jsonb_build_object('serial_no', 1, 'product_id', current_setting('pgtap.v_prod_no_cost'),
       'uom_conversion_factor', 1, 'is_counted', true, 'counted_qty_pack', 5, 'counted_qty_loose', 0, 'counted_base_qty', 5)),
     '[]'::jsonb, '[]'::jsonb, current_setting('pgtap.v_user')::uuid
   );
-  PERFORM fn_submit_stock_count(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, v_f, '2026-07-05'::date, current_setting('pgtap.v_user')::uuid);
+  PERFORM fn_submit_stock_count(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid, v_f, '2026-05-24'::date, current_setting('pgtap.v_user')::uuid);
 
   v_rev_cost := fn_save_stock_count_review(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
       'location_id', current_setting('pgtap.v_loc'), 'review_no', NULL, 'review_date', '2026-07-26',
-      'as_of_date', '2026-07-05', 'reason_id', current_setting('pgtap.v_reason'), 'remarks', 'REV_COST'),
-    jsonb_build_array(jsonb_build_object('source_count_no', v_f, 'source_count_date', '2026-07-05')),
+      'as_of_date', '2026-05-24', 'reason_id', current_setting('pgtap.v_reason'), 'remarks', 'REV_COST'),
+    jsonb_build_array(jsonb_build_object('source_count_no', v_f, 'source_count_date', '2026-05-24')),
     current_setting('pgtap.v_user')::uuid
   );
   PERFORM set_config('pgtap.v_rev_cost', v_rev_cost, false);

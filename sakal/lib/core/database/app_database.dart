@@ -64,7 +64,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'sakal_local'));
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -125,6 +125,12 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(stockCountHeadersCache);
             await m.createTable(stockCountLinesCache);
           }
+          // v15: manufacturing_date alongside expiry_date (migration 080,
+          // regulatory/traceability). Only Opening Stock's cache is
+          // normalized per-column — every other module stores its batch
+          // children as a batchesJson blob, so the new field rides inside
+          // that existing JSON with no schema change needed there.
+          if (from < 15) await m.addColumn(openingStockLinesCache, openingStockLinesCache.manufacturingDate);
         },
       );
 }
