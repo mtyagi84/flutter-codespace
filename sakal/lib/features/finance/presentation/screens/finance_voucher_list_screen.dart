@@ -9,6 +9,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
+import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../providers/finance_voucher_providers.dart';
 
 MenuFeature? _findFeature(List<MenuModule> modules, String screenPath) {
@@ -271,51 +272,24 @@ class _FinanceVoucherListScreenState
 
         // ── Table (desktop/tablet) / Card list (mobile) ───────────────────────
         Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _error != null
-                  ? Center(child: Text(_error!,
-                        style: const TextStyle(color: AppColors.negative)))
-                  : rows.isEmpty
-                      ? _emptyState()
-                      : isMobile
-                          ? ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                              itemCount: rows.length,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(height: 8),
-                              itemBuilder: (_, i) => _buildCard(rows[i]),
-                            )
-                          : Padding(
-                              padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
-                              child: Column(children: [
-                                Container(
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.primary,
-                                    borderRadius: BorderRadius.vertical(
-                                        top: Radius.circular(8)),
-                                  ),
-                                  child: Row(children: [
-                                    _th('Trans No',   flex: 3),
-                                    _th('Date',       flex: 2),
-                                    _th('Type',       flex: 2),
-                                    _th('Mode',       flex: 2),
-                                    _th('Settlement', flex: 2),
-                                    _th('Status',     flex: 1),
-                                    _th('Remarks',    flex: 3),
-                                    _th('',           flex: 1),
-                                  ]),
-                                ),
-                                Expanded(
-                                  child: ListView.separated(
-                                    itemCount: rows.length,
-                                    separatorBuilder: (_, __) =>
-                                        const Divider(height: 1, color: AppColors.border),
-                                    itemBuilder: (_, i) => _buildRow(rows[i], i),
-                                  ),
-                                ),
-                              ]),
-                            ),
+          child: SakalAdaptiveList<Map<String, dynamic>>(
+            loading: _loading,
+            error: _error,
+            rows: rows,
+            columns: const [
+              SakalListColumn('Trans No', flex: 3),
+              SakalListColumn('Date', flex: 2),
+              SakalListColumn('Type', flex: 2),
+              SakalListColumn('Mode', flex: 2),
+              SakalListColumn('Settlement', flex: 2),
+              SakalListColumn('Status', flex: 1),
+              SakalListColumn('Remarks', flex: 3),
+              SakalListColumn('', flex: 1),
+            ],
+            rowBuilder: _buildRow,
+            cardBuilder: _buildCard,
+            emptyState: _emptyState(),
+          ),
         ),
 
         // ── Footer ────────────────────────────────────────────────────────────
@@ -347,16 +321,6 @@ class _FinanceVoucherListScreenState
       const SizedBox(width: 4),
       Text(label, style: const TextStyle(fontSize: 12)),
     ]),
-  );
-
-  Widget _th(String label, {int flex = 1}) => Expanded(
-    flex: flex,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Text(label,
-          style: const TextStyle(color: Colors.white,
-              fontWeight: FontWeight.w600, fontSize: 12)),
-    ),
   );
 
   Widget _buildRow(Map<String, dynamic> v, int index) {

@@ -5,10 +5,10 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
+import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../providers/stock_adjustment_providers.dart';
 
 class StockAdjustmentListScreen extends ConsumerStatefulWidget {
@@ -93,7 +93,6 @@ class _StockAdjustmentListScreenState extends ConsumerState<StockAdjustmentListS
   Widget build(BuildContext context) {
     final session   = ref.watch(sessionProvider);
     final isOffline = session?.offlineMode ?? false;
-    final isMobile  = Responsive.isMobile(context);
     final rows = _filtered;
 
     return Column(
@@ -140,37 +139,22 @@ class _StockAdjustmentListScreenState extends ConsumerState<StockAdjustmentListS
           ]),
         ),
         Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _error != null
-                  ? Center(child: Text(_error!, style: const TextStyle(color: AppColors.negative)))
-                  : rows.isEmpty
-                      ? _emptyState()
-                      : isMobile
-                          ? ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                              itemCount: rows.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 8),
-                              itemBuilder: (_, i) => _buildCard(rows[i]),
-                            )
-                          : Padding(
-                              padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
-                              child: Column(children: [
-                                Container(
-                                  decoration: const BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.vertical(top: Radius.circular(8))),
-                                  child: Row(children: [
-                                    _th('Adjustment No', flex: 2), _th('Date', flex: 2), _th('Location', flex: 3), _th('Reason', flex: 2), _th('Status', flex: 2), _th('', flex: 1),
-                                  ]),
-                                ),
-                                Expanded(
-                                  child: ListView.separated(
-                                    itemCount: rows.length,
-                                    separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.border),
-                                    itemBuilder: (_, i) => _buildRow(rows[i], i),
-                                  ),
-                                ),
-                              ]),
-                            ),
+          child: SakalAdaptiveList(
+            loading: _loading,
+            error: _error,
+            rows: rows,
+            columns: const [
+              SakalListColumn('Adjustment No', flex: 2),
+              SakalListColumn('Date', flex: 2),
+              SakalListColumn('Location', flex: 3),
+              SakalListColumn('Reason', flex: 2),
+              SakalListColumn('Status', flex: 2),
+              SakalListColumn('', flex: 1),
+            ],
+            rowBuilder: _buildRow,
+            cardBuilder: _buildCard,
+            emptyState: _emptyState(),
+          ),
         ),
         if (!_loading)
           Padding(
@@ -181,12 +165,6 @@ class _StockAdjustmentListScreenState extends ConsumerState<StockAdjustmentListS
       ],
     );
   }
-
-  Widget _th(String label, {int flex = 1}) => Expanded(
-    flex: flex,
-    child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12))),
-  );
 
   Widget _statusBadge(String status) {
     final color = _statusColors[status] ?? AppColors.textSecondary;

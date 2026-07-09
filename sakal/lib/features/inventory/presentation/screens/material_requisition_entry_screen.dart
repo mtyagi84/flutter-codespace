@@ -136,7 +136,8 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
               ..uomConversionFactor = (sl['uom_conversion_factor'] as num? ?? 1).toDouble()
               ..departmentId = sl['department_id'] as String?
               ..consumptionAreaId = sl['consumption_area_id'] as String?
-              ..issuedQty = (sl['issued_qty'] as num? ?? 0).toDouble();
+              ..issuedQty = (sl['issued_qty'] as num? ?? 0).toDouble()
+              ..matchedBarcode = sl['barcode'] as String?;
             row.qtyPackCtrl.text = (sl['qty_pack'] as num? ?? 0).toString();
             row.qtyLooseCtrl.text = (sl['qty_loose'] as num? ?? 0).toString();
             row.remarksCtrl.text = sl['remarks'] as String? ?? '';

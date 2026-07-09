@@ -292,8 +292,9 @@ class _MyScreenState extends ConsumerState<MyScreen>
 `MenuFeature` fields are `.addAllowed` / `.editAllowed` / `.approveAllowed` (NOT `.canAdd` / `.canEdit`).
 
 ### Adaptive list (all list screens)
-Mobile = card layout, Desktop = table. Use `SakalAdaptiveList` widget.
-Template: `lib/features/finance/presentation/screens/finance_voucher_list_screen.dart`
+Mobile = card layout, Desktop = table. Use the real shared widget: `lib/core/widgets/sakal_adaptive_list.dart` — `SakalAdaptiveList<T>({loading, error, rows, columns, rowBuilder, cardBuilder, emptyState})`, generic over the row type (`Map<String, dynamic>` for most Inventory screens, a typed model like `PurchaseReturnModel`/`GrnModel` for Purchase/Finance screens). It owns the loading/error/empty + `Responsive.isMobile(context)` switch internally — a list screen only supplies its own `SakalListColumn` header spec plus a `rowBuilder`/`cardBuilder` pair.
+**History**: this widget was planned early on but not actually built — flagged in a 2026-07-09 audit that found 14 list screens (Purchase/Inventory/Finance) each hand-rolling the identical switch, including the file still cited below as "template". Built for real the same day and all 14 screens migrated to it — no more hand-rolled copies should exist. When adding a new list screen, use this widget from the start; don't reintroduce the inline pattern.
+Template: `lib/features/finance/presentation/screens/finance_voucher_list_screen.dart` (now an actual consumer of the widget, not just an inline example).
 
 ### Save/Approve buttons — top-right of the header row (all entry screens)
 Every entry screen places its primary action buttons (`Save Draft`, `Approve`, `Post`, etc.) in the **top header row, right-aligned next to the title** — never at the bottom of the scrollable form. Desktop: `Row(children: [Expanded(child: titleBlock), if (canSave || canApprove) actionButtons])`. Mobile: stack the buttons in a `Column` below the title block instead of inline, to avoid overflow on narrow screens. Extract the title+status block into its own small widget (e.g. `_buildTitleBlock`) so it can be reused in both the mobile and desktop branches.
