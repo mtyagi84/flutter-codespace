@@ -29,6 +29,8 @@ class RouteNames {
   static const String printTemplateDesigner = '/setup/print-templates/designer';
 
   // Sales — screen_names must match ric_master_menus seeds
+  static const String salesQuotations    = '/sales/quotations';
+  static const String salesQuotationEntry = '/sales/quotation-entry';
   static const String salesInvoices = '/sales/invoices';
   static const String salesReturns  = '/sales/returns';
   static const String salesReceipts = '/sales/receipts';

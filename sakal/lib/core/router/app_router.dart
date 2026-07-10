@@ -52,6 +52,8 @@ import '../../features/inventory/presentation/screens/stock_count_list_screen.da
 import '../../features/inventory/presentation/screens/stock_count_entry_screen.dart';
 import '../../features/inventory/presentation/screens/stock_count_review_list_screen.dart';
 import '../../features/inventory/presentation/screens/stock_count_review_entry_screen.dart';
+import '../../features/sales/presentation/screens/sales_quotation_list_screen.dart';
+import '../../features/sales/presentation/screens/sales_quotation_entry_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_list_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_entry_screen.dart';
 import '../../features/purchase/presentation/screens/grn_list_screen.dart';
@@ -208,6 +210,17 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.productFlagTypes, builder: (c, s) => const ProductFlagTypesScreen()),
 
         // Sales
+        GoRoute(path: RouteNames.salesQuotations, builder: (c, s) => const SalesQuotationListScreen()),
+        GoRoute(
+          path: RouteNames.salesQuotationEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return SalesQuotationEntryScreen(
+              editQuotationNo:   extra?['quotationNo']   as String?,
+              editQuotationDate: extra?['quotationDate'] as String?,
+            );
+          },
+        ),
         GoRoute(path: RouteNames.salesInvoices, builder: (c, s) => const _Placeholder('Sales Invoice')),
         GoRoute(path: RouteNames.salesReturns,  builder: (c, s) => const _Placeholder('Sales Return')),
         GoRoute(path: RouteNames.salesReceipts, builder: (c, s) => const _Placeholder('Cash Receipt')),

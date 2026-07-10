@@ -60,9 +60,10 @@ begin
          serial_no, group_code, group_name, group_serial_no,
          approve_allowed, copy_allowed, excel_upload_allowed)
     values
-        (p_client_id, p_company_id, v_sl, 'SL-INV', 'Sales Invoice', '/sales/invoices', 0, 'SL-TXN', 'Transactions', 0, true,  true,  false),
-        (p_client_id, p_company_id, v_sl, 'SL-RET', 'Sales Return',  '/sales/returns',  1, 'SL-TXN', 'Transactions', 0, true,  false, false),
-        (p_client_id, p_company_id, v_sl, 'SL-RCP', 'Cash Receipt',  '/sales/receipts', 2, 'SL-TXN', 'Transactions', 0, false, false, false)
+        (p_client_id, p_company_id, v_sl, 'SL-QUO', 'Sales Quotation', '/sales/quotations', 0, 'SL-TXN', 'Transactions', 0, true,  true,  false),
+        (p_client_id, p_company_id, v_sl, 'SL-INV', 'Sales Invoice',   '/sales/invoices',   1, 'SL-TXN', 'Transactions', 0, true,  true,  false),
+        (p_client_id, p_company_id, v_sl, 'SL-RET', 'Sales Return',    '/sales/returns',    2, 'SL-TXN', 'Transactions', 0, true,  false, false),
+        (p_client_id, p_company_id, v_sl, 'SL-RCP', 'Cash Receipt',    '/sales/receipts',   3, 'SL-TXN', 'Transactions', 0, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set group_code      = excluded.group_code,
             group_name      = excluded.group_name,

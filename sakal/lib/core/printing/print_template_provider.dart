@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../network/dio_client.dart';
 import '../providers/session_provider.dart';
+import 'default_templates/sales_quotation_default_template.dart';
 import 'default_templates/purchase_order_default_template.dart';
 import 'default_templates/grn_default_template.dart';
 import 'default_templates/purchase_invoice_default_template.dart';
@@ -50,6 +51,7 @@ final printTemplateProvider = FutureProvider.family<PrintTemplate, String>((ref,
 /// point for a brand-new template, so an admin edits a proven-good layout
 /// instead of a blank page.
 PrintTemplate defaultTemplateFor(String documentType) => switch (documentType) {
+  'SALES_QUOTATION'         => salesQuotationDefaultTemplate,
   'PURCHASE_ORDER'          => purchaseOrderDefaultTemplate,
   'GRN'                     => grnDefaultTemplate,
   'PURCHASE_INVOICE'        => purchaseInvoiceDefaultTemplate,

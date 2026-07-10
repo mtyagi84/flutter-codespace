@@ -34,6 +34,24 @@ class PrintFieldRegistry {
     PrintFieldDef('totals.grand_total', 'Grand Total', PrintDataFormat.currency),
   ];
 
+  static const _salesQuotationScalarFields = [
+    PrintFieldDef('header.quotation_no', 'Quotation Number'),
+    PrintFieldDef('header.quotation_date', 'Quotation Date'),
+    PrintFieldDef('header.valid_until_date', 'Valid Until'),
+    PrintFieldDef('header.status', 'Status'),
+    PrintFieldDef('header.customer_name', 'Customer Name'),
+    PrintFieldDef('header.sales_person_name', 'Sales Person'),
+    PrintFieldDef('header.currency_code', 'Currency'),
+    PrintFieldDef('header.payment_terms', 'Payment Terms'),
+    PrintFieldDef('header.delivery_terms', 'Delivery Terms'),
+    PrintFieldDef('header.remarks', 'Remarks'),
+    PrintFieldDef('totals.gross_amount', 'Gross Amount', PrintDataFormat.currency),
+    PrintFieldDef('totals.discount_amount', 'Discount', PrintDataFormat.currency),
+    PrintFieldDef('totals.tax_amount', 'Tax', PrintDataFormat.currency),
+    PrintFieldDef('totals.charges_amount', 'Charges', PrintDataFormat.currency),
+    PrintFieldDef('totals.grand_total', 'Grand Total', PrintDataFormat.currency),
+  ];
+
   static const _grnScalarFields = [
     PrintFieldDef('header.grn_no', 'GRN Number'),
     PrintFieldDef('header.grn_date', 'GRN Date'),
@@ -184,6 +202,20 @@ class PrintFieldRegistry {
     PrintFieldDef('company.city_name', 'Company City'),
     PrintFieldDef('company.logo', 'Company Logo (image)'),
   ];
+
+  static const _salesQuotationTableRowFields = {
+    'lines': [
+      PrintFieldDef('product_name', 'Item Name'),
+      PrintFieldDef('uom_label', 'UOM'),
+      PrintFieldDef('base_qty', 'Quantity', PrintDataFormat.number),
+      PrintFieldDef('rate', 'Rate', PrintDataFormat.currency),
+      PrintFieldDef('final_amount', 'Amount', PrintDataFormat.currency),
+    ],
+    'charges': [
+      PrintFieldDef('charge_name', 'Charge Name'),
+      PrintFieldDef('amount', 'Amount', PrintDataFormat.currency),
+    ],
+  };
 
   static const _poTableRowFields = {
     'lines': [
@@ -339,6 +371,7 @@ class PrintFieldRegistry {
   /// elements) available for a document type, company fields included.
   static List<PrintFieldDef> scalarFields(String documentType) => [
     ...switch (documentType) {
+      'SALES_QUOTATION'         => _salesQuotationScalarFields,
       'PURCHASE_ORDER'          => _poScalarFields,
       'GRN'                     => _grnScalarFields,
       'PURCHASE_INVOICE'        => _purchaseInvoiceScalarFields,
@@ -360,6 +393,7 @@ class PrintFieldRegistry {
 
   /// Which repeating lists (table `bind` values) exist for a document type.
   static List<String> tableNames(String documentType) => switch (documentType) {
+    'SALES_QUOTATION'         => const ['lines', 'charges'],
     'PURCHASE_ORDER'          => const ['lines', 'charges', 'paymentTerms'],
     'GRN'                     => const ['lines', 'charges'],
     'PURCHASE_INVOICE'        => const ['grns'],
@@ -379,6 +413,7 @@ class PrintFieldRegistry {
 
   /// Columns available for a table bound to [tableName] within [documentType].
   static List<PrintFieldDef> rowFields(String documentType, String tableName) => switch (documentType) {
+    'SALES_QUOTATION'         => _salesQuotationTableRowFields[tableName] ?? const [],
     'PURCHASE_ORDER'          => _poTableRowFields[tableName] ?? const [],
     'GRN'                     => _grnTableRowFields[tableName] ?? const [],
     'PURCHASE_INVOICE'        => _purchaseInvoiceTableRowFields[tableName] ?? const [],
@@ -401,12 +436,14 @@ class PrintFieldRegistry {
   /// both places (plus a *_default_template.dart and field entries here)
   /// when a new document's print support is built.
   static const documentTypes = [
+    'SALES_QUOTATION',
     'PURCHASE_ORDER', 'GRN', 'PURCHASE_INVOICE', 'PURCHASE_RETURN', 'VOUCHER',
     'MATERIAL_REQUISITION', 'MATERIAL_ISSUE', 'STOCK_TRANSFER_REQUEST', 'STOCK_TRANSFER', 'STOCK_RECEIPT',
     'STOCK_ADJUSTMENT', 'OPENING_STOCK', 'STOCK_COUNT', 'STOCK_COUNT_REVIEW',
   ];
 
   static String documentTypeLabel(String documentType) => switch (documentType) {
+    'SALES_QUOTATION'         => 'Sales Quotation',
     'PURCHASE_ORDER'          => 'Purchase Order',
     'GRN'                     => 'Goods Receipt Note',
     'PURCHASE_INVOICE'        => 'Purchase Bill',

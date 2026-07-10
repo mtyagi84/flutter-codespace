@@ -19,6 +19,7 @@ import 'tables/stock_receipt_cache_tables.dart';
 import 'tables/stock_adjustment_cache_tables.dart';
 import 'tables/opening_stock_cache_tables.dart';
 import 'tables/stock_count_cache_tables.dart';
+import 'tables/sales_quotation_cache_tables.dart';
 
 part 'app_database.g.dart';
 
@@ -59,12 +60,15 @@ part 'app_database.g.dart';
   OpeningStockLinesCache,
   StockCountHeadersCache,
   StockCountLinesCache,
+  SalesQuotationsCache,
+  SalesQuotationLinesCache,
+  SalesQuotationChargeLinesCache,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'sakal_local'));
 
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 16;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -131,6 +135,11 @@ class AppDatabase extends _$AppDatabase {
           // children as a batchesJson blob, so the new field rides inside
           // that existing JSON with no schema change needed there.
           if (from < 15) await m.addColumn(openingStockLinesCache, openingStockLinesCache.manufacturingDate);
+          if (from < 16) {
+            await m.createTable(salesQuotationsCache);
+            await m.createTable(salesQuotationLinesCache);
+            await m.createTable(salesQuotationChargeLinesCache);
+          }
         },
       );
 }

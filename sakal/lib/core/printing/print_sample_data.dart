@@ -13,6 +13,35 @@ class PrintSampleData {
   };
 
   static Map<String, dynamic> forDocumentType(String documentType) => switch (documentType) {
+    'SALES_QUOTATION' => {
+      'company': _company(),
+      'header': {
+        'quotation_no':      'SQ/KIN/2026/00001',
+        'quotation_date':    '10 Jul 2026',
+        'valid_until_date':  '25 Jul 2026',
+        'status':            'DRAFT',
+        'customer_name':     '[3110] Sample Customer Ltd',
+        'sales_person_name': 'John Sales',
+        'currency_code':     'USD',
+        'payment_terms':     '30 days net',
+        'delivery_terms':    'Ex-Warehouse, Lubumbashi',
+        'remarks':           'Sample remarks for preview.',
+      },
+      'lines': [
+        {'product_name': 'Sample Item A', 'uom_label': 'Piece', 'base_qty': 10, 'rate': 30.0, 'final_amount': 300.0},
+        {'product_name': 'Sample Item B', 'uom_label': 'Carton', 'base_qty': 2, 'rate': 140.0, 'final_amount': 280.0},
+      ],
+      'charges': [
+        {'charge_name': 'Delivery', 'amount': 20.0},
+      ],
+      'totals': {
+        'gross_amount': 580.0,
+        'discount_amount': 0.0,
+        'tax_amount': 92.8,
+        'charges_amount': 20.0,
+        'grand_total': 692.8,
+      },
+    },
     'PURCHASE_ORDER' => {
       'company': _company(),
       'header': {
