@@ -59,6 +59,15 @@ BEGIN
     (v_debtor_id,   v_client_id, v_company_id, '4001', 'Customer Alpha', 'Customer', 'OHADA', true, true, false, now()),
     (v_supplier_id, v_client_id, v_company_id, '5001', 'Supplier Beta',  'Supplier', 'OHADA', true, true, false, now())
   ON CONFLICT (id) DO NOTHING;
+
+  -- fn_check_period_open (migration 035) requires the transaction date to
+  -- fall inside an open financial year — this fixture predates that check
+  -- (added when fn_post_finance_voucher was rebuilt in migration 037) and
+  -- never had one. Covers every date this file posts against (2026-06-01,
+  -- 2026-06-04).
+  INSERT INTO rim_financial_years (client_id, company_id, fy_name, fy_start_date, fy_end_date, is_active, is_closed)
+  VALUES (v_client_id, v_company_id, 'FY 2026', '2026-01-01', '2026-12-31', true, false)
+  ON CONFLICT (client_id, company_id, fy_start_date) DO NOTHING;
 END;
 $$;
 
