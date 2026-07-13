@@ -54,6 +54,8 @@ import '../../features/inventory/presentation/screens/stock_count_review_list_sc
 import '../../features/inventory/presentation/screens/stock_count_review_entry_screen.dart';
 import '../../features/sales/presentation/screens/sales_quotation_list_screen.dart';
 import '../../features/sales/presentation/screens/sales_quotation_entry_screen.dart';
+import '../../features/sales/presentation/screens/price_master_list_screen.dart';
+import '../../features/sales/presentation/screens/price_master_entry_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_list_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_entry_screen.dart';
 import '../../features/purchase/presentation/screens/grn_list_screen.dart';
@@ -218,6 +220,17 @@ final appRouter = GoRouter(
             return SalesQuotationEntryScreen(
               editQuotationNo:   extra?['quotationNo']   as String?,
               editQuotationDate: extra?['quotationDate'] as String?,
+            );
+          },
+        ),
+        GoRoute(path: RouteNames.salesPriceMaster, builder: (c, s) => const PriceMasterListScreen()),
+        GoRoute(
+          path: RouteNames.salesPriceMasterEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return PriceMasterEntryScreen(
+              editEntryNo:   extra?['entryNo']   as String?,
+              editEntryDate: extra?['entryDate'] as String?,
             );
           },
         ),

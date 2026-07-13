@@ -20,6 +20,7 @@ import 'tables/stock_adjustment_cache_tables.dart';
 import 'tables/opening_stock_cache_tables.dart';
 import 'tables/stock_count_cache_tables.dart';
 import 'tables/sales_quotation_cache_tables.dart';
+import 'tables/price_master_cache_tables.dart';
 
 part 'app_database.g.dart';
 
@@ -63,12 +64,14 @@ part 'app_database.g.dart';
   SalesQuotationsCache,
   SalesQuotationLinesCache,
   SalesQuotationChargeLinesCache,
+  PriceMasterHeadersCache,
+  PriceMasterLinesCache,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'sakal_local'));
 
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 18;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -139,6 +142,29 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(salesQuotationsCache);
             await m.createTable(salesQuotationLinesCache);
             await m.createTable(salesQuotationChargeLinesCache);
+          }
+          if (from < 17) {
+            await m.createTable(priceMasterHeadersCache);
+            await m.createTable(priceMasterLinesCache);
+          }
+          // v18: Price Master's backend contract was revised from
+          // company-wide to LOCATION-WISE (docs/screens/sales_price_master.md)
+          // before the v17 tables above ever shipped to a real device —
+          // adding the location/currency/rate columns onto the header and
+          // the cost/margin/below-cost-reason/barcode columns onto the
+          // lines, same table classes, no new tables.
+          if (from < 18) {
+            await m.addColumn(priceMasterHeadersCache, priceMasterHeadersCache.locationId);
+            await m.addColumn(priceMasterHeadersCache, priceMasterHeadersCache.locationName);
+            await m.addColumn(priceMasterHeadersCache, priceMasterHeadersCache.priceCurrencyId);
+            await m.addColumn(priceMasterHeadersCache, priceMasterHeadersCache.currencyCode);
+            await m.addColumn(priceMasterHeadersCache, priceMasterHeadersCache.rateToBase);
+            await m.addColumn(priceMasterHeadersCache, priceMasterHeadersCache.rateToLocal);
+            await m.addColumn(priceMasterLinesCache, priceMasterLinesCache.barcode);
+            await m.addColumn(priceMasterLinesCache, priceMasterLinesCache.costPrice);
+            await m.addColumn(priceMasterLinesCache, priceMasterLinesCache.marginPercent);
+            await m.addColumn(priceMasterLinesCache, priceMasterLinesCache.belowCostReasonId);
+            await m.addColumn(priceMasterLinesCache, priceMasterLinesCache.belowCostReasonName);
           }
         },
       );

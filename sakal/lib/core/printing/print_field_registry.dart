@@ -196,6 +196,18 @@ class PrintFieldRegistry {
     PrintFieldDef('header.remarks', 'Remarks'),
   ];
 
+  static const _priceMasterScalarFields = [
+    PrintFieldDef('header.entry_no', 'Entry No'),
+    PrintFieldDef('header.entry_date', 'Entry Date'),
+    PrintFieldDef('header.effective_date', 'Effective Date'),
+    PrintFieldDef('header.status', 'Status'),
+    PrintFieldDef('header.location_name', 'Location'),
+    PrintFieldDef('header.price_type_label', 'Price Type'),
+    PrintFieldDef('header.customer_name', 'Customer'),
+    PrintFieldDef('header.currency_code', 'Currency'),
+    PrintFieldDef('header.remarks', 'Remarks'),
+  ];
+
   static const _companyFields = [
     PrintFieldDef('company.company_name', 'Company Name'),
     PrintFieldDef('company.address', 'Company Address'),
@@ -367,6 +379,16 @@ class PrintFieldRegistry {
     ],
   };
 
+  static const _priceMasterTableRowFields = {
+    'lines': [
+      PrintFieldDef('product_name', 'Item Name'),
+      PrintFieldDef('uom_label', 'UOM'),
+      PrintFieldDef('cost_price', 'Cost Price', PrintDataFormat.currency),
+      PrintFieldDef('margin_percent', 'Margin %', PrintDataFormat.number),
+      PrintFieldDef('selling_price', 'Selling Price', PrintDataFormat.currency),
+    ],
+  };
+
   /// Every scalar field (usable by text/field/image/barcode/watermark
   /// elements) available for a document type, company fields included.
   static List<PrintFieldDef> scalarFields(String documentType) => [
@@ -386,6 +408,7 @@ class PrintFieldRegistry {
       'OPENING_STOCK'           => _openingStockScalarFields,
       'STOCK_COUNT'             => _stockCountScalarFields,
       'STOCK_COUNT_REVIEW'      => _stockCountReviewScalarFields,
+      'PRICE_MASTER'            => _priceMasterScalarFields,
       _ => const <PrintFieldDef>[],
     },
     ..._companyFields,
@@ -408,6 +431,7 @@ class PrintFieldRegistry {
     'OPENING_STOCK'           => const ['lines'],
     'STOCK_COUNT'             => const ['lines'],
     'STOCK_COUNT_REVIEW'      => const ['lines'],
+    'PRICE_MASTER'            => const ['lines'],
     _ => const [],
   };
 
@@ -428,6 +452,7 @@ class PrintFieldRegistry {
     'OPENING_STOCK'           => _openingStockTableRowFields[tableName] ?? const [],
     'STOCK_COUNT'             => _stockCountTableRowFields[tableName] ?? const [],
     'STOCK_COUNT_REVIEW'      => _stockCountReviewTableRowFields[tableName] ?? const [],
+    'PRICE_MASTER'            => _priceMasterTableRowFields[tableName] ?? const [],
     _ => const [],
   };
 
@@ -439,7 +464,7 @@ class PrintFieldRegistry {
     'SALES_QUOTATION',
     'PURCHASE_ORDER', 'GRN', 'PURCHASE_INVOICE', 'PURCHASE_RETURN', 'VOUCHER',
     'MATERIAL_REQUISITION', 'MATERIAL_ISSUE', 'STOCK_TRANSFER_REQUEST', 'STOCK_TRANSFER', 'STOCK_RECEIPT',
-    'STOCK_ADJUSTMENT', 'OPENING_STOCK', 'STOCK_COUNT', 'STOCK_COUNT_REVIEW',
+    'STOCK_ADJUSTMENT', 'OPENING_STOCK', 'STOCK_COUNT', 'STOCK_COUNT_REVIEW', 'PRICE_MASTER',
   ];
 
   static String documentTypeLabel(String documentType) => switch (documentType) {
@@ -458,6 +483,7 @@ class PrintFieldRegistry {
     'OPENING_STOCK'           => 'Opening Stock',
     'STOCK_COUNT'             => 'Stock Count',
     'STOCK_COUNT_REVIEW'      => 'Stock Count Review',
+    'PRICE_MASTER'            => 'Sales Price Master',
     _ => documentType,
   };
 }

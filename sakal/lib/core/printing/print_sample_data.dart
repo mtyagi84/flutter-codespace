@@ -260,6 +260,24 @@ class PrintSampleData {
         {'product_name': 'Sample Item B', 'batch_no': 'B001', 'serial_no': '', 'counted_qty': 15, 'system_qty': 18, 'variance_qty': -3, 'adjust_flag': '-'},
       ],
     },
+    'PRICE_MASTER' => {
+      'company': _company(),
+      'header': {
+        'entry_no':         'PRC/KIN/2026/00001',
+        'entry_date':       '10 Jul 2026',
+        'effective_date':   '01 Aug 2026',
+        'status':           'DRAFT',
+        'location_name':    'Main Warehouse',
+        'price_type_label': 'Generic',
+        'customer_name':    '',
+        'currency_code':    'USD',
+        'remarks':          'Sample remarks for preview.',
+      },
+      'lines': [
+        {'product_name': 'Sample Item A', 'uom_label': 'Piece', 'cost_price': 5.0, 'margin_percent': 20.0, 'selling_price': 6.0},
+        {'product_name': 'Sample Item B', 'uom_label': 'Carton', 'cost_price': 40.0, 'margin_percent': 12.5, 'selling_price': 45.0},
+      ],
+    },
     _ => {'company': _company(), 'header': {}, 'lines': [], 'totals': {}},
   };
 }
