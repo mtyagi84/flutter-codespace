@@ -26,6 +26,14 @@ BEGIN;
 
 CREATE TEMP TABLE test_results (n SERIAL PRIMARY KEY, result TEXT);
 
+-- pgTAP requires a plan() (or no_plan()) before any ok()/is()/throws_ok()
+-- call — this file has 24 assertions across its several DO blocks below,
+-- captured into test_results the same as every other test in this suite,
+-- but was missing this declaration entirely (the only file in the suite
+-- with that gap — every ok()/throws_ok() call would raise "You tried to
+-- run a test without a plan!" the moment it executed).
+SELECT plan(24);
+
 -- ══════════════════════════════════════════════════════════════════════════
 -- Fixture
 -- ══════════════════════════════════════════════════════════════════════════
