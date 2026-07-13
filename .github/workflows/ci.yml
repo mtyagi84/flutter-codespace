@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  flutter:
+    name: Flutter analyze & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sakal
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Drift's generated app_database.g.dart is not committed to the repo
+      # (git-ignored implicitly by never being added) — nothing below this
+      # step will even parse without it.
+      - name: Generate Drift code
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: flutter analyze
+        run: flutter analyze
+
+      - name: flutter test
+        run: flutter test
+
+      # Informational only for now — none of this codebase's files have
+      # ever been run through `dart format` (no Flutter toolchain in the
+      # authoring environment), so a hard gate here would fail on style
+      # alone, not real bugs. Once a one-time `dart format .` cleanup pass
+      # is committed, remove `continue-on-error` to make this a real gate.
+      - name: dart format (informational)
+        run: dart format --output=none --set-exit-if-changed .
+        continue-on-error: true
+
+  backend:
+    name: Backend migrations & pgTAP
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # Plain `postgres` images don't ship the pgjwt/pgtap extensions
+        # this schema needs (migration 023_jwt_auth.sql creates pgjwt;
+        # every file under backend/tests/ needs pgtap) — supabase/postgres
+        # is the same image Supabase itself runs on and ships both.
+        image: supabase/postgres:15.1.0.117
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      PGPASSWORD: postgres
+      PGHOST: localhost
+      PGUSER: postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable pgTAP
+        run: psql -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS pgtap;"
+
+      - name: Run migrations 001-083
+        run: |
+          set -e
+          for f in $(ls sakal/backend/migrations/*.sql | sort); do
+            echo "::group::Applying $f"
+            psql -v ON_ERROR_STOP=1 -f "$f"
+            echo "::endgroup::"
+          done
+
+      # Every test file wraps itself in BEGIN...ROLLBACK with hardcoded
+      # fixture UUIDs, so all 24 are safe to run back-to-back against the
+      # same database. Each file's own final SELECT dumps every assertion
+      # as a row starting with "ok " or "not ok " (see each file's own
+      # header comment) — grep for the latter to fail the job.
+      - name: Run pgTAP tests
+        run: |
+          fail=0
+          for f in $(ls sakal/backend/tests/*.sql | sort); do
+            echo "::group::Running $f"
+            out=$(psql -v ON_ERROR_STOP=1 -f "$f")
+            echo "$out"
+            if echo "$out" | grep -q "not ok"; then
+              echo "::error file=$f::One or more assertions failed"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $fail
