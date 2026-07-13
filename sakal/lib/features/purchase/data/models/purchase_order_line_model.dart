@@ -1,3 +1,20 @@
+/// PostgREST can return a NUMERIC/DECIMAL column as either a JSON number or
+/// a JSON string (precision-preserving encoding) — `as num?` alone throws on
+/// the string case rather than parsing it.
+double _asDouble(dynamic v, [double fallback = 0]) {
+  if (v == null) return fallback;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v) ?? fallback;
+  return fallback;
+}
+
+double? _asDoubleOrNull(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v);
+  return null;
+}
+
 /// rid_purchase_order_lines. See backend/migrations/031_purchase_orders.sql.
 class PurchaseOrderLineModel {
   final String  id;
@@ -78,27 +95,27 @@ class PurchaseOrderLineModel {
       barcode:             j['barcode'] as String?,
       uomId:               j['uom_id'] as String,
       uomLabel:            uom?['description'] as String?,
-      uomConversionFactor: (j['uom_conversion_factor'] as num? ?? 1).toDouble(),
-      qtyPack:             (j['qty_pack'] as num? ?? 0).toDouble(),
-      qtyLoose:            (j['qty_loose'] as num? ?? 0).toDouble(),
-      baseQty:             (j['base_qty'] as num? ?? 0).toDouble(),
-      rate:                (j['rate'] as num? ?? 0).toDouble(),
-      grossAmount:         (j['gross_amount'] as num? ?? 0).toDouble(),
-      discountPercent:     (j['discount_percent'] as num? ?? 0).toDouble(),
-      discountAmount:      (j['discount_amount'] as num? ?? 0).toDouble(),
+      uomConversionFactor: _asDouble(j['uom_conversion_factor'], 1),
+      qtyPack:             _asDouble(j['qty_pack']),
+      qtyLoose:            _asDouble(j['qty_loose']),
+      baseQty:             _asDouble(j['base_qty']),
+      rate:                _asDouble(j['rate']),
+      grossAmount:         _asDouble(j['gross_amount']),
+      discountPercent:     _asDouble(j['discount_percent']),
+      discountAmount:      _asDouble(j['discount_amount']),
       taxGroupId:          j['tax_group_id'] as String?,
       taxGroupName:        taxGroup?['group_name'] as String?,
-      taxAmount:           (j['tax_amount'] as num? ?? 0).toDouble(),
-      finalAmount:         (j['final_amount'] as num? ?? 0).toDouble(),
-      baseAmount:          (j['base_amount'] as num? ?? 0).toDouble(),
-      localAmount:         (j['local_amount'] as num? ?? 0).toDouble(),
-      chargeAmount:        (j['charge_amount'] as num? ?? 0).toDouble(),
-      landedAmount:        (j['landed_amount'] as num? ?? 0).toDouble(),
+      taxAmount:           _asDouble(j['tax_amount']),
+      finalAmount:         _asDouble(j['final_amount']),
+      baseAmount:          _asDouble(j['base_amount']),
+      localAmount:         _asDouble(j['local_amount']),
+      chargeAmount:        _asDouble(j['charge_amount']),
+      landedAmount:        _asDouble(j['landed_amount']),
       departmentId:        j['department_id'] as String?,
       consumptionAreaId:   j['consumption_area_id'] as String?,
-      qtyOnHandAtOrder:    (j['qty_on_hand_at_order'] as num?)?.toDouble(),
-      reorderLevelAtOrder: (j['reorder_level_at_order'] as num?)?.toDouble(),
-      qtyReceived:         (j['qty_received'] as num? ?? 0).toDouble(),
+      qtyOnHandAtOrder:    _asDoubleOrNull(j['qty_on_hand_at_order']),
+      reorderLevelAtOrder: _asDoubleOrNull(j['reorder_level_at_order']),
+      qtyReceived:         _asDouble(j['qty_received']),
     );
   }
 }

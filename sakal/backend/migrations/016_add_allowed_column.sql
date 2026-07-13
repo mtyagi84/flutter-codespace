@@ -16,6 +16,13 @@ ALTER TABLE ric_user_menus
 
 
 -- ── Step 2: fn_get_user_permissions ──────────────────────────
+-- RETURNS TABLE is implemented via OUT parameters — Postgres refuses to
+-- let CREATE OR REPLACE change their shape/order, and add_allowed is
+-- inserted mid-list (next to view_allowed) rather than appended, so an
+-- explicit drop is required first (same pattern later used for
+-- fn_compute_stock_count_variance in migration 080).
+DROP FUNCTION IF EXISTS fn_get_user_permissions(uuid, uuid, uuid);
+
 CREATE OR REPLACE FUNCTION fn_get_user_permissions(
     p_user_id    uuid,
     p_client_id  uuid,
