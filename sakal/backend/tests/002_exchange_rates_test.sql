@@ -26,8 +26,13 @@ BEGIN
   VALUES (v_client_id, 'TEST CLIENT', true, false, now())
   ON CONFLICT (id) DO NOTHING;
 
-  INSERT INTO ric_companies (id, client_id, company_name, is_active, is_deleted, created_at)
-  VALUES (v_company_id, v_client_id, 'TEST COMPANY', true, false, now())
+  -- base_currency must be set to 'USD' — fn_get_exchange_rate resolves it
+  -- from ric_companies to decide which lookup path applies (direct/
+  -- reciprocal/cross-rate), and every rate row below is seeded as
+  -- from_currency='USD'. Left NULL before, every path fell through to the
+  -- cross-rate branch and failed looking up "<NULL> -> USD".
+  INSERT INTO ric_companies (id, client_id, company_name, base_currency, local_currency, is_active, is_deleted, created_at)
+  VALUES (v_company_id, v_client_id, 'TEST COMPANY', 'USD', 'USD', true, false, now())
   ON CONFLICT (id) DO NOTHING;
 
   INSERT INTO ric_locations (id, client_id, company_id, location_name, is_active, is_deleted, created_at)
