@@ -50,13 +50,14 @@ BEGIN
           'x', true, false, now())
   ON CONFLICT (id) DO NOTHING;
 
+  -- accounting_std is NOT NULL (added after this fixture was first written)
   INSERT INTO rim_accounts (id, client_id, company_id, account_code, account_name,
-                             account_nature, posting_allowed, is_active, is_deleted, created_at)
+                             account_nature, accounting_std, posting_allowed, is_active, is_deleted, created_at)
   VALUES
-    (v_cash_id,     v_client_id, v_company_id, '1001', 'Petty Cash',     'Cash',     true, true, false, now()),
-    (v_bank_id,     v_client_id, v_company_id, '1100', 'HDFC Bank',      'Bank',     true, true, false, now()),
-    (v_debtor_id,   v_client_id, v_company_id, '4001', 'Customer Alpha', 'Customer', true, true, false, now()),
-    (v_supplier_id, v_client_id, v_company_id, '5001', 'Supplier Beta',  'Supplier', true, true, false, now())
+    (v_cash_id,     v_client_id, v_company_id, '1001', 'Petty Cash',     'Cash',     'OHADA', true, true, false, now()),
+    (v_bank_id,     v_client_id, v_company_id, '1100', 'HDFC Bank',      'Bank',     'OHADA', true, true, false, now()),
+    (v_debtor_id,   v_client_id, v_company_id, '4001', 'Customer Alpha', 'Customer', 'OHADA', true, true, false, now()),
+    (v_supplier_id, v_client_id, v_company_id, '5001', 'Supplier Beta',  'Supplier', 'OHADA', true, true, false, now())
   ON CONFLICT (id) DO NOTHING;
 END;
 $$;

@@ -53,11 +53,11 @@ BEGIN
   VALUES (v_currency_id, v_client_id, v_company_id, 'USD', 'US Dollar', '$', true, now())
   ON CONFLICT (id) DO NOTHING;
 
-  INSERT INTO rim_accounts (id, client_id, company_id, account_code, account_name, account_nature, posting_allowed, is_active, is_deleted, created_at)
+  INSERT INTO rim_accounts (id, client_id, company_id, account_code, account_name, account_nature, accounting_std, posting_allowed, is_active, is_deleted, created_at)
   VALUES
-    (v_supplier_id,    v_client_id, v_company_id, '5001', 'Test Supplier',      'Supplier', true, true, false, now()),
-    (v_stock_acc_id,   v_client_id, v_company_id, '1300', 'Stock Account',      'General',  true, true, false, now()),
-    (v_accrual_acc_id, v_client_id, v_company_id, '2200', 'Purchase Accrual',   'General',  true, true, false, now())
+    (v_supplier_id,    v_client_id, v_company_id, '5001', 'Test Supplier',      'Supplier', 'OHADA', true, true, false, now()),
+    (v_stock_acc_id,   v_client_id, v_company_id, '1300', 'Stock Account',      'General',  'OHADA', true, true, false, now()),
+    (v_accrual_acc_id, v_client_id, v_company_id, '2200', 'Purchase Accrual',   'General',  'OHADA', true, true, false, now())
   ON CONFLICT (id) DO NOTHING;
 
   INSERT INTO rim_products (id, client_id, company_id, product_code, product_name, cost_currency_id, created_by)

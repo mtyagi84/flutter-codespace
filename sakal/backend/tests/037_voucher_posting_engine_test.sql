@@ -43,11 +43,11 @@ BEGIN
   VALUES (v_user_id, v_client_id, v_company_id, 'test037', 'Test User', 'x', true, false, now())
   ON CONFLICT (id) DO NOTHING;
 
-  INSERT INTO rim_accounts (id, client_id, company_id, account_code, account_name, account_nature, posting_allowed, is_active, is_deleted, created_at)
+  INSERT INTO rim_accounts (id, client_id, company_id, account_code, account_name, account_nature, accounting_std, posting_allowed, is_active, is_deleted, created_at)
   VALUES
-    (v_stock_id,   v_client_id, v_company_id, '1300', 'Stock Account',    'General', true,  true, false, now()),
-    (v_accrual_id, v_client_id, v_company_id, '2200', 'Purchase Accrual', 'General', true,  true, false, now()),
-    (v_group_id,   v_client_id, v_company_id, '2000', 'Liabilities',      'General', false, true, false, now())
+    (v_stock_id,   v_client_id, v_company_id, '1300', 'Stock Account',    'General', 'OHADA', true,  true, false, now()),
+    (v_accrual_id, v_client_id, v_company_id, '2200', 'Purchase Accrual', 'General', 'OHADA', true,  true, false, now()),
+    (v_group_id,   v_client_id, v_company_id, '2000', 'Liabilities',      'General', 'OHADA', false, true, false, now())
   ON CONFLICT (id) DO NOTHING;
 
   INSERT INTO rim_financial_years (id, client_id, company_id, fy_name, fy_start_date, fy_end_date, is_active, is_closed)
