@@ -688,9 +688,6 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
   bool get _isExpired =>
       (_status == 'SENT' || _status == 'ACCEPTED') && _validUntilDate.isBefore(DateTime.now());
 
-  String _locationLabel(String? id) =>
-      _locations.firstWhere((l) => l['id'] == id, orElse: () => const {})['location_name'] as String? ?? '';
-
   Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) {
     _recompute();
     return {
