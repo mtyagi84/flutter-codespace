@@ -71,8 +71,12 @@ BEGIN
   VALUES (v_customer_group_id, v_client_id, v_company_id, '3000', 'Sundry Debtors 086', 'Customer', 'OHADA', false, true, false, now())
   ON CONFLICT (id) DO NOTHING;
 
+  -- account_code MUST end in exactly 3 digits — fn_next_account_code (used
+  -- by fn_convert_prospect_to_customer below) scans RIGHT(account_code,3)
+  -- across every sibling under the same parent to compute the next
+  -- sequence number, and fails to cast a non-numeric suffix.
   INSERT INTO rim_accounts (id, client_id, company_id, parent_id, account_code, account_name, account_nature, accounting_std, posting_allowed, account_currency_id, is_active, is_deleted, created_at)
-  VALUES (v_customer_id, v_client_id, v_company_id, v_customer_group_id, '3086A', 'Test086 Customer', 'Customer', 'OHADA', true, v_usd_ccy_id, true, false, now())
+  VALUES (v_customer_id, v_client_id, v_company_id, v_customer_group_id, '3000001', 'Test086 Customer', 'Customer', 'OHADA', true, v_usd_ccy_id, true, false, now())
   ON CONFLICT (id) DO NOTHING;
 
   SELECT id INTO v_unit_type_id FROM rim_common_master_types WHERE type_key = 'UNIT';
