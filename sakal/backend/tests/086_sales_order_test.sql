@@ -270,7 +270,7 @@ BEGIN
   v_q_ok := fn_save_sales_quotation(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
       'location_id', current_setting('pgtap.v_loc'), 'quotation_no', NULL, 'quotation_date', '2026-06-01',
-      'valid_until_date', (CURRENT_DATE + 365)::text, 'customer_type', 'CUSTOMER', 'customer_id', current_setting('pgtap.v_customer'),
+      'valid_until_date', (CURRENT_DATE + 365)::text, 'customer_type', 'CUSTOMER', 'customer_id', current_setting('pgtap.v_customer'), 'party_name', 'Test086 Customer',
       'quotation_currency_id', current_setting('pgtap.v_usd_ccy')),
     jsonb_build_array(jsonb_build_object('serial_no', 1, 'product_id', current_setting('pgtap.v_prod_priced'),
       'uom_id', current_setting('pgtap.v_uom'), 'uom_conversion_factor', 1, 'base_qty', 100, 'rate', 50, 'final_amount', 5000)),
@@ -283,7 +283,7 @@ BEGIN
   v_q_draft := fn_save_sales_quotation(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
       'location_id', current_setting('pgtap.v_loc'), 'quotation_no', NULL, 'quotation_date', '2026-06-02',
-      'valid_until_date', (CURRENT_DATE + 365)::text, 'customer_type', 'CUSTOMER', 'customer_id', current_setting('pgtap.v_customer'),
+      'valid_until_date', (CURRENT_DATE + 365)::text, 'customer_type', 'CUSTOMER', 'customer_id', current_setting('pgtap.v_customer'), 'party_name', 'Test086 Customer',
       'quotation_currency_id', current_setting('pgtap.v_usd_ccy')),
     jsonb_build_array(jsonb_build_object('serial_no', 1, 'product_id', current_setting('pgtap.v_prod_priced'),
       'uom_id', current_setting('pgtap.v_uom'), 'uom_conversion_factor', 1, 'base_qty', 10, 'rate', 50, 'final_amount', 500)),
@@ -294,7 +294,7 @@ BEGIN
   v_q_expired := fn_save_sales_quotation(
     jsonb_build_object('client_id', current_setting('pgtap.v_client'), 'company_id', current_setting('pgtap.v_company'),
       'location_id', current_setting('pgtap.v_loc'), 'quotation_no', NULL, 'quotation_date', '2020-01-01',
-      'valid_until_date', '2020-01-15', 'customer_type', 'CUSTOMER', 'customer_id', current_setting('pgtap.v_customer'),
+      'valid_until_date', '2020-01-15', 'customer_type', 'CUSTOMER', 'customer_id', current_setting('pgtap.v_customer'), 'party_name', 'Test086 Customer',
       'quotation_currency_id', current_setting('pgtap.v_usd_ccy')),
     jsonb_build_array(jsonb_build_object('serial_no', 1, 'product_id', current_setting('pgtap.v_prod_priced'),
       'uom_id', current_setting('pgtap.v_uom'), 'uom_conversion_factor', 1, 'base_qty', 10, 'rate', 50, 'final_amount', 500)),
