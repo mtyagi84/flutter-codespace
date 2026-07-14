@@ -86,15 +86,35 @@ jobs:
       # same database. Each file's own final SELECT dumps every assertion
       # as a row starting with "ok " or "not ok " (see each file's own
       # header comment) — grep for the latter to fail the job.
+      #
+      # Two independent failure modes are checked explicitly and never
+      # conflated: (1) psql's own exit code, for a hard SQL error (a crash
+      # inside the file, e.g. a missing fixture row or a real function
+      # bug) — 2>&1 merges stderr into the captured output so the actual
+      # ERROR text is visible in the log for whichever file triggered it,
+      # and `set +e`/`set -e` around the call makes capturing that exit
+      # code explicit rather than relying on how bash's errexit interacts
+      # with command substitution (a real, easy-to-get-wrong corner case
+      # — a plain `out=$(cmd)` under `set -e` does NOT reliably abort the
+      # script on `cmd`'s own failure, which silently swallowed a hard
+      # crash in an earlier version of this step); (2) a soft "not ok"
+      # pgTAP assertion failure, via grep, same as before.
       - name: Run pgTAP tests
         run: |
           fail=0
           for f in $(ls sakal/backend/tests/*.sql | sort); do
             echo "::group::Running $f"
-            out=$(psql -v ON_ERROR_STOP=1 -f "$f")
+            set +e
+            out=$(psql -v ON_ERROR_STOP=1 -f "$f" 2>&1)
+            status=$?
+            set -e
             echo "$out"
+            if [ "$status" -ne 0 ]; then
+              echo "::error file=$f::psql exited non-zero (hard SQL error) — see the ERROR text above"
+              fail=1
+            fi
             if echo "$out" | grep -q "not ok"; then
-              echo "::error file=$f::One or more assertions failed"
+              echo "::error file=$f::One or more pgTAP assertions failed"
               fail=1
             fi
             echo "::endgroup::"
