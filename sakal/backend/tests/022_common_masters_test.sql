@@ -56,8 +56,12 @@ BEGIN
   SELECT COUNT(*) INTO v_count FROM rim_common_master_types WHERE type_key = 'UNIT';
   INSERT INTO test_results (result) SELECT ok(v_count = 1, 'ok 2 — UNIT type seeded');
 
-  SELECT COUNT(*) INTO v_count FROM rim_common_master_types WHERE type_key IN ('BRAND','UNIT','ITEM_SIZE','ITEM_TYPE','COLOR');
-  INSERT INTO test_results (result) SELECT ok(v_count = 5, 'ok 3 — all 5 types seeded');
+  -- Migration 022 seeds exactly 4 types (BRAND, UNIT, ITEM_SIZE, COLOR) --
+  -- 'ITEM_TYPE' was never one of them (checked: not seeded by any
+  -- migration at all), so this assertion's own expectation was wrong from
+  -- the start, not a case of application behavior changing.
+  SELECT COUNT(*) INTO v_count FROM rim_common_master_types WHERE type_key IN ('BRAND','UNIT','ITEM_SIZE','COLOR');
+  INSERT INTO test_results (result) SELECT ok(v_count = 4, 'ok 3 — all 4 types seeded');
 
   -- ── Test 2: Insert a common master (Brand = Coca-Cola) ────────────────────
   SELECT id INTO v_brand_type_id FROM rim_common_master_types WHERE type_key = 'BRAND';
