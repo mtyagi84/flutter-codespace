@@ -51,15 +51,20 @@ BEGIN
   VALUES (v_fy, v_client, v_company, 'FY TEST077', '2020-01-01', '2030-12-31', true, false)
   ON CONFLICT (id) DO NOTHING;
 
+  -- currency_notation is NOT NULL with no default -- and since Postgres
+  -- validates NOT NULL constraints while constructing the row, BEFORE
+  -- ON CONFLICT ever gets a chance to suppress anything, omitting it fails
+  -- outright even when the trigger-seeded row would otherwise make this a
+  -- harmless no-op.
   SELECT id INTO v_usd FROM rim_currencies WHERE client_id = v_client AND company_id = v_company AND currency_id = 'USD';
   IF v_usd IS NULL THEN
-    INSERT INTO rim_currencies (id, client_id, company_id, currency_id, currency_name, is_active, created_by)
-    VALUES (gen_random_uuid(), v_client, v_company, 'USD', 'US Dollar', true, v_user)
+    INSERT INTO rim_currencies (id, client_id, company_id, currency_id, currency_name, currency_notation, is_active, created_by)
+    VALUES (gen_random_uuid(), v_client, v_company, 'USD', 'US Dollar', '$', true, v_user)
     RETURNING id INTO v_usd;
   END IF;
 
-  INSERT INTO rim_currencies (id, client_id, company_id, currency_id, currency_name, is_active, created_by)
-  VALUES (gen_random_uuid(), v_client, v_company, 'EUR', 'Euro', true, v_user)
+  INSERT INTO rim_currencies (id, client_id, company_id, currency_id, currency_name, currency_notation, is_active, created_by)
+  VALUES (gen_random_uuid(), v_client, v_company, 'EUR', 'Euro', '€', true, v_user)
   ON CONFLICT DO NOTHING;
   SELECT id INTO v_eur FROM rim_currencies WHERE client_id = v_client AND company_id = v_company AND currency_id = 'EUR';
 
