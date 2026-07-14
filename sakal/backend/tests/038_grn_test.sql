@@ -21,7 +21,7 @@ DECLARE
   v_company_id   uuid := '00000000-0000-0000-0038-000000000002';
   v_loc_id       uuid := '00000000-0000-0000-0038-000000000003';
   v_user_id      uuid := '00000000-0000-0000-0038-000000000004';
-  v_currency_id  uuid := '00000000-0000-0000-0038-000000000005';
+  v_currency_id  uuid;  -- read back trigger-seeded USD, see below
   v_supplier_id  uuid := '00000000-0000-0000-0038-000000000006';
   v_stock_acc_id uuid := '00000000-0000-0000-0038-000000000007';
   v_accrual_acc_id uuid := '00000000-0000-0000-0038-000000000008';
@@ -49,9 +49,14 @@ BEGIN
   VALUES (v_user_id, v_client_id, v_company_id, 'test038', 'Test User', 'x', true, false, now())
   ON CONFLICT (id) DO NOTHING;
 
-  INSERT INTO rim_currencies (id, client_id, company_id, currency_id, currency_name, currency_notation, is_active, created_at)
-  VALUES (v_currency_id, v_client_id, v_company_id, 'USD', 'US Dollar', '$', true, now())
-  ON CONFLICT (id) DO NOTHING;
+  -- ric_companies has an AFTER INSERT trigger (trg_seed_company_currencies,
+  -- migration 007) that auto-seeds every world currency, including USD, for
+  -- the new company. Explicitly inserting our own USD row here collides on
+  -- the real unique constraint (client_id, company_id, currency_id), which
+  -- an ON CONFLICT (id) target doesn't catch (different id). Read back the
+  -- trigger-seeded id instead (same fix already applied in 054/061's tests).
+  SELECT id INTO v_currency_id FROM rim_currencies
+  WHERE client_id = v_client_id AND company_id = v_company_id AND currency_id = 'USD';
 
   INSERT INTO rim_accounts (id, client_id, company_id, account_code, account_name, account_nature, accounting_std, posting_allowed, is_active, is_deleted, created_at)
   VALUES
@@ -286,11 +291,19 @@ SELECT ok(
 -- ══════════════════════════════════════════════════════════════════════════════
 
 DO $$
+DECLARE
+  v_eur_ccy_id uuid;
 BEGIN
-  INSERT INTO rim_currencies (id, client_id, company_id, currency_id, currency_name, currency_notation, is_active, created_at)
-  VALUES ('00000000-0000-0000-0038-000000000015', '00000000-0000-0000-0038-000000000001', '00000000-0000-0000-0038-000000000002',
-          'EUR', 'Euro', '€', true, now())
-  ON CONFLICT (id) DO NOTHING;
+  -- ric_companies' trg_seed_company_currencies trigger (migration 007)
+  -- already auto-seeded EUR (and every other world currency) for this
+  -- company when it was created — read back its id rather than inserting
+  -- our own, which would collide on the real unique constraint
+  -- (client_id, company_id, currency_id) the same way the USD insert above
+  -- did (same fix already applied in 054/061's tests).
+  SELECT id INTO v_eur_ccy_id FROM rim_currencies
+  WHERE client_id = '00000000-0000-0000-0038-000000000001'
+    AND company_id = '00000000-0000-0000-0038-000000000002' AND currency_id = 'EUR';
+  PERFORM set_config('pgtap.v_eur_ccy_038', v_eur_ccy_id::text, false);
 
   -- USD -> EUR at 0.5, so EUR -> USD (rate_to_base) is 1/0.5 = 2 — a clean
   -- number to assert against without floating-point rounding noise.
@@ -313,7 +326,7 @@ BEGIN
       'grn_no', NULL, 'grn_date', '2026-06-03',
       'supplier_id', '00000000-0000-0000-0038-000000000006',
       'receipt_mode', 'DIRECT',
-      'grn_currency_id', '00000000-0000-0000-0038-000000000015',
+      'grn_currency_id', current_setting('pgtap.v_eur_ccy_038'),
       'rate_to_base', 2, 'rate_to_local', 3
     ),
     jsonb_build_array(

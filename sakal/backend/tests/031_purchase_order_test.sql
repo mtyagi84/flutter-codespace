@@ -22,7 +22,7 @@ DECLARE
   v_company_id     uuid := '00000000-0000-0000-0031-000000000002';
   v_loc_id         uuid := '00000000-0000-0000-0031-000000000003';
   v_user_id        uuid := '00000000-0000-0000-0031-000000000004';
-  v_currency_id    uuid := '00000000-0000-0000-0031-000000000005';
+  v_currency_id    uuid;  -- read back trigger-seeded USD, see below
   v_supplier_id    uuid := '00000000-0000-0000-0031-000000000006';
   v_product_id     uuid := '00000000-0000-0000-0031-000000000007';
   v_fy_id          uuid := '00000000-0000-0000-0031-000000000008';
@@ -51,9 +51,14 @@ BEGIN
   VALUES (v_user_id, v_client_id, v_company_id, 'test031', 'Test User', 'x', true, false, now())
   ON CONFLICT (id) DO NOTHING;
 
-  INSERT INTO rim_currencies (id, client_id, company_id, currency_id, currency_name, currency_notation, is_active, created_at)
-  VALUES (v_currency_id, v_client_id, v_company_id, 'USD', 'US Dollar', '$', true, now())
-  ON CONFLICT (id) DO NOTHING;
+  -- ric_companies has an AFTER INSERT trigger (trg_seed_company_currencies,
+  -- migration 007) that auto-seeds every world currency, including USD, for
+  -- the new company. Explicitly inserting our own USD row here collides on
+  -- the real unique constraint (client_id, company_id, currency_id), which
+  -- an ON CONFLICT (id) target doesn't catch (different id). Read back the
+  -- trigger-seeded id instead (same fix already applied in 054/061's tests).
+  SELECT id INTO v_currency_id FROM rim_currencies
+  WHERE client_id = v_client_id AND company_id = v_company_id AND currency_id = 'USD';
 
   INSERT INTO rim_accounts (id, client_id, company_id, account_code, account_name, account_nature, accounting_std, posting_allowed, is_active, is_deleted, created_at)
   VALUES (v_supplier_id, v_client_id, v_company_id, '5001', 'Test Supplier', 'Supplier', 'OHADA', true, true, false, now())
