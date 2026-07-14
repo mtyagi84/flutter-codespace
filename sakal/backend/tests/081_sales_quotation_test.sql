@@ -245,6 +245,7 @@ INSERT INTO test_results (result) SELECT throws_ok(
        '[]'::jsonb, '00000000-0000-0000-0081-000000000004'
      ) $$,
   '23514', -- check_violation SQLSTATE — chk_sales_quotation_validity fires at the DB level, not a custom RAISE
+  NULL, -- don't match message text, just the SQLSTATE (see 026/031/078's own '23514'/'P0001' calls)
   'ok 11 — Valid Until before Quotation Date is rejected (chk_sales_quotation_validity)'
 );
 
