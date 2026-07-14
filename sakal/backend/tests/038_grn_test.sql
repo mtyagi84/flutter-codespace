@@ -33,6 +33,12 @@ DECLARE
   v_tax_member_id uuid := '00000000-0000-0000-0038-000000000014';
   v_stock_link_type uuid; v_accrual_link_type uuid;
   v_po_order_no  text := 'PO-TEST-038-1';
+  -- rid_purchase_order_lines.uom_id is NOT NULL (unlike GRN/Return lines,
+  -- see 061's test for the same distinction) -- this fixture inserts
+  -- directly into that table (bypassing fn_save_purchase_order), so needs
+  -- a real UOM master row of its own.
+  v_uom_id       uuid := '00000000-0000-0000-0038-000000000016';
+  v_unit_type_id uuid;
 BEGIN
   INSERT INTO ric_clients (id, client_name, is_active, is_deleted, created_at)
   VALUES (v_client_id, 'TEST038', true, false, now()) ON CONFLICT (id) DO NOTHING;
@@ -71,6 +77,11 @@ BEGIN
 
   INSERT INTO rim_products (id, client_id, company_id, product_code, product_name, cost_currency_id, created_by)
   VALUES (v_product_id, v_client_id, v_company_id, 'GRN-00001', 'GRN Test Item', v_currency_id, v_user_id)
+  ON CONFLICT (id) DO NOTHING;
+
+  SELECT id INTO v_unit_type_id FROM rim_common_master_types WHERE type_key = 'UNIT';
+  INSERT INTO rim_common_masters (id, client_id, company_id, type_id, description, is_active, is_deleted, created_by)
+  VALUES (v_uom_id, v_client_id, v_company_id, v_unit_type_id, 'Piece038', true, false, v_user_id)
   ON CONFLICT (id) DO NOTHING;
 
   INSERT INTO rim_financial_years (id, client_id, company_id, fy_name, fy_start_date, fy_end_date, is_active, is_closed)
@@ -126,11 +137,11 @@ BEGIN
 
   INSERT INTO rid_purchase_order_lines (
     client_id, company_id, order_no, order_date, serial_no,
-    product_id, base_qty, rate, gross_amount, tax_group_id, tax_amount, final_amount,
+    product_id, uom_id, base_qty, rate, gross_amount, tax_group_id, tax_amount, final_amount,
     charge_amount, landed_amount, qty_received, created_by, updated_by
   ) VALUES (
     v_client_id, v_company_id, v_po_order_no, '2026-05-01', 1,
-    v_product_id, 10, 100, 1000, v_tax_group_id, 160, 1160,
+    v_product_id, v_uom_id, 10, 100, 1000, v_tax_group_id, 160, 1160,
     0, 1160, 0, v_user_id, v_user_id
   ) ON CONFLICT (client_id, company_id, order_no, order_date, serial_no) DO NOTHING;
 END;
