@@ -282,12 +282,18 @@ CREATE TABLE IF NOT EXISTS rih_sales_orders (
     source_quotation_date DATE,
     customer_id           UUID          NOT NULL REFERENCES rim_accounts(id),
     customer_po_ref       TEXT,
+    ship_to               TEXT,
+    bill_to               TEXT,
+    expected_delivery_date DATE,
     sales_person_id       UUID          REFERENCES rim_users(id),
     order_currency_id     UUID          NOT NULL REFERENCES rim_currencies(id),
     rate_to_base          NUMERIC(18,8) NOT NULL DEFAULT 1,
     rate_to_local         NUMERIC(18,8) NOT NULL DEFAULT 1,
-    payment_terms         TEXT,
-    delivery_terms        TEXT,
+    -- Structured master references (086_sales_order + 087_payment_terms) —
+    -- never free text, unlike PO/Quotation's own older TEXT columns.
+    payment_term_id       UUID          REFERENCES rim_payment_terms(id),
+    incoterm_id           UUID          REFERENCES rim_common_masters(id),
+    delivery_instructions TEXT,
     gross_amount          NUMERIC(18,4) NOT NULL DEFAULT 0,
     discount_amount       NUMERIC(18,4) NOT NULL DEFAULT 0,
     charges_amount        NUMERIC(18,4) NOT NULL DEFAULT 0,
@@ -297,6 +303,7 @@ CREATE TABLE IF NOT EXISTS rih_sales_orders (
                           CHECK (status IN ('DRAFT','APPROVED','PARTIALLY_DELIVERED','DELIVERED','CANCELLED')),
     approved_by           UUID          REFERENCES rim_users(id),
     approved_at           TIMESTAMPTZ,
+    cancellation_reason   TEXT,
     remarks               TEXT,
     is_active             BOOLEAN       NOT NULL DEFAULT true,
     is_deleted            BOOLEAN       NOT NULL DEFAULT false,
@@ -365,6 +372,9 @@ CREATE TABLE IF NOT EXISTS rid_sales_order_lines (
     price_source                TEXT          NOT NULL DEFAULT 'PRICE_MASTER'
                                 CHECK (price_source IN ('PRICE_MASTER','QUOTATION','MANUAL_OVERRIDE')),
     price_override_reason       TEXT,
+    -- Traceability back to the exact Price Master batch that priced this
+    -- line — nullable, populated only when price_source = 'PRICE_MASTER'.
+    price_source_entry_no       TEXT,
     gross_amount                NUMERIC(18,4) NOT NULL DEFAULT 0,
     discount_percent            NUMERIC(6,2)  NOT NULL DEFAULT 0,
     discount_amount             NUMERIC(18,4) NOT NULL DEFAULT 0,
@@ -518,6 +528,8 @@ DECLARE
     v_remaining         NUMERIC;
     v_convert_qty       NUMERIC;
     v_charge            JSONB;
+    v_order_currency_code TEXT;
+    v_price_entry_no    TEXT;
 BEGIN
     v_client_id   := (p_header->>'client_id')::uuid;
     v_company_id  := (p_header->>'company_id')::uuid;
@@ -544,6 +556,11 @@ BEGIN
     v_can_discount := coalesce(v_can_discount, false);
 
     v_customer_id := (nullif(p_header->>'customer_id', ''))::uuid;
+
+    -- fn_get_active_price (087) needs the order's own currency as an ISO
+    -- code, not the UUID, to know what to convert TO.
+    SELECT currency_id INTO v_order_currency_code
+    FROM rim_currencies WHERE id = (p_header->>'order_currency_id')::uuid;
 
     IF v_order_mode = 'AGAINST_QUOTATION' THEN
         SELECT * INTO v_quotation FROM rih_sales_quotations
@@ -604,19 +621,23 @@ BEGIN
         INSERT INTO rih_sales_orders (
             client_id, company_id, location_id, order_no, order_date, order_mode,
             source_quotation_no, source_quotation_date, customer_id, customer_po_ref,
+            ship_to, bill_to, expected_delivery_date,
             sales_person_id, order_currency_id, rate_to_base, rate_to_local,
-            payment_terms, delivery_terms,
+            payment_term_id, incoterm_id, delivery_instructions,
             gross_amount, discount_amount, charges_amount, tax_amount, grand_total,
             remarks, created_by, updated_by
         ) VALUES (
             v_client_id, v_company_id, v_location_id, v_order_no, v_order_date, v_order_mode,
             nullif(p_header->>'source_quotation_no', ''), (nullif(p_header->>'source_quotation_date', ''))::date,
             v_customer_id, nullif(p_header->>'customer_po_ref', ''),
+            nullif(p_header->>'ship_to', ''), nullif(p_header->>'bill_to', ''),
+            (nullif(p_header->>'expected_delivery_date', ''))::date,
             (nullif(p_header->>'sales_person_id', ''))::uuid,
             (p_header->>'order_currency_id')::uuid,
             coalesce((p_header->>'rate_to_base')::numeric, 1),
             coalesce((p_header->>'rate_to_local')::numeric, 1),
-            nullif(p_header->>'payment_terms', ''), nullif(p_header->>'delivery_terms', ''),
+            (nullif(p_header->>'payment_term_id', ''))::uuid, (nullif(p_header->>'incoterm_id', ''))::uuid,
+            nullif(p_header->>'delivery_instructions', ''),
             coalesce((p_header->>'gross_amount')::numeric, 0),
             coalesce((p_header->>'discount_amount')::numeric, 0),
             coalesce((p_header->>'charges_amount')::numeric, 0),
@@ -631,12 +652,16 @@ BEGIN
             order_date        = v_order_date,
             customer_id       = v_customer_id,
             customer_po_ref   = nullif(p_header->>'customer_po_ref', ''),
+            ship_to           = nullif(p_header->>'ship_to', ''),
+            bill_to           = nullif(p_header->>'bill_to', ''),
+            expected_delivery_date = (nullif(p_header->>'expected_delivery_date', ''))::date,
             sales_person_id   = (nullif(p_header->>'sales_person_id', ''))::uuid,
             order_currency_id = (p_header->>'order_currency_id')::uuid,
             rate_to_base      = coalesce((p_header->>'rate_to_base')::numeric, 1),
             rate_to_local     = coalesce((p_header->>'rate_to_local')::numeric, 1),
-            payment_terms     = nullif(p_header->>'payment_terms', ''),
-            delivery_terms    = nullif(p_header->>'delivery_terms', ''),
+            payment_term_id   = (nullif(p_header->>'payment_term_id', ''))::uuid,
+            incoterm_id       = (nullif(p_header->>'incoterm_id', ''))::uuid,
+            delivery_instructions = nullif(p_header->>'delivery_instructions', ''),
             gross_amount      = coalesce((p_header->>'gross_amount')::numeric, 0),
             discount_amount   = coalesce((p_header->>'discount_amount')::numeric, 0),
             charges_amount    = coalesce((p_header->>'charges_amount')::numeric, 0),
@@ -663,12 +688,16 @@ BEGIN
         v_serial := (v_line->>'serial_no')::integer;
 
         IF v_order_mode = 'DIRECT' THEN
-            SELECT selling_price, price_type INTO v_price
+            -- fn_get_active_price (087) converts internally TO
+            -- v_order_currency_code — never trust a Price Master batch's
+            -- own currency to already match this order's currency.
+            SELECT selling_price, price_type, entry_no INTO v_price
             FROM fn_get_active_price(
                 v_client_id, v_company_id, v_location_id,
                 (v_line->>'product_id')::uuid, (v_line->>'uom_id')::uuid,
-                v_customer_id, v_order_date
+                v_customer_id, v_order_date, v_order_currency_code
             );
+            v_price_entry_no := NULL; -- only set below when price_source ends up PRICE_MASTER
 
             v_override_reason := nullif(v_line->>'price_override_reason', '');
 
@@ -676,6 +705,7 @@ BEGIN
                           OR (v_line->>'rate')::numeric = v_price.selling_price) THEN
                 v_rate := v_price.selling_price;
                 v_price_source := 'PRICE_MASTER';
+                v_price_entry_no := v_price.entry_no;
             ELSIF NOT FOUND AND NOT v_can_override THEN
                 RAISE EXCEPTION 'PRICE_NOT_CONFIGURED'
                     USING DETAIL = format('Line %s: [%s] %s has no active price configured for this customer/date.',
@@ -739,7 +769,7 @@ BEGIN
         INSERT INTO rid_sales_order_lines (
             client_id, company_id, order_no, order_date, serial_no,
             product_id, item_description, barcode, uom_id, uom_conversion_factor,
-            qty_pack, qty_loose, base_qty, rate, price_source, price_override_reason,
+            qty_pack, qty_loose, base_qty, rate, price_source, price_override_reason, price_source_entry_no,
             gross_amount, discount_percent, discount_amount,
             tax_group_id, tax_amount, final_amount, base_amount, local_amount,
             charge_amount, landed_amount, source_quotation_line_serial, remarks,
@@ -754,7 +784,7 @@ BEGIN
             coalesce((v_line->>'qty_pack')::numeric, 0),
             coalesce((v_line->>'qty_loose')::numeric, 0),
             coalesce((v_line->>'base_qty')::numeric, 0),
-            v_rate, v_price_source, v_override_reason,
+            v_rate, v_price_source, v_override_reason, v_price_entry_no,
             coalesce((v_line->>'gross_amount')::numeric, 0),
             v_discount_pct,
             coalesce((v_line->>'discount_amount')::numeric, 0),
@@ -934,6 +964,7 @@ CREATE OR REPLACE FUNCTION fn_cancel_sales_order(
     p_company_id UUID,
     p_order_no   TEXT,
     p_order_date DATE,
+    p_reason     TEXT,
     p_user_id    UUID
 )
 RETURNS VOID
@@ -944,6 +975,10 @@ DECLARE
     v_line          RECORD;
     v_any_converted BOOLEAN;
 BEGIN
+    IF nullif(trim(p_reason), '') IS NULL THEN
+        RAISE EXCEPTION 'Enter a reason for cancelling this order.';
+    END IF;
+
     SELECT * INTO v_header FROM rih_sales_orders
     WHERE client_id = p_client_id AND company_id = p_company_id
       AND order_no = p_order_no AND order_date = p_order_date
@@ -996,12 +1031,13 @@ BEGIN
 
     UPDATE rih_sales_orders SET
         status = 'CANCELLED',
+        cancellation_reason = trim(p_reason),
         updated_at = now(), updated_by = p_user_id
     WHERE id = v_header.id;
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION fn_cancel_sales_order(UUID, UUID, TEXT, DATE, UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION fn_cancel_sales_order(UUID, UUID, TEXT, DATE, TEXT, UUID) TO authenticated;
 
 
 -- ============================================================

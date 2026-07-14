@@ -74,6 +74,17 @@ abstract class SalesOrderRepository {
     required String uomId,
     required String customerId,
     required String asOfDate,
+    required String currencyCode,
+  });
+
+  Future<List<Map<String, dynamic>>> getPaymentTerms({
+    required String clientId,
+    required String companyId,
+  });
+
+  Future<List<Map<String, dynamic>>> getIncoterms({
+    required String clientId,
+    required String companyId,
   });
 
   Future<Map<String, dynamic>?> getUserSalesControls({
@@ -168,6 +179,7 @@ abstract class SalesOrderRepository {
     required String companyId,
     required String orderNo,
     required String orderDate,
+    required String reason,
     required String userId,
   });
 }

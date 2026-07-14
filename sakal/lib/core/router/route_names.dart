@@ -87,6 +87,7 @@ class RouteNames {
   static const String taxMaster        = '/master/tax-master';
   static const String taxGroups        = '/master/tax-groups';
   static const String additionalCharges = '/master/additional-charges';
+  static const String paymentTerms      = '/master/payment-terms';
   static const String productMaster    = '/master/products';
   static const String productEntry     = '/master/product-entry';
   static const String accountLinkSetup     = '/master/account-link-setup';

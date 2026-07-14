@@ -30,6 +30,7 @@ import '../../features/master/presentation/screens/supplier_master_screen.dart';
 import '../../features/master/presentation/screens/tax_master_screen.dart';
 import '../../features/master/presentation/screens/tax_groups_screen.dart';
 import '../../features/master/presentation/screens/additional_charges_screen.dart';
+import '../../features/master/presentation/screens/payment_terms_screen.dart';
 import '../../features/master/presentation/screens/account_link_setup_screen.dart';
 import '../../features/master/presentation/screens/account_link_configure_screen.dart';
 import '../../features/master/presentation/screens/item_account_links_screen.dart';
@@ -185,6 +186,7 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.taxMaster,      builder: (c, s) => const TaxMasterScreen()),
         GoRoute(path: RouteNames.taxGroups,      builder: (c, s) => const TaxGroupsScreen()),
         GoRoute(path: RouteNames.additionalCharges, builder: (c, s) => const AdditionalChargesScreen()),
+        GoRoute(path: RouteNames.paymentTerms,   builder: (c, s) => const PaymentTermsScreen()),
         GoRoute(path: RouteNames.accountLinkSetup, builder: (c, s) => const AccountLinkSetupScreen()),
         GoRoute(
           path: RouteNames.accountLinkConfigure,

@@ -72,12 +72,28 @@ const salesOrderDefaultTemplate = PrintTemplate(
       showWhen: PrintCondition(field: 'header.order_mode', equals: 'Against Quotation'),
     ),
     PrintElement(
-      id: 'payment_terms', type: PrintElementType.field, bind: 'header.payment_terms', label: 'Payment Terms: ',
+      id: 'ship_to', type: PrintElementType.field, bind: 'header.ship_to', label: 'Ship To: ',
+      x: 1, y: 10.5, w: 90, font: PrintFont(size: 9),
+    ),
+    PrintElement(
+      id: 'bill_to', type: PrintElementType.field, bind: 'header.bill_to', label: 'Bill To: ',
+      x: 2, y: 10.5, w: 85, font: PrintFont(size: 9),
+    ),
+    PrintElement(
+      id: 'payment_terms', type: PrintElementType.field, bind: 'header.payment_term_name', label: 'Payment Terms: ',
       x: 1, y: 11, w: 90, font: PrintFont(size: 9),
     ),
     PrintElement(
-      id: 'delivery_terms', type: PrintElementType.field, bind: 'header.delivery_terms', label: 'Delivery Terms: ',
+      id: 'incoterm', type: PrintElementType.field, bind: 'header.incoterm_label', label: 'Incoterm: ',
       x: 2, y: 11, w: 85, font: PrintFont(size: 9),
+    ),
+    PrintElement(
+      id: 'expected_delivery_date', type: PrintElementType.field, bind: 'header.expected_delivery_date', label: 'Expected Delivery: ',
+      x: 1, y: 11.3, w: 90, font: PrintFont(size: 9),
+    ),
+    PrintElement(
+      id: 'delivery_instructions', type: PrintElementType.field, bind: 'header.delivery_instructions', label: 'Delivery Instructions: ',
+      x: 2, y: 11.3, w: 85, font: PrintFont(size: 9),
     ),
     PrintElement(id: 'div2', type: PrintElementType.line, x: 1, y: 12, w: 180),
     PrintElement(

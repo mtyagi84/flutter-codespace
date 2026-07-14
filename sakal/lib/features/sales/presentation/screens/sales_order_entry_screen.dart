@@ -49,6 +49,7 @@ class _OrderLineRow {
   bool    overrideEnabled = false; // user explicitly opened Rate for editing
   final TextEditingController overrideReasonCtrl = TextEditingController();
   double  costPrice = 0;
+  double  availableStock = 0;
   bool    costLoading = false;
 
   // Against-Quotation mode
@@ -143,8 +144,14 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
   String?  _orderCurrencyCode;
   final _rateToBaseCtrl  = TextEditingController(text: '1');
   final _rateToLocalCtrl = TextEditingController(text: '1');
-  final _paymentTermsCtrl  = TextEditingController();
-  final _deliveryTermsCtrl = TextEditingController();
+  String? _paymentTermId;
+  String  _paymentTermDisplay = '';
+  String? _incotermId;
+  String  _incotermDisplay = '';
+  final _shipToCtrl = TextEditingController();
+  final _billToCtrl = TextEditingController();
+  DateTime? _expectedDeliveryDate;
+  final _deliveryInstructionsCtrl = TextEditingController();
   final _remarksCtrl = TextEditingController();
 
   List<Map<String, dynamic>> _locations = [];
@@ -153,6 +160,8 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
   List<Map<String, dynamic>> _taxGroups = [];
   List<Map<String, dynamic>> _additionalCharges = [];
   List<Map<String, dynamic>> _currencies = [];
+  List<Map<String, dynamic>> _paymentTerms = [];
+  List<Map<String, dynamic>> _incoterms = [];
   String _baseCurrency = '';
   String _localCurrency = '';
   Map<String, double> _taxRatePct = {};
@@ -191,8 +200,9 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     _customerPoRefCtrl.dispose();
     _rateToBaseCtrl.dispose();
     _rateToLocalCtrl.dispose();
-    _paymentTermsCtrl.dispose();
-    _deliveryTermsCtrl.dispose();
+    _shipToCtrl.dispose();
+    _billToCtrl.dispose();
+    _deliveryInstructionsCtrl.dispose();
     _remarksCtrl.dispose();
     for (final l in _lines) { l.dispose(); }
     for (final c in _charges) { c.dispose(); }
@@ -214,6 +224,8 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
         ref.read(baseCurrencyProvider.future),
         ref.read(localCurrencyProvider.future),
         _ds.getUserSalesControls(clientId: session.clientId, companyId: session.companyId, userId: session.userId),
+        _ds.getPaymentTerms(clientId: session.clientId, companyId: session.companyId),
+        _ds.getIncoterms(clientId: session.clientId, companyId: session.companyId),
       ]);
 
       _products          = results[0] as List<Map<String, dynamic>>;
@@ -225,6 +237,8 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
       _baseCurrency      = results[6] as String;
       _localCurrency     = results[7] as String;
       final controls = results[8] as Map<String, dynamic>?;
+      _paymentTerms      = results[9] as List<Map<String, dynamic>>;
+      _incoterms         = results[10] as List<Map<String, dynamic>>;
       _canOverridePrice   = controls?['can_override_price'] as bool? ?? false;
       _canGiveDiscount    = controls?['can_give_discount'] as bool? ?? false;
       _maxDiscountPercent = (controls?['max_discount_percent'] as num?)?.toDouble();
@@ -273,6 +287,8 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     final customer    = header['customer'] as Map<String, dynamic>?;
     final salesPerson = header['sales_person'] as Map<String, dynamic>?;
     final currency    = header['currency'] as Map<String, dynamic>?;
+    final paymentTerm = header['payment_term'] as Map<String, dynamic>?;
+    final incoterm    = header['incoterm'] as Map<String, dynamic>?;
 
     _orderNo             = header['order_no'] as String;
     _orderDate           = DateTime.parse(header['order_date'] as String);
@@ -284,14 +300,22 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     _customerId          = header['customer_id'] as String?;
     _customerDisplay     = customer != null ? '[${customer['account_code']}] ${customer['account_name']}' : '';
     _customerPoRefCtrl.text = header['customer_po_ref'] as String? ?? '';
+    _shipToCtrl.text        = header['ship_to'] as String? ?? '';
+    _billToCtrl.text        = header['bill_to'] as String? ?? '';
+    _expectedDeliveryDate   = header['expected_delivery_date'] != null
+        ? DateTime.tryParse(header['expected_delivery_date'] as String)
+        : null;
     _salesPersonId        = header['sales_person_id'] as String?;
     _salesPersonDisplay    = salesPerson?['full_name'] as String? ?? '';
     _orderCurrencyId        = header['order_currency_id'] as String?;
     _orderCurrencyCode       = currency?['currency_id'] as String?;
     _rateToBaseCtrl.text  = (header['rate_to_base']  as num? ?? 1).toString();
     _rateToLocalCtrl.text = (header['rate_to_local'] as num? ?? 1).toString();
-    _paymentTermsCtrl.text  = header['payment_terms'] as String? ?? '';
-    _deliveryTermsCtrl.text = header['delivery_terms'] as String? ?? '';
+    _paymentTermId          = header['payment_term_id'] as String?;
+    _paymentTermDisplay     = paymentTerm?['term_name'] as String? ?? '';
+    _incotermId             = header['incoterm_id'] as String?;
+    _incotermDisplay        = incoterm?['description'] as String? ?? '';
+    _deliveryInstructionsCtrl.text = header['delivery_instructions'] as String? ?? '';
     _remarksCtrl.text       = header['remarks'] as String? ?? '';
 
     if (_customerId != null) unawaited(_loadCustomerInfo(_customerId!));
@@ -325,6 +349,11 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
       row.overrideReasonCtrl.text = sl['price_override_reason'] as String? ?? '';
       row.remarksCtrl.text = sl['remarks'] as String? ?? '';
       _lines.add(row);
+    }
+    if (!_isAgainstQuotation) {
+      for (final row in _lines) {
+        if (row.productId != null) unawaited(_refreshLineStockInfo(row));
+      }
     }
 
     final savedCharges = await _ds.getCharges(
@@ -399,8 +428,6 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     _orderCurrencyCode      = currency?['currency_id'] as String?;
     _rateToBaseCtrl.text  = (quote['rate_to_base']  as num? ?? 1).toString();
     _rateToLocalCtrl.text = (quote['rate_to_local'] as num? ?? 1).toString();
-    _paymentTermsCtrl.text  = quote['payment_terms'] as String? ?? '';
-    _deliveryTermsCtrl.text = quote['delivery_terms'] as String? ?? '';
 
     if (_customerId != null) unawaited(_loadCustomerInfo(_customerId!));
 
@@ -471,6 +498,11 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
       _rateToLocalCtrl.text = '1';
     });
     await _fetchRates();
+    if (!_isAgainstQuotation) {
+      for (final row in _lines) {
+        if (row.productId != null && row.priceSource == 'PRICE_MASTER') unawaited(_resolvePrice(row));
+      }
+    }
   }
 
   Future<void> _fetchRates() async {
@@ -519,14 +551,16 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
       row.costCurrencyId = product['cost_currency_id'] as String?;
     });
     await _resolvePrice(row);
-    if (_canViewCostPrice) unawaited(_refreshLineCost(row));
+    unawaited(_refreshLineStockInfo(row));
   }
 
   /// Direct mode only. Resolves fn_get_active_price; a missing price
   /// leaves the line unresolved (hard-blocked at Save unless
   /// can_override_price), never silently defaults to zero-and-editable.
+  /// (087) fn_get_active_price converts internally to the order's own
+  /// currency — never assume the Price Master batch already matches it.
   Future<void> _resolvePrice(_OrderLineRow row) async {
-    if (row.productId == null || row.uomId == null || _customerId == null || _locationId == null) return;
+    if (row.productId == null || row.uomId == null || _customerId == null || _locationId == null || _orderCurrencyCode == null) return;
     setState(() => row.priceLoading = true);
     final session = ref.read(sessionProvider)!;
     try {
@@ -534,6 +568,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
         clientId: session.clientId, companyId: session.companyId,
         locationId: _locationId!, productId: row.productId!, uomId: row.uomId!,
         customerId: _customerId!, asOfDate: _fmtDate(_orderDate),
+        currencyCode: _orderCurrencyCode!,
       );
       if (!mounted) return;
       setState(() {
@@ -559,7 +594,10 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     setState(() { row.overrideEnabled = true; row.priceSource = 'MANUAL_OVERRIDE'; });
   }
 
-  Future<void> _refreshLineCost(_OrderLineRow row) async {
+  /// Fetches current stock (always, informational hint — never gated) and
+  /// cost price (display gated by _canViewCostPrice, but harmless to fetch
+  /// alongside since it rides the same row).
+  Future<void> _refreshLineStockInfo(_OrderLineRow row) async {
     if (row.productId == null || _locationId == null) return;
     setState(() => row.costLoading = true);
     final session = ref.read(sessionProvider)!;
@@ -569,7 +607,11 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
         locationId: _locationId!, productId: row.productId!,
       );
       if (!mounted) return;
-      setState(() { row.costPrice = (pl?['cost_price'] as num? ?? 0).toDouble(); row.costLoading = false; });
+      setState(() {
+        row.availableStock = (pl?['current_stock'] as num? ?? 0).toDouble();
+        row.costPrice = (pl?['cost_price'] as num? ?? 0).toDouble();
+        row.costLoading = false;
+      });
     } catch (_) {
       if (mounted) setState(() => row.costLoading = false);
     }
@@ -712,12 +754,16 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
         'source_quotation_date': _sourceQuotationDate,
         'customer_id':           _customerId,
         'customer_po_ref':       _customerPoRefCtrl.text.trim(),
+        'ship_to':               _shipToCtrl.text.trim(),
+        'bill_to':               _billToCtrl.text.trim(),
+        'expected_delivery_date': _expectedDeliveryDate != null ? _fmtDate(_expectedDeliveryDate!) : null,
         'sales_person_id':       _salesPersonId,
         'order_currency_id':     _orderCurrencyId,
         'rate_to_base':          double.tryParse(_rateToBaseCtrl.text) ?? 1,
         'rate_to_local':         double.tryParse(_rateToLocalCtrl.text) ?? 1,
-        'payment_terms':         _paymentTermsCtrl.text.trim(),
-        'delivery_terms':        _deliveryTermsCtrl.text.trim(),
+        'payment_term_id':       _paymentTermId,
+        'incoterm_id':           _incotermId,
+        'delivery_instructions': _deliveryInstructionsCtrl.text.trim(),
         'gross_amount':          _grossTotal,
         'discount_amount':       _discountTotal,
         'charges_amount':        _chargesTotal,
@@ -846,29 +892,48 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
 
   Future<void> _cancel() async {
     if (_orderNo == null) return;
-    final confirmed = await showDialog<bool>(
+    final reasonCtrl = TextEditingController();
+    final reason = await showDialog<String>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Cancel Sales Order'),
-        content: const Text('This marks the order as cancelled. Continue?'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('This marks the order as cancelled. Continue?'),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: reasonCtrl,
+            autofocus: true,
+            decoration: InputDecoration(border: const OutlineInputBorder(), label: _req('Reason')),
+            maxLines: 2,
+          ),
+        ]),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context, rootNavigator: true).pop(false), child: const Text('No')),
+          TextButton(onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(), child: const Text('No')),
           FilledButton(
-            onPressed: () => Navigator.of(context, rootNavigator: true).pop(true),
+            onPressed: () {
+              if (reasonCtrl.text.trim().isEmpty) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(content: Text('Enter a reason for cancelling this order.'), backgroundColor: Colors.orange),
+                );
+                return;
+              }
+              Navigator.of(dialogContext, rootNavigator: true).pop(reasonCtrl.text.trim());
+            },
             style: FilledButton.styleFrom(backgroundColor: AppColors.negative),
             child: const Text('Cancel Order'),
           ),
         ],
       ),
     );
-    if (confirmed != true) return;
+    reasonCtrl.dispose();
+    if (reason == null || reason.isEmpty) return;
 
     final session = ref.read(sessionProvider)!;
     setState(() { _cancelling = true; _actionError = null; });
     try {
       await _ds.cancel(
         clientId: session.clientId, companyId: session.companyId,
-        orderNo: _orderNo!, orderDate: _fmtDate(_orderDate), userId: session.userId,
+        orderNo: _orderNo!, orderDate: _fmtDate(_orderDate), reason: reason, userId: session.userId,
       );
       if (mounted) {
         _showSnack('Sales Order $_orderNo cancelled.', color: AppColors.positive);
@@ -903,10 +968,14 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
         'status':            _status,
         'customer_name':     _customerDisplay.contains('] ') ? _customerDisplay.split('] ').last : _customerDisplay,
         'customer_po_ref':   _customerPoRefCtrl.text,
+        'ship_to':           _shipToCtrl.text,
+        'bill_to':           _billToCtrl.text,
+        'expected_delivery_date': _expectedDeliveryDate != null ? _displayDate(_expectedDeliveryDate) : '',
         'sales_person_name': _salesPersonDisplay,
         'currency_code':     _orderCurrencyCode ?? '',
-        'payment_terms':     _paymentTermsCtrl.text,
-        'delivery_terms':    _deliveryTermsCtrl.text,
+        'payment_term_name': _paymentTermDisplay,
+        'incoterm_label':    _incotermDisplay,
+        'delivery_instructions': _deliveryInstructionsCtrl.text,
         'remarks':           _remarksCtrl.text,
       },
       'lines': _lines.where((l) => l.productId != null && l.baseQty > 0).map((l) => {
@@ -1262,14 +1331,71 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
               style: const TextStyle(fontSize: 13),
               onChanged: (_) => setState(() {}),
             ));
-            final f3 = field(TextFormField(
-              controller: _paymentTermsCtrl, enabled: !locked,
-              decoration: dec.copyWith(labelText: 'Payment Terms'),
+            final f3 = field(DropdownButtonFormField<String>(
+              decoration: dec.copyWith(labelText: 'Payment Term'),
+              isExpanded: true, isDense: true, itemHeight: null,
+              initialValue: _paymentTermId,
+              items: _paymentTerms.map((t) => DropdownMenuItem(value: t['id'] as String,
+                  child: Text(t['term_name'] as String, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
+              onChanged: locked ? null : (v) => setState(() {
+                _paymentTermId = v;
+                _paymentTermDisplay = v == null ? '' : (_paymentTerms.firstWhere((t) => t['id'] == v)['term_name'] as String);
+              }),
+            ));
+            final f4 = field(DropdownButtonFormField<String>(
+              decoration: dec.copyWith(labelText: 'Incoterm'),
+              isExpanded: true, isDense: true, itemHeight: null,
+              initialValue: _incotermId,
+              items: _incoterms.map((t) => DropdownMenuItem(value: t['id'] as String,
+                  child: Text(t['description'] as String, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
+              onChanged: locked ? null : (v) => setState(() {
+                _incotermId = v;
+                _incotermDisplay = v == null ? '' : (_incoterms.firstWhere((t) => t['id'] == v)['description'] as String);
+              }),
+            ));
+            return isMobile
+                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [Expanded(child: f1), const SizedBox(width: 12), Expanded(child: f2)]), const SizedBox(height: 8),
+                    Row(children: [Expanded(child: f3), const SizedBox(width: 12), Expanded(child: f4)]),
+                  ])
+                : Row(children: [
+                    Expanded(child: f1), const SizedBox(width: 12),
+                    Expanded(child: f2), const SizedBox(width: 12),
+                    Expanded(child: f3), const SizedBox(width: 12),
+                    Expanded(child: f4),
+                  ]);
+          }),
+          if (_paymentTermId != null) Builder(builder: (_) {
+            final desc = _paymentTerms.firstWhere((t) => t['id'] == _paymentTermId, orElse: () => const {})['description'] as String?;
+            if (desc == null || desc.isEmpty) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(desc, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+            );
+          }),
+          const SizedBox(height: 12),
+          Builder(builder: (_) {
+            final f1 = field(TextFormField(
+              controller: _shipToCtrl, enabled: !locked,
+              decoration: dec.copyWith(labelText: 'Ship To'),
               style: const TextStyle(fontSize: 13),
             ));
+            final f2 = field(TextFormField(
+              controller: _billToCtrl, enabled: !locked,
+              decoration: dec.copyWith(labelText: 'Bill To'),
+              style: const TextStyle(fontSize: 13),
+            ));
+            final f3 = field(InkWell(
+              onTap: locked ? null : () => _pickDate(_expectedDeliveryDate, (d) => setState(() => _expectedDeliveryDate = d)),
+              child: InputDecorator(
+                decoration: dec.copyWith(labelText: 'Expected Delivery',
+                    suffixIcon: Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary)),
+                child: Text(_displayDate(_expectedDeliveryDate), style: const TextStyle(fontSize: 13)),
+              ),
+            ));
             final f4 = field(TextFormField(
-              controller: _deliveryTermsCtrl, enabled: !locked,
-              decoration: dec.copyWith(labelText: 'Delivery Terms'),
+              controller: _deliveryInstructionsCtrl, enabled: !locked,
+              decoration: dec.copyWith(labelText: 'Delivery Instructions'),
               style: const TextStyle(fontSize: 13),
             ));
             return isMobile
@@ -1419,6 +1545,9 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
                 style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
             SizedBox(width: 110, child: Text('Landed: ${row.landedAmount.toStringAsFixed(2)}',
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary))),
+            if (row.productId != null) SizedBox(width: 90, child: row.costLoading
+                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                : Text('Stock: ${row.availableStock.toStringAsFixed(2)}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
             if (_canViewCostPrice) SizedBox(width: 90, child: row.costLoading
                 ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
                 : Text('Cost: ${row.costPrice.toStringAsFixed(2)}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),

@@ -22,14 +22,23 @@ class SalesOrdersCache extends Table {
   TextColumn get customerCode          => text().withDefault(const Constant(''))();
   TextColumn get customerName          => text().withDefault(const Constant(''))();
   TextColumn get customerPoRef         => text().withDefault(const Constant(''))();
+  TextColumn get shipTo                => text().withDefault(const Constant(''))();
+  TextColumn get billTo                => text().withDefault(const Constant(''))();
+  TextColumn get expectedDeliveryDate  => text().withDefault(const Constant(''))();
   TextColumn get salesPersonId         => text().withDefault(const Constant(''))();
   TextColumn get salesPersonName       => text().withDefault(const Constant(''))();
   TextColumn get orderCurrencyId       => text()();
   TextColumn get orderCurrencyCode     => text().withDefault(const Constant(''))();
   RealColumn get rateToBase            => real().withDefault(const Constant(1.0))();
   RealColumn get rateToLocal           => real().withDefault(const Constant(1.0))();
-  TextColumn get paymentTerms          => text().withDefault(const Constant(''))();
-  TextColumn get deliveryTerms         => text().withDefault(const Constant(''))();
+  // Structured master references (087_payment_terms) — replace the old
+  // free-text paymentTerms/deliveryTerms columns Purchase Order/Sales
+  // Quotation still carry.
+  TextColumn get paymentTermId         => text().withDefault(const Constant(''))();
+  TextColumn get paymentTermName       => text().withDefault(const Constant(''))();
+  TextColumn get incotermId            => text().withDefault(const Constant(''))();
+  TextColumn get incotermLabel         => text().withDefault(const Constant(''))();
+  TextColumn get deliveryInstructions  => text().withDefault(const Constant(''))();
   RealColumn get grossAmount           => real().withDefault(const Constant(0.0))();
   RealColumn get discountAmount        => real().withDefault(const Constant(0.0))();
   RealColumn get chargesAmount         => real().withDefault(const Constant(0.0))();
@@ -38,6 +47,7 @@ class SalesOrdersCache extends Table {
   TextColumn get status                => text().withDefault(const Constant('DRAFT'))();
   TextColumn get approvedBy            => text().withDefault(const Constant(''))();
   TextColumn get approvedAt            => text().withDefault(const Constant(''))();
+  TextColumn get cancellationReason    => text().withDefault(const Constant(''))();
   TextColumn get remarks               => text().withDefault(const Constant(''))();
   BoolColumn get isDeleted             => boolean().withDefault(const Constant(false))();
   DateTimeColumn get cachedAt          => dateTime().nullable()();
@@ -67,6 +77,7 @@ class SalesOrderLinesCache extends Table {
   RealColumn get rate                        => real().withDefault(const Constant(0.0))();
   TextColumn get priceSource                 => text().withDefault(const Constant('PRICE_MASTER'))();
   TextColumn get priceOverrideReason         => text().withDefault(const Constant(''))();
+  TextColumn get priceSourceEntryNo          => text().withDefault(const Constant(''))();
   RealColumn get grossAmount                 => real().withDefault(const Constant(0.0))();
   RealColumn get discountPercent             => real().withDefault(const Constant(0.0))();
   RealColumn get discountAmount              => real().withDefault(const Constant(0.0))();

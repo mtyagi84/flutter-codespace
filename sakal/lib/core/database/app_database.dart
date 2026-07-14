@@ -75,7 +75,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'sakal_local'));
 
   @override
-  int get schemaVersion => 19;
+  int get schemaVersion => 20;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -174,6 +174,24 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(salesOrdersCache);
             await m.createTable(salesOrderLinesCache);
             await m.createTable(salesOrderChargeLinesCache);
+          }
+          // v20: Sales Order's own pre-launch revision (before the v19
+          // tables above ever shipped to a real device) — payment_terms/
+          // delivery_terms TEXT columns replaced with structured
+          // payment_term_id/incoterm_id references (087_payment_terms),
+          // plus ship_to/bill_to/expected_delivery_date/cancellation_reason
+          // and the line's price_source_entry_no traceability column.
+          if (from < 20) {
+            await m.addColumn(salesOrdersCache, salesOrdersCache.shipTo);
+            await m.addColumn(salesOrdersCache, salesOrdersCache.billTo);
+            await m.addColumn(salesOrdersCache, salesOrdersCache.expectedDeliveryDate);
+            await m.addColumn(salesOrdersCache, salesOrdersCache.paymentTermId);
+            await m.addColumn(salesOrdersCache, salesOrdersCache.paymentTermName);
+            await m.addColumn(salesOrdersCache, salesOrdersCache.incotermId);
+            await m.addColumn(salesOrdersCache, salesOrdersCache.incotermLabel);
+            await m.addColumn(salesOrdersCache, salesOrdersCache.deliveryInstructions);
+            await m.addColumn(salesOrdersCache, salesOrdersCache.cancellationReason);
+            await m.addColumn(salesOrderLinesCache, salesOrderLinesCache.priceSourceEntryNo);
           }
         },
       );

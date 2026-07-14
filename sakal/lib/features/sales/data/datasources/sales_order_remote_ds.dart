@@ -8,7 +8,9 @@ class SalesOrderRemoteDs {
       'location:ric_locations!location_id(location_name),'
       'customer:rim_accounts!customer_id(account_code,account_name),'
       'sales_person:rim_users!sales_person_id(full_name),'
-      'currency:rim_currencies!order_currency_id(currency_id)';
+      'currency:rim_currencies!order_currency_id(currency_id),'
+      'payment_term:rim_payment_terms!payment_term_id(term_name,description),'
+      'incoterm:rim_common_masters!incoterm_id(description)';
 
   Future<List<Map<String, dynamic>>> listOrders({
     required String clientId,
@@ -71,7 +73,7 @@ class SalesOrderRemoteDs {
       'order_date': 'eq.$orderDate',
       'is_deleted': 'eq.false',
       'select':     'serial_no,product_id,item_description,barcode,uom_id,uom_conversion_factor,'
-          'qty_pack,qty_loose,base_qty,rate,price_source,price_override_reason,'
+          'qty_pack,qty_loose,base_qty,rate,price_source,price_override_reason,price_source_entry_no,'
           'gross_amount,discount_percent,discount_amount,'
           'tax_group_id,tax_amount,final_amount,base_amount,local_amount,charge_amount,landed_amount,'
           'delivered_qty,source_quotation_line_serial,remarks,'
@@ -196,6 +198,11 @@ class SalesOrderRemoteDs {
 
   // ── Direct mode: price/discount governance ───────────────────────────────
 
+  /// fn_get_active_price (087) converts internally TO [currencyCode] —
+  /// never assume a Price Master batch's own currency already matches
+  /// the caller's document currency. Returns both the converted
+  /// selling_price (what the caller uses) and native_selling_price/
+  /// price_currency_code/conversion_rate for audit/display.
   Future<Map<String, dynamic>?> getActivePrice({
     required String clientId,
     required String companyId,
@@ -204,18 +211,62 @@ class SalesOrderRemoteDs {
     required String uomId,
     required String customerId,
     required String asOfDate,
+    required String currencyCode,
   }) async {
     final res = await _dio.post('/rpc/fn_get_active_price', data: {
-      'p_client_id':   clientId,
-      'p_company_id':  companyId,
-      'p_location_id': locationId,
-      'p_product_id':  productId,
-      'p_uom_id':      uomId,
-      'p_customer_id': customerId,
-      'p_as_of_date':  asOfDate,
+      'p_client_id':       clientId,
+      'p_company_id':      companyId,
+      'p_location_id':     locationId,
+      'p_product_id':      productId,
+      'p_uom_id':          uomId,
+      'p_customer_id':     customerId,
+      'p_as_of_date':      asOfDate,
+      'p_target_currency': currencyCode,
     });
     final list = res.data as List;
     return list.isNotEmpty ? list.first as Map<String, dynamic> : null;
+  }
+
+  Future<List<Map<String, dynamic>>> getPaymentTerms({
+    required String clientId,
+    required String companyId,
+  }) async {
+    final res = await _dio.get('/rim_payment_terms', queryParameters: {
+      'client_id':  'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'is_deleted': 'eq.false',
+      'is_active':  'eq.true',
+      'select':     'id,term_code,term_name,description',
+      'order':      'term_name.asc',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
+  /// Incoterm reuses the generic common-masters mechanism (087) — same
+  /// two-step type_key lookup as PriceMasterRemoteDs.getReasons() /
+  /// Stock Adjustment's own getReasons().
+  Future<List<Map<String, dynamic>>> getIncoterms({
+    required String clientId,
+    required String companyId,
+  }) async {
+    final typeRes = await _dio.get('/rim_common_master_types', queryParameters: {
+      'type_key': 'eq.INCOTERM',
+      'select':   'id',
+      'limit':    '1',
+    });
+    final typeList = typeRes.data as List;
+    if (typeList.isEmpty) return [];
+    final typeId = (typeList.first as Map<String, dynamic>)['id'] as String;
+    final res = await _dio.get('/rim_common_masters', queryParameters: {
+      'type_id':    'eq.$typeId',
+      'client_id':  'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'is_deleted': 'eq.false',
+      'is_active':  'eq.true',
+      'select':     'id,description',
+      'order':      'sort_order.asc,description.asc',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
   }
 
   /// The acting user's Sales Controls (price override / discount cap /
@@ -505,6 +556,7 @@ class SalesOrderRemoteDs {
     required String companyId,
     required String orderNo,
     required String orderDate,
+    required String reason,
     required String userId,
   }) async {
     await _dio.post('/rpc/fn_cancel_sales_order', data: {
@@ -512,6 +564,7 @@ class SalesOrderRemoteDs {
       'p_company_id': companyId,
       'p_order_no':   orderNo,
       'p_order_date': orderDate,
+      'p_reason':     reason,
       'p_user_id':    userId,
     });
   }

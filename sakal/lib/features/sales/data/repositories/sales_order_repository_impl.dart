@@ -127,10 +127,24 @@ class SalesOrderRepositoryImpl implements SalesOrderRepository {
     required String uomId,
     required String customerId,
     required String asOfDate,
+    required String currencyCode,
   }) => _remote.getActivePrice(
         clientId: clientId, companyId: companyId, locationId: locationId,
         productId: productId, uomId: uomId, customerId: customerId, asOfDate: asOfDate,
+        currencyCode: currencyCode,
       );
+
+  @override
+  Future<List<Map<String, dynamic>>> getPaymentTerms({
+    required String clientId,
+    required String companyId,
+  }) => _remote.getPaymentTerms(clientId: clientId, companyId: companyId);
+
+  @override
+  Future<List<Map<String, dynamic>>> getIncoterms({
+    required String clientId,
+    required String companyId,
+  }) => _remote.getIncoterms(clientId: clientId, companyId: companyId);
 
   @override
   Future<Map<String, dynamic>?> getUserSalesControls({
@@ -245,9 +259,10 @@ class SalesOrderRepositoryImpl implements SalesOrderRepository {
     required String companyId,
     required String orderNo,
     required String orderDate,
+    required String reason,
     required String userId,
   }) => _remote.cancel(
         clientId: clientId, companyId: companyId, orderNo: orderNo,
-        orderDate: orderDate, userId: userId,
+        orderDate: orderDate, reason: reason, userId: userId,
       );
 }

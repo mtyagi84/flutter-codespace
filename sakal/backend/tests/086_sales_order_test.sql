@@ -118,7 +118,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-SELECT plan(20);
+SELECT plan(21);
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- Direct mode — price resolution + governance (Part A)
@@ -500,27 +500,38 @@ INSERT INTO test_results (result) SELECT ok(
 DO $$
 BEGIN
   PERFORM fn_cancel_sales_order(current_setting('pgtap.v_client')::uuid, current_setting('pgtap.v_company')::uuid,
-    current_setting('pgtap.v_order_aq2'), '2026-06-06'::date, current_setting('pgtap.v_user_b')::uuid);
+    current_setting('pgtap.v_order_aq2'), '2026-06-06'::date, 'Customer changed requirements', current_setting('pgtap.v_user_b')::uuid);
 END;
 $$ LANGUAGE plpgsql;
 
 INSERT INTO test_results (result) SELECT ok(
   (SELECT status FROM rih_sales_orders WHERE client_id = current_setting('pgtap.v_client')::uuid
      AND order_no = current_setting('pgtap.v_order_aq2')) = 'CANCELLED'
+  AND (SELECT cancellation_reason FROM rih_sales_orders WHERE client_id = current_setting('pgtap.v_client')::uuid
+     AND order_no = current_setting('pgtap.v_order_aq2')) = 'Customer changed requirements'
   AND (SELECT converted_qty FROM rid_sales_quotation_lines WHERE client_id = current_setting('pgtap.v_client')::uuid
      AND quotation_no = current_setting('pgtap.v_q_ok') AND serial_no = 1) = 40
   AND (SELECT status FROM rih_sales_quotations WHERE client_id = current_setting('pgtap.v_client')::uuid
      AND quotation_no = current_setting('pgtap.v_q_ok')) = 'PARTIALLY_CONVERTED',
-  'ok 17 — cancelling an APPROVED Against-Quotation order rolls converted_qty back and reverts the quotation status'
+  'ok 17 — cancelling an APPROVED Against-Quotation order rolls converted_qty back, reverts the quotation status, and stores the cancellation reason'
 );
 
--- Test 18: cancelling an already-CANCELLED order is rejected.
+-- Test 18: cancelling without a reason is rejected.
 INSERT INTO test_results (result) SELECT throws_ok(
-  format($$ SELECT fn_cancel_sales_order(%L::uuid, %L::uuid, %L, '2026-06-06'::date, %L::uuid) $$,
+  format($$ SELECT fn_cancel_sales_order(%L::uuid, %L::uuid, %L, '2026-06-01'::date, NULL, %L::uuid) $$,
+    current_setting('pgtap.v_client'), current_setting('pgtap.v_company'),
+    current_setting('pgtap.v_order1'), current_setting('pgtap.v_user_b')),
+  'Enter a reason for cancelling this order.',
+  'ok 18a — cancelling without a reason is rejected'
+);
+
+-- Test 18b: cancelling an already-CANCELLED order is rejected.
+INSERT INTO test_results (result) SELECT throws_ok(
+  format($$ SELECT fn_cancel_sales_order(%L::uuid, %L::uuid, %L, '2026-06-06'::date, 'duplicate cancel attempt', %L::uuid) $$,
     current_setting('pgtap.v_client'), current_setting('pgtap.v_company'),
     current_setting('pgtap.v_order_aq2'), current_setting('pgtap.v_user_b')),
   'P0001', NULL,
-  'ok 18 — cancelling an already-cancelled order is rejected'
+  'ok 18b — cancelling an already-cancelled order is rejected'
 );
 
 -- Test 19: order_aq1 is APPROVED (from test 15) — re-saving it (e.g. to
