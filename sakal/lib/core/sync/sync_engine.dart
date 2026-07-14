@@ -250,6 +250,27 @@ class SyncEngine {
               ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.countNo.equals(oldId)))
             .write(StockCountLinesCacheCompanion(countNo: Value(newId)));
         break;
+
+      case 'SALES_QUOTATION':
+        await (db.update(db.salesQuotationsCache)
+              ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.quotationNo.equals(oldId)))
+            .write(SalesQuotationsCacheCompanion(quotationNo: Value(newId)));
+        await (db.update(db.salesQuotationLinesCache)
+              ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.quotationNo.equals(oldId)))
+            .write(SalesQuotationLinesCacheCompanion(quotationNo: Value(newId)));
+        await (db.update(db.salesQuotationChargeLinesCache)
+              ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.quotationNo.equals(oldId)))
+            .write(SalesQuotationChargeLinesCacheCompanion(quotationNo: Value(newId)));
+        break;
+
+      case 'PRICE_MASTER':
+        await (db.update(db.priceMasterHeadersCache)
+              ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.entryNo.equals(oldId)))
+            .write(PriceMasterHeadersCacheCompanion(entryNo: Value(newId)));
+        await (db.update(db.priceMasterLinesCache)
+              ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.entryNo.equals(oldId)))
+            .write(PriceMasterLinesCacheCompanion(entryNo: Value(newId)));
+        break;
     }
   }
 
