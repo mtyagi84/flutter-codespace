@@ -375,7 +375,7 @@ INSERT INTO test_results (result) SELECT throws_ok(
     %L::uuid
   ) $$, current_setting('pgtap.v_client'), current_setting('pgtap.v_company'), current_setting('pgtap.v_loc'),
        current_setting('pgtap.v_reason'), current_setting('pgtap.v_count_d'), current_setting('pgtap.v_user')),
-  'already part of Review',
+  'P0001', NULL, -- dynamic message (interpolates count_no/review_no) — check SQLSTATE only, not exact text
   'ok 8 — a second Review cannot pick a Stock Count already reserved by Review REV_X'
 );
 
@@ -415,7 +415,7 @@ INSERT INTO test_results (result) SELECT throws_ok(
     %L::uuid
   ) $$, current_setting('pgtap.v_client'), current_setting('pgtap.v_company'), current_setting('pgtap.v_loc'),
        current_setting('pgtap.v_reason'), current_setting('pgtap.v_count_i'), current_setting('pgtap.v_count_c'), current_setting('pgtap.v_user')),
-  'different location',
+  'P0001', NULL, -- dynamic message (interpolates count_no) — check SQLSTATE only, not exact text
   'ok 10 — a Stock Count at a different location cannot be added to this Review'
 );
 
@@ -427,7 +427,7 @@ INSERT INTO test_results (result) SELECT throws_ok(
     %L::uuid
   ) $$, current_setting('pgtap.v_client'), current_setting('pgtap.v_company'), current_setting('pgtap.v_loc'),
        current_setting('pgtap.v_reason'), current_setting('pgtap.v_count_e'), current_setting('pgtap.v_user')),
-  'must be Submitted',
+  'P0001', NULL, -- dynamic message (interpolates count_no) — check SQLSTATE only, not exact text
   'ok 11 — a still-DRAFT Stock Count cannot be picked into a Review'
 );
 
