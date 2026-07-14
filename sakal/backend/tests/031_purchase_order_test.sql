@@ -60,6 +60,11 @@ BEGIN
   SELECT id INTO v_currency_id FROM rim_currencies
   WHERE client_id = v_client_id AND company_id = v_company_id AND currency_id = 'USD';
 
+  -- Referenced by literal further down in separate top-level DO blocks
+  -- (PL/pgSQL variables don't survive across DO blocks) — same set_config/
+  -- current_setting relay already used for v_grn_no/v_invoice_no elsewhere.
+  PERFORM set_config('pgtap.v_currency_031', v_currency_id::text, false);
+
   INSERT INTO rim_accounts (id, client_id, company_id, account_code, account_name, account_nature, accounting_std, posting_allowed, is_active, is_deleted, created_at)
   VALUES (v_supplier_id, v_client_id, v_company_id, '5001', 'Test Supplier', 'Supplier', 'OHADA', true, true, false, now())
   ON CONFLICT (id) DO NOTHING;
@@ -120,7 +125,7 @@ BEGIN
       'location_id', '00000000-0000-0000-0031-000000000003',
       'order_no', NULL, 'order_date', '2026-06-01', 'po_type', 'LOCAL',
       'supplier_id', '00000000-0000-0000-0031-000000000006',
-      'po_currency_id', '00000000-0000-0000-0031-000000000005',
+      'po_currency_id', current_setting('pgtap.v_currency_031'),
       'rate_to_base', 1, 'rate_to_local', 1
     ),
     jsonb_build_array(
@@ -189,7 +194,7 @@ BEGIN
       'location_id', '00000000-0000-0000-0031-000000000003',
       'order_no', current_setting('pgtap.v_order_no_031'), 'order_date', '2026-06-01', 'po_type', 'LOCAL',
       'supplier_id', '00000000-0000-0000-0031-000000000006',
-      'po_currency_id', '00000000-0000-0000-0031-000000000005',
+      'po_currency_id', current_setting('pgtap.v_currency_031'),
       'rate_to_base', 1, 'rate_to_local', 1
     ),
     jsonb_build_array(
@@ -228,7 +233,7 @@ BEGIN
       'location_id', '00000000-0000-0000-0031-000000000003',
       'order_no', NULL, 'order_date', '2026-06-01', 'po_type', 'LOCAL',
       'supplier_id', '00000000-0000-0000-0031-000000000006',
-      'po_currency_id', '00000000-0000-0000-0031-000000000005',
+      'po_currency_id', current_setting('pgtap.v_currency_031'),
       'rate_to_base', 1, 'rate_to_local', 1
     ),
     '[]'::jsonb, '[]'::jsonb, '[]'::jsonb,
@@ -259,7 +264,7 @@ BEGIN
       'location_id', '00000000-0000-0000-0031-000000000003',
       'order_no', NULL, 'order_date', '2026-06-01', 'po_type', 'LOCAL',
       'supplier_id', '00000000-0000-0000-0031-000000000006',
-      'po_currency_id', '00000000-0000-0000-0031-000000000005',
+      'po_currency_id', current_setting('pgtap.v_currency_031'),
       'rate_to_base', 1, 'rate_to_local', 1
     ),
     jsonb_build_array(
@@ -326,7 +331,7 @@ SELECT throws_ok(
       'location_id', '00000000-0000-0000-0031-000000000003',
       'order_no', %L, 'order_date', '2026-06-01', 'po_type', 'LOCAL',
       'supplier_id', '00000000-0000-0000-0031-000000000006',
-      'po_currency_id', '00000000-0000-0000-0031-000000000005',
+      'po_currency_id', current_setting('pgtap.v_currency_031'),
       'rate_to_base', 1, 'rate_to_local', 1
     ),
     '[]'::jsonb, '[]'::jsonb, '[]'::jsonb,

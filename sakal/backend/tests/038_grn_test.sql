@@ -58,6 +58,10 @@ BEGIN
   SELECT id INTO v_currency_id FROM rim_currencies
   WHERE client_id = v_client_id AND company_id = v_company_id AND currency_id = 'USD';
 
+  -- Referenced by literal further down in separate top-level DO blocks
+  -- (PL/pgSQL variables don't survive across DO blocks).
+  PERFORM set_config('pgtap.v_currency_038', v_currency_id::text, false);
+
   INSERT INTO rim_accounts (id, client_id, company_id, account_code, account_name, account_nature, accounting_std, posting_allowed, is_active, is_deleted, created_at)
   VALUES
     (v_supplier_id,    v_client_id, v_company_id, '5001', 'Test Supplier',      'Supplier', 'OHADA', true, true, false, now()),
@@ -145,7 +149,7 @@ BEGIN
       'grn_no', NULL, 'grn_date', '2026-06-01',
       'supplier_id', '00000000-0000-0000-0038-000000000006',
       'receipt_mode', 'AGAINST_PO',
-      'grn_currency_id', '00000000-0000-0000-0038-000000000005',
+      'grn_currency_id', current_setting('pgtap.v_currency_038'),
       'rate_to_base', 1, 'rate_to_local', 1
     ),
     jsonb_build_array(
@@ -256,7 +260,7 @@ BEGIN
       'grn_no', NULL, 'grn_date', '2026-06-02',
       'supplier_id', '00000000-0000-0000-0038-000000000006',
       'receipt_mode', 'DIRECT',
-      'grn_currency_id', '00000000-0000-0000-0038-000000000005',
+      'grn_currency_id', current_setting('pgtap.v_currency_038'),
       'rate_to_base', 1, 'rate_to_local', 1
     ),
     jsonb_build_array(
