@@ -149,9 +149,11 @@ BEGIN
     ),
     jsonb_build_array(
       jsonb_build_object('serial_no', 1, 'account_id', '00000000-0000-0000-0037-000000000005',
-        'trans_nature', 'DR', 'trans_amount', 100, 'trans_currency', 'USD'),
+        'trans_nature', 'DR', 'trans_amount', 100, 'trans_currency', 'USD',
+        'party_amount', 100, 'party_currency', 'USD', 'party_rate', 1),
       jsonb_build_object('serial_no', 2, 'account_id', '00000000-0000-0000-0037-000000000006',
-        'trans_nature', 'CR', 'trans_amount', 100, 'trans_currency', 'USD')
+        'trans_nature', 'CR', 'trans_amount', 100, 'trans_currency', 'USD',
+        'party_amount', 100, 'party_currency', 'USD', 'party_rate', 1)
     ),
     '00000000-0000-0000-0037-000000000004'
   );
@@ -186,9 +188,11 @@ BEGIN
     ),
     jsonb_build_array(
       jsonb_build_object('serial_no', 1, 'account_id', '00000000-0000-0000-0037-000000000007', -- group account
-        'trans_nature', 'DR', 'trans_amount', 100, 'trans_currency', 'USD'),
+        'trans_nature', 'DR', 'trans_amount', 100, 'trans_currency', 'USD',
+        'party_amount', 100, 'party_currency', 'USD', 'party_rate', 1),
       jsonb_build_object('serial_no', 2, 'account_id', '00000000-0000-0000-0037-000000000006',
-        'trans_nature', 'CR', 'trans_amount', 100, 'trans_currency', 'USD')
+        'trans_nature', 'CR', 'trans_amount', 100, 'trans_currency', 'USD',
+        'party_amount', 100, 'party_currency', 'USD', 'party_rate', 1)
     ),
     '00000000-0000-0000-0037-000000000004'
   );
