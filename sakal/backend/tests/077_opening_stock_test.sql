@@ -68,9 +68,18 @@ BEGIN
   ON CONFLICT DO NOTHING;
   SELECT id INTO v_eur FROM rim_currencies WHERE client_id = v_client AND company_id = v_company AND currency_id = 'EUR';
 
-  INSERT INTO rim_exchange_rates (client_id, company_id, from_currency_id, to_currency_id, rate, rate_date, created_by)
-  VALUES (v_client, v_company, v_usd, v_eur, 0.9, '2026-06-01', v_user)
-  ON CONFLICT DO NOTHING;
+  -- rim_exchange_rates (migration 018) keys on location_id + from_currency/
+  -- to_currency as TEXT ISO codes (not from_currency_id/to_currency_id
+  -- UUIDs), and stores buying_rate/selling_rate separately rather than a
+  -- single "rate" column -- this insert was written against a schema shape
+  -- that never actually existed. from_currency is always the company's
+  -- base currency per that table's own convention (fn_get_exchange_rate
+  -- resolves USD -> EUR here, needed for fn_save_opening_stock/
+  -- fn_approve_opening_stock to derive unit_cost_specific on the EUR-cost
+  -- product line below).
+  INSERT INTO rim_exchange_rates (client_id, company_id, location_id, rate_date, from_currency, to_currency, buying_rate, selling_rate, created_by)
+  VALUES (v_client, v_company, v_loc, '2026-06-01', 'USD', 'EUR', 0.9, 0.9, v_user)
+  ON CONFLICT (client_id, company_id, location_id, rate_date, from_currency, to_currency) DO NOTHING;
 
   INSERT INTO rim_products (id, client_id, company_id, product_code, product_name, cost_currency_id, tracking_type, created_by)
   VALUES
