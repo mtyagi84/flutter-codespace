@@ -55,30 +55,41 @@ BEGIN
   ON CONFLICT (id) DO NOTHING;
 
   -- Opening stock: 10 units @ base 1.5000 / specific 1.8000 (qty_before=0, so
-  -- weighted average collapses to the inward price itself).
+  -- weighted average collapses to the inward price itself). Named
+  -- parameters throughout this file — fn_post_stock_movement's positional
+  -- shape has grown (p_serial_no inserted mid-list, p_rate_to_base/
+  -- p_manufacturing_date appended) since this fixture was first written,
+  -- and a stale 15-arg positional call silently misaligned into type
+  -- mismatches (DATE where TEXT expected, UUID where DATE expected) rather
+  -- than failing obviously.
   PERFORM fn_post_stock_movement(
-    v_client_id, v_company_id, v_location_id, v_product_id,
-    '2026-06-01'::date, 'OPENING_STOCK', 10,
-    1.5, 1.8, NULL, NULL,
-    'OPENING_STOCK', 'OPEN-1', '2026-06-01'::date, v_user_id
+    p_client_id => v_client_id, p_company_id => v_company_id,
+    p_location_id => v_location_id, p_product_id => v_product_id,
+    p_trans_date => '2026-06-01'::date, p_trans_type => 'OPENING_STOCK', p_qty_change => 10,
+    p_unit_cost_base => 1.5, p_unit_cost_specific => 1.8,
+    p_source_doc_type => 'OPENING_STOCK', p_source_doc_no => 'OPEN-1',
+    p_source_doc_date => '2026-06-01'::date, p_user_id => v_user_id
   );
 
   -- Inward: 20 units @ base 1.7000 / specific 2.0000 — this is the user's own
   -- worked example: (10*1.5 + 20*1.7)/30 = 49/30 = 1.6333(base),
   -- (10*1.8 + 20*2.0)/30 = 58/30 = 1.9333(specific).
   PERFORM fn_post_stock_movement(
-    v_client_id, v_company_id, v_location_id, v_product_id,
-    '2026-06-02'::date, 'GRN', 20,
-    1.7, 2.0, NULL, NULL,
-    'GRN', 'GRN-TEST-1', '2026-06-02'::date, v_user_id
+    p_client_id => v_client_id, p_company_id => v_company_id,
+    p_location_id => v_location_id, p_product_id => v_product_id,
+    p_trans_date => '2026-06-02'::date, p_trans_type => 'GRN', p_qty_change => 20,
+    p_unit_cost_base => 1.7, p_unit_cost_specific => 2.0,
+    p_source_doc_type => 'GRN', p_source_doc_no => 'GRN-TEST-1',
+    p_source_doc_date => '2026-06-02'::date, p_user_id => v_user_id
   );
 
   -- Outward: 5 units sold. Cost must NOT change; current_stock drops to 25.
   PERFORM fn_post_stock_movement(
-    v_client_id, v_company_id, v_location_id, v_product_id,
-    '2026-06-03'::date, 'SALES_INVOICE', -5,
-    NULL, NULL, NULL, NULL,
-    'SALES_INVOICE', 'INV-TEST-1', '2026-06-03'::date, v_user_id
+    p_client_id => v_client_id, p_company_id => v_company_id,
+    p_location_id => v_location_id, p_product_id => v_product_id,
+    p_trans_date => '2026-06-03'::date, p_trans_type => 'SALES_INVOICE', p_qty_change => -5,
+    p_source_doc_type => 'SALES_INVOICE', p_source_doc_no => 'INV-TEST-1',
+    p_source_doc_date => '2026-06-03'::date, p_user_id => v_user_id
   );
 END;
 $$ LANGUAGE plpgsql;
@@ -149,10 +160,11 @@ SELECT ok(
 
 SELECT throws_ok(
   $$ SELECT fn_post_stock_movement(
-       '00000000-0000-0000-0036-000000000001', '00000000-0000-0000-0036-000000000002',
-       '00000000-0000-0000-0036-000000000004', '00000000-0000-0000-0036-000000000005',
-       '2026-06-04'::date, 'GRN', 5, NULL, NULL, NULL, NULL,
-       'GRN', 'GRN-TEST-2', '2026-06-04'::date, '00000000-0000-0000-0036-000000000003'
+       p_client_id => '00000000-0000-0000-0036-000000000001', p_company_id => '00000000-0000-0000-0036-000000000002',
+       p_location_id => '00000000-0000-0000-0036-000000000004', p_product_id => '00000000-0000-0000-0036-000000000005',
+       p_trans_date => '2026-06-04'::date, p_trans_type => 'GRN', p_qty_change => 5,
+       p_source_doc_type => 'GRN', p_source_doc_no => 'GRN-TEST-2',
+       p_source_doc_date => '2026-06-04'::date, p_user_id => '00000000-0000-0000-0036-000000000003'
      ) $$,
   'UNIT_COST_REQUIRED',
   'ok 9 — an inward movement with no unit cost raises UNIT_COST_REQUIRED'

@@ -30,9 +30,17 @@ DECLARE
   v_prod4  uuid := '00000000-0000-0026-0000-000000000004';  -- for uniqueness test
   v_prod5  uuid := '00000000-0000-0026-0000-000000000005';  -- for update test
 
-  -- UOM rows
+  -- UOM rows (rim_product_uom's own id)
   v_uom1   uuid := '00000000-0000-0026-0001-000000000001';
   v_uom2   uuid := '00000000-0000-0026-0001-000000000002';
+
+  -- Actual UOM master rows (rim_common_masters, type_key='UNIT') that
+  -- v_uom1/v_uom2 point at via uom_id — previously this fixture mistakenly
+  -- pointed uom_id at v_prod1 (the product's own id) and never created a
+  -- real UOM row at all, which only surfaced once the FK was enforced.
+  v_uom_piece_id  uuid := '00000000-0000-0026-0003-000000000001';
+  v_uom_carton_id uuid := '00000000-0000-0026-0003-000000000002';
+  v_unit_type_id  uuid;
 
   -- Location stock row
   v_loc1   uuid := '00000000-0000-0026-0002-000000000001';
@@ -86,19 +94,29 @@ BEGIN
   VALUES (v_prod5, v_client_id, v_company_id, 'PRD-00005', 'Update Me', v_user_id)
   ON CONFLICT (id) DO NOTHING;
 
+  -- Real UOM master rows — uom_id on rim_product_uom is a real FK to
+  -- rim_common_masters (type_key='UNIT'), not to rim_products.
+  SELECT id INTO v_unit_type_id FROM rim_common_master_types WHERE type_key = 'UNIT';
+
+  INSERT INTO rim_common_masters (id, client_id, company_id, type_id, description, created_by)
+  VALUES
+    (v_uom_piece_id,  v_client_id, v_company_id, v_unit_type_id, 'Piece026',  v_user_id),
+    (v_uom_carton_id, v_client_id, v_company_id, v_unit_type_id, 'Carton026', v_user_id)
+  ON CONFLICT (id) DO NOTHING;
+
   -- UOM levels for product 1
   INSERT INTO rim_product_uom (id, client_id, company_id, product_id,
                                 uom_id, conversion_factor, is_base_uom,
                                 is_purchase_uom, is_sales_uom, sort_order, created_by)
   VALUES (v_uom1, v_client_id, v_company_id, v_prod1,
-          v_prod1, 1.0, true, true, true, 1, v_user_id)
+          v_uom_piece_id, 1.0, true, true, true, 1, v_user_id)
   ON CONFLICT (id) DO NOTHING;
 
   INSERT INTO rim_product_uom (id, client_id, company_id, product_id,
                                 uom_id, conversion_factor, is_base_uom,
                                 is_purchase_uom, is_sales_uom, sort_order, created_by)
   VALUES (v_uom2, v_client_id, v_company_id, v_prod1,
-          v_prod1, 12.0, false, true, false, 2, v_user_id)
+          v_uom_carton_id, 12.0, false, true, false, 2, v_user_id)
   ON CONFLICT (id) DO NOTHING;
 
   -- Location stock for product 1
