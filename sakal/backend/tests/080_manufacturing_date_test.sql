@@ -300,6 +300,28 @@ INSERT INTO test_results (result) SELECT ok(
 -- ══════════════════════════════════════════════════════════════════════════
 -- 7. Stock Count -> Stock Count Review -> composed Stock Adjustment chain.
 -- ══════════════════════════════════════════════════════════════════════════
+-- v_prod_count has no prior movement anywhere in this fixture -- a "+"
+-- adjustment (which is exactly what a newly-counted, never-before-seen
+-- batch nets to) is hard-blocked with COST_NOT_ESTABLISHED unless the
+-- PRODUCT already has some cost basis at this location (the check is
+-- per-product, not per-batch -- a brand-new batch is legitimately allowed
+-- to "+", same as Stock Adjustment itself allows, but only once the
+-- product's own cost_price is non-zero). Seed a small prior movement
+-- under a different batch, well before the count date, purely to
+-- establish that cost basis.
+DO $$
+BEGIN
+  PERFORM fn_post_stock_movement(
+    p_client_id => current_setting('pgtap.v_client')::uuid, p_company_id => current_setting('pgtap.v_company')::uuid,
+    p_location_id => current_setting('pgtap.v_loc')::uuid, p_product_id => current_setting('pgtap.v_prod_count')::uuid,
+    p_trans_date => '2026-01-01'::date, p_trans_type => 'OPENING_STOCK', p_qty_change => 1,
+    p_unit_cost_base => 5, p_unit_cost_specific => 5, p_batch_no => 'MFG-CNT-SEED',
+    p_source_doc_type => 'OPENING_STOCK', p_source_doc_no => 'MFG-CNT-SEED-DOC',
+    p_source_doc_date => '2026-01-01'::date, p_user_id => current_setting('pgtap.v_user')::uuid
+  );
+END;
+$$ LANGUAGE plpgsql;
+
 DO $$
 DECLARE v_count_no text; v_rev_no text; v_adj_no text;
 BEGIN
