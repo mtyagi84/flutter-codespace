@@ -33,6 +33,8 @@ class RouteNames {
   static const String salesQuotationEntry = '/sales/quotation-entry';
   static const String salesPriceMaster      = '/sales/price-master';
   static const String salesPriceMasterEntry = '/sales/price-master-entry';
+  static const String salesOrders     = '/sales/orders';
+  static const String salesOrderEntry = '/sales/order-entry';
   static const String salesInvoices = '/sales/invoices';
   static const String salesReturns  = '/sales/returns';
   static const String salesReceipts = '/sales/receipts';

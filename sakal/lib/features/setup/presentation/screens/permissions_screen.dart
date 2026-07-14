@@ -25,6 +25,15 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
   bool    _loadingPerms = false;
   String? _error;
 
+  // ── Sales Controls (086_sales_order.sql: ric_user_sales_controls) ────────
+  // Per-user price-override/discount/cost-visibility settings, separate
+  // from the menu-feature grid above. Missing row = all false/0 (least-
+  // privilege default, same convention as the feature grid).
+  Map<String, dynamic>? _salesControls;
+  String?  _salesControlsRowId; // null = no row yet, next save is an INSERT
+  bool     _loadingSalesControls = false;
+  bool     _savingSalesControls  = false;
+
   @override
   void initState() {
     super.initState();
@@ -84,6 +93,92 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
       if (mounted) {
         setState(() { _loadingPerms = false; _error = 'Could not load permissions.'; });
       }
+    }
+    unawaited(_loadSalesControls(userId));
+  }
+
+  Future<void> _loadSalesControls(String userId) async {
+    setState(() { _loadingSalesControls = true; _salesControls = null; _salesControlsRowId = null; });
+    final session = ref.read(sessionProvider)!;
+    try {
+      final res = await DioClient.instance.get('/ric_user_sales_controls', queryParameters: {
+        'client_id':  'eq.${session.clientId}',
+        'company_id': 'eq.${session.companyId}',
+        'user_id':    'eq.$userId',
+        'is_deleted': 'eq.false',
+        'select':     'id,can_override_price,can_give_discount,max_discount_percent,can_view_cost_price',
+        'limit':      '1',
+      });
+      final list = res.data as List;
+      if (mounted) {
+        setState(() {
+          if (list.isNotEmpty) {
+            final row = list.first as Map<String, dynamic>;
+            _salesControlsRowId = row['id'] as String;
+            _salesControls = row;
+          } else {
+            _salesControls = {
+              'can_override_price': false, 'can_give_discount': false,
+              'max_discount_percent': null, 'can_view_cost_price': false,
+            };
+          }
+          _loadingSalesControls = false;
+        });
+      }
+    } on DioException {
+      if (mounted) {
+        setState(() {
+          _salesControls = {
+            'can_override_price': false, 'can_give_discount': false,
+            'max_discount_percent': null, 'can_view_cost_price': false,
+          };
+          _loadingSalesControls = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _saveSalesControls(Map<String, dynamic> updated) async {
+    if (_selectedUserId == null || _savingSalesControls) return;
+    final previous = _salesControls;
+    setState(() { _salesControls = updated; _savingSalesControls = true; });
+    final session = ref.read(sessionProvider)!;
+    final payload = {
+      'can_override_price':   updated['can_override_price'],
+      'can_give_discount':    updated['can_give_discount'],
+      'max_discount_percent': updated['max_discount_percent'],
+      'can_view_cost_price':  updated['can_view_cost_price'],
+      'updated_by':           session.userId,
+    };
+    try {
+      if (_salesControlsRowId != null) {
+        await DioClient.instance.patch('/ric_user_sales_controls',
+            queryParameters: {'id': 'eq.$_salesControlsRowId'}, data: payload);
+      } else {
+        final res = await DioClient.instance.post('/ric_user_sales_controls', data: {
+          ...payload,
+          'client_id':  session.clientId,
+          'company_id': session.companyId,
+          'user_id':    _selectedUserId,
+          'created_by': session.userId,
+        });
+        final created = res.data;
+        if (created is List && created.isNotEmpty) {
+          _salesControlsRowId = (created.first as Map<String, dynamic>)['id'] as String?;
+        } else {
+          unawaited(_loadSalesControls(_selectedUserId!));
+        }
+      }
+    } on DioException {
+      if (mounted) {
+        setState(() => _salesControls = previous);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not save Sales Controls. Please try again.'),
+          backgroundColor: AppColors.negative,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _savingSalesControls = false);
     }
   }
 
@@ -489,6 +584,15 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                                 const SizedBox(height: 12),
                               ],
 
+                              // ── Sales Controls ───────────────────────
+                              _SalesControlsCard(
+                                loading: _loadingSalesControls,
+                                saving: _savingSalesControls,
+                                values: _salesControls,
+                                onChanged: _saveSalesControls,
+                              ),
+                              const SizedBox(height: 12),
+
                               // ── Module cards ─────────────────────────
                               if (_loadingPerms)
                                 Card(
@@ -535,6 +639,150 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Sales Controls card ─────────────────────────────────────────────────────
+// Odoo has no single equivalent — price-editing is a plain field, discount
+// limits are typically an Approvals-app workflow, and cost/margin
+// visibility is its own dedicated group (sales_margin.group_sale_margin).
+// This card assembles the equivalent of all three into one purpose-built
+// per-user settings row (ric_user_sales_controls), consumed by
+// fn_save_sales_order — see 086_sales_order.sql.
+class _SalesControlsCard extends StatefulWidget {
+  final bool loading;
+  final bool saving;
+  final Map<String, dynamic>? values;
+  final ValueChanged<Map<String, dynamic>> onChanged;
+
+  const _SalesControlsCard({
+    required this.loading,
+    required this.saving,
+    required this.values,
+    required this.onChanged,
+  });
+
+  @override
+  State<_SalesControlsCard> createState() => _SalesControlsCardState();
+}
+
+class _SalesControlsCardState extends State<_SalesControlsCard> {
+  late final TextEditingController _maxDiscountCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _maxDiscountCtrl = TextEditingController(text: _fmtMaxDiscount(widget.values));
+  }
+
+  @override
+  void didUpdateWidget(covariant _SalesControlsCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.values != widget.values) {
+      _maxDiscountCtrl.text = _fmtMaxDiscount(widget.values);
+    }
+  }
+
+  @override
+  void dispose() {
+    _maxDiscountCtrl.dispose();
+    super.dispose();
+  }
+
+  String _fmtMaxDiscount(Map<String, dynamic>? values) {
+    final v = values?['max_discount_percent'];
+    return v == null ? '' : (v as num).toString();
+  }
+
+  void _emit({bool? canOverride, bool? canDiscount, double? maxDiscount, bool? canViewCost}) {
+    final v = widget.values ?? const {};
+    widget.onChanged({
+      'can_override_price':   canOverride  ?? v['can_override_price']   as bool? ?? false,
+      'can_give_discount':    canDiscount  ?? v['can_give_discount']    as bool? ?? false,
+      'max_discount_percent': maxDiscount  ?? (v['max_discount_percent'] as num?)?.toDouble(),
+      'can_view_cost_price':  canViewCost  ?? v['can_view_cost_price']  as bool? ?? false,
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final v = widget.values;
+    final canOverride = v?['can_override_price'] as bool? ?? false;
+    final canDiscount = v?['can_give_discount'] as bool? ?? false;
+    final canViewCost = v?['can_view_cost_price'] as bool? ?? false;
+
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.sell_outlined, size: 16, color: AppColors.textSecondary),
+            const SizedBox(width: 8),
+            const Text('Sales Controls', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+            const SizedBox(width: 8),
+            if (widget.saving) const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
+          ]),
+          const SizedBox(height: 2),
+          const Text(
+            'Governs price/discount behavior on Sales Order — not part of the menu grid below.',
+            style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 10),
+          if (widget.loading)
+            const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Center(child: CircularProgressIndicator()))
+          else
+            Column(children: [
+              SwitchListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Can override price', style: TextStyle(fontSize: 13)),
+                subtitle: const Text('Type a rate manually on a Direct Sales Order line, even when Price Master has (or lacks) an active price',
+                    style: TextStyle(fontSize: 11)),
+                value: canOverride,
+                onChanged: widget.saving ? null : (v) => _emit(canOverride: v),
+              ),
+              SwitchListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Can give discount', style: TextStyle(fontSize: 13)),
+                subtitle: const Text('Shows the Discount % field on Sales Order lines', style: TextStyle(fontSize: 11)),
+                value: canDiscount,
+                onChanged: widget.saving ? null : (v) => _emit(canDiscount: v),
+              ),
+              if (canDiscount) Padding(
+                padding: const EdgeInsets.only(left: 16, bottom: 8),
+                child: SizedBox(
+                  width: 220,
+                  child: TextFormField(
+                    controller: _maxDiscountCtrl,
+                    enabled: !widget.saving,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Max Discount %  (blank = unlimited)',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    ),
+                    style: const TextStyle(fontSize: 13),
+                    onFieldSubmitted: (text) => _emit(maxDiscount: text.trim().isEmpty ? null : double.tryParse(text.trim())),
+                    onEditingComplete: () => _emit(maxDiscount: _maxDiscountCtrl.text.trim().isEmpty ? null : double.tryParse(_maxDiscountCtrl.text.trim())),
+                  ),
+                ),
+              ),
+              SwitchListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Can view cost price', style: TextStyle(fontSize: 13)),
+                subtitle: const Text('Shows Cost Price / Margin on Sales Order lines — hidden by never fetching it otherwise',
+                    style: TextStyle(fontSize: 11)),
+                value: canViewCost,
+                onChanged: widget.saving ? null : (v) => _emit(canViewCost: v),
+              ),
+            ]),
+        ]),
       ),
     );
   }

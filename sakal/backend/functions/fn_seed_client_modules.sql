@@ -62,9 +62,10 @@ begin
     values
         (p_client_id, p_company_id, v_sl, 'SL-PRC', 'Price Master',    '/sales/price-master', 0, 'SL-MST', 'Pricing & Setup', 0, true,  false, false),
         (p_client_id, p_company_id, v_sl, 'SL-QUO', 'Sales Quotation', '/sales/quotations', 0, 'SL-TXN', 'Transactions', 1, true,  true,  false),
-        (p_client_id, p_company_id, v_sl, 'SL-INV', 'Sales Invoice',   '/sales/invoices',   1, 'SL-TXN', 'Transactions', 1, true,  true,  false),
-        (p_client_id, p_company_id, v_sl, 'SL-RET', 'Sales Return',    '/sales/returns',    2, 'SL-TXN', 'Transactions', 1, true,  false, false),
-        (p_client_id, p_company_id, v_sl, 'SL-RCP', 'Cash Receipt',    '/sales/receipts',   3, 'SL-TXN', 'Transactions', 1, false, false, false)
+        (p_client_id, p_company_id, v_sl, 'SL-SO',  'Sales Order',     '/sales/orders',     1, 'SL-TXN', 'Transactions', 1, true,  true,  false),
+        (p_client_id, p_company_id, v_sl, 'SL-INV', 'Sales Invoice',   '/sales/invoices',   2, 'SL-TXN', 'Transactions', 1, true,  true,  false),
+        (p_client_id, p_company_id, v_sl, 'SL-RET', 'Sales Return',    '/sales/returns',    3, 'SL-TXN', 'Transactions', 1, true,  false, false),
+        (p_client_id, p_company_id, v_sl, 'SL-RCP', 'Cash Receipt',    '/sales/receipts',   4, 'SL-TXN', 'Transactions', 1, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set group_code      = excluded.group_code,
             group_name      = excluded.group_name,

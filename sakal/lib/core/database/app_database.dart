@@ -21,6 +21,7 @@ import 'tables/opening_stock_cache_tables.dart';
 import 'tables/stock_count_cache_tables.dart';
 import 'tables/sales_quotation_cache_tables.dart';
 import 'tables/price_master_cache_tables.dart';
+import 'tables/sales_order_cache_tables.dart';
 
 part 'app_database.g.dart';
 
@@ -66,12 +67,15 @@ part 'app_database.g.dart';
   SalesQuotationChargeLinesCache,
   PriceMasterHeadersCache,
   PriceMasterLinesCache,
+  SalesOrdersCache,
+  SalesOrderLinesCache,
+  SalesOrderChargeLinesCache,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'sakal_local'));
 
   @override
-  int get schemaVersion => 18;
+  int get schemaVersion => 19;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -165,6 +169,11 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(priceMasterLinesCache, priceMasterLinesCache.marginPercent);
             await m.addColumn(priceMasterLinesCache, priceMasterLinesCache.belowCostReasonId);
             await m.addColumn(priceMasterLinesCache, priceMasterLinesCache.belowCostReasonName);
+          }
+          if (from < 19) {
+            await m.createTable(salesOrdersCache);
+            await m.createTable(salesOrderLinesCache);
+            await m.createTable(salesOrderChargeLinesCache);
           }
         },
       );

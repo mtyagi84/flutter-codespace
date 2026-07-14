@@ -271,6 +271,18 @@ class SyncEngine {
               ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.entryNo.equals(oldId)))
             .write(PriceMasterLinesCacheCompanion(entryNo: Value(newId)));
         break;
+
+      case 'SALES_ORDER':
+        await (db.update(db.salesOrdersCache)
+              ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.orderNo.equals(oldId)))
+            .write(SalesOrdersCacheCompanion(orderNo: Value(newId)));
+        await (db.update(db.salesOrderLinesCache)
+              ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.orderNo.equals(oldId)))
+            .write(SalesOrderLinesCacheCompanion(orderNo: Value(newId)));
+        await (db.update(db.salesOrderChargeLinesCache)
+              ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.orderNo.equals(oldId)))
+            .write(SalesOrderChargeLinesCacheCompanion(orderNo: Value(newId)));
+        break;
     }
   }
 
