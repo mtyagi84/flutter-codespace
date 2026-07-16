@@ -547,7 +547,7 @@ Two entry modes on one screen: **DIRECT** (a fresh order, priced live) and **AGA
   - `rih_sales_quotations` (081, already shipped) retrofitted **additively** with nullable `payment_term_id`/`incoterm_id` — the old `payment_terms`/`delivery_terms` TEXT columns are kept, never dropped.
   - Sales Order itself gained `ship_to`/`bill_to` (mirrors PO's own fields), `expected_delivery_date`, and a **required** `cancellation_reason` (`fn_cancel_sales_order` now takes a mandatory `p_reason`, validated as its first statement — same reason-required precedent as Stock Adjustment/Purchase Return).
 - **Real deadlock-ordering bug caught by self-review**: `fn_save_sales_order`'s AGAINST_QUOTATION line loop locked `rid_sales_quotation_lines` rows in raw JSONB array order rather than a sorted order — violating this project's own documented rule (see "Concurrency" above) that multi-row locking must iterate a pre-sorted key list. Fixed by adding `ORDER BY (value->>'source_quotation_line_serial')::integer NULLS LAST, (value->>'serial_no')::integer` to the loop's source query.
-- **Not yet run against real Supabase as of session close** (2026-07-16) — migrations 086/087 (in the now-corrected 086-before-087 order) pass CI (throwaway container); confirm with the user whether they've been applied before assuming the live schema has them.
+- **Run against real Supabase 2026-07-16**, in the corrected 086-before-087 order, after the numbering fix above — committed and pushed (`801848e`).
 
 ---
 
