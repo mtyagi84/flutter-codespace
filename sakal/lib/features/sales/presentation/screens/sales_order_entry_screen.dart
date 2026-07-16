@@ -557,7 +557,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
   /// Direct mode only. Resolves fn_get_active_price; a missing price
   /// leaves the line unresolved (hard-blocked at Save unless
   /// can_override_price), never silently defaults to zero-and-editable.
-  /// (087) fn_get_active_price converts internally to the order's own
+  /// (086) fn_get_active_price converts internally to the order's own
   /// currency — never assume the Price Master batch already matches it.
   Future<void> _resolvePrice(_OrderLineRow row) async {
     if (row.productId == null || row.uomId == null || _customerId == null || _locationId == null || _orderCurrencyCode == null) return;

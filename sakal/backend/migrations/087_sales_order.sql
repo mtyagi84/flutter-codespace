@@ -1,5 +1,5 @@
 -- ============================================================
--- Migration 086: Sales Order — third screen of the Sales module
+-- Migration 087: Sales Order — third screen of the Sales module
 -- ============================================================
 -- Mirrors Purchase Order's role on the sales side: a customer commitment
 -- document with ZERO stock and ZERO GL impact at any status. Real
@@ -289,7 +289,7 @@ CREATE TABLE IF NOT EXISTS rih_sales_orders (
     order_currency_id     UUID          NOT NULL REFERENCES rim_currencies(id),
     rate_to_base          NUMERIC(18,8) NOT NULL DEFAULT 1,
     rate_to_local         NUMERIC(18,8) NOT NULL DEFAULT 1,
-    -- Structured master references (086_sales_order + 087_payment_terms) —
+    -- Structured master references (087_sales_order + 086_payment_terms) —
     -- never free text, unlike PO/Quotation's own older TEXT columns.
     payment_term_id       UUID          REFERENCES rim_payment_terms(id),
     incoterm_id           UUID          REFERENCES rim_common_masters(id),
@@ -557,7 +557,7 @@ BEGIN
 
     v_customer_id := (nullif(p_header->>'customer_id', ''))::uuid;
 
-    -- fn_get_active_price (087) needs the order's own currency as an ISO
+    -- fn_get_active_price (086) needs the order's own currency as an ISO
     -- code, not the UUID, to know what to convert TO.
     SELECT currency_id INTO v_order_currency_code
     FROM rim_currencies WHERE id = (p_header->>'order_currency_id')::uuid;
@@ -688,7 +688,7 @@ BEGIN
         v_serial := (v_line->>'serial_no')::integer;
 
         IF v_order_mode = 'DIRECT' THEN
-            -- fn_get_active_price (087) converts internally TO
+            -- fn_get_active_price (086) converts internally TO
             -- v_order_currency_code — never trust a Price Master batch's
             -- own currency to already match this order's currency.
             SELECT selling_price, price_type, entry_no INTO v_price

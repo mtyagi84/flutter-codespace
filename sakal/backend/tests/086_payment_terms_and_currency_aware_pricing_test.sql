@@ -1,6 +1,6 @@
 -- ============================================================
--- 087_payment_terms_and_currency_aware_pricing_test.sql — pgTAP tests
--- for migration 087 (currency-aware fn_get_active_price, Payment Terms
+-- 086_payment_terms_and_currency_aware_pricing_test.sql — pgTAP tests
+-- for migration 086 (currency-aware fn_get_active_price, Payment Terms
 -- master, Incoterm seed, Sales Quotation retrofit).
 --
 -- HOW TO RUN (Supabase SQL Editor):

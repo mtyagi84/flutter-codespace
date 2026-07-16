@@ -12,7 +12,7 @@ import '../../../../core/widgets/offline_banner.dart';
 /// account.payment.term.line): a header + installment lines, referenced
 /// by id from Sales Order (and future Sales Quotation/Purchase Order
 /// screens) rather than the old free-text payment_terms columns.
-/// See backend/migrations/087_payment_terms_and_currency_aware_pricing.sql.
+/// See backend/migrations/086_payment_terms_and_currency_aware_pricing.sql.
 class PaymentTermsScreen extends ConsumerStatefulWidget {
   const PaymentTermsScreen({super.key});
 

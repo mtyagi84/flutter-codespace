@@ -1,16 +1,16 @@
 -- ============================================================
--- Migration 087: Payment Terms master + Incoterm + currency-aware
+-- Migration 086: Payment Terms master + Incoterm + currency-aware
 -- fn_get_active_price
 -- ============================================================
--- Pre-launch revision surfaced while reviewing migration 086 (Sales
+-- Pre-launch revision surfaced while reviewing migration 087 (Sales
 -- Order) before it runs against real Supabase for the first time. Three
 -- pieces, built together because they're all foundational fixes that
--- 086 itself will consume:
+-- 087 itself will consume:
 --
 --   1. fn_get_active_price becomes currency-aware — a real bug found
 --      during review: it returned a raw selling_price with no
 --      indication of what currency it was IN, and fn_save_sales_order
---      (086) took that number directly as the line rate. A Sales Order
+--      (087) took that number directly as the line rate. A Sales Order
 --      raised in a currency different from whatever the Price Master
 --      batch was entered in would have silently charged the wrong
 --      amount. DROP + CREATE is required here (not a plain CREATE OR

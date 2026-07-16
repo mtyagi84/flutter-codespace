@@ -178,7 +178,7 @@ class AppDatabase extends _$AppDatabase {
           // v20: Sales Order's own pre-launch revision (before the v19
           // tables above ever shipped to a real device) — payment_terms/
           // delivery_terms TEXT columns replaced with structured
-          // payment_term_id/incoterm_id references (087_payment_terms),
+          // payment_term_id/incoterm_id references (086_payment_terms),
           // plus ship_to/bill_to/expected_delivery_date/cancellation_reason
           // and the line's price_source_entry_no traceability column.
           if (from < 20) {

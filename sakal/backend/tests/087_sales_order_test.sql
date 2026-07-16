@@ -1,5 +1,5 @@
 -- ============================================================
--- 086_sales_order_test.sql — pgTAP tests for migration 086
+-- 087_sales_order_test.sql — pgTAP tests for migration 087
 -- (ric_user_sales_controls, fn_convert_prospect_to_customer,
 --  fn_save_sales_order, fn_approve_sales_order, fn_cancel_sales_order)
 --

@@ -25,7 +25,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
   bool    _loadingPerms = false;
   String? _error;
 
-  // ── Sales Controls (086_sales_order.sql: ric_user_sales_controls) ────────
+  // ── Sales Controls (087_sales_order.sql: ric_user_sales_controls) ────────
   // Per-user price-override/discount/cost-visibility settings, separate
   // from the menu-feature grid above. Missing row = all false/0 (least-
   // privilege default, same convention as the feature grid).
@@ -650,7 +650,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
 // visibility is its own dedicated group (sales_margin.group_sale_margin).
 // This card assembles the equivalent of all three into one purpose-built
 // per-user settings row (ric_user_sales_controls), consumed by
-// fn_save_sales_order — see 086_sales_order.sql.
+// fn_save_sales_order — see 087_sales_order.sql.
 class _SalesControlsCard extends StatefulWidget {
   final bool loading;
   final bool saving;

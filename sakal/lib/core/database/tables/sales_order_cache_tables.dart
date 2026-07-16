@@ -4,7 +4,7 @@ import 'package:drift/drift.dart';
 /// saved via fn_save_sales_order. Business composite key (client_id,
 /// company_id, order_no, order_date) — same shape as SalesQuotationsCache's
 /// (quotation_no, quotation_date) key. locationId is a plain
-/// display/editable column only, not part of the key (086_sales_order.sql:
+/// display/editable column only, not part of the key (087_sales_order.sql:
 /// location_id lives on the header as a plain column, same shape as Sales
 /// Quotation/GRN/Material Requisition).
 @DataClassName('SalesOrderCacheEntry')
@@ -31,7 +31,7 @@ class SalesOrdersCache extends Table {
   TextColumn get orderCurrencyCode     => text().withDefault(const Constant(''))();
   RealColumn get rateToBase            => real().withDefault(const Constant(1.0))();
   RealColumn get rateToLocal           => real().withDefault(const Constant(1.0))();
-  // Structured master references (087_payment_terms) — replace the old
+  // Structured master references (086_payment_terms) — replace the old
   // free-text paymentTerms/deliveryTerms columns Purchase Order/Sales
   // Quotation still carry.
   TextColumn get paymentTermId         => text().withDefault(const Constant(''))();

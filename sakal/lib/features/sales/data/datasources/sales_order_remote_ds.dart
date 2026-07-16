@@ -198,7 +198,7 @@ class SalesOrderRemoteDs {
 
   // ── Direct mode: price/discount governance ───────────────────────────────
 
-  /// fn_get_active_price (087) converts internally TO [currencyCode] —
+  /// fn_get_active_price (086) converts internally TO [currencyCode] —
   /// never assume a Price Master batch's own currency already matches
   /// the caller's document currency. Returns both the converted
   /// selling_price (what the caller uses) and native_selling_price/
@@ -242,7 +242,7 @@ class SalesOrderRemoteDs {
     return List<Map<String, dynamic>>.from(res.data as List);
   }
 
-  /// Incoterm reuses the generic common-masters mechanism (087) — same
+  /// Incoterm reuses the generic common-masters mechanism (086) — same
   /// two-step type_key lookup as PriceMasterRemoteDs.getReasons() /
   /// Stock Adjustment's own getReasons().
   Future<List<Map<String, dynamic>>> getIncoterms({
