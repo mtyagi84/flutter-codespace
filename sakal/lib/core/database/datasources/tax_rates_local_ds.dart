@@ -15,7 +15,8 @@ class TaxRatesLocalDs {
   }) async {
     if (taxIds.isEmpty) return {};
     final rows = await (_db.select(_db.taxRatesCache)
-          ..where((t) => t.taxId.isIn(taxIds) & t.isActive.equals(true))
+          ..where((t) => t.taxId.isIn(taxIds))
+          ..where((t) => t.isActive.equals(true))
           ..orderBy([(t) => OrderingTerm.desc(t.effectiveFrom)]))
         .get();
     final asOf = DateTime.tryParse(asOfDate) ?? DateTime.now();

@@ -34,7 +34,8 @@ class GenericLookupLocalDs {
     required String id,
   }) async {
     final row = await (_db.select(_db.genericLookupCache)
-          ..where((t) => t.cacheKey.equals(cacheKey) & t.id.equals(id)))
+          ..where((t) => t.cacheKey.equals(cacheKey))
+          ..where((t) => t.id.equals(id)))
         .getSingleOrNull();
     return row == null ? null : jsonDecode(row.dataJson) as Map<String, dynamic>;
   }

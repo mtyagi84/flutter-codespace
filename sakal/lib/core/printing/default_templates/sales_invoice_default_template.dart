@@ -42,7 +42,7 @@ const salesInvoiceDefaultTemplate = PrintTemplate(
       id: 'provisional_watermark', type: PrintElementType.watermark,
       text: 'PROVISIONAL — PENDING SYNC',
       x: 1, y: 6, w: 180,
-      showWhen: PrintCondition(field: 'header.provisional', equals: true),
+      showWhen: PrintCondition(field: 'header.provisional', equals: 'true'),
     ),
     PrintElement(
       id: 'draft_watermark', type: PrintElementType.watermark,

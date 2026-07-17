@@ -16,7 +16,9 @@ class AccountsLocalDs {
     required String companyId,
   }) async {
     final rows = await (_db.select(_db.accountsCache)
-          ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.isActive.equals(true)))
+          ..where((t) => t.clientId.equals(clientId))
+          ..where((t) => t.companyId.equals(companyId))
+          ..where((t) => t.isActive.equals(true)))
         .get();
     return rows.map(_toPickerMap).toList();
   }

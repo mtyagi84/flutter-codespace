@@ -24,7 +24,9 @@ class ProductUomLocalDs {
         .getSingleOrNull();
     if (row == null) return null;
     final product = await (_db.select(_db.productsCache)
-          ..where((t) => t.id.equals(row.productId) & t.isDeleted.equals(false) & t.isActive.equals(true)))
+          ..where((t) => t.id.equals(row.productId))
+          ..where((t) => t.isDeleted.equals(false))
+          ..where((t) => t.isActive.equals(true)))
         .getSingleOrNull();
     if (product == null) return null;
     return {

@@ -58,7 +58,9 @@ class SalesInvoiceLocalDs {
     if (!tryPartNumber) return null;
 
     final row = await (_db.select(_db.productsCache)
-          ..where((t) => t.partNumber.equals(code) & t.isDeleted.equals(false) & t.isActive.equals(true))
+          ..where((t) => t.partNumber.equals(code))
+          ..where((t) => t.isDeleted.equals(false))
+          ..where((t) => t.isActive.equals(true))
           ..limit(1))
         .getSingleOrNull();
     if (row == null) return null;
