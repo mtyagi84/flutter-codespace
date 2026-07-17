@@ -47,7 +47,8 @@ begin
         (p_client_id, p_company_id, v_ad, 'AD-PRM', 'User Permissions', '/setup/permissions', 1, 'AD-USMG', 'User Management', 1, false, false, false),
         (p_client_id, p_company_id, v_ad, 'AD-PDC', 'Period Close',              '/setup/period-close',            3, 'AD-SETG', 'System Setup', 0, true,  false, false),
         (p_client_id, p_company_id, v_ad, 'AD-BDC', 'Backdated Entry Control',   '/setup/backdated-entry-control', 4, 'AD-SETG', 'System Setup', 0, false, false, false),
-        (p_client_id, p_company_id, v_ad, 'AD-PAYTERM', 'Payment Terms',         '/master/payment-terms',          5, 'AD-SETG', 'System Setup', 0, false, false, false)
+        (p_client_id, p_company_id, v_ad, 'AD-PAYTERM', 'Payment Terms',         '/master/payment-terms',          5, 'AD-SETG', 'System Setup', 0, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'AD-QIS', 'Quick Invoice Setup',       '/setup/quick-invoice-setup',      6, 'AD-SETG', 'System Setup', 0, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set group_code      = excluded.group_code,
             group_name      = excluded.group_name,
@@ -65,8 +66,9 @@ begin
         (p_client_id, p_company_id, v_sl, 'SL-QUO', 'Sales Quotation', '/sales/quotations', 0, 'SL-TXN', 'Transactions', 1, true,  true,  false),
         (p_client_id, p_company_id, v_sl, 'SL-SO',  'Sales Order',     '/sales/orders',     1, 'SL-TXN', 'Transactions', 1, true,  true,  false),
         (p_client_id, p_company_id, v_sl, 'SL-INV', 'Sales Invoice',   '/sales/invoices',   2, 'SL-TXN', 'Transactions', 1, true,  true,  false),
-        (p_client_id, p_company_id, v_sl, 'SL-RET', 'Sales Return',    '/sales/returns',    3, 'SL-TXN', 'Transactions', 1, true,  false, false),
-        (p_client_id, p_company_id, v_sl, 'SL-RCP', 'Cash Receipt',    '/sales/receipts',   4, 'SL-TXN', 'Transactions', 1, false, false, false)
+        (p_client_id, p_company_id, v_sl, 'SL-INR', 'Sales Invoice - Manager Review', '/sales/invoice-manager-review', 3, 'SL-TXN', 'Transactions', 1, true, false, false),
+        (p_client_id, p_company_id, v_sl, 'SL-RET', 'Sales Return',    '/sales/returns',    4, 'SL-TXN', 'Transactions', 1, true,  false, false),
+        (p_client_id, p_company_id, v_sl, 'SL-RCP', 'Cash Receipt',    '/sales/receipts',   5, 'SL-TXN', 'Transactions', 1, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set group_code      = excluded.group_code,
             group_name      = excluded.group_name,

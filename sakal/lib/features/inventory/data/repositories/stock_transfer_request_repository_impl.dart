@@ -59,25 +59,43 @@ class StockTransferRequestRepositoryImpl implements StockTransferRequestReposito
     return lines;
   }
 
+  // Genuine offline gap (this module had zero master-data offline support
+  // at all) — now served from the shared Master-Data Sync facility
+  // (core/sync/master_data_modules.dart) when offline.
   @override
   Future<List<Map<String, dynamic>>> getLocations({
     required String clientId,
     required String companyId,
-  }) => _remote.getLocations(clientId: clientId, companyId: companyId);
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.getLocations(clientId: clientId, companyId: companyId);
+    }
+    return _remote.getLocations(clientId: clientId, companyId: companyId);
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getProductsForPicker({
     required String clientId,
     required String companyId,
     String? search,
-  }) => _remote.getProductsForPicker(clientId: clientId, companyId: companyId, search: search);
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.getProductsForPicker(clientId: clientId, companyId: companyId, search: search);
+    }
+    return _remote.getProductsForPicker(clientId: clientId, companyId: companyId, search: search);
+  }
 
   @override
   Future<Map<String, dynamic>?> getProductByBarcode({
     required String clientId,
     required String companyId,
     required String barcode,
-  }) => _remote.getProductByBarcode(clientId: clientId, companyId: companyId, barcode: barcode);
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.getProductByBarcode(barcode);
+    }
+    return _remote.getProductByBarcode(clientId: clientId, companyId: companyId, barcode: barcode);
+  }
 
   @override
   Future<String> save({

@@ -283,6 +283,15 @@ class SyncEngine {
               ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.orderNo.equals(oldId)))
             .write(SalesOrderChargeLinesCacheCompanion(orderNo: Value(newId)));
         break;
+
+      case 'SALES_INVOICE':
+        await (db.update(db.salesInvoicesCache)
+              ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.invoiceNo.equals(oldId)))
+            .write(SalesInvoicesCacheCompanion(invoiceNo: Value(newId)));
+        await (db.update(db.salesInvoiceLinesCache)
+              ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.invoiceNo.equals(oldId)))
+            .write(SalesInvoiceLinesCacheCompanion(invoiceNo: Value(newId)));
+        break;
     }
   }
 

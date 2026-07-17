@@ -1,5 +1,7 @@
 import 'dart:async';
 import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
+import '../../../../core/database/datasources/tax_group_members_local_ds.dart';
+import '../../../../core/database/datasources/tax_rates_local_ds.dart';
 import '../../domain/repositories/purchase_order_repository.dart';
 import '../datasources/purchase_order_remote_ds.dart';
 import '../datasources/purchase_order_local_ds.dart';
@@ -12,6 +14,8 @@ class PurchaseOrderRepositoryImpl implements PurchaseOrderRepository {
   final PurchaseOrderRemoteDs   _remote;
   final PurchaseOrderLocalDs?   _local;       // null on Flutter Web (no Drift)
   final GenericLookupLocalDs?   _lookupLocal; // null on Flutter Web (no Drift)
+  final TaxGroupMembersLocalDs? _taxGroupMembersLocal; // null on Flutter Web (no Drift)
+  final TaxRatesLocalDs?        _taxRatesLocal;        // null on Flutter Web (no Drift)
   final bool                    _isOffline;
   final String                  _clientId;
   final String                  _companyId;
@@ -22,8 +26,11 @@ class PurchaseOrderRepositoryImpl implements PurchaseOrderRepository {
     this._lookupLocal,
     this._isOffline,
     this._clientId,
-    this._companyId,
-  );
+    this._companyId, {
+    TaxGroupMembersLocalDs? taxGroupMembersLocal,
+    TaxRatesLocalDs? taxRatesLocal,
+  })  : _taxGroupMembersLocal = taxGroupMembersLocal,
+        _taxRatesLocal = taxRatesLocal;
 
   // Small helper for the reference-data getters below: try the cache first
   // when offline, otherwise fetch remote and cache for next time.
@@ -228,15 +235,30 @@ class PurchaseOrderRepositoryImpl implements PurchaseOrderRepository {
         fetchRemote: () => _remote.getTaxGroups(clientId: clientId, companyId: companyId),
       );
 
+  // Genuine offline gap (same class of bug found in Sales Invoice, migration
+  // 088/089 session) — these two were remote-only with no cache branch at
+  // all, unlike this repository's other lookups, which already go through
+  // _cachedLookup. Now served from the shared TaxGroupMembersCache/
+  // TaxRatesCache (core/sync/master_data_modules.dart's Products & Pricing
+  // module) when the new local-ds instances are supplied.
   @override
-  Future<Map<String, List<String>>> getTaxGroupMemberTaxIds(List<String> groupIds) =>
-      _remote.getTaxGroupMemberTaxIds(groupIds);
+  Future<Map<String, List<String>>> getTaxGroupMemberTaxIds(List<String> groupIds) async {
+    if (_isOffline && _taxGroupMembersLocal != null) {
+      return _taxGroupMembersLocal.getMemberTaxIds(groupIds);
+    }
+    return _remote.getTaxGroupMemberTaxIds(groupIds);
+  }
 
   @override
   Future<Map<String, double>> getTaxRatesByIds({
     required List<String> taxIds,
     required String asOfDate,
-  }) => _remote.getTaxRatesByIds(taxIds: taxIds, asOfDate: asOfDate);
+  }) async {
+    if (_isOffline && _taxRatesLocal != null) {
+      return _taxRatesLocal.getRatesByIds(taxIds: taxIds, asOfDate: asOfDate);
+    }
+    return _remote.getTaxRatesByIds(taxIds: taxIds, asOfDate: asOfDate);
+  }
 
   @override
   Future<Map<String, double>> getProductStockSnapshot({

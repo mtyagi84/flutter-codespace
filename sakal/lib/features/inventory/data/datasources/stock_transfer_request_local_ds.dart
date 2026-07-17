@@ -1,11 +1,54 @@
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 import '../../../../core/database/app_database.dart';
+import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
+import '../../../../core/database/datasources/product_uom_local_ds.dart';
+import '../../../master/data/datasources/products_local_ds.dart';
 
 class StockTransferRequestLocalDs {
   final AppDatabase _db;
   StockTransferRequestLocalDs(this._db);
 
-  // ── Read ──────────────────────────────────────────────────────────────────
+  // ── Master-data offline fallback (shared Master-Data Sync facility) ───────
+
+  Future<List<Map<String, dynamic>>> getLocations({
+    required String clientId,
+    required String companyId,
+  }) {
+    return GenericLookupLocalDs(_db).getLookups(cacheKey: 'LOCATIONS', clientId: clientId, companyId: companyId);
+  }
+
+  Future<List<Map<String, dynamic>>> getProductsForPicker({
+    required String clientId,
+    required String companyId,
+    String? search,
+  }) async {
+    final products = await ProductsLocalDs(_db).getProducts(
+      clientId: clientId, companyId: companyId, isActive: true, search: search, limit: 500,
+    );
+    final lookupDs = GenericLookupLocalDs(_db);
+    final result = <Map<String, dynamic>>[];
+    for (final p in products) {
+      Map<String, dynamic>? uomRow;
+      if (p.baseUomId != null && p.baseUomId!.isNotEmpty) {
+        uomRow = await lookupDs.getLookupById(cacheKey: 'COMMON_MASTERS_UNIT', id: p.baseUomId!);
+      }
+      result.add({
+        'id': p.id,
+        'product_code': p.productCode,
+        'product_name': p.productName,
+        'base_uom_id': p.baseUomId,
+        'tracking_type': p.trackingType,
+        'uom': {'description': uomRow?['description']},
+      });
+    }
+    return result;
+  }
+
+  Future<Map<String, dynamic>?> getProductByBarcode(String barcode) {
+    return ProductUomLocalDs(_db).getByBarcode(barcode);
+  }
+
+  // ── Read — request documents ─────────────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> listRequests({
     required String clientId,

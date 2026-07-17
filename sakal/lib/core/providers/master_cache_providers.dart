@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:drift/drift.dart' show Value;
 import '../database/app_database.dart';
 import '../database/datasources/generic_lookup_local_ds.dart';
+import '../database/datasources/accounts_local_ds.dart';
 import '../network/dio_client.dart';
 import 'session_provider.dart';
 
@@ -130,20 +130,8 @@ final accountsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async 
   if (session == null) return [];
 
   if (session.offlineMode && !kIsWeb) {
-    final db = ref.watch(appDatabaseProvider);
-    final rows = await (db.select(db.accountsCache)
-          ..where((t) => t.clientId.equals(session.clientId))
-          ..where((t) => t.companyId.equals(session.companyId))
-          ..where((t) => t.isActive.equals(true)))
-        .get();
-    return rows.map((r) => {
-      'id':             r.id,
-      'account_code':   r.accountCode,
-      'account_name':   r.accountName,
-      'account_nature': r.accountNature,
-      'parent':         {'account_name': r.parentName},
-      'rim_currencies': {'currency_id':  r.accountCurrency},
-    }).toList();
+    final local = AccountsLocalDs(ref.watch(appDatabaseProvider));
+    return local.getAccounts(clientId: session.clientId, companyId: session.companyId);
   }
 
   final res = await DioClient.instance.get('/rim_accounts', queryParameters: {
@@ -177,25 +165,8 @@ final accountsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async 
   }
 
   if (!kIsWeb) {
-    final db  = ref.read(appDatabaseProvider);
-    final now = DateTime.now();
-    unawaited(() async {
-      for (final a in accounts) {
-        final parentRel = a['parent'];
-        final currRel   = a['rim_currencies'];
-        await db.into(db.accountsCache).insertOnConflictUpdate(AccountsCacheCompanion.insert(
-          id:              a['id'] as String,
-          clientId:        session.clientId,
-          companyId:       session.companyId,
-          accountCode:     a['account_code']   as String? ?? '',
-          accountName:     a['account_name']   as String? ?? '',
-          accountNature:   a['account_nature'] as String? ?? '',
-          parentName:      Value(parentRel is Map ? (parentRel['account_name'] as String? ?? '') : ''),
-          accountCurrency: Value(currRel is Map ? (currRel['currency_id'] as String? ?? '') : ''),
-          cachedAt:        Value(now),
-        ));
-      }
-    }());
+    final local = AccountsLocalDs(ref.read(appDatabaseProvider));
+    unawaited(local.upsertAccounts(accounts, clientId: session.clientId, companyId: session.companyId));
   }
 
   return accounts;

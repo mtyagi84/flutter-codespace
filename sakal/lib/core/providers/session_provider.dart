@@ -14,6 +14,8 @@ class UserSession {
   final bool   enableBarcode;
   final bool   enablePartNumber;
   final String qtyEntryMode;
+  final bool   quickInvoiceDispatchStock;
+  final bool   quickInvoiceCollectCash;
 
   const UserSession({
     required this.userId,
@@ -28,6 +30,8 @@ class UserSession {
     this.enableBarcode    = false,
     this.enablePartNumber = false,
     this.qtyEntryMode     = 'PACK_AND_LOOSE',
+    this.quickInvoiceDispatchStock = true,
+    this.quickInvoiceCollectCash   = true,
   });
 
   UserSession copyWith({
@@ -36,6 +40,8 @@ class UserSession {
     bool?   enableBarcode,
     bool?   enablePartNumber,
     String? qtyEntryMode,
+    bool?   quickInvoiceDispatchStock,
+    bool?   quickInvoiceCollectCash,
   }) =>
       UserSession(
         userId:           userId,
@@ -50,6 +56,8 @@ class UserSession {
         enableBarcode:    enableBarcode    ?? this.enableBarcode,
         enablePartNumber: enablePartNumber ?? this.enablePartNumber,
         qtyEntryMode:     qtyEntryMode     ?? this.qtyEntryMode,
+        quickInvoiceDispatchStock: quickInvoiceDispatchStock ?? this.quickInvoiceDispatchStock,
+        quickInvoiceCollectCash:   quickInvoiceCollectCash   ?? this.quickInvoiceCollectCash,
       );
 }
 

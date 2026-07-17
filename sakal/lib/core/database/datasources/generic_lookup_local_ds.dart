@@ -26,6 +26,19 @@ class GenericLookupLocalDs {
     return rows.map((r) => jsonDecode(r.dataJson) as Map<String, dynamic>).toList();
   }
 
+  /// Single-row-by-PK read — for per-user rows like a Quick Invoice Setup
+  /// entry or sales-controls row, where `getLookups`' client/company/parent
+  /// filters aren't precise enough (id IS the discriminator).
+  Future<Map<String, dynamic>?> getLookupById({
+    required String cacheKey,
+    required String id,
+  }) async {
+    final row = await (_db.select(_db.genericLookupCache)
+          ..where((t) => t.cacheKey.equals(cacheKey) & t.id.equals(id)))
+        .getSingleOrNull();
+    return row == null ? null : jsonDecode(row.dataJson) as Map<String, dynamic>;
+  }
+
   Future<void> upsertLookups({
     required String cacheKey,
     required List<Map<String, dynamic>> rows,

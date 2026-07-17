@@ -22,6 +22,11 @@ import 'tables/stock_count_cache_tables.dart';
 import 'tables/sales_quotation_cache_tables.dart';
 import 'tables/price_master_cache_tables.dart';
 import 'tables/sales_order_cache_tables.dart';
+import 'tables/sales_invoice_cache_tables.dart';
+import 'tables/product_uom_cache_table.dart';
+import 'tables/tax_group_members_cache_table.dart';
+import 'tables/tax_rates_cache_table.dart';
+import 'tables/module_sync_status_cache_table.dart';
 
 part 'app_database.g.dart';
 
@@ -70,12 +75,24 @@ part 'app_database.g.dart';
   SalesOrdersCache,
   SalesOrderLinesCache,
   SalesOrderChargeLinesCache,
+  SalesInvoicesCache,
+  SalesInvoiceLinesCache,
+  ProductUomCache,
+  TaxGroupMembersCache,
+  TaxRatesCache,
+  ModuleSyncStatusCache,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'sakal_local'));
 
+  /// Test-only constructor — points at a caller-supplied executor (typically
+  /// `NativeDatabase.memory()`) instead of the real on-disk/web-worker
+  /// database `driftDatabase()` creates. Standard Drift testing idiom; never
+  /// used by production code.
+  AppDatabase.forTesting(super.executor);
+
   @override
-  int get schemaVersion => 20;
+  int get schemaVersion => 22;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -192,6 +209,32 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(salesOrdersCache, salesOrdersCache.deliveryInstructions);
             await m.addColumn(salesOrdersCache, salesOrdersCache.cancellationReason);
             await m.addColumn(salesOrderLinesCache, salesOrderLinesCache.priceSourceEntryNo);
+          }
+          // v21: Sales Invoice ("Quick Invoice") — first Sales module
+          // screen with real GL/stock impact (089_sales_invoice.sql).
+          if (from < 21) {
+            await m.createTable(salesInvoicesCache);
+            await m.createTable(salesInvoiceLinesCache);
+          }
+          // v22: shared app-wide Master-Data Sync facility — closes the
+          // gap where Sales Invoice (and several other offline-capable
+          // modules) had no offline fallback at all for their product/
+          // customer/UOM/tax pickers. New tables for the master-data
+          // types with no existing cache shape (relational/date-window
+          // lookups a GenericLookupCache blob can't serve), plus extra
+          // nullable Customer-detail columns on the existing AccountsCache.
+          if (from < 22) {
+            await m.createTable(productUomCache);
+            await m.createTable(taxGroupMembersCache);
+            await m.createTable(taxRatesCache);
+            await m.createTable(moduleSyncStatusCache);
+            await m.addColumn(accountsCache, accountsCache.creditLimit);
+            await m.addColumn(accountsCache, accountsCache.creditDays);
+            await m.addColumn(accountsCache, accountsCache.isCreditBlocked);
+            await m.addColumn(accountsCache, accountsCache.phone);
+            await m.addColumn(accountsCache, accountsCache.email);
+            await m.addColumn(accountsCache, accountsCache.addressLine1);
+            await m.addColumn(accountsCache, accountsCache.addressLine2);
           }
         },
       );

@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
+import '../../../../core/database/datasources/tax_group_members_local_ds.dart';
+import '../../../../core/database/datasources/tax_rates_local_ds.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../data/datasources/purchase_order_remote_ds.dart';
 import '../../data/datasources/purchase_order_local_ds.dart';
@@ -22,6 +24,14 @@ final _lookupLocalDsProvider = Provider<GenericLookupLocalDs?>(
   (ref) => kIsWeb ? null : GenericLookupLocalDs(ref.watch(appDatabaseProvider)),
 );
 
+final _taxGroupMembersLocalDsProvider = Provider<TaxGroupMembersLocalDs?>(
+  (ref) => kIsWeb ? null : TaxGroupMembersLocalDs(ref.watch(appDatabaseProvider)),
+);
+
+final _taxRatesLocalDsProvider = Provider<TaxRatesLocalDs?>(
+  (ref) => kIsWeb ? null : TaxRatesLocalDs(ref.watch(appDatabaseProvider)),
+);
+
 final purchaseOrderRepositoryProvider = Provider<PurchaseOrderRepository>((ref) {
   final session   = ref.watch(sessionProvider);
   final isOffline = session?.offlineMode ?? false;
@@ -32,5 +42,7 @@ final purchaseOrderRepositoryProvider = Provider<PurchaseOrderRepository>((ref) 
     isOffline,
     session?.clientId ?? '',
     session?.companyId ?? '',
+    taxGroupMembersLocal: ref.watch(_taxGroupMembersLocalDsProvider),
+    taxRatesLocal: ref.watch(_taxRatesLocalDsProvider),
   );
 });

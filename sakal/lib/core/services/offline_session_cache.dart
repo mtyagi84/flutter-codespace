@@ -133,6 +133,8 @@ class OfflineSessionCache {
     'enableBarcode':    s.enableBarcode,
     'enablePartNumber': s.enablePartNumber,
     'qtyEntryMode':     s.qtyEntryMode,
+    'quickInvoiceDispatchStock': s.quickInvoiceDispatchStock,
+    'quickInvoiceCollectCash':   s.quickInvoiceCollectCash,
   };
 
   static UserSession _decodeSession(Map<String, dynamic> m) => UserSession(
@@ -148,5 +150,7 @@ class OfflineSessionCache {
     enableBarcode:    m['enableBarcode']    as bool? ?? false,
     enablePartNumber: m['enablePartNumber'] as bool? ?? false,
     qtyEntryMode:     m['qtyEntryMode']     as String? ?? 'PACK_AND_LOOSE',
+    quickInvoiceDispatchStock: m['quickInvoiceDispatchStock'] as bool? ?? true,
+    quickInvoiceCollectCash:   m['quickInvoiceCollectCash']   as bool? ?? true,
   );
 }

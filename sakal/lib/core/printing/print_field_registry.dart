@@ -76,6 +76,25 @@ class PrintFieldRegistry {
     PrintFieldDef('totals.grand_total', 'Grand Total', PrintDataFormat.currency),
   ];
 
+  static const _salesInvoiceScalarFields = [
+    PrintFieldDef('header.invoice_no', 'Invoice Number'),
+    PrintFieldDef('header.invoice_date', 'Invoice Date'),
+    PrintFieldDef('header.provisional', 'Provisional (offline, pre-sync)'),
+    PrintFieldDef('header.sale_type', 'Sale Type'),
+    PrintFieldDef('header.status', 'Status'),
+    PrintFieldDef('header.customer_name', 'Customer Name'),
+    PrintFieldDef('header.party_phone', 'Mobile'),
+    PrintFieldDef('header.party_address', 'Address'),
+    PrintFieldDef('header.sales_person_name', 'Sales Person'),
+    PrintFieldDef('header.currency_code', 'Currency'),
+    PrintFieldDef('header.remarks', 'Remarks'),
+    PrintFieldDef('totals.gross_amount', 'Gross Amount', PrintDataFormat.currency),
+    PrintFieldDef('totals.discount_amount', 'Discount', PrintDataFormat.currency),
+    PrintFieldDef('totals.charges_amount', 'Charges', PrintDataFormat.currency),
+    PrintFieldDef('totals.tax_amount', 'Tax', PrintDataFormat.currency),
+    PrintFieldDef('totals.grand_total', 'Grand Total', PrintDataFormat.currency),
+  ];
+
   static const _grnScalarFields = [
     PrintFieldDef('header.grn_no', 'GRN Number'),
     PrintFieldDef('header.grn_date', 'GRN Date'),
@@ -240,6 +259,20 @@ class PrintFieldRegistry {
   ];
 
   static const _salesOrderTableRowFields = {
+    'lines': [
+      PrintFieldDef('product_name', 'Item Name'),
+      PrintFieldDef('uom_label', 'UOM'),
+      PrintFieldDef('base_qty', 'Quantity', PrintDataFormat.number),
+      PrintFieldDef('rate', 'Rate', PrintDataFormat.currency),
+      PrintFieldDef('final_amount', 'Amount', PrintDataFormat.currency),
+    ],
+    'charges': [
+      PrintFieldDef('charge_name', 'Charge Name'),
+      PrintFieldDef('amount', 'Amount', PrintDataFormat.currency),
+    ],
+  };
+
+  static const _salesInvoiceTableRowFields = {
     'lines': [
       PrintFieldDef('product_name', 'Item Name'),
       PrintFieldDef('uom_label', 'UOM'),
@@ -448,6 +481,7 @@ class PrintFieldRegistry {
       'STOCK_COUNT'             => _stockCountScalarFields,
       'STOCK_COUNT_REVIEW'      => _stockCountReviewScalarFields,
       'PRICE_MASTER'            => _priceMasterScalarFields,
+      'SALES_INVOICE'           => _salesInvoiceScalarFields,
       _ => const <PrintFieldDef>[],
     },
     ..._companyFields,
@@ -472,6 +506,7 @@ class PrintFieldRegistry {
     'STOCK_COUNT'             => const ['lines'],
     'STOCK_COUNT_REVIEW'      => const ['lines'],
     'PRICE_MASTER'            => const ['lines'],
+    'SALES_INVOICE'           => const ['lines', 'charges'],
     _ => const [],
   };
 
@@ -494,6 +529,7 @@ class PrintFieldRegistry {
     'STOCK_COUNT'             => _stockCountTableRowFields[tableName] ?? const [],
     'STOCK_COUNT_REVIEW'      => _stockCountReviewTableRowFields[tableName] ?? const [],
     'PRICE_MASTER'            => _priceMasterTableRowFields[tableName] ?? const [],
+    'SALES_INVOICE'           => _salesInvoiceTableRowFields[tableName] ?? const [],
     _ => const [],
   };
 
@@ -506,6 +542,7 @@ class PrintFieldRegistry {
     'PURCHASE_ORDER', 'GRN', 'PURCHASE_INVOICE', 'PURCHASE_RETURN', 'VOUCHER',
     'MATERIAL_REQUISITION', 'MATERIAL_ISSUE', 'STOCK_TRANSFER_REQUEST', 'STOCK_TRANSFER', 'STOCK_RECEIPT',
     'STOCK_ADJUSTMENT', 'OPENING_STOCK', 'STOCK_COUNT', 'STOCK_COUNT_REVIEW', 'PRICE_MASTER',
+    'SALES_INVOICE',
   ];
 
   static String documentTypeLabel(String documentType) => switch (documentType) {
@@ -526,6 +563,7 @@ class PrintFieldRegistry {
     'STOCK_COUNT'             => 'Stock Count',
     'STOCK_COUNT_REVIEW'      => 'Stock Count Review',
     'PRICE_MASTER'            => 'Sales Price Master',
+    'SALES_INVOICE'           => 'Sales Invoice',
     _ => documentType,
   };
 }

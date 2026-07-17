@@ -313,6 +313,36 @@ class PrintSampleData {
         {'product_name': 'Sample Item B', 'uom_label': 'Carton', 'cost_price': 40.0, 'margin_percent': 12.5, 'selling_price': 45.0},
       ],
     },
+    'SALES_INVOICE' => {
+      'company': _company(),
+      'header': {
+        'invoice_no':        'SI/KIN/2026/00001',
+        'invoice_date':      '16 Jul 2026',
+        'provisional':       false,
+        'sale_type':         'CASH',
+        'status':            'APPROVED',
+        'customer_name':     'Walk-in Customer',
+        'party_phone':       '+243 900 000 000',
+        'party_address':     'Lubumbashi, DRC',
+        'sales_person_name': 'John Sales',
+        'currency_code':     'USD',
+        'remarks':           'Sample remarks for preview.',
+      },
+      'lines': [
+        {'product_name': 'Sample Item A', 'uom_label': 'Piece', 'base_qty': 5, 'rate': 30.0, 'final_amount': 150.0},
+        {'product_name': 'Sample Item B', 'uom_label': 'Carton', 'base_qty': 1, 'rate': 140.0, 'final_amount': 140.0},
+      ],
+      'charges': [
+        {'charge_name': 'Delivery', 'amount': 10.0},
+      ],
+      'totals': {
+        'gross_amount': 290.0,
+        'discount_amount': 0.0,
+        'charges_amount': 10.0,
+        'tax_amount': 47.4,
+        'grand_total': 347.4,
+      },
+    },
     _ => {'company': _company(), 'header': {}, 'lines': [], 'totals': {}},
   };
 }

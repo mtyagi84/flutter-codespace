@@ -1,13 +1,29 @@
 import 'dart:convert';
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 import '../../../../core/database/app_database.dart';
+import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
 import '../models/purchase_return_model.dart';
 
 class PurchaseReturnLocalDs {
   final AppDatabase _db;
   PurchaseReturnLocalDs(this._db);
 
-  // ── Read ──────────────────────────────────────────────────────────────────
+  // ── Master-data offline fallback (shared Master-Data Sync facility) ───────
+  // Only the Return-Reason common master — the supplier-with-approved-GRN
+  // picker is deliberately NOT cached (transaction-state-filtered, same
+  // scope cut as GRN's own supplier-with-open-PO picker); starting a
+  // brand-new return fully offline still needs connectivity, matching this
+  // module's already-documented "already-loaded return editable offline,
+  // brand-new one isn't" precedent.
+  Future<List<Map<String, dynamic>>> getCommonMastersByType({
+    required String clientId,
+    required String companyId,
+    required String typeKey,
+  }) {
+    return GenericLookupLocalDs(_db).getLookups(cacheKey: 'COMMON_MASTERS_$typeKey', clientId: clientId, companyId: companyId);
+  }
+
+  // ── Read — return documents ──────────────────────────────────────────────
 
   Future<List<PurchaseReturnModel>> listPurchaseReturns({
     required String clientId,

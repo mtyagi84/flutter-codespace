@@ -194,12 +194,21 @@ class PurchaseReturnRepositoryImpl implements PurchaseReturnRepository {
         clientId: clientId, companyId: companyId, returnNo: returnNo, returnDate: returnDate, lineSerial: lineSerial,
       );
 
+  // Genuine offline gap — the Return-Reason picker was remote-only with no
+  // cache branch at all. Now served from the shared COMMON_MASTERS_$typeKey
+  // cache (core/sync/master_data_modules.dart's Operational Reference Data
+  // module) when offline.
   @override
   Future<List<Map<String, dynamic>>> getCommonMastersByType({
     required String clientId,
     required String companyId,
     required String typeKey,
-  }) => _remote.getCommonMastersByType(clientId: clientId, companyId: companyId, typeKey: typeKey);
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.getCommonMastersByType(clientId: clientId, companyId: companyId, typeKey: typeKey);
+    }
+    return _remote.getCommonMastersByType(clientId: clientId, companyId: companyId, typeKey: typeKey);
+  }
 
   @override
   Future<String> save({

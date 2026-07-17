@@ -1,0 +1,126 @@
+Stock Count (Physical Stock Take) module
+Context
+Company does periodic (monthly/quarterly/ad-hoc) physical stock counts to reconcile physical vs. system stock, then needs the difference posted as a Stock Adjustment (existing module, migration 076). Two-screen workflow: Screen 1 — one or more counters each do a physical count at a location (filtered by category/item-type) and save/submit their own count entry. Screen 2 — a manager picks multiple submitted counts for the same location, sees them "clubbed" (summed) per product/batch/serial against system stock, reviews the variance, and approves — which posts a real Stock Adjustment through the existing posting engine.
+
+Design decisions already made with the user (do not re-litigate):
+
+Blind count — Screen 1 never shows system/expected qty to the counter, to avoid biasing the physical count.
+Variance basis = system stock AS OF a chosen date, computed live from ril_stock_ledger (immutable, append-only, already the schema's sole source of truth) — not a live read of rim_product_location.current_stock. Stays correct even if counting spans days or the manager reviews long after counting.
+Scan behavior: scanning a barcode/part number jumps to and highlights that row in the pre-populated worksheet; counter then types the qty (not a tally-increment-per-scan mode).
+Unknown serial (physically found, system has no ledger history for it at this location): flagged as an exception, excluded from auto-adjustment entirely — never auto-create a + line with no established cost/origin.
+Other load-bearing decisions made during design (see full reasoning in research/plan below — these are not optional variants, they're the correct shape given the codebase's own precedents):
+
+Uncounted ≠ counted-zero. An item in scope that nobody entered a qty for must be completely excluded from variance — never treated as physical-zero. Enforced via an explicit is_counted flag per line (not just nullable qty), because for batch/serial-tracked products "confirmed empty" and "never touched" both look like zero children.
+Never merge same-product quantities at write time (confirmed codebase-wide convention across Purchase Bill←GRNs, GRN←POs, Material Issue←Requisitions — none of them merge; they keep one row per source-document reference and compute clubbed totals via a query at read time). Screen 2 stores only which submitted counts it includes (a junction table); the clubbed variance itself is computed on-the-fly by a shared SQL function, never written as a merged copy.
+Reuse the existing Stock Adjustment engine, don't reimplement it. Screen 2's Approve computes netted +/- lines and calls the existing fn_save_stock_adjustment + fn_approve_stock_adjustment (migration 076) — inheriting cost-lookup, GL posting, and the batch/serial negative-stock rules for free, per the project's absolute "shared posting engines" rule.
+Reservation-once-consumed, mirroring GRN's billed_invoice_no pattern: a submitted count picked into a manager's DRAFT review is locked from being picked into a second concurrent review.
+Backend — two new migrations
+backend/migrations/078_stock_count.sql (Screen 1)
+rim_voucher_types: seed ('CNT', 'Stock Count', 'STOCK', NULL, 'YEARLY', 'CNT/{LOC}/{YYYY}/{SEQ5}', true) — numbering only, no posting (same shape as Opening Stock's OPST).
+
+rih_stock_count_headers: id, client_id, company_id, location_id, count_no, count_date, category_filter_id → rim_item_categories(id) [nullable = all], nature_filter TEXT [nullable = all, matches rim_products.product_nature's CHECK values], status CHECK IN ('DRAFT','SUBMITTED','CONSOLIDATED'), submitted_by, submitted_at, consolidated_into_review_no, consolidated_into_review_date [reservation pointer], remarks, <standard audit columns>. UNIQUE(client_id, company_id, count_no, count_date). auth_rw_* RLS, updated_at trigger.
+
+rid_stock_count_lines: one row per counted PRODUCT (not per lot — the worksheet is pre-populated by filter, one row per in-scope product; batch/serial detail hangs off that row via the existing generic rid_transaction_line_batches/rid_transaction_line_serials tables, source_doc_type='STOCK_COUNT', line_serial = rid_stock_count_lines.serial_no — confirmed schema: both tables key on client_id, company_id, source_doc_type, source_doc_no, source_doc_date, line_serial, batches additionally carry batch_no, expiry_date, qty_pack, qty_loose, base_qty, serials carry serial_no). Columns: id, client_id, company_id, count_no, count_date, serial_no INT, product_id, uom_id, uom_conversion_factor, is_counted BOOLEAN NOT NULL DEFAULT false [authoritative "row touched" flag], counted_qty_pack, counted_qty_loose, counted_base_qty [all NULL unless is_counted=true; for batch/serial rows base_qty = SUM(children)], barcode [audit: which scan matched this row], remarks, <standard audit columns>. CHECK (is_counted=false AND counted_base_qty IS NULL) OR is_counted=true. UNIQUE(..., count_no, count_date, serial_no). FK to header. auth_rw_* RLS.
+
+Divergence from Stock Adjustment's use of the batch/serial tables: Stock Adjustment's - line shows an existing-lot candidate picker. Stock Count's batch/serial entry must be pure free-text new-lot entry (GRN-style — counter types what they physically found), regardless of whether the system already knows that lot. Showing "expected" candidates would leak system data into what must stay a blind count.
+
+fn_stock_count_eligible_products(p_client_id, p_company_id, p_category_id DEFAULT NULL, p_nature DEFAULT NULL) RETURNS TABLE(product_id, product_code, product_name, tracking_type, base_uom_id, uom_label, barcode, part_number) — SQL STABLE, filters rim_products by is_active/is_deleted, category_id IN (SELECT id FROM fn_category_subtree(p_category_id)) when given (first Flutter caller of this existing-but-unconsumed function), product_nature = p_nature when given. Called once, when the counter confirms Location+Date+filters and hits "Start Count" — Flutter builds the initial is_counted=false row set from this, then the first fn_save_stock_count persists that snapshot. Resuming a draft never re-runs this — it reads rid_stock_count_lines directly, which is what makes the worksheet's scope fixed at creation.
+
+fn_save_stock_count(p_header, p_lines, p_batches, p_serials, p_user_id) RETURNS TEXT — DRAFT-only, same shape/delete-reinsert pattern as fn_save_stock_adjustment (076). p_lines is the FULL worksheet on every save (not incremental). Per counted line with batch children: sum-check abs(batch_qty_sum - counted_base_qty) > 0.0001 → RAISE EXCEPTION 'BATCH_QTY_MISMATCH'.
+
+fn_submit_stock_count(p_client_id, p_company_id, p_count_no, p_count_date, p_user_id) RETURNS VOID — locks DRAFT→SUBMITTED. Blocks with NO_COUNTED_LINES if zero rows have is_counted=true. No fn_check_period_open/fn_check_backdate_allowed call — Screen 1 never touches the ledger or GL; those checks belong entirely to Screen 2's Approve.
+
+Menu seed: IN-CNT / "Stock Count" / /inventory/stock-count, approve_allowed=true (gates the Submit button, same convention as every other lock-transition), serial_no 8, group IN-OPS/Operations — into both a direct existing-companies INSERT (migration 078, mirrors migration 071's pattern) and fn_seed_client_modules.sql's IN block (future clients).
+
+backend/migrations/079_stock_count_review.sql (Screen 2)
+Additive traceability on the existing Stock Adjustment table (mirrors rih_finance_headers.source_doc_type/no/date from migration 037, which Stock Adjustment's own header currently lacks):
+
+ALTER TABLE rih_stock_adjustment_headers
+    ADD COLUMN IF NOT EXISTS source_doc_type TEXT,
+    ADD COLUMN IF NOT EXISTS source_doc_no   TEXT,
+    ADD COLUMN IF NOT EXISTS source_doc_date DATE;
+fn_save_stock_adjustment (076) gets CREATE OR REPLACEd — same 5-param signature — to also persist these three from optional header JSONB keys. The manual Stock Adjustment screen is unaffected (never sends those keys, they stay NULL).
+
+rim_voucher_types: seed ('CNTR', 'Stock Count Review', 'STOCK', NULL, 'YEARLY', 'CNTR/{LOC}/{YYYY}/{SEQ5}', true) — numbering only. (The actual GL/stock posting happens entirely inside the existing ADJ/ADJV codes via the composed call below.)
+
+rih_stock_count_review_headers: id, client_id, company_id, location_id, review_no, review_date, as_of_date DATE NOT NULL [the ONE canonical variance-comparison date, manager-set, defaults to today], reason_id → rim_common_masters [STOCK_ADJUSTMENT_REASON type — reuse the existing 'Physical Count Variance' row seeded in 076, no new common-master seed needed], status CHECK IN ('DRAFT','APPROVED'), approved_by, approved_at, posted_adjustment_no, posted_adjustment_date, remarks, <standard audit columns>. UNIQUE(client_id, company_id, review_no, review_date). auth_rw_* RLS, updated_at trigger.
+
+rid_stock_count_review_sources (junction, membership only — never a merged-line copy, per the "never merge at write time" convention): id, client_id, company_id, review_no, review_date, source_count_no, source_count_date, created_at, created_by. UNIQUE(..., review_no, review_date, source_count_no, source_count_date). FK to review header.
+
+fn_save_stock_count_review(p_header, p_source_refs, p_user_id) RETURNS TEXT — DRAFT-only. Reservation pattern copied exactly from fn_save_purchase_invoice's GRN-reservation logic: on re-save, first un-reserves whatever the draft previously held (rih_stock_count_headers.status back to SUBMITTED, consolidated_into_review_no/date cleared) and clears old junction rows; then for each p_source_refs entry, locks one row per statement in a fixed sort order (deadlock-avoidance rule — ORDER BY source_count_no, source_count_date, SELECT ... FOR UPDATE per row, never a single ORDER BY ... FOR UPDATE), validates status != 'DRAFT' (must be SUBMITTED first) and same location_id, blocks if already reserved by a different review, then sets status='CONSOLIDATED' + reservation pointer and inserts the junction row.
+
+fn_compute_stock_count_variance(p_client_id, p_company_id, p_review_no, p_review_date) RETURNS TABLE(product_id, tracking_type, batch_no, expiry_date, serial_no, counted_qty, system_qty, variance_qty, adjust_flag, is_unknown_serial, unit_cost) — the single source of truth for netting, called by BOTH the on-screen preview grid and Approve, so what the manager sees is guaranteed to be what gets posted. STABLE function:
+
+Builds all_counts from three CTEs over rid_stock_count_lines (is_counted=true only — this is where "uncounted excluded" falls out for free, untouched rows never enter this set) joined through the review's rid_stock_count_review_sources:
+untracked: SUM(counted_base_qty) GROUP BY product_id — additive across sources (same product counted in different, non-overlapping zones by different counters).
+batch: SUM(base_qty) GROUP BY product_id, batch_no — additive, same reasoning.
+serial: SELECT DISTINCT product_id, serial_no — not summed; the same physical unit found in two overlapping counts is one unit, never double-counted.
+Computes system_qty per bucket via SUM(ril_stock_ledger.qty_change) WHERE location_id=... AND trans_date <= as_of_date, split three ways (aggregate/batch_no/serial_no — confirmed exact column names against ril_stock_ledger: client_id, company_id, location_id, product_id, trans_date, qty_change, batch_no, serial_no).
+adjust_flag: +/-/NULL (NULL = exact match, no line — or unknown serial, see next). is_unknown_serial = (serial_no IS NOT NULL AND system_qty <= 0) — batch gets normal +/- treatment (a never-before-seen batch found physically is a legitimate +, same as Stock Adjustment already allows); only serial gets the exception treatment, per decision #4.
+unit_cost is informational only for the preview grid — fn_approve_stock_adjustment re-fetches the real cost itself under row lock, unchanged.
+fn_approve_stock_count_review(p_client_id, p_company_id, p_review_no, p_review_date, p_approved_by) RETURNS TEXT (returns the posted adjustment_no):
+
+Lock header, validate DRAFT, validate reason_id IS NOT NULL.
+fn_check_period_open/fn_check_backdate_allowed('STOCK_COUNT_REVIEW', as_of_date) + FUTURE_DATE_NOT_ALLOWED guard on as_of_date — same convention as every other Approve function.
+Lock every source count (one row per statement, fixed sort order).
+Loop fn_compute_stock_count_variance(...): skip is_unknown_serial rows (count them for the error message), skip adjust_flag IS NULL (zero variance), else build one JSONB line per row into p_lines/p_batches/p_serials arrays shaped exactly like fn_save_stock_adjustment expects (qty_pack=qty_loose=0/base_qty=abs(variance_qty) split per pack/loose convention, adjust_flag, reason_id from the review header, remarks referencing the review).
+If zero lines produced → RAISE EXCEPTION 'NO_VARIANCE_LINES' (mentioning how many unknown-serial exceptions were skipped, if any).
+Compose the existing engine — v_adjustment_no := fn_save_stock_adjustment(header_with_source_doc_tags, lines, batches, serials, p_approved_by); PERFORM fn_approve_stock_adjustment(...). Never write ril_stock_ledger/rid_finance_lines directly.
+Mark review APPROVED, store posted_adjustment_no/date.
+Menu seed: IN-CNR / "Stock Count Review" / /inventory/stock-count-review, serial_no 9, same group — both places, same pattern as IN-CNT above.
+
+Voucher-code summary
+Code	Purpose	Posts GL/stock?
+CNT	Numbers Screen 1 documents	No
+CNTR	Numbers Screen 2 documents	No
+ADJ	(existing) Numbers the auto-created Stock Adjustment	No
+ADJV	(existing) Posts the GL entries	Yes — reused unchanged
+No new ril_stock_ledger.trans_type value is introduced — Screen 2 only ever reaches the ledger indirectly through fn_approve_stock_adjustment, which already posts ADJUSTMENT_IN/ADJUSTMENT_OUT (whitelisted since migration 036, confirmed in both ril_stock_ledger CHECK constraints already). No CHECK-constraint migration needed.
+
+Flutter — Screen 1 (Counter)
+Routes (route_names.dart/app_router.dart): stockCount (/inventory/stock-count), stockCountEntry (/inventory/stock-count-entry).
+
+stock_count_entry_screen.dart — the core new screen:
+Header: Location, Count Date, category-subtree picker (adapt product_entry_screen.dart's _buildCategoryPicker — flat Autocomplete<ItemCategoryModel> over precomputed breadcrumb paths — made nullable, "All Categories" default; the picked value is the subtree root, expanded server-side via fn_category_subtree), nature filter (adapt product_list_screen.dart's _NatureFilter dropdown pattern, nullable = "All Natures").
+"Start Count" (new doc only): one fn_stock_count_eligible_products RPC call → builds the initial row list (all isCounted=false) → immediately followed by the first fn_save_stock_count to obtain count_no.
+Worksheet grid: ListView.builder, not Column/Wrap — this is the one screen expected to render hundreds of rows. Each row its own lightweight StatefulWidget holding its own controllers so typing in one row doesn't rebuild the rest. showLooseQty/showBarcode computed once in build(), threaded down as plain bool params (standard convention). Untracked row: Pack/Loose fields directly on the row, typing any value (including explicit 0) flips isCounted=true. Batch/serial-tracked row: expand chevron reveals free-text add-row sub-list (no candidate picker — pure new-lot entry, per the blind-count divergence noted above), plus an explicit "Mark Counted — None Found" button that sets isCounted=true with zero children (this is what lets a tracked product be explicitly confirmed-empty rather than just left untouched).
+Scan-to-jump: gated by session.enableBarcode/enablePartNumber. onFieldSubmitted does a local lookup against the already-loaded worksheet (never remote — the worksheet is a closed universe once started), scrolls to and highlights the matching row, autofocuses its qty field. No match → clear snackbar, not a silent no-op.
+Plain text search box above the grid as the non-scan fallback for jumping to a row.
+Save Draft / Submit buttons top-right (Submit hidden once status != 'DRAFT'), print button once count_no != null.
+stock_count_list_screen.dart — SakalAdaptiveList, template finance_voucher_list_screen.dart.
+Domain/data/provider layer mirroring Stock Adjustment's exact file shape: domain/repositories/stock_count_repository.dart, data/datasources/stock_count_remote_ds.dart (+ _local_ds.dart), data/repositories/stock_count_repository_impl.dart, presentation/providers/stock_count_providers.dart.
+Full offline support (Drift cache + SyncEngine enqueue, same pattern as every other module) — this is exactly the scenario offline mode exists for (a store count spanning hours/days on unreliable connectivity), and neither Save nor Submit touches the ledger/GL/period checks, so there's no correctness reason to force it online. New Drift tables StockCountHeadersCache/StockCountLinesCache in lib/core/database/tables/stock_count_cache_tables.dart, registered in app_database.dart, schema version bump, SyncEngine._renameLocalDocument case for 'STOCK_COUNT'.
+Print support (5-file checklist): print_field_registry.dart, default_templates/stock_count_default_template.dart (mirror opening_stock_default_template.dart's header+lines shape), print_template_provider.dart, print_sample_data.dart, screen's own _buildPrintDocument()/print button.
+Flutter — Screen 2 (Manager/Review)
+Routes: stockCountReview (/inventory/stock-count-review), stockCountReviewEntry (/inventory/stock-count-review-entry).
+
+stock_count_review_entry_screen.dart:
+Header: Location, Review Date, As Of Date (defaults today, the one canonical comparison date), Reason picker (STOCK_ADJUSTMENT_REASON common masters, default "Physical Count Variance").
+Source picker card: CheckboxListTile list of SUBMITTED-status counts at the chosen location — direct adaptation of material_issue_entry_screen.dart's requisition-picker (_toggleRequisition pattern), swapping "requisition" for "stock count."
+Variance grid: calls fn_compute_stock_count_variance whenever source selection or As Of Date changes. ListView.builder again (same large-list reasoning). Columns: product, tracking/batch/serial, counted qty, system qty, variance qty, variance value (variance_qty * unit_cost), +/-/— chip. Each row expandable to drill into which source count(s) contributed (client-side join over the already-loaded source lines — cheap).
+Separate "Exceptions" section for is_unknown_serial=true rows — visually distinct, excluded from the postable grid, needs manual resolution outside this module.
+Save Draft (fn_save_stock_count_review) / Approve (fn_approve_stock_count_review — the preview grid already shows exactly what will post, since both call the same fn_compute_stock_count_variance) top-right; print button once review_no != null.
+stock_count_review_list_screen.dart — SakalAdaptiveList.
+Domain/data/provider layer, same shape.
+Online-only, no Drift caching — needs a live view of other counters' SUBMITTED status (may not be in one device's local cache) and a live ledger-based system-qty computation (a stale local replica would actively mislead the manager); Approve is a real posting action, already online-only by existing convention.
+Print support (5-file checklist), STOCK_COUNT_REVIEW doc type — prints the variance report + source drill-down + linked adjustment number.
+Verification
+pgTAP, style/rigor of 076_stock_adjustment_test.sql/077_opening_stock_test.sql (hardcoded UUIDs, BEGIN;/ROLLBACK;, test_results temp table). One SIMPLE company, one location, products covering NONE/BATCH/SERIAL tracking.
+
+078_stock_count_test.sql: fn_stock_count_eligible_products correctly expands a category subtree via fn_category_subtree and applies the nature filter; fn_save_stock_count persists a full worksheet with untouched rows staying is_counted=false; resuming (second save) correctly reflects newly-typed rows while leaving untouched ones alone; BATCH_QTY_MISMATCH fires on a sum mismatch; fn_submit_stock_count blocks with NO_COUNTED_LINES on an all-untouched worksheet, succeeds and locks otherwise; editing a SUBMITTED count is blocked.
+
+079_stock_count_review_test.sql: (1) an untouched product never appears in fn_compute_stock_count_variance's output even though the ledger has a non-zero balance for it — proves missed ≠ phantom - line; (2) a ledger entry dated AFTER as_of_date does NOT affect computed system_qty, one dated ON/BEFORE it DOES — proves the as-of-date correctness that's the whole point of decision #2; (3) the same batch counted across two different submitted counts sums correctly; (4) the same serial entered in two overlapping counts is counted ONCE, not summed; (5) an unrecognized serial produces is_unknown_serial=true/adjust_flag=NULL and is skipped by Approve (review still posts successfully off remaining lines); (6) exact counted=system produces no line; (7) reservation: Review A picking Count X blocks Review B from picking the same Count X, and un-picking from A's draft correctly frees it for B; (8) a SUBMITTED count at a different location can't be added to a review for another location; (9) end-to-end Approve: rih_stock_adjustment_headers gets the right source_doc_type/no/date, ledger rows post with correct trans_type, the ADJV voucher balances DR=CR, review's posted_adjustment_no/status='APPROVED' set; (10) a - line exceeding a batch/serial's actual system balance still fails with BATCH_INSUFFICIENT_STOCK/SERIAL_NOT_IN_STOCK — proves Approve genuinely routes through fn_post_stock_movement's existing strict check, not a bypass; (11) COST_NOT_ESTABLISHED still blocks an uncosted + line, unchanged; (12) period-lock and future-date guards on as_of_date.
+
+Manual smoke test in the Codespace: two counters do overlapping-product, non-overlapping-zone counts of the same location (one filtered by Category A, one unfiltered) including a batch-tracked product split across both and a serial-tracked product found by only one; submit both; as manager, club them, confirm the variance grid's clubbed totals and per-source drill-down look right, confirm an intentionally-wrong scanned serial shows as an exception and not a phantom line, approve, and confirm the resulting Stock Adjustment (and its GL voucher) is correct end to end.
+
+Critical files for implementation
+backend/migrations/076_stock_adjustment.sql — exact fn_save_stock_adjustment/fn_approve_stock_adjustment shape and batch/serial branching that 078/079 mirror and compose into.
+backend/migrations/077_opening_stock.sql — closest precedent for a non-posting, worksheet-shaped document, and its exact menu-seed migration pattern.
+backend/migrations/054_purchase_invoice.sql / 063_purchase_return_batch_serial.sql — the reservation-once-consumed (billed_invoice_no) pattern consolidated_into_review_no and fn_save_stock_count_review directly copy.
+backend/migrations/038_grn.sql — confirmed exact schema of rid_transaction_line_batches/rid_transaction_line_serials, reused unchanged by Stock Count.
+backend/migrations/024_item_categories.sql — rim_item_categories/fn_category_subtree (first Flutter consumer is this module).
+backend/functions/fn_seed_client_modules.sql + migration 071's existing-companies menu-seed INSERT pattern.
+lib/features/inventory/presentation/screens/stock_adjustment_entry_screen.dart — batch/serial dual-entry UI adapted for Screen 1 (minus the candidate-picker half).
+lib/features/inventory/presentation/screens/material_issue_entry_screen.dart — multi-source CheckboxListTile consolidation UI adapted for Screen 2.
+lib/features/master/presentation/screens/product_entry_screen.dart / product_list_screen.dart — category-breadcrumb Autocomplete and nature-filter dropdown patterns for Screen 1's header filters.
+CLAUDE.md — every cross-cutting convention (RLS, migration idempotency, period/backdate checks, Definition of Complete, deadlock lock-ordering) this plan must keep satisfying.

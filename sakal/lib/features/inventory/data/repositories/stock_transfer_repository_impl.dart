@@ -74,11 +74,19 @@ class StockTransferRepositoryImpl implements StockTransferRepository {
     return charges;
   }
 
+  // Genuine offline gap (this module had zero master-data offline support
+  // at all) — now served from the shared Master-Data Sync facility
+  // (core/sync/master_data_modules.dart) when offline.
   @override
   Future<List<Map<String, dynamic>>> getLocations({
     required String clientId,
     required String companyId,
-  }) => _remote.getLocations(clientId: clientId, companyId: companyId);
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.getLocations(clientId: clientId, companyId: companyId);
+    }
+    return _remote.getLocations(clientId: clientId, companyId: companyId);
+  }
 
   @override
   Future<String> getInterLocationModel({
@@ -106,13 +114,23 @@ class StockTransferRepositoryImpl implements StockTransferRepository {
     required String clientId,
     required String companyId,
     String? search,
-  }) => _remote.getProductsForPicker(clientId: clientId, companyId: companyId, search: search);
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.getProductsForPicker(clientId: clientId, companyId: companyId, search: search);
+    }
+    return _remote.getProductsForPicker(clientId: clientId, companyId: companyId, search: search);
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getAdditionalCharges({
     required String clientId,
     required String companyId,
-  }) => _remote.getAdditionalCharges(clientId: clientId, companyId: companyId);
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.getAdditionalCharges(clientId: clientId, companyId: companyId);
+    }
+    return _remote.getAdditionalCharges(clientId: clientId, companyId: companyId);
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getAvailableBatches({
@@ -161,7 +179,12 @@ class StockTransferRepositoryImpl implements StockTransferRepository {
     required String clientId,
     required String companyId,
     required String barcode,
-  }) => _remote.getProductByBarcode(clientId: clientId, companyId: companyId, barcode: barcode);
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.getProductByBarcode(barcode);
+    }
+    return _remote.getProductByBarcode(clientId: clientId, companyId: companyId, barcode: barcode);
+  }
 
   @override
   Future<String> save({

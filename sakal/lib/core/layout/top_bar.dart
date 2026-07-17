@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +10,7 @@ import '../router/route_names.dart';
 import '../services/offline_session_cache.dart';
 import '../theme/app_colors.dart';
 import '../utils/responsive.dart';
+import '../widgets/master_data_sync_indicator.dart';
 import '../widgets/sync_status_indicator.dart';
 
 class TopBar extends ConsumerWidget implements PreferredSizeWidget {
@@ -59,6 +61,7 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
         ],
       ),
       actions: [
+        const MasterDataSyncIndicator(),
         const SyncStatusIndicator(),
         Padding(
           padding: const EdgeInsets.only(right: 8),
@@ -67,6 +70,8 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
             onSelected: (val) async {
               if (val == 'change_password') {
                 context.go(RouteNames.changePassword);
+              } else if (val == 'offline_settings') {
+                context.go(RouteNames.offlineSettings);
               } else if (val == 'switch_company') {
                 await _showSwitchCompanyDialog(context, ref, session!);
               } else if (val == 'logout') {
@@ -143,6 +148,18 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
                   ],
                 ),
               ),
+              if (!kIsWeb)
+                const PopupMenuItem(
+                  value: 'offline_settings',
+                  child: Row(
+                    children: [
+                      Icon(Icons.cloud_off_outlined,
+                          size: 16, color: AppColors.textSecondary),
+                      SizedBox(width: 10),
+                      Text('Offline Data'),
+                    ],
+                  ),
+                ),
               const PopupMenuDivider(),
               const PopupMenuItem(
                 value: 'logout',
@@ -248,6 +265,8 @@ class _SwitchCompanyDialogState extends State<_SwitchCompanyDialog> {
             enableBarcode:    settings['enable_barcode']     as bool? ?? false,
             enablePartNumber: settings['enable_part_number'] as bool? ?? false,
             qtyEntryMode:     settings['qty_entry_mode']     as String? ?? 'PACK_AND_LOOSE',
+            quickInvoiceDispatchStock: settings['quick_invoice_dispatch_stock'] as bool? ?? true,
+            quickInvoiceCollectCash:   settings['quick_invoice_collect_cash']   as bool? ?? true,
           );
       widget.ref.read(menuProvider.notifier).state = menuList;
 

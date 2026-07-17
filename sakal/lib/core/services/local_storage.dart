@@ -23,4 +23,12 @@ class LocalStorage {
     await _prefs.remove('client_no');
     await _prefs.remove('client_id');
   }
+
+  // Offline mode — per-device toggle (see Offline Settings screen). Native
+  // only; offline mode is never offered on web (no Drift there).
+  static bool get deviceOfflineEnabled => _prefs.getBool('device_offline_enabled') ?? false;
+
+  static Future<void> setDeviceOfflineEnabled(bool value) async {
+    await _prefs.setBool('device_offline_enabled', value);
+  }
 }

@@ -14,7 +14,12 @@
       "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Manglu\\\\SAKAL\\\\sakal\\\\docs\\\\screens\")",
       "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Manglu\\\\SAKAL\\\\sakal\\\\lib\\\\features\\\\finance\\\\presentation\\\\screens\")",
       "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Manglu\\\\SAKAL\\\\sakal\\\\test\\\\features\\\\finance\")",
-      "Bash(flutter analyze *)"
+      "Bash(flutter analyze *)",
+      "Bash(grep -n \"^CREATE OR REPLACE FUNCTION\\\\|^\\\\$\\\\$ LANGUAGE\\\\|^\\\\$\\\\$;\" \"C:/Manglu/SAKAL/sakal/backend/migrations/089_sales_invoice.sql\")",
+      "Bash(python3 -c ' *)",
+      "Bash(cd \"C:/Manglu/SAKAL/sakal\" && grep -n \"flutter_riverpod\" pubspec.yaml *)",
+      "Read(//c//**)",
+      "Bash(grep -n 'class _$AppDatabase\\\\|_$AppDatabase\\(' lib/core/database/app_database.g.dart)"
     ]
   }
 }

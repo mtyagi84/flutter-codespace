@@ -1,11 +1,81 @@
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 import '../../../../core/database/app_database.dart';
+import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
+import '../../../../core/database/datasources/product_uom_local_ds.dart';
+import '../../../master/data/datasources/products_local_ds.dart';
 
 class MaterialRequisitionLocalDs {
   final AppDatabase _db;
   MaterialRequisitionLocalDs(this._db);
 
-  // ── Read ──────────────────────────────────────────────────────────────────
+  // ── Master-data offline fallback (shared Master-Data Sync facility) ───────
+  // Same reasoning/shape as sales_invoice_local_ds.dart's own façade
+  // methods — reads only, populated by core/sync/master_data_sync_service.dart.
+
+  Future<List<Map<String, dynamic>>> getLocationsForIssue({
+    required String clientId,
+    required String companyId,
+  }) async {
+    final rows = await GenericLookupLocalDs(_db).getLookups(cacheKey: 'LOCATIONS', clientId: clientId, companyId: companyId);
+    return rows.where((r) => r['is_issue_allowed'] == true).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> getUsersForAutocomplete({
+    required String clientId,
+    required String companyId,
+  }) {
+    return GenericLookupLocalDs(_db).getLookups(cacheKey: 'USERS', clientId: clientId, companyId: companyId);
+  }
+
+  Future<List<Map<String, dynamic>>> getProductsForPicker({
+    required String clientId,
+    required String companyId,
+    String? search,
+  }) async {
+    final products = await ProductsLocalDs(_db).getProducts(
+      clientId: clientId, companyId: companyId, isActive: true, search: search, limit: 500,
+    );
+    final lookupDs = GenericLookupLocalDs(_db);
+    final result = <Map<String, dynamic>>[];
+    for (final p in products) {
+      Map<String, dynamic>? uomRow;
+      if (p.baseUomId != null && p.baseUomId!.isNotEmpty) {
+        uomRow = await lookupDs.getLookupById(cacheKey: 'COMMON_MASTERS_UNIT', id: p.baseUomId!);
+      }
+      result.add({
+        'id': p.id,
+        'product_code': p.productCode,
+        'product_name': p.productName,
+        'base_uom_id': p.baseUomId,
+        'tracking_type': p.trackingType,
+        'uom': {'description': uomRow?['description']},
+      });
+    }
+    return result;
+  }
+
+  Future<Map<String, dynamic>?> getProductByBarcode(String barcode) {
+    return ProductUomLocalDs(_db).getByBarcode(barcode);
+  }
+
+  Future<List<Map<String, dynamic>>> getDepartments({
+    required String clientId,
+    required String companyId,
+  }) {
+    return GenericLookupLocalDs(_db).getLookups(cacheKey: 'COMMON_MASTERS_DEPARTMENT', clientId: clientId, companyId: companyId);
+  }
+
+  Future<List<Map<String, dynamic>>> getConsumptionAreasForDepartment({
+    required String clientId,
+    required String companyId,
+    required String departmentId,
+  }) {
+    return GenericLookupLocalDs(_db).getLookups(
+      cacheKey: 'DEPARTMENT_CONSUMPTION_AREAS', clientId: clientId, companyId: companyId, parentId: departmentId,
+    );
+  }
+
+  // ── Read — requisition documents ─────────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> listRequisitions({
     required String clientId,

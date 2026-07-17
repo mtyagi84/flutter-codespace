@@ -60,6 +60,10 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
   // Quantity entry mode (Pack + Loose on PO/GRN/Sales/Transfer line entry)
   String _qtyEntryMode = 'PACK_AND_LOOSE';
 
+  // Quick Invoice — immediate vs deferred stock dispatch / cash collection
+  bool _quickInvoiceDispatchStock = true;
+  bool _quickInvoiceCollectCash   = true;
+
   bool    _loading = true;
   bool    _saving  = false;
   String? _error;
@@ -138,6 +142,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
     _enablePartNumber = d['enable_part_number'] as bool? ?? false;
     _interLocationModel = d['inter_location_model'] as String? ?? 'SIMPLE';
     _qtyEntryMode        = d['qty_entry_mode']        as String? ?? 'PACK_AND_LOOSE';
+    _quickInvoiceDispatchStock = d['quick_invoice_dispatch_stock'] as bool? ?? true;
+    _quickInvoiceCollectCash   = d['quick_invoice_collect_cash']   as bool? ?? true;
   }
 
   // ── Image picking ────────────────────────────────────────────────────────
@@ -206,6 +212,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
           if (!_hasProducts) 'enable_part_number': _enablePartNumber,
           if (!_hasTransactions) 'inter_location_model': _interLocationModel,
           'qty_entry_mode':     _qtyEntryMode,
+          'quick_invoice_dispatch_stock': _quickInvoiceDispatchStock,
+          'quick_invoice_collect_cash':   _quickInvoiceCollectCash,
           'updated_at':         DateTime.now().toUtc().toIso8601String(),
           'updated_by':         session.userId,
         },
@@ -218,6 +226,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
         enableBarcode:    _enableBarcode,
         enablePartNumber: _enablePartNumber,
         qtyEntryMode:     _qtyEntryMode,
+        quickInvoiceDispatchStock: _quickInvoiceDispatchStock,
+        quickInvoiceCollectCash:   _quickInvoiceCollectCash,
       );
 
       if (mounted) {
@@ -290,6 +300,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
                     _buildInterLocationModel(),
                     const SizedBox(height: 20),
                     _buildQtyEntryMode(),
+                    const SizedBox(height: 20),
+                    _buildQuickInvoiceSection(),
                     const SizedBox(height: 28),
 
                     // ── Save button ──────────────────────────────────
@@ -804,6 +816,39 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  // ── Section: Quick Invoice ────────────────────────────────────────────────
+
+  Widget _buildQuickInvoiceSection() {
+    return _SectionCard(
+      title: 'Quick Invoice',
+      icon: Icons.point_of_sale_outlined,
+      subtitle: 'Controls whether the Quick Sales screen moves stock/cash immediately on '
+          'save, or defers to a dedicated Delivery/Receipt screen. Freely changeable at any '
+          'time — each invoice keeps whatever mode was in effect when it was created.',
+      children: [
+        _buildCodingToggle(
+          icon: Icons.local_shipping_outlined,
+          label: 'Dispatch Stock Immediately',
+          description: 'Quick Invoice deducts stock at Save time. When off, stock is left '
+              'pending for a future Delivery screen.',
+          value: _quickInvoiceDispatchStock,
+          locked: false,
+          onChanged: (v) => setState(() => _quickInvoiceDispatchStock = v),
+        ),
+        const SizedBox(height: 12),
+        _buildCodingToggle(
+          icon: Icons.payments_outlined,
+          label: 'Collect Cash Immediately',
+          description: 'Quick Invoice auto-generates a settled Receipt Voucher at Save time. '
+              'When off, the receivable is left pending for a future Receipt screen.',
+          value: _quickInvoiceCollectCash,
+          locked: false,
+          onChanged: (v) => setState(() => _quickInvoiceCollectCash = v),
+        ),
+      ],
     );
   }
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/services/local_storage.dart';
 import '../../../../core/services/offline_session_cache.dart';
+import '../../../../core/sync/master_data_sync_service.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 
@@ -120,6 +122,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         enableBarcode:    d['enable_barcode']    as bool? ?? false,
         enablePartNumber: d['enable_part_number'] as bool? ?? false,
         qtyEntryMode:     d['qty_entry_mode']     as String? ?? 'PACK_AND_LOOSE',
+        quickInvoiceDispatchStock: d['quick_invoice_dispatch_stock'] as bool? ?? true,
+        quickInvoiceCollectCash:   d['quick_invoice_collect_cash']   as bool? ?? true,
       );
 
       // Cache credentials for future offline login
@@ -132,6 +136,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       ref.read(sessionProvider.notifier).state = session;
       ref.read(menuProvider.notifier).state    = menuList;
+
+      // Background master-data refresh for devices with offline mode
+      // enabled — non-blocking (never gates reaching Dashboard/Sync), per
+      // the offline-design memory's own reasoning against a second
+      // blocking full-screen step for a read-only cache warm-up. See
+      // core/sync/master_data_sync_service.dart.
+      if (!kIsWeb && LocalStorage.deviceOfflineEnabled) {
+        unawaited(runBackgroundMasterDataSync(ref, session));
+      }
 
       // Route to sync screen if pending offline documents exist.
       // On Flutter Web the SQLite WASM runtime is not loaded — skip the check.
@@ -182,6 +195,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         enableBarcode:    result.session.enableBarcode,
         enablePartNumber: result.session.enablePartNumber,
         qtyEntryMode:     result.session.qtyEntryMode,
+        quickInvoiceDispatchStock: result.session.quickInvoiceDispatchStock,
+        quickInvoiceCollectCash:   result.session.quickInvoiceCollectCash,
       );
       ref.read(menuProvider.notifier).state = result.menu;
       context.go(RouteNames.dashboard);

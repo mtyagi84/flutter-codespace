@@ -59,44 +59,78 @@ class MaterialRequisitionRepositoryImpl implements MaterialRequisitionRepository
     return lines;
   }
 
+  // Genuine offline gap (this module had zero master-data offline support
+  // at all) — now served from the shared Master-Data Sync facility
+  // (core/sync/master_data_modules.dart) when offline, matching the same
+  // pattern already established for Sales Invoice/GRN/PO.
   @override
   Future<List<Map<String, dynamic>>> getLocationsForIssue({
     required String clientId,
     required String companyId,
-  }) => _remote.getLocationsForIssue(clientId: clientId, companyId: companyId);
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.getLocationsForIssue(clientId: clientId, companyId: companyId);
+    }
+    return _remote.getLocationsForIssue(clientId: clientId, companyId: companyId);
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getUsersForAutocomplete({
     required String clientId,
     required String companyId,
-  }) => _remote.getUsersForAutocomplete(clientId: clientId, companyId: companyId);
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.getUsersForAutocomplete(clientId: clientId, companyId: companyId);
+    }
+    return _remote.getUsersForAutocomplete(clientId: clientId, companyId: companyId);
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getProductsForPicker({
     required String clientId,
     required String companyId,
     String? search,
-  }) => _remote.getProductsForPicker(clientId: clientId, companyId: companyId, search: search);
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.getProductsForPicker(clientId: clientId, companyId: companyId, search: search);
+    }
+    return _remote.getProductsForPicker(clientId: clientId, companyId: companyId, search: search);
+  }
 
   @override
   Future<Map<String, dynamic>?> getProductByBarcode({
     required String clientId,
     required String companyId,
     required String barcode,
-  }) => _remote.getProductByBarcode(clientId: clientId, companyId: companyId, barcode: barcode);
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.getProductByBarcode(barcode);
+    }
+    return _remote.getProductByBarcode(clientId: clientId, companyId: companyId, barcode: barcode);
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getDepartments({
     required String clientId,
     required String companyId,
-  }) => _remote.getDepartments(clientId: clientId, companyId: companyId);
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.getDepartments(clientId: clientId, companyId: companyId);
+    }
+    return _remote.getDepartments(clientId: clientId, companyId: companyId);
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getConsumptionAreasForDepartment({
     required String clientId,
     required String companyId,
     required String departmentId,
-  }) => _remote.getConsumptionAreasForDepartment(clientId: clientId, companyId: companyId, departmentId: departmentId);
+  }) {
+    if (_isOffline && _local != null) {
+      return _local.getConsumptionAreasForDepartment(clientId: clientId, companyId: companyId, departmentId: departmentId);
+    }
+    return _remote.getConsumptionAreasForDepartment(clientId: clientId, companyId: companyId, departmentId: departmentId);
+  }
 
   @override
   Future<String> save({

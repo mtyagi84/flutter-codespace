@@ -1,12 +1,67 @@
 import 'dart:convert';
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 import '../../../../core/database/app_database.dart';
+import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
+import '../../../../core/database/datasources/product_uom_local_ds.dart';
+import '../../../master/data/datasources/products_local_ds.dart';
 
 class StockTransferLocalDs {
   final AppDatabase _db;
   StockTransferLocalDs(this._db);
 
-  // ── Read ──────────────────────────────────────────────────────────────────
+  // ── Master-data offline fallback (shared Master-Data Sync facility) ───────
+
+  Future<List<Map<String, dynamic>>> getLocations({
+    required String clientId,
+    required String companyId,
+  }) {
+    return GenericLookupLocalDs(_db).getLookups(cacheKey: 'LOCATIONS', clientId: clientId, companyId: companyId);
+  }
+
+  Future<List<Map<String, dynamic>>> getProductsForPicker({
+    required String clientId,
+    required String companyId,
+    String? search,
+  }) async {
+    final products = await ProductsLocalDs(_db).getProducts(
+      clientId: clientId, companyId: companyId, isActive: true, search: search, limit: 500,
+    );
+    final lookupDs = GenericLookupLocalDs(_db);
+    final result = <Map<String, dynamic>>[];
+    for (final p in products) {
+      Map<String, dynamic>? uomRow;
+      if (p.baseUomId != null && p.baseUomId!.isNotEmpty) {
+        uomRow = await lookupDs.getLookupById(cacheKey: 'COMMON_MASTERS_UNIT', id: p.baseUomId!);
+      }
+      result.add({
+        'id': p.id,
+        'product_code': p.productCode,
+        'product_name': p.productName,
+        'base_uom_id': p.baseUomId,
+        'tracking_type': p.trackingType,
+        'uom': {'description': uomRow?['description']},
+      });
+    }
+    return result;
+  }
+
+  Future<Map<String, dynamic>?> getProductByBarcode(String barcode) {
+    return ProductUomLocalDs(_db).getByBarcode(barcode);
+  }
+
+  /// The shared ADDITIONAL_CHARGES cache holds every charge regardless of
+  /// module (SALES/PURCHASE/TRANSFER/BOTH) — filter client-side to this
+  /// module's own applicable_on values, mirroring the remote query's own
+  /// `applicable_on: in.(TRANSFER,BOTH)` filter.
+  Future<List<Map<String, dynamic>>> getAdditionalCharges({
+    required String clientId,
+    required String companyId,
+  }) async {
+    final rows = await GenericLookupLocalDs(_db).getLookups(cacheKey: 'ADDITIONAL_CHARGES', clientId: clientId, companyId: companyId);
+    return rows.where((r) => r['applicable_on'] == 'TRANSFER' || r['applicable_on'] == 'BOTH').toList();
+  }
+
+  // ── Read — transfer documents ────────────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> listTransfers({
     required String clientId,
