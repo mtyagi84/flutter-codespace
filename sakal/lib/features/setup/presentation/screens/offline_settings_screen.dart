@@ -73,7 +73,7 @@ class _OfflineSettingsScreenState extends ConsumerState<OfflineSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final isMobile = Responsive.isMobile(context);
-    final title = const Text('Offline Settings',
+    const title = Text('Offline Settings',
         style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary));
     final refreshAllButton = FilledButton.icon(
       onPressed: _syncingAll ? null : _refreshAll,

@@ -301,9 +301,9 @@ Future<int> _syncSalesInvoiceSetup(AppDatabase db, UserSession session) async {
 }
 
 final List<MasterDataModule> masterDataModules = [
-  MasterDataModule(key: 'PRODUCTS_PRICING', label: 'Products & Pricing', icon: Icons.inventory_2_outlined, sync: _syncProductsAndPricing),
-  MasterDataModule(key: 'CUSTOMERS_SUPPLIERS', label: 'Customers & Suppliers', icon: Icons.people_outline, sync: _syncCustomersSuppliers),
-  MasterDataModule(key: 'LOCATIONS_CURRENCIES', label: 'Locations & Currencies', icon: Icons.place_outlined, sync: _syncLocationsAndCurrencies),
-  MasterDataModule(key: 'OPERATIONAL_REFERENCE_DATA', label: 'Operational Reference Data', icon: Icons.tune, sync: _syncOperationalReferenceData),
-  MasterDataModule(key: 'SALES_INVOICE_SETUP', label: 'Sales Invoice Setup', icon: Icons.point_of_sale_outlined, sync: _syncSalesInvoiceSetup),
+  const MasterDataModule(key: 'PRODUCTS_PRICING', label: 'Products & Pricing', icon: Icons.inventory_2_outlined, sync: _syncProductsAndPricing),
+  const MasterDataModule(key: 'CUSTOMERS_SUPPLIERS', label: 'Customers & Suppliers', icon: Icons.people_outline, sync: _syncCustomersSuppliers),
+  const MasterDataModule(key: 'LOCATIONS_CURRENCIES', label: 'Locations & Currencies', icon: Icons.place_outlined, sync: _syncLocationsAndCurrencies),
+  const MasterDataModule(key: 'OPERATIONAL_REFERENCE_DATA', label: 'Operational Reference Data', icon: Icons.tune, sync: _syncOperationalReferenceData),
+  const MasterDataModule(key: 'SALES_INVOICE_SETUP', label: 'Sales Invoice Setup', icon: Icons.point_of_sale_outlined, sync: _syncSalesInvoiceSetup),
 ];

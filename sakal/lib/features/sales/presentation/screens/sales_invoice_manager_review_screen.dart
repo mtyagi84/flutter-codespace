@@ -107,7 +107,7 @@ class _SalesInvoiceManagerReviewScreenState extends ConsumerState<SalesInvoiceMa
   Widget build(BuildContext context) {
     final locationsAsync = ref.watch(locationsProvider);
     final isMobile = Responsive.isMobile(context);
-    final title = const Text('Sales Invoice — Manager Review',
+    const title = Text('Sales Invoice — Manager Review',
         style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary));
     final postAllButton = (_invoices.isNotEmpty && canApprove)
         ? FilledButton.icon(icon: const Icon(Icons.playlist_add_check, size: 16), label: const Text('Post All Eligible'), onPressed: _postAllEligible)
