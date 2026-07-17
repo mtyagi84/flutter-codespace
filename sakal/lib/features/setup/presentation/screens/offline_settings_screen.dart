@@ -101,7 +101,7 @@ class _OfflineSettingsScreenState extends ConsumerState<OfflineSettingsScreen> {
                   const SizedBox(height: 10),
                   Row(children: [refreshAllButton]),
                 ])
-              : Row(children: [Expanded(child: title), refreshAllButton]),
+              : Row(children: [const Expanded(child: title), refreshAllButton]),
         ),
         const Divider(height: 20),
         Expanded(

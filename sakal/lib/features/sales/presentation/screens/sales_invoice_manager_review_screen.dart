@@ -123,7 +123,7 @@ class _SalesInvoiceManagerReviewScreenState extends ConsumerState<SalesInvoiceMa
                   title,
                   if (postAllButton != null) ...[const SizedBox(height: 10), postAllButton],
                 ])
-              : Row(children: [Expanded(child: title), if (postAllButton != null) postAllButton]),
+              : Row(children: [const Expanded(child: title), if (postAllButton != null) postAllButton]),
         ),
         const Divider(height: 20),
         Padding(
