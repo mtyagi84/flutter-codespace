@@ -58,6 +58,33 @@ class SalesInvoiceRemoteDs {
     return list.isNotEmpty ? list.first as Map<String, dynamic> : null;
   }
 
+  /// The GL lines fn_post_voucher created for ONE of this invoice's own
+  /// vouchers — same pattern as GRN's/Purchase Invoice's own "Posted
+  /// Journal Entries" section. An approved invoice can have up to four
+  /// separate vouchers (sales_voucher_no always, cos_voucher_no only when
+  /// stock dispatches immediately, local/base receipt voucher numbers only
+  /// when cash was collected at Approve time) — the caller fetches each
+  /// one present on the header individually and renders one block per
+  /// voucher, rather than this method trying to merge them into one query.
+  Future<List<Map<String, dynamic>>> getPostedVoucherLines({
+    required String clientId,
+    required String companyId,
+    required String voucherNo,
+    required String voucherDate,
+  }) async {
+    final res = await _dio.get('/rid_finance_lines', queryParameters: {
+      'client_id':  'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'trans_no':   'eq.$voucherNo',
+      'trans_date': 'eq.$voucherDate',
+      'is_deleted': 'eq.false',
+      'select':     'serial_no,trans_no,trans_nature,trans_amount,'
+          'account:rim_accounts!account_id(account_code,account_name)',
+      'order':      'serial_no.asc',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
   Future<List<Map<String, dynamic>>> getLines({
     required String clientId,
     required String companyId,

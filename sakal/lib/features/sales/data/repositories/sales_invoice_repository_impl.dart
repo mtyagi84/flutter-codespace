@@ -120,6 +120,14 @@ class SalesInvoiceRepositoryImpl implements SalesInvoiceRepository {
     required String invoiceDate,
   }) => _remote.getLineSerialAllocations(clientId: clientId, companyId: companyId, invoiceNo: invoiceNo, invoiceDate: invoiceDate);
 
+  @override
+  Future<List<Map<String, dynamic>>> getPostedVoucherLines({
+    required String clientId,
+    required String companyId,
+    required String voucherNo,
+    required String voucherDate,
+  }) => _remote.getPostedVoucherLines(clientId: clientId, companyId: companyId, voucherNo: voucherNo, voucherDate: voucherDate);
+
   // ── Manager Review — online-only, no local fallback ───────────────────────
 
   @override

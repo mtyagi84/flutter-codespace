@@ -63,6 +63,17 @@ abstract class SalesInvoiceRepository {
     required String invoiceDate,
   });
 
+  /// The GL lines for ONE of this invoice's own posted vouchers (sales,
+  /// cost-of-sales, or either cash receipt) — see the remote datasource's
+  /// own doc comment for why this fetches one voucher at a time rather
+  /// than merging all of an invoice's vouchers into one query.
+  Future<List<Map<String, dynamic>>> getPostedVoucherLines({
+    required String clientId,
+    required String companyId,
+    required String voucherNo,
+    required String voucherDate,
+  });
+
   // ── Manager Review — online-only, no local fallback ───────────────────────
 
   Future<List<Map<String, dynamic>>> listDraftInvoicesForReview({

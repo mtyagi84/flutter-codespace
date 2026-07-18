@@ -193,6 +193,19 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
   String? _preparedByName;
   String? _authorisedByName;
 
+  // Posted Journal Entries — an APPROVED invoice can have up to 4 separate
+  // vouchers (sales always, cost-of-sales only if stock dispatched, either
+  // cash-receipt voucher only if cash was actually collected). Each entry
+  // is (label, voucherNo, voucherDate); lines are fetched per-voucher and
+  // keyed by voucherNo in _voucherLines. See _buildPostedVoucherSection.
+  bool _loadingVoucherLines = false;
+  final Map<String, List<Map<String, dynamic>>> _voucherLines = {};
+  final Map<String, String> _voucherNumbersByLabel = {};
+  String? _salesVoucherNo, _salesVoucherDate;
+  String? _cosVoucherNo, _cosVoucherDate;
+  String? _localReceiptVoucherNo, _localReceiptVoucherDate;
+  String? _baseReceiptVoucherNo, _baseReceiptVoucherDate;
+
   String? _locationId;
   String  _locationName = '';
   String? _invoiceCurrencyId;
@@ -463,6 +476,14 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     _collectCash = header['cash_collection_mode'] == 'IMMEDIATE';
     _collectedLocalCtrl.text = header['collected_amount_local'] != null ? '${header['collected_amount_local']}' : '';
     _collectedBaseCtrl.text = header['collected_amount_base'] != null ? '${header['collected_amount_base']}' : '';
+    _salesVoucherNo = header['sales_voucher_no'] as String?;
+    _salesVoucherDate = header['sales_voucher_date'] as String?;
+    _cosVoucherNo = header['cos_voucher_no'] as String?;
+    _cosVoucherDate = header['cos_voucher_date'] as String?;
+    _localReceiptVoucherNo = header['local_receipt_voucher_no'] as String?;
+    _localReceiptVoucherDate = header['local_receipt_voucher_date'] as String?;
+    _baseReceiptVoucherNo = header['base_receipt_voucher_no'] as String?;
+    _baseReceiptVoucherDate = header['base_receipt_voucher_date'] as String?;
 
     final lines = await ds.getLines(clientId: session.clientId, companyId: session.companyId, invoiceNo: _invoiceNo!, invoiceDate: _fmtDate(_invoiceDate));
     for (final l in _lines) {
@@ -482,6 +503,34 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     }
 
     if (mounted) setState(() { _loading = false; });
+    if (_status == 'APPROVED') unawaited(_loadPostedVoucherLines(ds, session));
+  }
+
+  Future<void> _loadPostedVoucherLines(SalesInvoiceRepository ds, UserSession session) async {
+    final vouchers = <String, (String, String)>{
+      if (_salesVoucherNo != null && _salesVoucherDate != null) 'Sales Voucher': (_salesVoucherNo!, _salesVoucherDate!),
+      if (_cosVoucherNo != null && _cosVoucherDate != null) 'Cost of Sales': (_cosVoucherNo!, _cosVoucherDate!),
+      if (_localReceiptVoucherNo != null && _localReceiptVoucherDate != null) 'Cash Receipt — Local': (_localReceiptVoucherNo!, _localReceiptVoucherDate!),
+      if (_baseReceiptVoucherNo != null && _baseReceiptVoucherDate != null) 'Cash Receipt — Base': (_baseReceiptVoucherNo!, _baseReceiptVoucherDate!),
+    };
+    if (vouchers.isEmpty) return;
+    setState(() => _loadingVoucherLines = true);
+    try {
+      final results = await Future.wait(vouchers.entries.map((e) async {
+        final (voucherNo, voucherDate) = e.value;
+        final lines = await ds.getPostedVoucherLines(
+          clientId: session.clientId, companyId: session.companyId, voucherNo: voucherNo, voucherDate: voucherDate,
+        );
+        return MapEntry(e.key, lines);
+      }));
+      if (mounted) setState(() {
+        _voucherLines..clear()..addEntries(results);
+        _voucherNumbersByLabel..clear()..addEntries(vouchers.entries.map((e) => MapEntry(e.key, e.value.$1)));
+        _loadingVoucherLines = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _loadingVoucherLines = false);
+    }
   }
 
   Future<void> _restoreBatchSerialAllocations(dynamic ds, dynamic session) async {
@@ -1676,6 +1725,10 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                           const SizedBox(height: 16),
                           if (_collectCash) ...[_buildPaymentCard(locked), const SizedBox(height: 16)],
                           _buildTotalsCard(),
+                          if (_status == 'APPROVED') ...[
+                            const SizedBox(height: 20),
+                            _buildPostedVoucherSection(),
+                          ],
                         ]),
                       ),
                     ),
@@ -2230,5 +2283,96 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
         SakalSummaryRow(label: 'Charges', value: _chargesTotal),
       ],
     );
+  }
+
+  // ── Posted journal entries (read-only, APPROVED invoices only) ─────────
+  // Same purpose as GRN's/Purchase Invoice's own "Posted Journal Entries"
+  // section — Sales Invoice never got one, which is what made a correctly-
+  // posted invoice look like nothing had happened: Save auto-approves (no
+  // separate Approve button on this screen), and the app's central Finance
+  // Voucher List screen deliberately excludes auto-posted vouchers
+  // (posting_source='AUTO') by design, so this was the only place left
+  // that could ever show the SLS/COS/CRV vouchers fn_approve_sales_invoice
+  // actually creates.
+  Widget _buildPostedVoucherSection() {
+    if (_voucherLines.isEmpty && !_loadingVoucherLines) return const SizedBox.shrink();
+
+    Widget cell(String text, {TextAlign align = TextAlign.left, bool bold = false}) => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Text(text, textAlign: align, style: TextStyle(fontSize: 13, fontWeight: bold ? FontWeight.w700 : FontWeight.w400)),
+    );
+
+    Widget voucherCard(String label, String voucherNo, List<Map<String, dynamic>> lines) {
+      double totalDebit = 0, totalCredit = 0;
+      for (final l in lines) {
+        final amount = (l['trans_amount'] as num? ?? 0).toDouble();
+        if (l['trans_nature'] == 'DR') { totalDebit += amount; } else { totalCredit += amount; }
+      }
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
+          clipBehavior: Clip.antiAlias,
+          child: Column(children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+              child: Row(children: [
+                Expanded(child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary))),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: AppColors.positive.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+                  child: Text(voucherNo, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.positive)),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 8),
+            SakalTableHeaderBar(cells: [
+              const Expanded(flex: 2, child: SizedBox.shrink()),
+              Expanded(flex: 5, child: SakalTableHeaderBar.label('Ledger Name')),
+              Expanded(flex: 2, child: SakalTableHeaderBar.label('Debit')),
+              Expanded(flex: 2, child: SakalTableHeaderBar.label('Credit')),
+            ]),
+            for (var i = 0; i < lines.length; i++) Builder(builder: (_) {
+              final l = lines[i];
+              final account = l['account'] as Map<String, dynamic>?;
+              final ledgerName = account != null ? '[${account['account_code']}] ${account['account_name']}' : '—';
+              final amount = (l['trans_amount'] as num? ?? 0).toDouble();
+              final isDr = l['trans_nature'] == 'DR';
+              return Container(
+                color: i.isEven ? Colors.white : AppColors.background,
+                child: Row(children: [
+                  Expanded(flex: 2, child: cell('${l['serial_no']}')),
+                  Expanded(flex: 5, child: cell(ledgerName)),
+                  Expanded(flex: 2, child: cell(isDr ? amount.toStringAsFixed(2) : '—', align: TextAlign.right)),
+                  Expanded(flex: 2, child: cell(!isDr ? amount.toStringAsFixed(2) : '—', align: TextAlign.right)),
+                ]),
+              );
+            }),
+            Container(
+              decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.06), border: const Border(top: BorderSide(color: AppColors.border))),
+              child: Row(children: [
+                const Expanded(flex: 7, child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Text('Total', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                )),
+                Expanded(flex: 2, child: cell(totalDebit.toStringAsFixed(2), align: TextAlign.right, bold: true)),
+                Expanded(flex: 2, child: cell(totalCredit.toStringAsFixed(2), align: TextAlign.right, bold: true)),
+              ]),
+            ),
+          ]),
+        ),
+      );
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Posted Journal Entries', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+      const SizedBox(height: 8),
+      if (_loadingVoucherLines)
+        const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+      else
+        for (final entry in _voucherLines.entries)
+          voucherCard(entry.key, _voucherNumbersByLabel[entry.key] ?? '', entry.value),
+    ]);
   }
 }
