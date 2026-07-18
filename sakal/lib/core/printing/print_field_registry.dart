@@ -151,8 +151,9 @@ class PrintFieldRegistry {
     PrintFieldDef('header.remarks', 'Remarks'),
     PrintFieldDef('header.party_name', 'Party Name (Against Bill)'),
     PrintFieldDef('totals.total_display', 'Total (pre-formatted)'),
-    PrintFieldDef('signatures.prepared_by', 'Prepared By'),
-    PrintFieldDef('signatures.authorised_by', 'Authorised By'),
+    // signatures.* fields are appended to EVERY document type by
+    // scalarFields() below (same idiom as _companyFields) — no longer
+    // listed here specifically, to avoid a duplicate dropdown entry.
   ];
 
   static const _materialRequisitionScalarFields = [
@@ -256,6 +257,17 @@ class PrintFieldRegistry {
     PrintFieldDef('company.address', 'Company Address'),
     PrintFieldDef('company.city_name', 'Company City'),
     PrintFieldDef('company.logo', 'Company Logo (image)'),
+  ];
+
+  // Every document has "Prepared By" (whoever created it — always known
+  // once saved) and "Authorised By" (whoever approved it — blank until
+  // approved). Appended to every document type below, same idiom as
+  // _companyFields, so no per-document-type registration is needed —
+  // was previously VOUCHER-only, the one gap that let every other
+  // module's print show the label with no name against it.
+  static const _signatureFields = [
+    PrintFieldDef('signatures.prepared_by', 'Prepared By'),
+    PrintFieldDef('signatures.authorised_by', 'Authorised By'),
   ];
 
   static const _salesOrderTableRowFields = {
@@ -485,6 +497,7 @@ class PrintFieldRegistry {
       _ => const <PrintFieldDef>[],
     },
     ..._companyFields,
+    ..._signatureFields,
   ];
 
   /// Which repeating lists (table `bind` values) exist for a document type.

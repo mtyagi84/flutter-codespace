@@ -72,11 +72,11 @@ const stockCountDefaultTemplate = PrintTemplate(
     ),
     PrintElement(id: 'div3', type: PrintElementType.line, x: 1, y: 12, w: 180),
     PrintElement(
-      id: 'prepared_by', type: PrintElementType.text, text: 'Counted By',
+      id: 'prepared_by', type: PrintElementType.field, bind: 'signatures.prepared_by', label: 'Counted By: ',
       x: 1, y: 13, w: 80, font: PrintFont(size: 9, align: PrintAlign.center),
     ),
     PrintElement(
-      id: 'authorised_by', type: PrintElementType.text, text: 'Verified By',
+      id: 'authorised_by', type: PrintElementType.field, bind: 'signatures.authorised_by', label: 'Verified By: ',
       x: 2, y: 13, w: 80, font: PrintFont(size: 9, align: PrintAlign.center),
     ),
   ],

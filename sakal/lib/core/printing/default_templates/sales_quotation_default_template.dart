@@ -127,11 +127,11 @@ const salesQuotationDefaultTemplate = PrintTemplate(
     ),
     PrintElement(id: 'div3', type: PrintElementType.line, x: 1, y: 20, w: 180),
     PrintElement(
-      id: 'prepared_by', type: PrintElementType.text, text: 'Prepared By',
+      id: 'prepared_by', type: PrintElementType.field, bind: 'signatures.prepared_by', label: 'Prepared By: ',
       x: 1, y: 21, w: 80, font: PrintFont(size: 9, align: PrintAlign.center),
     ),
     PrintElement(
-      id: 'authorised_by', type: PrintElementType.text, text: 'Authorised Signatory',
+      id: 'authorised_by', type: PrintElementType.field, bind: 'signatures.authorised_by', label: 'Authorised Signatory: ',
       x: 2, y: 21, w: 80, font: PrintFont(size: 9, align: PrintAlign.center),
     ),
   ],

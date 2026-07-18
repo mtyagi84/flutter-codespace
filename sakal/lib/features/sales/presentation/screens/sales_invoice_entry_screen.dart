@@ -13,6 +13,8 @@ import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
+import '../../domain/repositories/sales_invoice_repository.dart';
 import '../providers/sales_invoice_providers.dart';
 
 class _BatchCandidate {
@@ -46,6 +48,12 @@ class _InvoiceLineRow {
   String? taxGroupId;
   String? taxGroupName;
   final TextEditingController remarksCtrl = TextEditingController();
+
+  // Keyboard-only entry chaining: Enter on Disc% moves focus here; the (+)
+  // button itself requests focus onto the NEXT row's productFocusNode once
+  // that row exists.
+  final FocusNode productFocusNode = FocusNode();
+  final FocusNode addButtonFocusNode = FocusNode();
 
   bool   priceResolved = false;
   String priceSource = 'PRICE_MASTER';
@@ -95,6 +103,8 @@ class _InvoiceLineRow {
     discountPctCtrl.dispose();
     remarksCtrl.dispose();
     overrideReasonCtrl.dispose();
+    productFocusNode.dispose();
+    addButtonFocusNode.dispose();
     for (final b in batchCandidates) {
       b.qtyCtrl.dispose();
     }
@@ -169,6 +179,15 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
   final _partyAddressCtrl = TextEditingController();
   String? _salesPersonId;
   String  _salesPersonDisplay = '';
+
+  // Resolved once in _loadExisting (against _users, already loaded by
+  // _init before it) — print's "Prepared By"/"Authorised By" data supply.
+  // Sales Invoice's own default receipt template doesn't render a
+  // signature block (deliberate — a POS receipt, not a document routed
+  // for signature), but the data is still supplied so a company's own
+  // custom template can bind to it via the print designer.
+  String? _preparedByName;
+  String? _authorisedByName;
 
   String? _locationId;
   String  _locationName = '';
@@ -256,6 +275,15 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     return '${d.day.toString().padLeft(2, '0')} ${m[d.month]} ${d.year}';
   }
 
+  // _users is loaded once in _init() (getUsersForAutocomplete, id+full_name)
+  // — reused here rather than a fresh query, same as every other
+  // UUID->name resolution already done on this screen (sales person, etc.).
+  String? _resolveUserName(String? userId) {
+    if (userId == null) return null;
+    final match = _users.firstWhere((u) => u['id'] == userId, orElse: () => const {});
+    return match['full_name'] as String?;
+  }
+
   void _showSnack(String msg, {required Color color}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
@@ -335,18 +363,27 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     _customerDisplay = cashCustomer == null ? '' : '[${cashCustomer['account_code']}] ${cashCustomer['account_name']}';
     _salesPersonId = _quickSetup!['default_sales_person_id'] as String?;
     _salesPersonDisplay = (_quickSetup!['default_sales_person'] as Map<String, dynamic>?)?['full_name'] as String? ?? '';
-    if (_customerId != null) await _resolveCurrencyForCustomer(ds, _customerId!);
+    // Cash sale invoice currency is always the location's local currency,
+    // regardless of whatever ledger currency the cash-customer account
+    // itself happens to be configured with — user-specified: a cash
+    // drawer only ever holds local-currency notes.
+    if (_customerId != null) await _resolveCurrencyForCustomer(ds, _customerId!, forceLocalCurrency: true);
   }
 
-  Future<void> _resolveCurrencyForCustomer(dynamic ds, String customerId) async {
+  Future<void> _resolveCurrencyForCustomer(dynamic ds, String customerId, {bool forceLocalCurrency = false}) async {
     final session = ref.read(sessionProvider)!;
-    final details = await ds.getCustomerDetails(customerId: customerId);
-    final currency = details?['rim_currencies'] as Map<String, dynamic>?;
     final baseCcy = await ref.read(baseCurrencyProvider.future);
     final localCcy = await ref.read(localCurrencyProvider.future);
     _baseCurrency = baseCcy;
     _localCurrency = localCcy;
-    final ccyCode = currency?['currency_id'] as String? ?? baseCcy;
+    String ccyCode;
+    if (forceLocalCurrency) {
+      ccyCode = localCcy;
+    } else {
+      final details = await ds.getCustomerDetails(customerId: customerId);
+      final currency = details?['rim_currencies'] as Map<String, dynamic>?;
+      ccyCode = currency?['currency_id'] as String? ?? baseCcy;
+    }
     final currencies = await ref.read(currenciesProvider.future);
     if (currencies.isEmpty) {
       // No currency master data cached (e.g. offline and this module was
@@ -397,6 +434,8 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     _invoiceMode = header['invoice_mode'] as String? ?? 'DIRECT';
     _saleType = header['sale_type'] as String? ?? 'CASH';
     _status = header['status'] as String? ?? 'DRAFT';
+    _preparedByName = _resolveUserName(header['created_by'] as String?);
+    _authorisedByName = _resolveUserName(header['approved_by'] as String?);
     _sourceQuotationNo = header['quotation_no'] as String?;
     _sourceQuotationDate = header['quotation_date'] as String?;
     _sourceOrderNo = header['order_no'] as String?;
@@ -469,7 +508,14 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     if (mounted) setState(() {});
   }
 
-  Future<void> _loadFromQuotation(String quotationNo, String quotationDate, dynamic ds, dynamic session) async {
+  // ds/session MUST be statically typed here, never `dynamic` — the line
+  // list this method assigns into _lines (List<_InvoiceLineRow>) is built
+  // via `lines.map(_lineRowFromMap).toList()`; if the receiver is dynamic,
+  // that call becomes fully dynamic dispatch, generic-type inference is
+  // lost, and `.toList()` produces a runtime List<dynamic> that fails the
+  // implicit downcast into _lines with exactly the crash this fixes:
+  // "type 'List<dynamic>' is not a subtype of type 'List<_InvoiceLineRow>'".
+  Future<void> _loadFromQuotation(String quotationNo, String quotationDate, SalesInvoiceRepository ds, UserSession session) async {
     final header = await ds.getQuotationHeader(clientId: session.clientId, companyId: session.companyId, quotationNo: quotationNo, quotationDate: quotationDate);
     if (header == null || !mounted) { setState(() { _loading = false; _error = 'Source quotation not found.'; }); return; }
     final customer = header['customer'] as Map<String, dynamic>?;
@@ -500,7 +546,8 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     if (mounted) setState(() => _loading = false);
   }
 
-  Future<void> _loadFromOrder(String orderNo, String orderDate, dynamic ds, dynamic session) async {
+  // See _loadFromQuotation's comment — same fix, same reason.
+  Future<void> _loadFromOrder(String orderNo, String orderDate, SalesInvoiceRepository ds, UserSession session) async {
     final header = await ds.getOrderHeader(clientId: session.clientId, companyId: session.companyId, orderNo: orderNo, orderDate: orderDate);
     if (header == null || !mounted) { setState(() { _loading = false; _error = 'Source order not found.'; }); return; }
     final customer = header['customer'] as Map<String, dynamic>?;
@@ -526,6 +573,189 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
       clientId: session.clientId, companyId: session.companyId, orderNo: orderNo, orderDate: orderDate,
     ));
     if (mounted) setState(() => _loading = false);
+  }
+
+  // ── Live mode switching (inline Direct/Against Quotation/Against Order
+  // selector on this screen itself) ───────────────────────────────────────
+  // Replaces the old list-screen upfront picker dialog — "New Invoice"
+  // now opens straight into this screen in DIRECT mode, and the mode can
+  // be changed at any point while the invoice is still new/unsaved.
+
+  Future<Map<String, dynamic>?> _pickQuotation() async {
+    final session = ref.read(sessionProvider)!;
+    List<Map<String, dynamic>> quotations = [];
+    String? loadError;
+    try {
+      quotations = await ref.read(salesInvoiceRepositoryProvider).getInvoiceableQuotations(
+        clientId: session.clientId, companyId: session.companyId,
+      );
+    } catch (e) {
+      loadError = '$e';
+    }
+    if (!mounted) return null;
+    if (loadError != null) {
+      _showSnack('Could not load quotations: $loadError', color: AppColors.negative);
+      return null;
+    }
+    if (quotations.isEmpty) {
+      _showSnack('No quotation is available to invoice — it may already have an Order or Invoice against it.', color: AppColors.secondary);
+      return null;
+    }
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => SimpleDialog(
+        title: const Text('Select a Sales Quotation'),
+        children: quotations.map((q) {
+          final customer = q['customer'] as Map<String, dynamic>?;
+          final isProspect = q['customer_type'] == 'PROSPECT';
+          final party = isProspect ? (q['party_name'] as String? ?? '') : (customer?['account_name'] as String? ?? '');
+          return SimpleDialogOption(
+            onPressed: () => Navigator.of(context, rootNavigator: true).pop(q),
+            child: ListTile(
+              title: Text('${q['quotation_no']}'),
+              subtitle: Text('$party${isProspect ? ' (Prospect)' : ''} · Grand Total ${q['grand_total']}'),
+              trailing: Text('${q['status']}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Future<Map<String, dynamic>?> _pickOrder() async {
+    final session = ref.read(sessionProvider)!;
+    List<Map<String, dynamic>> orders = [];
+    String? loadError;
+    try {
+      orders = await ref.read(salesInvoiceRepositoryProvider).getInvoiceableOrders(
+        clientId: session.clientId, companyId: session.companyId,
+      );
+    } catch (e) {
+      loadError = '$e';
+    }
+    if (!mounted) return null;
+    if (loadError != null) {
+      _showSnack('Could not load orders: $loadError', color: AppColors.negative);
+      return null;
+    }
+    if (orders.isEmpty) {
+      _showSnack('No approved Sales Order is available to invoice.', color: AppColors.secondary);
+      return null;
+    }
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => SimpleDialog(
+        title: const Text('Select a Sales Order'),
+        children: orders.map((o) {
+          final customer = o['customer'] as Map<String, dynamic>?;
+          return SimpleDialogOption(
+            onPressed: () => Navigator.of(context, rootNavigator: true).pop(o),
+            child: ListTile(
+              title: Text('${o['order_no']}'),
+              subtitle: Text('${customer?['account_name'] ?? ''} · Grand Total ${o['grand_total']}'),
+              trailing: Text('${o['status']}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  /// True whenever the invoice has real entered content that switching
+  /// modes would silently discard — gates the confirm dialog below.
+  bool get _hasUnsavedWork => _lines.any((l) => l.productId != null) || _remarksCtrl.text.trim().isNotEmpty;
+
+  Future<bool> _confirmDiscardIfDirty() async {
+    if (!_hasUnsavedWork) return true;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Switch Invoice Source?'),
+        content: const Text('Switching Direct/Against Quotation/Against Order discards the products and details already entered on this invoice. Continue?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(false), child: const Text('Stay')),
+          FilledButton(onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(true), child: const Text('Switch & Discard')),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
+  Future<void> _onModeSegmentChanged(String newMode) async {
+    if (newMode == _invoiceMode) return;
+    if (!await _confirmDiscardIfDirty() || !mounted) return;
+
+    if (newMode == 'DIRECT') {
+      await _resetToDirect();
+    } else if (newMode == 'AGAINST_QUOTATION') {
+      final picked = await _pickQuotation();
+      if (picked == null || !mounted) return;
+      await _switchToQuotation(picked);
+    } else {
+      final picked = await _pickOrder();
+      if (picked == null || !mounted) return;
+      await _switchToOrder(picked);
+    }
+  }
+
+  /// "Change" link shown next to the already-picked quotation/order number
+  /// — reopens the same picker without going through Direct first (the
+  /// SegmentedButton's own onSelectionChanged only fires on a value
+  /// change, so re-picking a different doc in the SAME mode needs its own
+  /// entry point).
+  Future<void> _reselectSource() async {
+    if (!await _confirmDiscardIfDirty() || !mounted) return;
+    if (_invoiceMode == 'AGAINST_QUOTATION') {
+      final picked = await _pickQuotation();
+      if (picked == null || !mounted) return;
+      await _switchToQuotation(picked);
+    } else {
+      final picked = await _pickOrder();
+      if (picked == null || !mounted) return;
+      await _switchToOrder(picked);
+    }
+  }
+
+  Future<void> _resetToDirect() async {
+    setState(() => _loading = true);
+    for (final l in _lines) { l.dispose(); }
+    _lines = [];
+    for (final c in _charges) { c.dispose(); }
+    _charges.clear();
+    _invoiceMode = 'DIRECT';
+    _sourceQuotationNo = null; _sourceQuotationDate = null;
+    _sourceOrderNo = null; _sourceOrderDate = null;
+    _saleType = 'CASH';
+    _customerId = null; _customerDisplay = '';
+    final ds = ref.read(salesInvoiceRepositoryProvider);
+    final session = ref.read(sessionProvider)!;
+    _locationId = _quickSetup?['location_id'] as String? ?? session.locationId;
+    _locationName = (_quickSetup?['location'] as Map<String, dynamic>?)?['location_name'] as String? ?? '';
+    await _applyCashCustomer(ds);
+    _addLine();
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _switchToQuotation(Map<String, dynamic> picked) async {
+    setState(() { _loading = true; _invoiceMode = 'AGAINST_QUOTATION'; });
+    for (final l in _lines) { l.dispose(); }
+    _lines = [];
+    final ds = ref.read(salesInvoiceRepositoryProvider);
+    final session = ref.read(sessionProvider)!;
+    _sourceQuotationNo = picked['quotation_no'] as String;
+    _sourceQuotationDate = picked['quotation_date'] as String;
+    await _loadFromQuotation(_sourceQuotationNo!, _sourceQuotationDate!, ds, session);
+  }
+
+  Future<void> _switchToOrder(Map<String, dynamic> picked) async {
+    setState(() { _loading = true; _invoiceMode = 'AGAINST_ORDER'; });
+    for (final l in _lines) { l.dispose(); }
+    _lines = [];
+    final ds = ref.read(salesInvoiceRepositoryProvider);
+    final session = ref.read(sessionProvider)!;
+    _sourceOrderNo = picked['order_no'] as String;
+    _sourceOrderDate = picked['order_date'] as String;
+    await _loadFromOrder(_sourceOrderNo!, _sourceOrderDate!, ds, session);
   }
 
   /// Shared by both AGAINST_QUOTATION and AGAINST_ORDER — populates
@@ -588,14 +818,30 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
 
   // ── Lines ────────────────────────────────────────────────────────────────
 
+  // Also the target of the (+) icon on every line row (not just an
+  // "Add Line" button) — keyboard-chained from Disc%'s onFieldSubmitted
+  // (see _buildLineTile), so pressing Enter after typing a discount and
+  // then Enter/Space again on the now-focused (+) button adds the next
+  // line with zero mouse use.
   void _addLine() {
     final row = _InvoiceLineRow();
     final headerDiscount = double.tryParse(_headerDiscountPctCtrl.text) ?? 0;
     if (headerDiscount > 0) row.discountPctCtrl.text = '$headerDiscount';
     setState(() => _lines.add(row));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) row.productFocusNode.requestFocus();
+    });
   }
 
-  void _removeLine(_InvoiceLineRow row) => setState(() { _lines.remove(row); row.dispose(); });
+  // An invoice always needs >=1 line (fn_save_sales_invoice itself rejects
+  // an empty DIRECT invoice) — rather than special-case an empty-lines
+  // state in the UI, deleting down to zero simply re-seeds one fresh blank
+  // line immediately, so there is only ever one line-rendering code path.
+  void _removeLine(_InvoiceLineRow row) => setState(() {
+    _lines.remove(row);
+    row.dispose();
+    if (_lines.isEmpty && !_isAgainstSource) _lines.add(_InvoiceLineRow());
+  });
 
   // ── Charges (DIRECT mode only — AGAINST_QUOTATION/AGAINST_ORDER show a
   // read-only carry-forward from the source document, see
@@ -1249,6 +1495,14 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
         'tax_amount': _taxTotal + _chargeTaxTotal,
         'grand_total': _grandTotal,
       },
+      // Not rendered by this document's own default receipt template
+      // (deliberate — a POS receipt, not a document routed for signature)
+      // but supplied regardless so a company's own custom template can
+      // bind signatures.prepared_by/authorised_by via the print designer.
+      'signatures': {
+        'prepared_by': _preparedByName ?? '',
+        'authorised_by': _authorisedByName ?? '',
+      },
     };
   }
 
@@ -1382,9 +1636,8 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                             _errorBanner('This user has no Quick Invoice Setup — ask an admin to assign a location, cash customer, and cash accounts before making a Cash sale.'),
                             const SizedBox(height: 16),
                           ],
-                          _buildHeaderCard(locked, isMobile),
+                          _buildHeaderCard(locked, isMobile, isOffline),
                           const SizedBox(height: 16),
-                          _buildLinesHeaderCard(locked),
                         ]),
                       ),
                     ),
@@ -1392,7 +1645,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       sliver: SliverList(
                         delegate: SliverChildBuilderDelegate(
-                          (context, index) => _buildLineTile(_lines[index], locked, showLooseQty, showBarcode),
+                          (context, index) => _buildLineTile(_lines[index], locked, showLooseQty, showBarcode, isMobile),
                           childCount: _lines.length,
                         ),
                       ),
@@ -1432,7 +1685,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
         ),
       ]);
 
-  Widget _buildHeaderCard(bool locked, bool isMobile) {
+  Widget _buildHeaderCard(bool locked, bool isMobile, bool isOffline) {
     const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12));
     return Card(
       elevation: 0,
@@ -1440,23 +1693,50 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          if (_isNew) SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'CASH', label: Text('Cash'), icon: Icon(Icons.payments_outlined)),
-              ButtonSegment(value: 'CREDIT', label: Text('Credit'), icon: Icon(Icons.credit_card_outlined)),
+          if (_isNew) Wrap(spacing: 16, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            // Against Quotation/Order need a live "not already invoiced by
+            // someone else" server check — offline supports Direct only
+            // (same restriction the old list-screen dialog used to
+            // enforce before mode selection moved onto this screen). Each
+            // hidden-when-offline segment stays present if it's already
+            // the CURRENT mode (e.g. connectivity dropped mid-entry after
+            // switching to Against Quotation while online) — SegmentedButton
+            // asserts every `selected` value has a matching segment, so
+            // unconditionally hiding it here would crash instead of just
+            // blocking new entry into that mode.
+            SegmentedButton<String>(
+              segments: [
+                const ButtonSegment(value: 'DIRECT', label: Text('Direct'), icon: Icon(Icons.point_of_sale_outlined)),
+                if (!isOffline || _invoiceMode == 'AGAINST_QUOTATION')
+                  const ButtonSegment(value: 'AGAINST_QUOTATION', label: Text('Against Quotation'), icon: Icon(Icons.request_quote_outlined)),
+                if (!isOffline || _invoiceMode == 'AGAINST_ORDER')
+                  const ButtonSegment(value: 'AGAINST_ORDER', label: Text('Against Order'), icon: Icon(Icons.shopping_cart_checkout_outlined)),
+              ],
+              selected: {_invoiceMode},
+              onSelectionChanged: (s) => _onModeSegmentChanged(s.first),
+            ),
+            if (_isAgainstSource) ...[
+              Chip(label: Text(_sourceQuotationNo ?? _sourceOrderNo ?? '', style: const TextStyle(fontSize: 12))),
+              TextButton(onPressed: _reselectSource, child: const Text('Change')),
             ],
-            selected: {_saleType},
-            onSelectionChanged: _isAgainstSource ? null : (s) {
-              setState(() { _saleType = s.first; });
-              final ds = ref.read(salesInvoiceRepositoryProvider);
-              if (_saleType == 'CASH') {
-                unawaited(_applyCashCustomer(ds).then((_) { if (mounted) setState(() {}); }));
-              } else {
-                _customerId = null;
-                _customerDisplay = '';
-              }
-            },
-          ),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'CASH', label: Text('Cash'), icon: Icon(Icons.payments_outlined)),
+                ButtonSegment(value: 'CREDIT', label: Text('Credit'), icon: Icon(Icons.credit_card_outlined)),
+              ],
+              selected: {_saleType},
+              onSelectionChanged: _isAgainstSource ? null : (s) {
+                setState(() { _saleType = s.first; });
+                final ds = ref.read(salesInvoiceRepositoryProvider);
+                if (_saleType == 'CASH') {
+                  unawaited(_applyCashCustomer(ds).then((_) { if (mounted) setState(() {}); }));
+                } else {
+                  _customerId = null;
+                  _customerDisplay = '';
+                }
+              },
+            ),
+          ]),
           const SizedBox(height: 16),
           if (_saleType == 'CASH') ...[
             Wrap(spacing: 16, runSpacing: 12, children: [
@@ -1469,8 +1749,9 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                 ? InputDecorator(decoration: dec.copyWith(labelText: 'Customer'), child: Text(_customerDisplay.isEmpty ? '—' : _customerDisplay, style: const TextStyle(fontSize: 13)))
                 : SizedBox(
                     width: isMobile ? double.infinity : 320,
-                    child: Autocomplete<Map<String, dynamic>>(
+                    child: SakalAutocomplete<Map<String, dynamic>>(
                       initialValue: TextEditingValue(text: _customerDisplay),
+                      enabled: !locked,
                       displayStringForOption: (a) => '[${a['account_code']}] ${a['account_name']}',
                       optionsBuilder: (v) async {
                         final accounts = await ref.read(accountsProvider.future);
@@ -1503,21 +1784,8 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                         }
                         if (mounted) setState(() {});
                       },
-                      fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-                        controller: textCtrl, focusNode: focusNode, enabled: !locked,
-                        decoration: dec.copyWith(label: _req('Customer')),
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                      optionsViewBuilder: (context, onSel, opts) => Align(
-                        alignment: Alignment.topLeft,
-                        child: Material(elevation: 4, borderRadius: BorderRadius.circular(4),
-                            child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 260, minWidth: 280),
-                                child: ListView.builder(padding: EdgeInsets.zero, shrinkWrap: true, itemCount: opts.length,
-                                    itemBuilder: (context, idx) {
-                                      final a = opts.elementAt(idx);
-                                      return InkWell(onTap: () => onSel(a), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), child: Text('[${a['account_code']}] ${a['account_name']}', style: const TextStyle(fontSize: 13))));
-                                    }))),
-                      ),
+                      decoration: dec.copyWith(label: _req('Customer')),
+                      style: const TextStyle(fontSize: 13),
                     ),
                   ),
             const SizedBox(height: 12),
@@ -1539,51 +1807,51 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
             ),
           ],
           const SizedBox(height: 16),
-          Row(children: [
-            Expanded(child: Text('Location: ${_locationName.isEmpty ? '—' : _locationName}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary))),
+          Text('Location: ${_locationName.isEmpty ? '—' : _locationName}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          const SizedBox(height: 12),
+          // Currency, rate, and header discount together on one line —
+          // Currency itself was already a read-only Text (never a picker),
+          // so the only thing that could ever be "editable" here is the
+          // rate. Rate is now locked (not just previously gated on
+          // _canOverridePrice) whenever the invoice's currency isn't the
+          // cashier's own free choice to begin with: AGAINST_QUOTATION/
+          // AGAINST_ORDER inherit the source document's confirmed rate,
+          // and a Cash sale is always local currency by construction (see
+          // _resolveCurrencyForCustomer's forceLocalCurrency) — neither
+          // has a real exchange-rate decision left for a human to make.
+          Wrap(spacing: 16, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
             Text('Currency: ${_invoiceCurrencyCode ?? '—'}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-          ]),
-          // Previously resolved silently with no way for the cashier to see
-          // or correct it — a missing/unconfigured rate defaulted to 1:1
-          // invisibly. Shown (and, for authorized users, editable) whenever
-          // the invoice currency actually differs from base/local.
-          if (_invoiceCurrencyCode != null && (_invoiceCurrencyCode != _baseCurrency || _invoiceCurrencyCode != _localCurrency)) ...[
-            const SizedBox(height: 12),
-            Wrap(spacing: 16, runSpacing: 12, children: [
-              if (_invoiceCurrencyCode != _baseCurrency)
-                SizedBox(
-                  width: isMobile ? double.infinity : 200,
-                  child: TextFormField(
-                    controller: _rateToBaseCtrl, enabled: !locked && _canOverridePrice,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: dec.copyWith(labelText: 'Rate to Base ($_baseCurrency)'),
-                    onChanged: locked ? null : (_) => setState(() {}),
-                  ),
+            if (_invoiceCurrencyCode != null && _invoiceCurrencyCode != _baseCurrency)
+              SizedBox(
+                width: isMobile ? double.infinity : 200,
+                child: TextFormField(
+                  controller: _rateToBaseCtrl, enabled: !locked && _canOverridePrice && !_isAgainstSource && _saleType != 'CASH',
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: dec.copyWith(labelText: 'Rate to Base ($_baseCurrency)'),
+                  onChanged: locked ? null : (_) => setState(() {}),
                 ),
-              if (_invoiceCurrencyCode != _localCurrency)
-                SizedBox(
-                  width: isMobile ? double.infinity : 200,
-                  child: TextFormField(
-                    controller: _rateToLocalCtrl, enabled: !locked && _canOverridePrice,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: dec.copyWith(labelText: 'Rate to Local ($_localCurrency)'),
-                    onChanged: locked ? null : (_) => setState(() {}),
-                  ),
-                ),
-            ]),
-          ],
-          if (!_isAgainstSource) ...[
-            const SizedBox(height: 12),
-            SizedBox(
-              width: 200,
-              child: TextFormField(
-                controller: _headerDiscountPctCtrl, enabled: !locked,
-                keyboardType: TextInputType.number,
-                decoration: dec.copyWith(labelText: 'Header Discount % (fans out to lines)'),
-                onChanged: locked ? null : _applyHeaderDiscount,
               ),
-            ),
-          ],
+            if (_invoiceCurrencyCode != null && _invoiceCurrencyCode != _localCurrency)
+              SizedBox(
+                width: isMobile ? double.infinity : 200,
+                child: TextFormField(
+                  controller: _rateToLocalCtrl, enabled: !locked && _canOverridePrice && !_isAgainstSource && _saleType != 'CASH',
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: dec.copyWith(labelText: 'Rate to Local ($_localCurrency)'),
+                  onChanged: locked ? null : (_) => setState(() {}),
+                ),
+              ),
+            if (!_isAgainstSource)
+              SizedBox(
+                width: isMobile ? double.infinity : 200,
+                child: TextFormField(
+                  controller: _headerDiscountPctCtrl, enabled: !locked,
+                  keyboardType: TextInputType.number,
+                  decoration: dec.copyWith(labelText: 'Header Discount %'),
+                  onChanged: locked ? null : _applyHeaderDiscount,
+                ),
+              ),
+          ]),
           const SizedBox(height: 12),
           TextFormField(controller: _remarksCtrl, enabled: !locked, decoration: dec.copyWith(labelText: 'Remarks (optional)'), maxLines: 2),
         ]),
@@ -1591,30 +1859,29 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     );
   }
 
-  // Split from the line tiles themselves (build()'s SliverList renders
-  // those directly) so a realistic 30-50+ line invoice doesn't build every
-  // row eagerly regardless of scroll position — previously a plain
-  // Column.map inside a SingleChildScrollView. This header keeps the same
-  // "Lines" title + Add Line button; each tile below keeps its own
-  // existing border/margin (see _buildLineTile), so the section still
-  // reads as one group even without a single enclosing card border.
-  Widget _buildLinesHeaderCard(bool locked) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(children: [
-          const Expanded(child: Text('Lines', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600))),
-          if (!locked && !_isAgainstSource) TextButton.icon(onPressed: _addLine, icon: const Icon(Icons.add, size: 16), label: const Text('Add Line')),
-        ]),
-      ),
-    );
-  }
-
-  Widget _buildLineTile(_InvoiceLineRow row, bool locked, bool showLooseQty, bool showBarcode) {
+  Widget _buildLineTile(_InvoiceLineRow row, bool locked, bool showLooseQty, bool showBarcode, bool isMobile) {
     const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
     final rowLocked = locked || _isAgainstSource;
+    final rateEditable = !locked && !_isAgainstSource && (row.priceSource == 'MANUAL_OVERRIDE' || (!row.priceResolved && _canOverridePrice));
+
+    final qtyPackField = TextFormField(controller: row.qtyPackCtrl, enabled: !rowLocked, keyboardType: TextInputType.number,
+        decoration: dec.copyWith(label: _req(showLooseQty ? 'Qty Pack' : 'Quantity')), onChanged: (_) => _onLineQtyChanged(row));
+    final qtyLooseField = TextFormField(controller: row.qtyLooseCtrl, enabled: !rowLocked, keyboardType: TextInputType.number,
+        decoration: dec.copyWith(labelText: 'Qty Loose'), onChanged: (_) => _onLineQtyChanged(row));
+    final rateField = TextFormField(controller: row.rateCtrl, enabled: rateEditable,
+        keyboardType: TextInputType.number, decoration: dec.copyWith(labelText: 'Rate'),
+        onChanged: (_) { row.rateEditedByUser = true; setState(() {}); });
+    final discField = TextFormField(controller: row.discountPctCtrl, enabled: !rowLocked, keyboardType: TextInputType.number,
+        decoration: dec.copyWith(labelText: 'Disc %'), onChanged: (v) => _onDiscountChanged(row, v),
+        // Keyboard-only chaining: Enter here jumps to this row's own (+)
+        // button — Enter/Space on a focused IconButton activates it via
+        // Flutter's standard button-focus semantics, no extra wiring needed.
+        onFieldSubmitted: (_) => row.addButtonFocusNode.requestFocus());
+    final taxField = InputDecorator(decoration: dec.copyWith(labelText: 'Tax'),
+        child: Text(row.taxGroupName ?? '—', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)));
+    final amountText = Padding(padding: const EdgeInsets.only(top: 12),
+        child: Text('= ${row.finalAmount.toStringAsFixed(2)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)));
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -1625,8 +1892,9 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
             flex: 3,
             child: rowLocked
                 ? InputDecorator(decoration: dec.copyWith(labelText: 'Product'), child: Text(row.productDisplay.isEmpty ? '—' : row.productDisplay, style: const TextStyle(fontSize: 13)))
-                : Autocomplete<Map<String, dynamic>>(
+                : SakalAutocomplete<Map<String, dynamic>>(
                     initialValue: TextEditingValue(text: row.productDisplay),
+                    focusNode: row.productFocusNode,
                     displayStringForOption: (p) => '[${p['product_code']}] ${p['product_name']}',
                     optionsBuilder: (v) async {
                       final session = ref.read(sessionProvider)!;
@@ -1634,47 +1902,55 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                       return ds.getProductsForPicker(clientId: session.clientId, companyId: session.companyId, search: v.text);
                     },
                     onSelected: (p) => _onProductSelected(row, p),
-                    fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-                      controller: textCtrl, focusNode: focusNode,
-                      decoration: dec.copyWith(label: _req('Product')),
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                    optionsViewBuilder: (context, onSel, opts) => Align(
-                      alignment: Alignment.topLeft,
-                      child: Material(elevation: 4, borderRadius: BorderRadius.circular(4),
-                          child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 260, minWidth: 280),
-                              child: ListView.builder(padding: EdgeInsets.zero, shrinkWrap: true, itemCount: opts.length,
-                                  itemBuilder: (context, idx) {
-                                    final p = opts.elementAt(idx);
-                                    return InkWell(onTap: () => onSel(p), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), child: Text('[${p['product_code']}] ${p['product_name']}', style: const TextStyle(fontSize: 13))));
-                                  }))),
-                    ),
+                    decoration: dec.copyWith(label: _req('Product')),
+                    style: const TextStyle(fontSize: 13),
                   ),
           ),
           if (showBarcode && !rowLocked) ...[
             const SizedBox(width: 8),
             SizedBox(width: 140, child: TextFormField(controller: row.barcodeCtrl, decoration: dec.copyWith(labelText: 'Scan'), onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v))),
           ],
-          if (!locked && !_isAgainstSource) IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row)),
+          if (!locked && !_isAgainstSource) ...[
+            IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line'),
+            IconButton(
+              focusNode: row.addButtonFocusNode,
+              icon: const Icon(Icons.add_circle_outline, size: 20, color: AppColors.primary),
+              onPressed: _addLine,
+              tooltip: 'Add line',
+            ),
+          ],
         ]),
         const SizedBox(height: 8),
-        Wrap(spacing: 10, runSpacing: 10, children: [
-          SizedBox(width: 100, child: TextFormField(controller: row.qtyPackCtrl, enabled: !rowLocked, keyboardType: TextInputType.number,
-              decoration: dec.copyWith(label: _req(showLooseQty ? 'Qty Pack' : 'Quantity')), onChanged: (_) => _onLineQtyChanged(row))),
-          if (showLooseQty) SizedBox(width: 100, child: TextFormField(controller: row.qtyLooseCtrl, enabled: !rowLocked, keyboardType: TextInputType.number,
-              decoration: dec.copyWith(labelText: 'Qty Loose'), onChanged: (_) => _onLineQtyChanged(row))),
-          SizedBox(width: 110, child: TextFormField(controller: row.rateCtrl, enabled: !locked && (row.priceSource == 'MANUAL_OVERRIDE' || (!row.priceResolved && _canOverridePrice)),
-              keyboardType: TextInputType.number, decoration: dec.copyWith(labelText: 'Rate'),
-              onChanged: (_) { row.rateEditedByUser = true; setState(() {}); })),
-          if (!locked && !_isAgainstSource && !row.priceResolved && _canOverridePrice)
-            TextButton(onPressed: () => setState(() => row.priceSource = 'MANUAL_OVERRIDE'), child: const Text('Override Price')),
-          SizedBox(width: 100, child: TextFormField(controller: row.discountPctCtrl, enabled: !rowLocked, keyboardType: TextInputType.number,
-              decoration: dec.copyWith(labelText: 'Disc %'), onChanged: (v) => _onDiscountChanged(row, v))),
-          if (row.discountGivenByName != null && row.discountGivenByName!.isNotEmpty)
-            Padding(padding: const EdgeInsets.only(top: 12), child: Text('by ${row.discountGivenByName}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
-          SizedBox(width: 90, child: InputDecorator(decoration: dec.copyWith(labelText: 'Tax'), child: Text(row.taxGroupName ?? '—', style: const TextStyle(fontSize: 12)))),
-          SizedBox(width: 110, child: Padding(padding: const EdgeInsets.only(top: 12), child: Text('= ${row.finalAmount.toStringAsFixed(2)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)))),
-        ]),
+        isMobile
+            ? Wrap(spacing: 10, runSpacing: 10, children: [
+                SizedBox(width: 100, child: qtyPackField),
+                if (showLooseQty) SizedBox(width: 100, child: qtyLooseField),
+                SizedBox(width: 110, child: rateField),
+                SizedBox(width: 100, child: discField),
+                SizedBox(width: 130, child: taxField),
+                SizedBox(width: 110, child: amountText),
+              ])
+            // Desktop: a Row with the Tax field Expanded, so it actually
+            // uses the available width instead of wrapping a full tax-group
+            // name ("DRC Standard (TVA 16%)") inside a fixed ~90px box —
+            // the exact complaint a real screenshot caught (a Wrap of fixed
+            // SizedBoxes never grows a child to fill leftover row space,
+            // no matter how much is visibly unused to its right).
+            : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                SizedBox(width: 100, child: qtyPackField),
+                if (showLooseQty) ...[const SizedBox(width: 10), SizedBox(width: 100, child: qtyLooseField)],
+                const SizedBox(width: 10),
+                SizedBox(width: 110, child: rateField),
+                const SizedBox(width: 10),
+                SizedBox(width: 100, child: discField),
+                const SizedBox(width: 10),
+                Expanded(child: taxField),
+                const SizedBox(width: 10),
+                SizedBox(width: 110, child: amountText),
+              ]),
+        if (!locked && !_isAgainstSource && !row.priceResolved && _canOverridePrice)
+          Padding(padding: const EdgeInsets.only(top: 6),
+              child: TextButton(onPressed: () => setState(() => row.priceSource = 'MANUAL_OVERRIDE'), child: const Text('Override Price'))),
         if (row.priceSource == 'MANUAL_OVERRIDE' && !locked)
           Padding(padding: const EdgeInsets.only(top: 10), child: TextFormField(controller: row.overrideReasonCtrl, decoration: dec.copyWith(label: _req('Override Reason')))),
         if (_dispatchStock && (row.isBatchTracked || row.isSerialTracked)) _buildBatchSerialSection(row, locked),

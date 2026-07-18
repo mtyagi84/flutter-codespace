@@ -140,6 +140,10 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
   final _customerPoRefCtrl = TextEditingController();
   String?  _salesPersonId;
   String   _salesPersonDisplay = '';
+  // Resolved in _loadExisting (against _users, already loaded before it) —
+  // print's "Prepared By"/"Authorised Signatory" data supply.
+  String?  _preparedByName;
+  String?  _authorisedByName;
   String?  _orderCurrencyId;
   String?  _orderCurrencyCode;
   final _rateToBaseCtrl  = TextEditingController(text: '1');
@@ -293,6 +297,8 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     _orderNo             = header['order_no'] as String;
     _orderDate           = DateTime.parse(header['order_date'] as String);
     _status              = header['status'] as String;
+    _preparedByName      = _resolveUserName(header['created_by'] as String?);
+    _authorisedByName    = _resolveUserName(header['approved_by'] as String?);
     _orderMode           = header['order_mode'] as String? ?? 'DIRECT';
     _sourceQuotationNo   = header['source_quotation_no'] as String?;
     _sourceQuotationDate = header['source_quotation_date'] as String?;
@@ -996,6 +1002,10 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
         'charges_amount':  _chargesTotal,
         'grand_total':     _grandTotal,
       },
+      'signatures': {
+        'prepared_by': _preparedByName ?? '',
+        'authorised_by': _authorisedByName ?? '',
+      },
     };
   }
 
@@ -1036,6 +1046,14 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
   void _showSnack(String msg, {Color? color}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
+  }
+
+  // _users is loaded once in _init() (getUsersForAutocomplete, id+full_name)
+  // — reused here for print's Prepared By/Authorised Signatory names.
+  String? _resolveUserName(String? userId) {
+    if (userId == null) return null;
+    final match = _users.firstWhere((u) => u['id'] == userId, orElse: () => const {});
+    return match['full_name'] as String?;
   }
 
   Future<void> _pickDate(DateTime? current, ValueChanged<DateTime> onPicked) async {

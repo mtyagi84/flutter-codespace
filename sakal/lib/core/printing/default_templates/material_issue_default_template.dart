@@ -70,11 +70,11 @@ const materialIssueDefaultTemplate = PrintTemplate(
     ),
     PrintElement(id: 'div3', type: PrintElementType.line, x: 1, y: 12, w: 180),
     PrintElement(
-      id: 'issued_by', type: PrintElementType.text, text: 'Issued By',
+      id: 'issued_by', type: PrintElementType.field, bind: 'signatures.prepared_by', label: 'Issued By: ',
       x: 1, y: 13, w: 80, font: PrintFont(size: 9, align: PrintAlign.center),
     ),
     PrintElement(
-      id: 'received_by', type: PrintElementType.text, text: 'Received By',
+      id: 'received_by', type: PrintElementType.field, bind: 'signatures.authorised_by', label: 'Received By: ',
       x: 2, y: 13, w: 80, font: PrintFont(size: 9, align: PrintAlign.center),
     ),
   ],
