@@ -14,12 +14,20 @@ import '../theme/theme_presets.dart';
 /// [isCompactDensityProvider] setting (40px dense / 54px comfortable) so
 /// "Dense" mode compacts every field on a screen, not just literal
 /// SakalAdaptiveList table rows — pass [height] to opt a specific field out
-/// (e.g. a multi-line remarks box) of that automatic sizing.
+/// (e.g. a multi-line remarks box) of that automatic sizing. Label font
+/// size, the label/value gap, and vertical padding all shrink together in
+/// dense mode too — a real bug found live: the label(10px)+gap(2)+value
+/// (14px) stack plus 12px of padding (33-34px) came within a hair of the
+/// 40px dense height even at "comfortable" sizing, and reliably clipped
+/// once Flutter's actual line-height (never exactly the font-size number)
+/// was added in — dense mode needs the WHOLE stack to shrink, not just the
+/// outer box.
 class SakalFieldCard extends ConsumerWidget {
   final String label;
   final bool required;
   final bool editable;
-  final Widget child;
+  final Widget? child;
+  final String? value;
   final double? height;
 
   const SakalFieldCard({
@@ -29,30 +37,20 @@ class SakalFieldCard extends ConsumerWidget {
     this.required = false,
     this.editable = false,
     this.height,
-  });
+  }) : value = null;
 
-  /// Convenience factory for a plain read-only text value — Location,
-  /// Currency-when-locked, a computed line amount, etc.
-  factory SakalFieldCard.readOnly({
-    Key? key,
-    required String label,
-    required String value,
-    bool required = false,
-    double? height,
-  }) {
-    return SakalFieldCard(
-      key: key,
-      label: label,
-      required: required,
-      height: height,
-      child: Text(
-        value,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-      ),
-    );
-  }
+  /// Convenience constructor for a plain read-only text value — Location,
+  /// Currency-when-locked, a computed line amount, etc. Kept as a `value`
+  /// string rather than a pre-built `Text` so its style can be resolved at
+  /// build time (density-aware), not frozen at construction time.
+  const SakalFieldCard.readOnly({
+    super.key,
+    required this.label,
+    required this.value,
+    this.required = false,
+    this.height,
+  })  : editable = false,
+        child = null;
 
   /// Decoration to give any input nested as this card's [child]
   /// (TextFormField / DropdownButtonFormField / SakalAutocomplete) — strips
@@ -73,16 +71,40 @@ class SakalFieldCard extends ConsumerWidget {
     contentPadding: EdgeInsets.zero,
   );
 
+  /// The value/input text style every editable field's own `child` should
+  /// be given (via its `style:` param) to match what this card renders for
+  /// a `.readOnly()` value — density-aware, so a caller doesn't have to
+  /// hand-roll its own dense/comfortable font-size switch. Callers compute
+  /// `isCompact` themselves (`ref.watch(isCompactDensityProvider)`) since a
+  /// child widget built outside this widget's own `build()` has no other
+  /// way to know it.
+  static TextStyle valueTextStyle(bool isCompact) => TextStyle(
+        fontSize: isCompact ? 12 : 14,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textPrimary,
+      );
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isCompact = ref.watch(isCompactDensityProvider);
     final preset = ThemePresetConfig.all[ref.watch(themePresetProvider)]!;
     final resolvedHeight = height ?? DensityMetrics.of(isCompact).rowHeight;
     final borderColor = editable ? preset.secondary : AppColors.border;
+    final labelFontSize = isCompact ? 8.5 : 10.0;
+    final gap = isCompact ? 1.0 : 2.0;
+    final vPad = isCompact ? 3.0 : 6.0;
+
+    final content = child ??
+        Text(
+          value!,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: valueTextStyle(isCompact),
+        );
 
     return Container(
       height: resolvedHeight,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: vPad),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(9),
@@ -97,14 +119,14 @@ class SakalFieldCard extends ConsumerWidget {
             overflow: TextOverflow.ellipsis,
             text: TextSpan(
               text: label.toUpperCase(),
-              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: labelFontSize, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: AppColors.textSecondary),
               children: required
                   ? const [TextSpan(text: ' *', style: TextStyle(color: AppColors.negative, fontWeight: FontWeight.w700))]
                   : null,
             ),
           ),
-          const SizedBox(height: 2),
-          Expanded(child: Align(alignment: Alignment.centerLeft, child: child)),
+          SizedBox(height: gap),
+          Expanded(child: Align(alignment: Alignment.centerLeft, child: content)),
         ],
       ),
     );

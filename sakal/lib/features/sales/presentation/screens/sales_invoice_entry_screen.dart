@@ -8,6 +8,7 @@ import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
@@ -1788,6 +1789,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
 
   Widget _buildHeaderCard(bool locked, bool isMobile, bool isOffline) {
     const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12));
+    final fieldTextStyle = SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider));
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -1890,7 +1892,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                           if (mounted) setState(() {});
                         },
                         decoration: SakalFieldCard.bareDecoration,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                        style: fieldTextStyle,
                       ),
                     )
                 : SakalFieldCard.readOnly(label: 'Customer', value: _customerDisplay.isEmpty ? '—' : _customerDisplay),
@@ -1900,7 +1902,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
               child: DropdownButtonFormField<String>(
                 decoration: SakalFieldCard.bareDecoration,
                 isExpanded: true, isDense: true, itemHeight: null,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                style: fieldTextStyle,
                 initialValue: _salesPersonId,
                 items: [
                   const DropdownMenuItem(value: null, child: Text('— None —')),
@@ -1921,11 +1923,11 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
             const SizedBox(height: 12),
             SakalFieldRow(isMobile: isMobile, flexes: const [4, 3, 4], children: [
               SakalFieldCard(label: 'Walk-in Customer Name (optional)', editable: !locked,
-                  child: TextFormField(controller: _partyNameCtrl, enabled: !locked, decoration: SakalFieldCard.bareDecoration, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary))),
+                  child: TextFormField(controller: _partyNameCtrl, enabled: !locked, decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle)),
               SakalFieldCard(label: 'Mobile (optional)', editable: !locked,
-                  child: TextFormField(controller: _partyPhoneCtrl, enabled: !locked, decoration: SakalFieldCard.bareDecoration, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary))),
+                  child: TextFormField(controller: _partyPhoneCtrl, enabled: !locked, decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle)),
               SakalFieldCard(label: 'Address (optional)', editable: !locked,
-                  child: TextFormField(controller: _partyAddressCtrl, enabled: !locked, decoration: SakalFieldCard.bareDecoration, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary))),
+                  child: TextFormField(controller: _partyAddressCtrl, enabled: !locked, decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle)),
             ]),
           ],
           const SizedBox(height: 16),
@@ -1952,7 +1954,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                   controller: _rateToBaseCtrl, enabled: !locked && _canOverridePrice && !_isAgainstSource && _saleType != 'CASH',
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: SakalFieldCard.bareDecoration,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                  style: fieldTextStyle,
                   onChanged: locked ? null : (_) => setState(() {}),
                 ),
               ),
@@ -1964,7 +1966,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                   controller: _rateToLocalCtrl, enabled: !locked && _canOverridePrice && !_isAgainstSource && _saleType != 'CASH',
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: SakalFieldCard.bareDecoration,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                  style: fieldTextStyle,
                   onChanged: locked ? null : (_) => setState(() {}),
                 ),
               ),
@@ -1976,7 +1978,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                   controller: _headerDiscountPctCtrl, enabled: !locked,
                   keyboardType: TextInputType.number,
                   decoration: SakalFieldCard.bareDecoration,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                  style: fieldTextStyle,
                   onChanged: locked ? null : _applyHeaderDiscount,
                 ),
               ),
@@ -2014,7 +2016,8 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
   Widget _buildLineTile(_InvoiceLineRow row, bool locked, bool showLooseQty, bool showBarcode, bool isMobile) {
     final rowLocked = locked || _isAgainstSource;
     final rateEditable = !locked && !_isAgainstSource && (row.priceSource == 'MANUAL_OVERRIDE' || (!row.priceResolved && _canOverridePrice));
-    const fieldTextStyle = TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary);
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final fieldTextStyle = SakalFieldCard.valueTextStyle(isCompact);
     final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
 
     final productField = rowLocked
@@ -2155,6 +2158,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
       return const Padding(padding: EdgeInsets.only(top: 10), child: LinearProgressIndicator());
     }
     final err = _batchSerialError(row);
+    final fieldTextStyle = SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider));
 
     // A small candidate set stretches to fill the row (SakalFieldRow) same
     // as every other field row on this screen — a Wrap of fixed-width boxes
@@ -2170,7 +2174,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
             child: TextFormField(
               controller: b.qtyCtrl, enabled: !locked, keyboardType: TextInputType.number,
               decoration: SakalFieldCard.bareDecoration,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+              style: fieldTextStyle,
               onChanged: (_) => setState(() {}),
             ),
           )).toList();
@@ -2210,6 +2214,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
   }
 
   Widget _buildPaymentCard(bool locked, bool isMobile) {
+    final fieldTextStyle = SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider));
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -2224,10 +2229,10 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
           SakalFieldRow(isMobile: isMobile, children: [
             SakalFieldCard(label: 'Collected — Local Currency', editable: !locked,
                 child: TextFormField(controller: _collectedLocalCtrl, enabled: !locked, keyboardType: TextInputType.number,
-                    decoration: SakalFieldCard.bareDecoration, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary))),
+                    decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle)),
             SakalFieldCard(label: 'Collected — Base Currency', editable: !locked,
                 child: TextFormField(controller: _collectedBaseCtrl, enabled: !locked, keyboardType: TextInputType.number,
-                    decoration: SakalFieldCard.bareDecoration, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary))),
+                    decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle)),
           ]),
         ]),
       ),
@@ -2242,6 +2247,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     // module's line items in those two modes.
     final chargesLocked = locked || _isAgainstSource;
     final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
+    final fieldTextStyle = SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider));
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -2269,7 +2275,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                       child: DropdownButtonFormField<String>(
                         decoration: SakalFieldCard.bareDecoration,
                         isExpanded: true, isDense: true, itemHeight: null,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                        style: fieldTextStyle,
                         initialValue: row.chargeId,
                         items: _additionalCharges.map((c) => DropdownMenuItem(value: c['id'] as String,
                             child: Text(c['charge_name'] as String, overflow: TextOverflow.ellipsis))).toList(),
@@ -2285,7 +2291,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                         controller: row.valueCtrl, enabled: !chargesLocked,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         decoration: SakalFieldCard.bareDecoration,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                        style: fieldTextStyle,
                         onChanged: (_) => setState(() {}),
                       ),
                     ),
