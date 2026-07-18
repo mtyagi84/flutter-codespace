@@ -4,9 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
 import '../../data/models/common_master_model.dart';
 import '../../data/models/common_master_type_model.dart';
 import '../providers/common_masters_providers.dart';
@@ -287,7 +289,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Common Masters',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700,
-                    color: AppColors.primary)),
+                    color: AppColors.textPrimary)),
             SizedBox(height: 2),
             Text('Shared lookup values used in various screens',
                 style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
@@ -367,10 +369,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
             icon: const Icon(Icons.add, size: 16),
             label: Text('Add $_selectedTypeName'),
             onPressed: _addState != null ? null : _startAdd,
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              minimumSize: const Size(0, 40),
-            ),
+            style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
           ),
       ],
     );
@@ -389,7 +388,6 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
             FilledButton(
               onPressed: _addState != null ? null : _startAdd,
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
                 minimumSize: const Size(48, 40),
                 padding: EdgeInsets.zero,
               ),
@@ -461,15 +459,18 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
   }
 
   Widget _searchField() {
-    return TextFormField(
-      decoration: const InputDecoration(
-        hintText: 'Search...',
-        prefixIcon: Icon(Icons.search, size: 18),
-        border: OutlineInputBorder(),
-        isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    return SakalFieldCard(
+      label: 'Search',
+      editable: true,
+      child: TextFormField(
+        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+        decoration: SakalFieldCard.bareDecoration.copyWith(
+          hintText: 'Search…',
+          hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+          prefixIcon: const Icon(Icons.search, size: 16),
+        ),
+        onChanged: _onSearchChanged,
       ),
-      onChanged: _onSearchChanged,
     );
   }
 
@@ -499,19 +500,20 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
   // ── Desktop table ──────────────────────────────────────────────────────────
 
   Widget _buildDesktopTable(bool canEdit) {
+    final headerColor = ThemePresetConfig.all[ref.watch(themePresetProvider)]!.primary;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
       child: Column(children: [
         // Header row
         Container(
-          decoration: const BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+          decoration: BoxDecoration(
+            color: headerColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
           ),
           child: Row(children: [
             _colHdr('Description',  flex: 4),
             _colHdr('Short Name',   flex: 2),
-            _colHdr('Sort Order',   flex: 2),
+            _colHdr('Sort Order',   flex: 2, numeric: true),
             _colHdr('Active',       flex: 1),
             _colHdr('',             flex: 2),
           ]),
@@ -574,11 +576,12 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
     );
   }
 
-  Widget _colHdr(String label, {int flex = 1}) => Expanded(
+  Widget _colHdr(String label, {int flex = 1, bool numeric = false}) => Expanded(
         flex: flex,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Text(label,
+              textAlign: numeric ? TextAlign.right : TextAlign.left,
               style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -587,6 +590,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
       );
 
   Widget _buildDesktopReadRow(CommonMasterModel m, bool canEdit) {
+    final tint = ThemePresetConfig.all[ref.watch(themePresetProvider)]!.primary;
     return Container(
       color: Colors.white,
       child: Row(children: [
@@ -606,12 +610,12 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
                 ? Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.08),
+                      color: tint.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(m.shortName!,
-                        style: const TextStyle(
-                            fontSize: 12, color: AppColors.primary,
+                        style: TextStyle(
+                            fontSize: 12, color: tint,
                             fontWeight: FontWeight.w600)),
                   )
                 : const Text('—',
@@ -623,6 +627,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Text('${m.sortOrder}',
+                textAlign: TextAlign.right,
                 style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280))),
           ),
         ),
@@ -662,9 +667,10 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
     required VoidCallback onCancel,
     required bool isNew,
   }) {
+    final tint = ThemePresetConfig.all[ref.watch(themePresetProvider)]!.primary;
     return StatefulBuilder(
       builder: (_, setRowState) => Container(
-        color: AppColors.primary.withValues(alpha: 0.04),
+        color: tint.withValues(alpha: 0.04),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         child: Row(children: [
           // Description
@@ -709,6 +715,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: TextFormField(
                 controller: state.sortOrderCtrl,
+                textAlign: TextAlign.right,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: const InputDecoration(
@@ -727,8 +734,6 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
             child: Checkbox(
               value: state.isActive,
               onChanged: (v) => setRowState(() => state.isActive = v ?? true),
-              fillColor: WidgetStateProperty.resolveWith((s) =>
-                  s.contains(WidgetState.selected) ? AppColors.primary : null),
             ),
           ),
           // Save / Cancel
@@ -738,7 +743,6 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
               FilledButton(
                 onPressed: _saving || !state.isValid ? null : onSave,
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
                   minimumSize: const Size(56, 36),
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                 ),
@@ -805,6 +809,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
   }
 
   Widget _buildMobileReadCard(CommonMasterModel m, bool canEdit) {
+    final tint = ThemePresetConfig.all[ref.watch(themePresetProvider)]!.primary;
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -822,20 +827,20 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
                       style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 15,
-                          color: AppColors.primary)),
+                          color: AppColors.textPrimary)),
                 ),
                 if (m.shortName != null)
                   Container(
                     margin: const EdgeInsets.only(left: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.08),
+                      color: tint.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(m.shortName!,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 11,
-                            color: AppColors.primary,
+                            color: tint,
                             fontWeight: FontWeight.w600)),
                   ),
               ]),
@@ -864,7 +869,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
           if (canEdit)
             IconButton(
               icon: const Icon(Icons.edit_outlined, size: 18),
-              color: AppColors.primary,
+              color: tint,
               tooltip: 'Edit',
               onPressed: () => _startEdit(m),
             ),
@@ -879,12 +884,13 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
     VoidCallback onCancel,
     bool isNew,
   ) {
+    final tint = ThemePresetConfig.all[ref.watch(themePresetProvider)]!.primary;
     return StatefulBuilder(
       builder: (_, setRowState) => Card(
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4), width: 1.5),
+          side: BorderSide(color: tint.withValues(alpha: 0.4), width: 1.5),
         ),
         child: Padding(
           padding: const EdgeInsets.all(14),
@@ -915,6 +921,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
                 width: 90,
                 child: TextFormField(
                   controller: state.sortOrderCtrl,
+                  textAlign: TextAlign.right,
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   decoration: const InputDecoration(
@@ -930,8 +937,6 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
               Checkbox(
                 value: state.isActive,
                 onChanged: (v) => setRowState(() => state.isActive = v ?? true),
-                fillColor: WidgetStateProperty.resolveWith((s) =>
-                  s.contains(WidgetState.selected) ? AppColors.primary : null),
               ),
               const Text('Active', style: TextStyle(fontSize: 14)),
               const Spacer(),
@@ -942,8 +947,6 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
               const SizedBox(width: 8),
               FilledButton(
                 onPressed: _saving || !state.isValid ? null : onSave,
-                style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary),
                 child: _saving
                     ? const SizedBox(
                         width: 14, height: 14,
