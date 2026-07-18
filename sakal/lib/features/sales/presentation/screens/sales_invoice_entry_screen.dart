@@ -1738,16 +1738,21 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
             ),
           ]),
           const SizedBox(height: 16),
-          if (_saleType == 'CASH') ...[
-            Wrap(spacing: 16, runSpacing: 12, children: [
-              SizedBox(width: isMobile ? double.infinity : 260, child: TextFormField(controller: _partyNameCtrl, enabled: !locked, decoration: dec.copyWith(labelText: 'Walk-in Customer Name (optional)'))),
-              SizedBox(width: isMobile ? double.infinity : 200, child: TextFormField(controller: _partyPhoneCtrl, enabled: !locked, decoration: dec.copyWith(labelText: 'Mobile (optional)'))),
-              SizedBox(width: isMobile ? double.infinity : 260, child: TextFormField(controller: _partyAddressCtrl, enabled: !locked, decoration: dec.copyWith(labelText: 'Address (optional)'))),
-            ]),
-          ] else ...[
-            _isAgainstSource
-                ? InputDecorator(decoration: dec.copyWith(labelText: 'Customer'), child: Text(_customerDisplay.isEmpty ? '—' : _customerDisplay, style: const TextStyle(fontSize: 13)))
-                : SizedBox(
+          // Row 1 — identity: Location, Customer, Sales Person. Same shape
+          // for Cash and Credit, Direct and Against-Source — user-specified
+          // ("practically there should not be any difference in UI/UX of
+          // credit sales or cash sales, they should look exactly same").
+          // The ONLY thing that differs between modes is whether the
+          // Customer slot is editable (Direct+Credit only) — every field,
+          // position, and width below is shared code, not two parallel
+          // layouts that happen to resemble each other.
+          Wrap(spacing: 16, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.start, children: [
+            SizedBox(
+              width: isMobile ? double.infinity : 180,
+              child: InputDecorator(decoration: dec.copyWith(labelText: 'Location'), child: Text(_locationName.isEmpty ? '—' : _locationName, style: const TextStyle(fontSize: 13))),
+            ),
+            (_saleType == 'CREDIT' && !_isAgainstSource)
+                ? SizedBox(
                     width: isMobile ? double.infinity : 320,
                     child: SakalAutocomplete<Map<String, dynamic>>(
                       initialValue: TextEditingValue(text: _customerDisplay),
@@ -1787,8 +1792,11 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                       decoration: dec.copyWith(label: _req('Customer')),
                       style: const TextStyle(fontSize: 13),
                     ),
+                  )
+                : SizedBox(
+                    width: isMobile ? double.infinity : 320,
+                    child: InputDecorator(decoration: dec.copyWith(labelText: 'Customer'), child: Text(_customerDisplay.isEmpty ? '—' : _customerDisplay, style: const TextStyle(fontSize: 13))),
                   ),
-            const SizedBox(height: 12),
             SizedBox(
               width: isMobile ? double.infinity : 260,
               child: DropdownButtonFormField<String>(
@@ -1805,22 +1813,37 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                 }),
               ),
             ),
+          ]),
+          // Row 2 — Cash-only supplementary walk-in details. Clearly
+          // secondary to Row 1's identity fields (which are what make Cash
+          // and Credit look the same) — this row simply doesn't exist for
+          // Credit.
+          if (_saleType == 'CASH') ...[
+            const SizedBox(height: 12),
+            Wrap(spacing: 16, runSpacing: 12, children: [
+              SizedBox(width: isMobile ? double.infinity : 260, child: TextFormField(controller: _partyNameCtrl, enabled: !locked, decoration: dec.copyWith(labelText: 'Walk-in Customer Name (optional)'))),
+              SizedBox(width: isMobile ? double.infinity : 200, child: TextFormField(controller: _partyPhoneCtrl, enabled: !locked, decoration: dec.copyWith(labelText: 'Mobile (optional)'))),
+              SizedBox(width: isMobile ? double.infinity : 260, child: TextFormField(controller: _partyAddressCtrl, enabled: !locked, decoration: dec.copyWith(labelText: 'Address (optional)'))),
+            ]),
           ],
           const SizedBox(height: 16),
-          Text('Location: ${_locationName.isEmpty ? '—' : _locationName}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-          const SizedBox(height: 12),
-          // Currency, rate, and header discount together on one line —
-          // Currency itself was already a read-only Text (never a picker),
-          // so the only thing that could ever be "editable" here is the
-          // rate. Rate is now locked (not just previously gated on
-          // _canOverridePrice) whenever the invoice's currency isn't the
-          // cashier's own free choice to begin with: AGAINST_QUOTATION/
-          // AGAINST_ORDER inherit the source document's confirmed rate,
-          // and a Cash sale is always local currency by construction (see
-          // _resolveCurrencyForCustomer's forceLocalCurrency) — neither
-          // has a real exchange-rate decision left for a human to make.
+          // Currency, rate, and header discount together on one line.
+          // Currency is a disabled field (never a picker — this project's
+          // Account Picker convention doesn't apply here, currency is
+          // always derived, never chosen), matching Location's own
+          // InputDecorator treatment above rather than plain Text. Rate is
+          // locked (not just gated on _canOverridePrice) whenever the
+          // invoice's currency isn't the cashier's own free choice to
+          // begin with: AGAINST_QUOTATION/AGAINST_ORDER inherit the source
+          // document's confirmed rate, and a Cash sale is always local
+          // currency by construction (see _resolveCurrencyForCustomer's
+          // forceLocalCurrency) — neither has a real exchange-rate
+          // decision left for a human to make.
           Wrap(spacing: 16, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            Text('Currency: ${_invoiceCurrencyCode ?? '—'}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+            SizedBox(
+              width: isMobile ? double.infinity : 140,
+              child: InputDecorator(decoration: dec.copyWith(labelText: 'Currency'), child: Text(_invoiceCurrencyCode ?? '—', style: const TextStyle(fontSize: 13))),
+            ),
             if (_invoiceCurrencyCode != null && _invoiceCurrencyCode != _baseCurrency)
               SizedBox(
                 width: isMobile ? double.infinity : 200,
