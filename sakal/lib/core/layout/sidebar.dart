@@ -6,6 +6,7 @@ import '../models/menu_models.dart';
 import '../providers/session_provider.dart';
 import '../router/route_names.dart';
 import '../theme/app_colors.dart';
+import '../theme/theme_presets.dart';
 
 class Sidebar extends ConsumerStatefulWidget {
   const Sidebar({super.key});
@@ -36,14 +37,20 @@ class _SidebarState extends ConsumerState<Sidebar> {
     });
   }
 
+  // ConsumerState's own `ref` field is available in every instance method
+  // below, not just build() — read directly where needed rather than
+  // threading the active preset through every nested _build* signature.
+  ThemePresetConfig get _activePreset => ThemePresetConfig.all[ref.watch(themePresetProvider)]!;
+
   @override
   Widget build(BuildContext context) {
     final menu      = ref.watch(menuProvider);
     final collapsed = ref.watch(sidebarCollapsedProvider);
     final path      = GoRouterState.of(context).matchedLocation;
+    final activePreset = _activePreset;
 
     return Container(
-      color: AppColors.sidebarBg,
+      color: activePreset.primary,
       child: Column(
         children: [
           _buildHeader(collapsed),
@@ -62,9 +69,9 @@ class _SidebarState extends ConsumerState<Sidebar> {
     return Container(
       height: 64,
       padding: EdgeInsets.symmetric(horizontal: collapsed ? 12 : 16),
-      decoration: const BoxDecoration(
-        color: AppColors.primaryDark,
-        border: Border(bottom: BorderSide(color: Colors.white10)),
+      decoration: BoxDecoration(
+        color: _activePreset.primary,
+        border: const Border(bottom: BorderSide(color: Colors.white10)),
       ),
       child: collapsed
           ? const Center(
@@ -84,11 +91,11 @@ class _SidebarState extends ConsumerState<Sidebar> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   alignment: Alignment.center,
-                  child: const Text('S',
+                  child: Text('S',
                       style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
-                          color: AppColors.primary)),
+                          color: _activePreset.primary)),
                 ),
                 const SizedBox(width: 10),
                 const Text(AppConfig.appName,
@@ -124,10 +131,10 @@ class _SidebarState extends ConsumerState<Sidebar> {
               height: 48,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: active ? AppColors.sidebarItemActive : Colors.transparent,
+                color: active ? _activePreset.accent : Colors.transparent,
                 border: active
-                    ? const Border(
-                        left: BorderSide(color: AppColors.secondary, width: 3))
+                    ? Border(
+                        left: BorderSide(color: _activePreset.secondary, width: 3))
                     : null,
               ),
               child: Icon(icon,
@@ -168,7 +175,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
               color: hasActive && !isExpanded
-                  ? AppColors.sidebarItemActive
+                  ? _activePreset.accent
                   : Colors.transparent,
             ),
             child: Row(
@@ -232,10 +239,10 @@ class _SidebarState extends ConsumerState<Sidebar> {
             height: 34,
             padding: const EdgeInsets.only(left: 28, right: 12),
             decoration: BoxDecoration(
-              color: active ? AppColors.sidebarItemActive.withValues(alpha: 0.6) : Colors.transparent,
+              color: active ? _activePreset.accent.withValues(alpha: 0.6) : Colors.transparent,
               border: isGroupActive
-                  ? const Border(
-                      left: BorderSide(color: AppColors.secondary, width: 3))
+                  ? Border(
+                      left: BorderSide(color: _activePreset.secondary, width: 3))
                   : null,
             ),
             child: Row(
@@ -287,10 +294,10 @@ class _SidebarState extends ConsumerState<Sidebar> {
         height: 32,
         padding: const EdgeInsets.only(left: 48, right: 16),
         decoration: BoxDecoration(
-          color: isActive ? AppColors.sidebarItemActive : Colors.transparent,
+          color: isActive ? _activePreset.accent : Colors.transparent,
           border: isActive
-              ? const Border(
-                  left: BorderSide(color: AppColors.secondary, width: 3))
+              ? Border(
+                  left: BorderSide(color: _activePreset.secondary, width: 3))
               : null,
         ),
         alignment: Alignment.centerLeft,

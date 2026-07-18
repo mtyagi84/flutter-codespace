@@ -8,6 +8,7 @@ import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
@@ -2106,31 +2107,52 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     );
   }
 
+  // High-contrast financial summary — solid active-theme-preset background,
+  // white typography throughout. Reactive to the live theme preset (unlike
+  // most of this screen's still-fixed AppColors.X styling — see this
+  // session's report for the exact scope of what is/isn't theme-reactive
+  // yet), since a solid-color card is the one place a preset swap is most
+  // visually obvious.
   Widget _buildTotalsCard() {
-    Widget row(String label, double value) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            SizedBox(width: 140, child: Text(label, textAlign: TextAlign.right, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary))),
-            SizedBox(width: 120, child: Text(value.toStringAsFixed(2), textAlign: TextAlign.right, style: const TextStyle(fontSize: 13))),
+    final activePreset = ThemePresetConfig.all[ref.watch(themePresetProvider)]!;
+    final ccy = _invoiceCurrencyCode ?? '';
+
+    Widget row(String label, double value, {bool isDiscount = false}) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+            Text('$ccy ${value.toStringAsFixed(2)}',
+                style: TextStyle(
+                  color: isDiscount ? const Color(0xFFFFCDD2) : Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                )),
           ]),
         );
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          row('Subtotal', _grossTotal),
-          row('Discount', -_discountTotal),
-          row('Tax', _taxTotal + _chargeTaxTotal),
-          row('Charges', _chargesTotal),
-          const Divider(height: 16),
-          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            const SizedBox(width: 140, child: Text('GRAND TOTAL', textAlign: TextAlign.right, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700))),
-            SizedBox(width: 120, child: Text(_grandTotal.toStringAsFixed(2), textAlign: TextAlign.right, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.primary))),
-          ]),
-        ]),
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: activePreset.primary,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
       ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('FINANCIAL SUMMARY',
+            style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+        const SizedBox(height: 16),
+        row('Subtotal', _grossTotal),
+        row('Discount', -_discountTotal, isDiscount: true),
+        row('Tax', _taxTotal + _chargeTaxTotal),
+        row('Charges', _chargesTotal),
+        const Divider(color: Colors.white24, height: 24, thickness: 1),
+        const Text('GRAND TOTAL', style: TextStyle(color: Colors.white70, fontSize: 10)),
+        const SizedBox(height: 4),
+        Text('$ccy ${_grandTotal.toStringAsFixed(2)}',
+            style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+      ]),
     );
   }
 }

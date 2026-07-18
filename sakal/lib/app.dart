@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/providers/session_provider.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_presets.dart';
 
 class SakalApp extends ConsumerWidget {
   const SakalApp({super.key});
@@ -14,10 +15,11 @@ class SakalApp extends ConsumerWidget {
     ref.listen(sessionProvider, (_, next) {
       sessionNotifier.value = next;
     });
+    final activePreset = ref.watch(themePresetProvider);
     return MaterialApp.router(
       title: 'SAKAL ERP',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
+      theme: AppTheme.forPreset(ThemePresetConfig.all[activePreset]!),
       routerConfig: appRouter,
     );
   }

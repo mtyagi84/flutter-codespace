@@ -5,6 +5,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
@@ -237,33 +238,40 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
     );
   }
 
+  // Row height is an explicit SizedBox, not padding-derived — the density
+  // toggle asks for an exact 40.0/54.0px row height, not an approximation
+  // via vertical padding. Horizontal cell padding also scales with density
+  // (12.0 dense / 18.0 comfortable) per the same spec.
   Widget _buildRow(Map<String, dynamic> r, int index) {
     final customer = r['customer'] as Map<String, dynamic>?;
     final currency = r['currency'] as Map<String, dynamic>?;
     final partyName = customer?['account_name'] as String? ?? r['party_name'] as String? ?? '—';
+    final metrics = DensityMetrics.of(ref.watch(isCompactDensityProvider));
+    final hPad = metrics.margin;
     return InkWell(
       onTap: () => _openEdit(r),
       child: Container(
         color: index.isEven ? Colors.white : AppColors.background,
+        height: metrics.rowHeight,
         child: Row(children: [
-          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          Expanded(flex: 2, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad),
               child: Text(r['invoice_no'] as String, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)))),
-          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
+          Expanded(flex: 2, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad),
               child: Text(_displayDate(r['invoice_date'] as String?), style: const TextStyle(fontSize: 13)))),
-          Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
+          Expanded(flex: 1, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad),
               child: _saleTypeBadge(r['sale_type'] as String? ?? 'CASH'))),
-          Expanded(flex: 3, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
+          Expanded(flex: 3, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad),
               child: Text(partyName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
-          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
+          Expanded(flex: 2, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad),
               child: Row(children: [
                 _statusBadge(r['status'] as String),
                 if (_pendingIds.contains(r['invoice_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
               ]))),
-          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
+          Expanded(flex: 2, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad),
               child: Text('${currency?['currency_id'] ?? ''} ${((r['grand_total'] as num?) ?? 0).toStringAsFixed(2)}',
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)))),
-          Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
+          Expanded(flex: 1, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad * 2 / 3),
               child: IconButton(icon: const Icon(Icons.arrow_forward_ios, size: 14), color: AppColors.primary,
                   onPressed: () => _openEdit(r), tooltip: 'Open', padding: EdgeInsets.zero))),
         ]),

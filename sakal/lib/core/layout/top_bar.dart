@@ -9,6 +9,7 @@ import '../providers/session_provider.dart';
 import '../router/route_names.dart';
 import '../services/offline_session_cache.dart';
 import '../theme/app_colors.dart';
+import '../theme/theme_presets.dart';
 import '../utils/responsive.dart';
 import '../widgets/master_data_sync_indicator.dart';
 import '../widgets/sync_status_indicator.dart';
@@ -26,6 +27,7 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
     final session   = ref.watch(sessionProvider);
     final collapsed = ref.watch(sidebarCollapsedProvider);
     final mobile    = Responsive.isMobile(context);
+    final activePreset = ThemePresetConfig.all[ref.watch(themePresetProvider)]!;
 
     return AppBar(
       backgroundColor: AppColors.surface,
@@ -63,6 +65,8 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
       actions: [
         const MasterDataSyncIndicator(),
         const SyncStatusIndicator(),
+        _buildDensityToggle(ref),
+        _buildThemeDropdown(ref),
         Padding(
           padding: const EdgeInsets.only(right: 8),
           child: PopupMenuButton<String>(
@@ -85,7 +89,7 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
               children: [
                 CircleAvatar(
                   radius: 16,
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: activePreset.primary,
                   child: Text(
                     session?.fullName.isNotEmpty == true
                         ? session!.fullName[0].toUpperCase()
@@ -176,6 +180,50 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
           ),
         ),
       ],
+    );
+  }
+
+  // Row-density toggle — Dense (40px rows) vs Comfortable (54px rows).
+  // Consumers that want to react to it read isCompactDensityProvider
+  // themselves (e.g. Sales Invoice's list screen); this button only flips
+  // the shared state.
+  Widget _buildDensityToggle(WidgetRef ref) {
+    final isCompact = ref.watch(isCompactDensityProvider);
+    return IconButton(
+      icon: Icon(
+        isCompact ? Icons.view_comfortable_outlined : Icons.view_compact_outlined,
+        color: AppColors.textSecondary,
+        size: 20,
+      ),
+      tooltip: isCompact ? 'Switch to Comfortable rows' : 'Switch to Dense rows',
+      onPressed: () => ref.read(isCompactDensityProvider.notifier).state = !isCompact,
+    );
+  }
+
+  Widget _buildThemeDropdown(WidgetRef ref) {
+    final active = ref.watch(themePresetProvider);
+    return PopupMenuButton<ThemePreset>(
+      tooltip: 'Switch theme',
+      icon: const Icon(Icons.palette_outlined, color: AppColors.textSecondary, size: 20),
+      onSelected: (preset) => ref.read(themePresetProvider.notifier).state = preset,
+      itemBuilder: (_) => ThemePreset.values.map((preset) {
+        final config = ThemePresetConfig.all[preset]!;
+        return PopupMenuItem(
+          value: preset,
+          child: Row(children: [
+            Container(
+              width: 14, height: 14,
+              decoration: BoxDecoration(color: config.primary, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 10),
+            Text(config.label),
+            if (preset == active) ...[
+              const Spacer(),
+              const Icon(Icons.check, size: 16, color: AppColors.positive),
+            ],
+          ]),
+        );
+      }).toList(),
     );
   }
 
