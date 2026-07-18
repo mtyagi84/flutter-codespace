@@ -557,11 +557,13 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
         );
         return MapEntry(e.key, lines);
       }));
-      if (mounted) setState(() {
-        _voucherLines..clear()..addEntries(results);
-        _voucherNumbersByLabel..clear()..addEntries(vouchers.entries.map((e) => MapEntry(e.key, e.value.$1)));
-        _loadingVoucherLines = false;
-      });
+      if (mounted) {
+        setState(() {
+          _voucherLines..clear()..addEntries(results);
+          _voucherNumbersByLabel..clear()..addEntries(vouchers.entries.map((e) => MapEntry(e.key, e.value.$1)));
+          _loadingVoucherLines = false;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _loadingVoucherLines = false);
     }
