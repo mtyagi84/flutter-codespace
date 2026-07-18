@@ -13,6 +13,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
 import '../../data/models/item_category_model.dart';
 import '../providers/item_categories_providers.dart';
 
@@ -205,24 +207,13 @@ class _ItemAccountLinksScreenState extends ConsumerState<ItemAccountLinksScreen>
                   Column(children: [
                     _categoryFilterField(),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: _searchCtrl,
-                      decoration: const InputDecoration(
-                          labelText: 'Search item code or name', prefixIcon: Icon(Icons.search)),
-                    ),
+                    _searchField(),
                   ])
                 else
                   Row(children: [
                     Expanded(flex: 2, child: _categoryFilterField()),
                     const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: TextField(
-                        controller: _searchCtrl,
-                        decoration: const InputDecoration(
-                            labelText: 'Search item code or name', prefixIcon: Icon(Icons.search)),
-                      ),
-                    ),
+                    Expanded(flex: 2, child: _searchField()),
                   ]),
                 const SizedBox(height: 16),
 
@@ -251,58 +242,49 @@ class _ItemAccountLinksScreenState extends ConsumerState<ItemAccountLinksScreen>
     );
   }
 
+  Widget _searchField() => SakalFieldCard(
+        label: 'Search item code or name',
+        editable: true,
+        child: TextField(
+          controller: _searchCtrl,
+          style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+          decoration: SakalFieldCard.bareDecoration.copyWith(
+            hintText: 'Search…',
+            hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+            prefixIcon: const Icon(Icons.search, size: 16),
+          ),
+        ),
+      );
+
+  // Category Picker convention app-wide: SakalAutocomplete (not a raw
+  // Autocomplete) for Up/Down/Enter keyboard navigation.
   Widget _categoryFilterField() {
     final options = _categories.where((c) => c.id != null).toList();
     final selected = options.where((c) => c.id == _categoryFilter).toList();
-    return Autocomplete<ItemCategoryModel>(
-      key: ValueKey(_categoryFilter ?? 'none'),
-      initialValue: TextEditingValue(text: selected.isNotEmpty ? _categoryPath(selected.first) : ''),
-      optionsBuilder: (v) {
-        final q = v.text.toLowerCase().trim();
-        if (q.isEmpty) return options;
-        return options.where((c) => _categoryPath(c).toLowerCase().contains(q));
-      },
-      displayStringForOption: _categoryPath,
-      onSelected: (c) => setState(() => _categoryFilter = c.id),
-      fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-        controller: textCtrl,
-        focusNode: focusNode,
+    return SakalFieldCard(
+      label: 'Filter by category',
+      editable: true,
+      child: SakalAutocomplete<ItemCategoryModel>(
+        key: ValueKey(_categoryFilter ?? 'none'),
+        initialValue: TextEditingValue(text: selected.isNotEmpty ? _categoryPath(selected.first) : ''),
+        displayStringForOption: _categoryPath,
+        optionsBuilder: (v) {
+          final q = v.text.toLowerCase().trim();
+          if (q.isEmpty) return options;
+          return options.where((c) => _categoryPath(c).toLowerCase().contains(q));
+        },
+        onSelected: (c) => setState(() => _categoryFilter = c.id),
         onChanged: (v) { if (v.isEmpty) setState(() => _categoryFilter = null); },
-        decoration: InputDecoration(
-          labelText: 'Filter by category',
-          prefixIcon: const Icon(Icons.category_outlined),
+        decoration: SakalFieldCard.bareDecoration.copyWith(
+          hintText: 'All categories…',
           suffixIcon: _categoryFilter != null
               ? IconButton(
-                  icon: const Icon(Icons.clear, size: 18),
-                  onPressed: () { textCtrl.clear(); setState(() => _categoryFilter = null); },
+                  icon: const Icon(Icons.clear, size: 16),
+                  onPressed: () => setState(() => _categoryFilter = null),
                 )
               : null,
         ),
-      ),
-      optionsViewBuilder: (context, onSel, opts) => Align(
-        alignment: Alignment.topLeft,
-        child: Material(
-          elevation: 4,
-          borderRadius: BorderRadius.circular(4),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 240, maxWidth: 400),
-            child: ListView.builder(
-              padding: EdgeInsets.zero,
-              shrinkWrap: true,
-              itemCount: opts.length,
-              itemBuilder: (context, idx) {
-                final c = opts.elementAt(idx);
-                return InkWell(
-                  onTap: () => onSel(c),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    child: Text(_categoryPath(c), style: const TextStyle(fontSize: 13)),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
+        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
       ),
     );
   }
@@ -490,52 +472,23 @@ class _ItemAccountLinksDialogState extends ConsumerState<_ItemAccountLinksDialog
                           final accountId = row['accountId'] as String?;
                           final matches = accounts.where((a) => a['id'] == accountId).toList();
                           final selected = matches.isNotEmpty ? matches.first : null;
-                          final picker = Autocomplete<Map<String, dynamic>>(
+                          // Account Picker convention app-wide: SakalAutocomplete
+                          // (not a raw Autocomplete) for Up/Down/Enter keyboard nav.
+                          final picker = SakalAutocomplete<Map<String, dynamic>>(
                             key: ValueKey('${id}_${accountId ?? 'none'}'),
                             initialValue: TextEditingValue(text: selected != null ? _displayAccount(selected) : ''),
+                            enabled: widget.canEdit && !widget.offline && !_saving,
+                            displayStringForOption: _displayAccount,
                             optionsBuilder: (v) {
                               final q = v.text.toLowerCase().trim();
-                              final filtered = q.isEmpty
-                                  ? accounts
-                                  : accounts.where((a) =>
-                                      (a['account_code'] as String? ?? '').toLowerCase().contains(q) ||
-                                      (a['account_name']  as String? ?? '').toLowerCase().contains(q));
-                              return filtered.take(50);
+                              if (q.isEmpty) return accounts.take(50);
+                              return accounts.where((a) =>
+                                  (a['account_code'] as String? ?? '').toLowerCase().contains(q) ||
+                                  (a['account_name']  as String? ?? '').toLowerCase().contains(q)).take(50);
                             },
-                            displayStringForOption: _displayAccount,
-                            fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-                              controller: textCtrl,
-                              focusNode: focusNode,
-                              enabled: widget.canEdit && !widget.offline && !_saving,
-                              decoration: const InputDecoration(isDense: true, hintText: 'Not configured'),
-                              style: const TextStyle(fontSize: 13),
-                            ),
                             onSelected: (a) => setState(() => _rows[id] = {...row, 'accountId': a['id'], 'source': 'ITEM'}),
-                            optionsViewBuilder: (context, onSel, options) => Align(
-                              alignment: Alignment.topLeft,
-                              child: Material(
-                                elevation: 4,
-                                borderRadius: BorderRadius.circular(4),
-                                child: ConstrainedBox(
-                                  constraints: const BoxConstraints(maxHeight: 240, maxWidth: 360),
-                                  child: ListView.builder(
-                                    padding: EdgeInsets.zero,
-                                    shrinkWrap: true,
-                                    itemCount: options.length,
-                                    itemBuilder: (context, idx) {
-                                      final a = options.elementAt(idx);
-                                      return InkWell(
-                                        onTap: () => onSel(a),
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                          child: Text(_displayAccount(a), style: const TextStyle(fontSize: 13)),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ),
+                            decoration: const InputDecoration(isDense: true, hintText: 'Not configured'),
+                            style: const TextStyle(fontSize: 13),
                           );
                           final badge = Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),

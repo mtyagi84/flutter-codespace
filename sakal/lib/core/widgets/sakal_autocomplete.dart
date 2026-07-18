@@ -27,6 +27,13 @@ class SakalAutocomplete<T extends Object> extends StatefulWidget {
   /// Account Picker convention: parent group shown under the account name).
   final Widget Function(BuildContext context, T option, bool isHighlighted)? optionBuilder;
 
+  /// Fires on every keystroke, same as a plain [TextField.onChanged].
+  /// Needed for a "clear the field to reset the selection" pattern (e.g. a
+  /// category/parent filter where an empty field means "no filter") — a
+  /// raw [Autocomplete]'s own [onChanged] normally does this, and callers
+  /// migrating onto this widget lose that unless it's exposed here too.
+  final ValueChanged<String>? onChanged;
+
   const SakalAutocomplete({
     super.key,
     this.initialValue,
@@ -40,6 +47,7 @@ class SakalAutocomplete<T extends Object> extends StatefulWidget {
     this.optionsMaxHeight = 260,
     this.optionsMinWidth = 280,
     this.optionBuilder,
+    this.onChanged,
   });
 
   @override
@@ -118,6 +126,7 @@ class _SakalAutocompleteState<T extends Object> extends State<SakalAutocomplete<
           enabled: widget.enabled,
           style: widget.style,
           decoration: widget.decoration,
+          onChanged: widget.onChanged,
         ),
       ),
       optionsViewBuilder: (context, onSelected, options) {
