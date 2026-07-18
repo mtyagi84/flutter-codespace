@@ -386,6 +386,9 @@ Any 401 from a non-login endpoint means the JWT expired. The `onError` intercept
 3. Call `OfflineSessionCache.deactivate()` → prevents stale session restore on page refresh
 Do NOT call `onSessionExpired` when the 401 comes from `fn_login` itself.
 
+**Always show `details`, never just `message` — `onError` promotes this once for every screen.**
+PostgREST error bodies are `{code, details, hint, message}` — `message` is the short `RAISE EXCEPTION` string (this codebase's convention is always a machine code, e.g. `'ACCOUNT_LINK_NOT_CONFIGURED'`), `details` is the actual human-readable text from `USING DETAIL = format(...)` — the field every "Error messages — never a raw ID" backend fix (see that section below) exists to populate. Real bug found live 2026-07-18: every save/action error handler in the app (confirmed: 75 occurrences across 43 files) read only `data['message']`, silently discarding `details` — meaning the user only ever saw the bare code, never the carefully human-readable text the backend built. Two screens (`purchase_order_entry_screen.dart`, `grn_entry_screen.dart`) had already independently discovered this and worked around it with their own private `_serverError()` helper, but the fix was never generalized. Fixed once in `DioClient`'s own `onError` interceptor — promotes `details` into `message` in place before `handler.next(error)`, so every existing (and future) `e.response?.data?['message'] ?? '...'` call site across the whole app automatically gets the richer text, no screen-level change needed. **Never write a new per-screen `_serverError()`-style helper for this** — it already happens for free at the interceptor level.
+
 ---
 
 ## Backend / PostgreSQL Rules (must follow on every new transaction module)
