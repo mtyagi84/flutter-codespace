@@ -120,6 +120,28 @@ class AppTheme {
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(6)),
         ),
+        segmentedButtonTheme: _segmentedButtonTheme(config.primary),
+      );
+
+  /// Pill-group look (light track, dark filled selected pill) from the
+  /// confirmed redesign mockup — themed once here so every SegmentedButton
+  /// in the app (Sales Invoice's mode/Cash-Credit selectors today, any
+  /// future screen tomorrow) picks it up automatically, reactive to the
+  /// active preset, with zero per-screen styling needed.
+  static SegmentedButtonThemeData _segmentedButtonTheme(Color selectedColor) =>
+      SegmentedButtonThemeData(
+        style: ButtonStyle(
+          shape: const WidgetStatePropertyAll(StadiumBorder()),
+          side: const WidgetStatePropertyAll(BorderSide(color: AppColors.border)),
+          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 16, vertical: 10)),
+          textStyle: const WidgetStatePropertyAll(TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          backgroundColor: WidgetStateProperty.resolveWith((states) =>
+              states.contains(WidgetState.selected) ? selectedColor : AppColors.surfaceVariant),
+          foregroundColor: WidgetStateProperty.resolveWith((states) =>
+              states.contains(WidgetState.selected) ? Colors.white : AppColors.textSecondary),
+          iconColor: WidgetStateProperty.resolveWith((states) =>
+              states.contains(WidgetState.selected) ? Colors.white : AppColors.textSecondary),
+        ),
       );
 
   static ThemeData get light => ThemeData(
@@ -232,5 +254,6 @@ class AppTheme {
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(6)),
         ),
+        segmentedButtonTheme: _segmentedButtonTheme(AppColors.primary),
       );
 }

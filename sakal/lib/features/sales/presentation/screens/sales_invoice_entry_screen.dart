@@ -8,13 +8,16 @@ import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_autocomplete.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_financial_summary_card.dart';
+import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/sales_invoice_repository.dart';
 import '../providers/sales_invoice_providers.dart';
 
@@ -1642,8 +1645,21 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                         ]),
                       ),
                     ),
+                    if (!isMobile)
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+                        sliver: SliverToBoxAdapter(
+                          // showBarcode column must match _buildLineTile's own per-row
+                          // condition exactly (showBarcode && !rowLocked) — showBarcode
+                          // already excludes _isAgainstSource (see its own definition
+                          // above), so ANDing !locked here reproduces !rowLocked without
+                          // re-deriving it, keeping the header's Scan column from
+                          // appearing when a locked/approved invoice's rows won't render one.
+                          child: _buildLineItemsHeader(showLooseQty, showBarcode && !locked, !locked && !_isAgainstSource),
+                        ),
+                      ),
                     SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      padding: EdgeInsets.fromLTRB(24, 0, 24, isMobile ? 0 : 12),
                       sliver: SliverList(
                         delegate: SliverChildBuilderDelegate(
                           (context, index) => _buildLineTile(_lines[index], locked, showLooseQty, showBarcode, isMobile),
@@ -1750,68 +1766,78 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
           Wrap(spacing: 16, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.start, children: [
             SizedBox(
               width: isMobile ? double.infinity : 180,
-              child: InputDecorator(decoration: dec.copyWith(labelText: 'Location'), child: Text(_locationName.isEmpty ? '—' : _locationName, style: const TextStyle(fontSize: 13))),
+              child: SakalFieldCard.readOnly(label: 'Location', value: _locationName.isEmpty ? '—' : _locationName),
             ),
             (_saleType == 'CREDIT' && !_isAgainstSource)
                 ? SizedBox(
                     width: isMobile ? double.infinity : 320,
-                    child: SakalAutocomplete<Map<String, dynamic>>(
-                      initialValue: TextEditingValue(text: _customerDisplay),
-                      enabled: !locked,
-                      displayStringForOption: (a) => '[${a['account_code']}] ${a['account_name']}',
-                      optionsBuilder: (v) async {
-                        final accounts = await ref.read(accountsProvider.future);
-                        final customers = accounts.where((a) => a['account_nature'] == 'Customer');
-                        final q = v.text.toLowerCase().trim();
-                        if (q.isEmpty) return customers;
-                        return customers.where((a) => (a['account_code'] as String).toLowerCase().contains(q) || (a['account_name'] as String).toLowerCase().contains(q));
-                      },
-                      onSelected: (a) async {
-                        _customerId = a['id'] as String;
-                        _customerDisplay = '[${a['account_code']}] ${a['account_name']}';
-                        final session = ref.read(sessionProvider)!;
-                        final ds = ref.read(salesInvoiceRepositoryProvider);
-                        try {
-                          await _resolveCurrencyForCustomer(ds, _customerId!);
-                          // Re-resolve price for any line added before the
-                          // customer was picked — _resolvePrice no-ops
-                          // silently when _customerId is null, so those
-                          // lines would otherwise be stuck unpriced.
-                          for (final l in _lines.where((l) => l.productId != null)) {
-                            await _resolvePrice(l, ds, session);
+                    child: SakalFieldCard(
+                      label: 'Customer',
+                      required: true,
+                      editable: true,
+                      child: SakalAutocomplete<Map<String, dynamic>>(
+                        initialValue: TextEditingValue(text: _customerDisplay),
+                        enabled: !locked,
+                        displayStringForOption: (a) => '[${a['account_code']}] ${a['account_name']}',
+                        optionsBuilder: (v) async {
+                          final accounts = await ref.read(accountsProvider.future);
+                          final customers = accounts.where((a) => a['account_nature'] == 'Customer');
+                          final q = v.text.toLowerCase().trim();
+                          if (q.isEmpty) return customers;
+                          return customers.where((a) => (a['account_code'] as String).toLowerCase().contains(q) || (a['account_name'] as String).toLowerCase().contains(q));
+                        },
+                        onSelected: (a) async {
+                          _customerId = a['id'] as String;
+                          _customerDisplay = '[${a['account_code']}] ${a['account_name']}';
+                          final session = ref.read(sessionProvider)!;
+                          final ds = ref.read(salesInvoiceRepositoryProvider);
+                          try {
+                            await _resolveCurrencyForCustomer(ds, _customerId!);
+                            // Re-resolve price for any line added before the
+                            // customer was picked — _resolvePrice no-ops
+                            // silently when _customerId is null, so those
+                            // lines would otherwise be stuck unpriced.
+                            for (final l in _lines.where((l) => l.productId != null)) {
+                              await _resolvePrice(l, ds, session);
+                            }
+                          } catch (e) {
+                            // Unlike the Cash-sale path (covered by _init()'s
+                            // own try/catch), this callback has no enclosing
+                            // handler — an uncaught error here previously
+                            // surfaced as an unhandled exception with no user
+                            // feedback at all.
+                            if (mounted) _showSnack('Could not resolve currency/price for this customer: $e', color: AppColors.negative);
                           }
-                        } catch (e) {
-                          // Unlike the Cash-sale path (covered by _init()'s
-                          // own try/catch), this callback has no enclosing
-                          // handler — an uncaught error here previously
-                          // surfaced as an unhandled exception with no user
-                          // feedback at all.
-                          if (mounted) _showSnack('Could not resolve currency/price for this customer: $e', color: AppColors.negative);
-                        }
-                        if (mounted) setState(() {});
-                      },
-                      decoration: dec.copyWith(label: _req('Customer')),
-                      style: const TextStyle(fontSize: 13),
+                          if (mounted) setState(() {});
+                        },
+                        decoration: SakalFieldCard.bareDecoration,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                      ),
                     ),
                   )
                 : SizedBox(
                     width: isMobile ? double.infinity : 320,
-                    child: InputDecorator(decoration: dec.copyWith(labelText: 'Customer'), child: Text(_customerDisplay.isEmpty ? '—' : _customerDisplay, style: const TextStyle(fontSize: 13))),
+                    child: SakalFieldCard.readOnly(label: 'Customer', value: _customerDisplay.isEmpty ? '—' : _customerDisplay),
                   ),
             SizedBox(
               width: isMobile ? double.infinity : 260,
-              child: DropdownButtonFormField<String>(
-                decoration: dec.copyWith(labelText: 'Sales Person'),
-                isExpanded: true, isDense: true, itemHeight: null,
-                initialValue: _salesPersonId,
-                items: [
-                  const DropdownMenuItem(value: null, child: Text('— None —')),
-                  ..._users.map((u) => DropdownMenuItem(value: u['id'] as String, child: Text(u['full_name'] as String, overflow: TextOverflow.ellipsis))),
-                ],
-                onChanged: locked ? null : (v) => setState(() {
-                  _salesPersonId = v;
-                  _salesPersonDisplay = _users.firstWhere((u) => u['id'] == v, orElse: () => const {})['full_name'] as String? ?? '';
-                }),
+              child: SakalFieldCard(
+                label: 'Sales Person',
+                editable: !locked,
+                child: DropdownButtonFormField<String>(
+                  decoration: SakalFieldCard.bareDecoration,
+                  isExpanded: true, isDense: true, itemHeight: null,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                  initialValue: _salesPersonId,
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('— None —')),
+                    ..._users.map((u) => DropdownMenuItem(value: u['id'] as String, child: Text(u['full_name'] as String, overflow: TextOverflow.ellipsis))),
+                  ],
+                  onChanged: locked ? null : (v) => setState(() {
+                    _salesPersonId = v;
+                    _salesPersonDisplay = _users.firstWhere((u) => u['id'] == v, orElse: () => const {})['full_name'] as String? ?? '';
+                  }),
+                ),
               ),
             ),
           ]),
@@ -1822,9 +1848,12 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
           if (_saleType == 'CASH') ...[
             const SizedBox(height: 12),
             Wrap(spacing: 16, runSpacing: 12, children: [
-              SizedBox(width: isMobile ? double.infinity : 260, child: TextFormField(controller: _partyNameCtrl, enabled: !locked, decoration: dec.copyWith(labelText: 'Walk-in Customer Name (optional)'))),
-              SizedBox(width: isMobile ? double.infinity : 200, child: TextFormField(controller: _partyPhoneCtrl, enabled: !locked, decoration: dec.copyWith(labelText: 'Mobile (optional)'))),
-              SizedBox(width: isMobile ? double.infinity : 260, child: TextFormField(controller: _partyAddressCtrl, enabled: !locked, decoration: dec.copyWith(labelText: 'Address (optional)'))),
+              SizedBox(width: isMobile ? double.infinity : 260, child: SakalFieldCard(label: 'Walk-in Customer Name (optional)', editable: !locked,
+                  child: TextFormField(controller: _partyNameCtrl, enabled: !locked, decoration: SakalFieldCard.bareDecoration, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)))),
+              SizedBox(width: isMobile ? double.infinity : 200, child: SakalFieldCard(label: 'Mobile (optional)', editable: !locked,
+                  child: TextFormField(controller: _partyPhoneCtrl, enabled: !locked, decoration: SakalFieldCard.bareDecoration, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)))),
+              SizedBox(width: isMobile ? double.infinity : 260, child: SakalFieldCard(label: 'Address (optional)', editable: !locked,
+                  child: TextFormField(controller: _partyAddressCtrl, enabled: !locked, decoration: SakalFieldCard.bareDecoration, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)))),
             ]),
           ],
           const SizedBox(height: 16),
@@ -1843,36 +1872,51 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
           Wrap(spacing: 16, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
             SizedBox(
               width: isMobile ? double.infinity : 140,
-              child: InputDecorator(decoration: dec.copyWith(labelText: 'Currency'), child: Text(_invoiceCurrencyCode ?? '—', style: const TextStyle(fontSize: 13))),
+              child: SakalFieldCard.readOnly(label: 'Currency', value: _invoiceCurrencyCode ?? '—'),
             ),
             if (_invoiceCurrencyCode != null && _invoiceCurrencyCode != _baseCurrency)
               SizedBox(
                 width: isMobile ? double.infinity : 200,
-                child: TextFormField(
-                  controller: _rateToBaseCtrl, enabled: !locked && _canOverridePrice && !_isAgainstSource && _saleType != 'CASH',
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: dec.copyWith(labelText: 'Rate to Base ($_baseCurrency)'),
-                  onChanged: locked ? null : (_) => setState(() {}),
+                child: SakalFieldCard(
+                  label: 'Rate to Base ($_baseCurrency)',
+                  editable: !locked && _canOverridePrice && !_isAgainstSource && _saleType != 'CASH',
+                  child: TextFormField(
+                    controller: _rateToBaseCtrl, enabled: !locked && _canOverridePrice && !_isAgainstSource && _saleType != 'CASH',
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: SakalFieldCard.bareDecoration,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    onChanged: locked ? null : (_) => setState(() {}),
+                  ),
                 ),
               ),
             if (_invoiceCurrencyCode != null && _invoiceCurrencyCode != _localCurrency)
               SizedBox(
                 width: isMobile ? double.infinity : 200,
-                child: TextFormField(
-                  controller: _rateToLocalCtrl, enabled: !locked && _canOverridePrice && !_isAgainstSource && _saleType != 'CASH',
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: dec.copyWith(labelText: 'Rate to Local ($_localCurrency)'),
-                  onChanged: locked ? null : (_) => setState(() {}),
+                child: SakalFieldCard(
+                  label: 'Rate to Local ($_localCurrency)',
+                  editable: !locked && _canOverridePrice && !_isAgainstSource && _saleType != 'CASH',
+                  child: TextFormField(
+                    controller: _rateToLocalCtrl, enabled: !locked && _canOverridePrice && !_isAgainstSource && _saleType != 'CASH',
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: SakalFieldCard.bareDecoration,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    onChanged: locked ? null : (_) => setState(() {}),
+                  ),
                 ),
               ),
             if (!_isAgainstSource)
               SizedBox(
                 width: isMobile ? double.infinity : 200,
-                child: TextFormField(
-                  controller: _headerDiscountPctCtrl, enabled: !locked,
-                  keyboardType: TextInputType.number,
-                  decoration: dec.copyWith(labelText: 'Header Discount %'),
-                  onChanged: locked ? null : _applyHeaderDiscount,
+                child: SakalFieldCard(
+                  label: 'Header Discount %',
+                  editable: !locked,
+                  child: TextFormField(
+                    controller: _headerDiscountPctCtrl, enabled: !locked,
+                    keyboardType: TextInputType.number,
+                    decoration: SakalFieldCard.bareDecoration,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    onChanged: locked ? null : _applyHeaderDiscount,
+                  ),
                 ),
               ),
           ]),
@@ -1883,58 +1927,150 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     );
   }
 
+  // Header row for the desktop line-items table — built with the EXACT same
+  // SizedBox/Expanded widths as _buildLineTile's own desktop Row below, so
+  // the dark SakalTableHeaderBar lines up column-for-column with the data
+  // underneath rather than two independently-flexed layouts drifting apart.
+  Widget _buildLineItemsHeader(bool showLooseQty, bool showBarcode, bool showActionsColumn) {
+    return SakalTableHeaderBar(cells: [
+      Expanded(flex: 3, child: SakalTableHeaderBar.label('Product')),
+      if (showBarcode) ...[const SizedBox(width: 8), SizedBox(width: 140, child: SakalTableHeaderBar.label('Scan'))],
+      const SizedBox(width: 10),
+      SizedBox(width: 100, child: SakalTableHeaderBar.label(showLooseQty ? 'Qty Pack' : 'Quantity')),
+      if (showLooseQty) ...[const SizedBox(width: 10), SizedBox(width: 100, child: SakalTableHeaderBar.label('Qty Loose'))],
+      const SizedBox(width: 10),
+      SizedBox(width: 110, child: SakalTableHeaderBar.label('Rate')),
+      const SizedBox(width: 10),
+      SizedBox(width: 100, child: SakalTableHeaderBar.label('Disc %')),
+      const SizedBox(width: 10),
+      Expanded(flex: 2, child: SakalTableHeaderBar.label('Tax')),
+      const SizedBox(width: 10),
+      SizedBox(width: 120, child: SakalTableHeaderBar.label('Amount')),
+      if (showActionsColumn) const SizedBox(width: 92),
+    ]);
+  }
+
   Widget _buildLineTile(_InvoiceLineRow row, bool locked, bool showLooseQty, bool showBarcode, bool isMobile) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
     final rowLocked = locked || _isAgainstSource;
     final rateEditable = !locked && !_isAgainstSource && (row.priceSource == 'MANUAL_OVERRIDE' || (!row.priceResolved && _canOverridePrice));
+    const fieldTextStyle = TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary);
 
-    final qtyPackField = TextFormField(controller: row.qtyPackCtrl, enabled: !rowLocked, keyboardType: TextInputType.number,
-        decoration: dec.copyWith(label: _req(showLooseQty ? 'Qty Pack' : 'Quantity')), onChanged: (_) => _onLineQtyChanged(row));
-    final qtyLooseField = TextFormField(controller: row.qtyLooseCtrl, enabled: !rowLocked, keyboardType: TextInputType.number,
-        decoration: dec.copyWith(labelText: 'Qty Loose'), onChanged: (_) => _onLineQtyChanged(row));
-    final rateField = TextFormField(controller: row.rateCtrl, enabled: rateEditable,
-        keyboardType: TextInputType.number, decoration: dec.copyWith(labelText: 'Rate'),
-        onChanged: (_) { row.rateEditedByUser = true; setState(() {}); });
-    final discField = TextFormField(controller: row.discountPctCtrl, enabled: !rowLocked, keyboardType: TextInputType.number,
-        decoration: dec.copyWith(labelText: 'Disc %'), onChanged: (v) => _onDiscountChanged(row, v),
-        // Keyboard-only chaining: Enter here jumps to this row's own (+)
-        // button — Enter/Space on a focused IconButton activates it via
-        // Flutter's standard button-focus semantics, no extra wiring needed.
-        onFieldSubmitted: (_) => row.addButtonFocusNode.requestFocus());
-    final taxField = InputDecorator(decoration: dec.copyWith(labelText: 'Tax'),
-        child: Text(row.taxGroupName ?? '—', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)));
-    final amountText = Padding(padding: const EdgeInsets.only(top: 12),
-        child: Text('= ${row.finalAmount.toStringAsFixed(2)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)));
+    final productField = rowLocked
+        ? SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? '—' : row.productDisplay)
+        : SakalFieldCard(
+            label: 'Product',
+            required: true,
+            editable: true,
+            child: SakalAutocomplete<Map<String, dynamic>>(
+              initialValue: TextEditingValue(text: row.productDisplay),
+              focusNode: row.productFocusNode,
+              displayStringForOption: (p) => '[${p['product_code']}] ${p['product_name']}',
+              optionsBuilder: (v) async {
+                final session = ref.read(sessionProvider)!;
+                final ds = ref.read(salesInvoiceRepositoryProvider);
+                return ds.getProductsForPicker(clientId: session.clientId, companyId: session.companyId, search: v.text);
+              },
+              onSelected: (p) => _onProductSelected(row, p),
+              decoration: SakalFieldCard.bareDecoration,
+              style: fieldTextStyle,
+            ),
+          );
+    final barcodeField = SakalFieldCard(
+      label: 'Scan',
+      editable: true,
+      child: TextFormField(controller: row.barcodeCtrl, decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle,
+          onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v)),
+    );
+    final qtyPackField = SakalFieldCard(
+      label: showLooseQty ? 'Qty Pack' : 'Quantity', required: true, editable: !rowLocked,
+      child: TextFormField(controller: row.qtyPackCtrl, enabled: !rowLocked, keyboardType: TextInputType.number,
+          decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle, onChanged: (_) => _onLineQtyChanged(row)),
+    );
+    final qtyLooseField = SakalFieldCard(
+      label: 'Qty Loose', editable: !rowLocked,
+      child: TextFormField(controller: row.qtyLooseCtrl, enabled: !rowLocked, keyboardType: TextInputType.number,
+          decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle, onChanged: (_) => _onLineQtyChanged(row)),
+    );
+    final rateField = SakalFieldCard(
+      label: 'Rate', editable: rateEditable,
+      child: TextFormField(controller: row.rateCtrl, enabled: rateEditable, keyboardType: TextInputType.number,
+          decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle,
+          onChanged: (_) { row.rateEditedByUser = true; setState(() {}); }),
+    );
+    final discField = SakalFieldCard(
+      label: 'Disc %', editable: !rowLocked,
+      child: TextFormField(controller: row.discountPctCtrl, enabled: !rowLocked, keyboardType: TextInputType.number,
+          decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle,
+          onChanged: (v) => _onDiscountChanged(row, v),
+          // Keyboard-only chaining: Enter here jumps to this row's own (+)
+          // button — Enter/Space on a focused IconButton activates it via
+          // Flutter's standard button-focus semantics, no extra wiring needed.
+          onFieldSubmitted: (_) => row.addButtonFocusNode.requestFocus()),
+    );
+    final taxField = SakalFieldCard.readOnly(label: 'Tax', value: row.taxGroupName ?? '—');
+    final amountField = SakalFieldCard.readOnly(label: 'Amount', value: row.finalAmount.toStringAsFixed(2));
 
+    final showActions = !locked && !_isAgainstSource;
+    final overrideVisible = !locked && !_isAgainstSource && !row.priceResolved && _canOverridePrice;
+    final overrideReasonVisible = row.priceSource == 'MANUAL_OVERRIDE' && !locked;
+    final batchSerialVisible = _dispatchStock && (row.isBatchTracked || row.isSerialTracked);
+    final hasExtraBody = overrideVisible || overrideReasonVisible || batchSerialVisible;
+    final extraBody = hasExtraBody
+        ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (overrideVisible)
+              Padding(padding: const EdgeInsets.only(bottom: 6),
+                  child: TextButton(onPressed: () => setState(() => row.priceSource = 'MANUAL_OVERRIDE'), child: const Text('Override Price'))),
+            if (overrideReasonVisible)
+              Padding(padding: const EdgeInsets.only(bottom: 6),
+                  child: TextFormField(controller: row.overrideReasonCtrl, decoration: InputDecoration(border: const OutlineInputBorder(), isDense: true, label: _req('Override Reason')))),
+            if (batchSerialVisible) _buildBatchSerialSection(row, locked),
+          ])
+        : null;
+
+    if (isMobile) {
+      return SakalLineItemCard(
+        title: row.productDisplay.isEmpty ? 'New Line' : row.productDisplay,
+        trailingHeaderAction: showActions
+            ? IconButton(focusNode: row.addButtonFocusNode, icon: const Icon(Icons.add_circle_outline, size: 20, color: Colors.white), onPressed: _addLine, tooltip: 'Add line')
+            : null,
+        onDelete: showActions ? () => _removeLine(row) : null,
+        fields: [
+          SizedBox(width: double.infinity, child: productField),
+          if (showBarcode && !rowLocked) SizedBox(width: double.infinity, child: barcodeField),
+          SizedBox(width: 100, child: qtyPackField),
+          if (showLooseQty) SizedBox(width: 100, child: qtyLooseField),
+          SizedBox(width: 110, child: rateField),
+          SizedBox(width: 100, child: discField),
+          SizedBox(width: 150, child: taxField),
+          SizedBox(width: 120, child: amountField),
+        ],
+        body: extraBody,
+      );
+    }
+
+    // Desktop — a continuous row under _buildLineItemsHeader's dark bar (no
+    // per-line bordered card any more), same left-to-right column order/
+    // widths as that header so the two stay visually aligned.
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(8)),
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(
-            flex: 3,
-            child: rowLocked
-                ? InputDecorator(decoration: dec.copyWith(labelText: 'Product'), child: Text(row.productDisplay.isEmpty ? '—' : row.productDisplay, style: const TextStyle(fontSize: 13)))
-                : SakalAutocomplete<Map<String, dynamic>>(
-                    initialValue: TextEditingValue(text: row.productDisplay),
-                    focusNode: row.productFocusNode,
-                    displayStringForOption: (p) => '[${p['product_code']}] ${p['product_name']}',
-                    optionsBuilder: (v) async {
-                      final session = ref.read(sessionProvider)!;
-                      final ds = ref.read(salesInvoiceRepositoryProvider);
-                      return ds.getProductsForPicker(clientId: session.clientId, companyId: session.companyId, search: v.text);
-                    },
-                    onSelected: (p) => _onProductSelected(row, p),
-                    decoration: dec.copyWith(label: _req('Product')),
-                    style: const TextStyle(fontSize: 13),
-                  ),
-          ),
-          if (showBarcode && !rowLocked) ...[
-            const SizedBox(width: 8),
-            SizedBox(width: 140, child: TextFormField(controller: row.barcodeCtrl, decoration: dec.copyWith(labelText: 'Scan'), onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v))),
-          ],
-          if (!locked && !_isAgainstSource) ...[
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(flex: 3, child: productField),
+          if (showBarcode && !rowLocked) ...[const SizedBox(width: 8), SizedBox(width: 140, child: barcodeField)],
+          const SizedBox(width: 10),
+          SizedBox(width: 100, child: qtyPackField),
+          if (showLooseQty) ...[const SizedBox(width: 10), SizedBox(width: 100, child: qtyLooseField)],
+          const SizedBox(width: 10),
+          SizedBox(width: 110, child: rateField),
+          const SizedBox(width: 10),
+          SizedBox(width: 100, child: discField),
+          const SizedBox(width: 10),
+          Expanded(flex: 2, child: taxField),
+          const SizedBox(width: 10),
+          SizedBox(width: 120, child: amountField),
+          if (showActions) ...[
+            const SizedBox(width: 4),
             IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line'),
             IconButton(
               focusNode: row.addButtonFocusNode,
@@ -1944,40 +2080,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
             ),
           ],
         ]),
-        const SizedBox(height: 8),
-        isMobile
-            ? Wrap(spacing: 10, runSpacing: 10, children: [
-                SizedBox(width: 100, child: qtyPackField),
-                if (showLooseQty) SizedBox(width: 100, child: qtyLooseField),
-                SizedBox(width: 110, child: rateField),
-                SizedBox(width: 100, child: discField),
-                SizedBox(width: 130, child: taxField),
-                SizedBox(width: 110, child: amountText),
-              ])
-            // Desktop: a Row with the Tax field Expanded, so it actually
-            // uses the available width instead of wrapping a full tax-group
-            // name ("DRC Standard (TVA 16%)") inside a fixed ~90px box —
-            // the exact complaint a real screenshot caught (a Wrap of fixed
-            // SizedBoxes never grows a child to fill leftover row space,
-            // no matter how much is visibly unused to its right).
-            : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                SizedBox(width: 100, child: qtyPackField),
-                if (showLooseQty) ...[const SizedBox(width: 10), SizedBox(width: 100, child: qtyLooseField)],
-                const SizedBox(width: 10),
-                SizedBox(width: 110, child: rateField),
-                const SizedBox(width: 10),
-                SizedBox(width: 100, child: discField),
-                const SizedBox(width: 10),
-                Expanded(child: taxField),
-                const SizedBox(width: 10),
-                SizedBox(width: 110, child: amountText),
-              ]),
-        if (!locked && !_isAgainstSource && !row.priceResolved && _canOverridePrice)
-          Padding(padding: const EdgeInsets.only(top: 6),
-              child: TextButton(onPressed: () => setState(() => row.priceSource = 'MANUAL_OVERRIDE'), child: const Text('Override Price'))),
-        if (row.priceSource == 'MANUAL_OVERRIDE' && !locked)
-          Padding(padding: const EdgeInsets.only(top: 10), child: TextFormField(controller: row.overrideReasonCtrl, decoration: dec.copyWith(label: _req('Override Reason')))),
-        if (_dispatchStock && (row.isBatchTracked || row.isSerialTracked)) _buildBatchSerialSection(row, locked),
+        if (extraBody != null) Padding(padding: const EdgeInsets.only(top: 8), child: extraBody),
       ]),
     );
   }
@@ -2052,8 +2155,6 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     // nothing to legitimately edit, same rule already governing this
     // module's line items in those two modes.
     final chargesLocked = locked || _isAgainstSource;
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -2074,28 +2175,33 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
             ..._charges.map((row) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                SizedBox(width: 200, child: DropdownButtonFormField<String>(
-                  decoration: dec.copyWith(labelText: 'Charge'),
-                  isExpanded: true, isDense: true, itemHeight: null,
-                  initialValue: row.chargeId,
-                  items: _additionalCharges.map((c) => DropdownMenuItem(value: c['id'] as String,
-                      child: Text(c['charge_name'] as String, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
-                  onChanged: chargesLocked ? null : (v) {
-                    final c = _additionalCharges.firstWhere((e) => e['id'] == v);
-                    _onChargeSelected(row, c);
-                  },
+                SizedBox(width: 200, child: SakalFieldCard(
+                  label: 'Charge', editable: !chargesLocked,
+                  child: DropdownButtonFormField<String>(
+                    decoration: SakalFieldCard.bareDecoration,
+                    isExpanded: true, isDense: true, itemHeight: null,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    initialValue: row.chargeId,
+                    items: _additionalCharges.map((c) => DropdownMenuItem(value: c['id'] as String,
+                        child: Text(c['charge_name'] as String, overflow: TextOverflow.ellipsis))).toList(),
+                    onChanged: chargesLocked ? null : (v) {
+                      final c = _additionalCharges.firstWhere((e) => e['id'] == v);
+                      _onChargeSelected(row, c);
+                    },
+                  ),
                 )),
-                SizedBox(width: 100, child: TextFormField(
-                  controller: row.valueCtrl, enabled: !chargesLocked,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: dec.copyWith(labelText: row.amountOrPercent == 'PERCENT' ? 'Percent' : 'Amount'),
-                  style: const TextStyle(fontSize: 13),
-                  onChanged: (_) => setState(() {}),
+                SizedBox(width: 100, child: SakalFieldCard(
+                  label: row.amountOrPercent == 'PERCENT' ? 'Percent' : 'Amount', editable: !chargesLocked,
+                  child: TextFormField(
+                    controller: row.valueCtrl, enabled: !chargesLocked,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: SakalFieldCard.bareDecoration,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    onChanged: (_) => setState(() {}),
+                  ),
                 )),
-                SizedBox(width: 90, child: Text('${row.nature} · ${row.amount.toStringAsFixed(2)}',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
-                if (row.isTaxable) SizedBox(width: 90, child: Text('Tax: ${row.taxAmount.toStringAsFixed(2)}',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
+                SizedBox(width: 90, child: SakalFieldCard.readOnly(label: row.nature, value: row.amount.toStringAsFixed(2))),
+                if (row.isTaxable) SizedBox(width: 90, child: SakalFieldCard.readOnly(label: 'Tax', value: row.taxAmount.toStringAsFixed(2))),
                 if (!chargesLocked) IconButton(
                   icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
                   onPressed: () => _removeCharge(row),
@@ -2114,45 +2220,15 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
   // yet), since a solid-color card is the one place a preset swap is most
   // visually obvious.
   Widget _buildTotalsCard() {
-    final activePreset = ThemePresetConfig.all[ref.watch(themePresetProvider)]!;
-    final ccy = _invoiceCurrencyCode ?? '';
-
-    Widget row(String label, double value, {bool isDiscount = false}) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-            Text('$ccy ${value.toStringAsFixed(2)}',
-                style: TextStyle(
-                  color: isDiscount ? const Color(0xFFFFCDD2) : Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                )),
-          ]),
-        );
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: activePreset.primary,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 10, offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('FINANCIAL SUMMARY',
-            style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-        const SizedBox(height: 16),
-        row('Subtotal', _grossTotal),
-        row('Discount', -_discountTotal, isDiscount: true),
-        row('Tax', _taxTotal + _chargeTaxTotal),
-        row('Charges', _chargesTotal),
-        const Divider(color: Colors.white24, height: 24, thickness: 1),
-        const Text('GRAND TOTAL', style: TextStyle(color: Colors.white70, fontSize: 10)),
-        const SizedBox(height: 4),
-        Text('$ccy ${_grandTotal.toStringAsFixed(2)}',
-            style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
-      ]),
+    return SakalFinancialSummaryCard(
+      currencyCode: _invoiceCurrencyCode ?? '',
+      total: _grandTotal,
+      rows: [
+        SakalSummaryRow(label: 'Subtotal', value: _grossTotal),
+        SakalSummaryRow(label: 'Discount', value: -_discountTotal, isNegative: true),
+        SakalSummaryRow(label: 'Tax', value: _taxTotal + _chargeTaxTotal),
+        SakalSummaryRow(label: 'Charges', value: _chargesTotal),
+      ],
     );
   }
 }
