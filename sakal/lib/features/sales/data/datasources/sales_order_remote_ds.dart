@@ -413,6 +413,14 @@ class SalesOrderRemoteDs {
     };
   }
 
+  // Not currently called by the entry screen (which defaults UOM from
+  // product['base_uom_id'] directly and only overrides via a barcode
+  // match) — kept correct anyway in case it's ever wired to a real
+  // dropdown later. See price_master_remote_ds.dart's getProductUoms for
+  // the full writeup of why the fallback below is needed: rim_product_uom
+  // only holds ADDITIONAL pack sizes, never auto-populated for a
+  // product's own base UOM, so a product can have zero rows here despite
+  // a perfectly valid base_uom_id.
   Future<List<Map<String, dynamic>>> getProductUoms(String productId) async {
     final res = await _dio.get('/rim_product_uom', queryParameters: {
       'product_id': 'eq.$productId',
@@ -420,7 +428,28 @@ class SalesOrderRemoteDs {
           'uom:rim_common_masters!uom_id(description)',
       'order':      'is_base_uom.desc',
     });
-    return List<Map<String, dynamic>>.from(res.data as List);
+    final rows = List<Map<String, dynamic>>.from(res.data as List);
+    if (rows.isNotEmpty) return rows;
+
+    final productRes = await _dio.get('/rim_products', queryParameters: {
+      'id':     'eq.$productId',
+      'select': 'base_uom_id,uom:rim_common_masters!base_uom_id(description)',
+      'limit':  '1',
+    });
+    final productList = productRes.data as List;
+    if (productList.isEmpty) return [];
+    final product = productList.first as Map<String, dynamic>;
+    final baseUomId = product['base_uom_id'] as String?;
+    if (baseUomId == null) return [];
+    return [
+      {
+        'uom_id': baseUomId,
+        'conversion_factor': 1,
+        'is_base_uom': true,
+        'barcode': null,
+        'uom': product['uom'],
+      },
+    ];
   }
 
   Future<List<Map<String, dynamic>>> getTaxGroups({

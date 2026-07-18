@@ -7,12 +7,35 @@ class ProductUomLocalDs {
   final AppDatabase _db;
   ProductUomLocalDs(this._db);
 
+  // Offline counterpart of price_master_remote_ds.dart's getProductUoms
+  // fallback — see that file for the full writeup. rim_product_uom only
+  // holds ADDITIONAL pack sizes, never auto-populated for a product's own
+  // base UOM, so ProductUomCache can be legitimately empty for a product
+  // that still has a perfectly valid cached base_uom_id.
   Future<List<Map<String, dynamic>>> getForProduct(String productId) async {
     final rows = await (_db.select(_db.productUomCache)
           ..where((t) => t.productId.equals(productId))
           ..orderBy([(t) => OrderingTerm.desc(t.isBaseUom)]))
         .get();
-    return rows.map(_toMap).toList();
+    if (rows.isNotEmpty) return rows.map(_toMap).toList();
+
+    final product = await (_db.select(_db.productsCache)
+          ..where((t) => t.id.equals(productId)))
+        .getSingleOrNull();
+    final baseUomId = product?.baseUomId;
+    if (baseUomId == null) return [];
+    final uom = await (_db.select(_db.commonMastersCache)
+          ..where((t) => t.id.equals(baseUomId)))
+        .getSingleOrNull();
+    return [
+      {
+        'uom_id': baseUomId,
+        'conversion_factor': 1.0,
+        'is_base_uom': true,
+        'barcode': null,
+        'uom': {'description': uom?.description ?? ''},
+      },
+    ];
   }
 
   /// Barcode-scan resolution — mirrors the remote `getProductByCode`'s

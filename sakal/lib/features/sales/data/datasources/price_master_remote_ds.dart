@@ -121,6 +121,18 @@ class PriceMasterRemoteDs {
   /// A product's own pack sizes — scopes the per-line UOM dropdown to only
   /// the UOMs actually configured for the selected product (a Piece price
   /// and a Carton price are two separate lines, never a free UOM picklist).
+  ///
+  /// Real bug found live: rim_product_uom only holds ADDITIONAL pack sizes
+  /// (Carton/Pallet) — picking a Base UOM on Product Master's "UOM &
+  /// Tracking" section sets rim_products.base_uom_id but does NOT
+  /// auto-create a matching rim_product_uom row (that needs a separate
+  /// manual "+ Add UOM" action in a different section of the same screen).
+  /// A product can legitimately have a correct base_uom_id and zero
+  /// rim_product_uom rows — this returned an empty list for it, blocking
+  /// price entry entirely even though the unit is perfectly well-defined.
+  /// Falls back to the product's own base_uom_id when rim_product_uom is
+  /// empty, in the exact same shape a real row would have, so the caller
+  /// (the UOM dropdown builder) needs no change at all.
   Future<List<Map<String, dynamic>>> getProductUoms(String productId) async {
     final res = await _dio.get('/rim_product_uom', queryParameters: {
       'product_id': 'eq.$productId',
@@ -128,7 +140,27 @@ class PriceMasterRemoteDs {
           'uom:rim_common_masters!uom_id(description)',
       'order':      'is_base_uom.desc,sort_order.asc',
     });
-    return List<Map<String, dynamic>>.from(res.data as List);
+    final rows = List<Map<String, dynamic>>.from(res.data as List);
+    if (rows.isNotEmpty) return rows;
+
+    final productRes = await _dio.get('/rim_products', queryParameters: {
+      'id':     'eq.$productId',
+      'select': 'base_uom_id,uom:rim_common_masters!base_uom_id(description)',
+      'limit':  '1',
+    });
+    final productList = productRes.data as List;
+    if (productList.isEmpty) return [];
+    final product = productList.first as Map<String, dynamic>;
+    final baseUomId = product['base_uom_id'] as String?;
+    if (baseUomId == null) return [];
+    return [
+      {
+        'uom_id': baseUomId,
+        'conversion_factor': 1,
+        'is_base_uom': true,
+        'uom': product['uom'],
+      },
+    ];
   }
 
   /// Below-cost reason picker — same two-step common-masters lookup as
