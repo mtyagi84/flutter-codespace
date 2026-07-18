@@ -6,9 +6,13 @@ import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
 
 /// Shared Sales+Purchase charge type master (freight, loading, handling…).
 /// See backend/migrations/031_purchase_orders.sql — rim_additional_charges.
@@ -269,7 +273,7 @@ class _AdditionalChargesScreenState extends ConsumerState<AdditionalChargesScree
       Expanded(flex: 3, child: _HCol('Name')),
       Expanded(flex: 2, child: _HCol('Applies To')),
       Expanded(flex: 2, child: _HCol('Nature')),
-      Expanded(flex: 2, child: _HCol('Default')),
+      Expanded(flex: 2, child: _HCol('Default', numeric: true)),
       Expanded(flex: 2, child: _HCol('Tax')),
       Expanded(flex: 2, child: _HCol('Active')),
       SizedBox(width: 90, child: _HCol('Actions')),
@@ -285,6 +289,7 @@ class _AdditionalChargesScreenState extends ConsumerState<AdditionalChargesScree
         ? (isPct ? '${(defVal as num).toStringAsFixed(2)}%' : (defVal as num).toStringAsFixed(2))
         : '—';
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
+    final tint = ThemePresetConfig.all[ref.watch(themePresetProvider)]!.primary;
     return Container(
       color: isEven ? Colors.transparent : AppColors.surfaceVariant.withValues(alpha: 0.35),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -303,7 +308,7 @@ class _AdditionalChargesScreenState extends ConsumerState<AdditionalChargesScree
           Expanded(flex: 2, child: Text(row['nature'] == 'DEDUCT' ? 'Deduct' : 'Add',
               style: TextStyle(fontSize: 12,
                   color: row['nature'] == 'DEDUCT' ? AppColors.negative : AppColors.positive))),
-          Expanded(flex: 2, child: Text(defText, style: const TextStyle(fontSize: 12))),
+          Expanded(flex: 2, child: Text(defText, textAlign: TextAlign.right, style: const TextStyle(fontSize: 12))),
           Expanded(flex: 2, child: Text(
               (row['is_taxable'] as bool? ?? false) ? (tax?['tax_code'] as String? ?? '—') : 'Non-taxable',
               style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
@@ -329,7 +334,7 @@ class _AdditionalChargesScreenState extends ConsumerState<AdditionalChargesScree
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               IconButton(
                 tooltip: 'Edit',
-                icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                icon: Icon(Icons.edit_outlined, size: 18, color: tint),
                 onPressed: (canEdit && !offline) ? () => _openDialog(row) : null,
               ),
               IconButton(
@@ -347,6 +352,7 @@ class _AdditionalChargesScreenState extends ConsumerState<AdditionalChargesScree
   Widget _buildMobileCard(Map<String, dynamic> row, bool offline) {
     final active  = row['is_active'] as bool? ?? true;
     final tax     = row['tax'] as Map<String, dynamic>?;
+    final tint    = ThemePresetConfig.all[ref.watch(themePresetProvider)]!.primary;
     final isPct   = row['amount_or_percent'] == 'PERCENT';
     final defVal  = isPct ? row['default_percent'] : row['default_amount'];
     final defText = defVal != null
@@ -389,7 +395,7 @@ class _AdditionalChargesScreenState extends ConsumerState<AdditionalChargesScree
         Row(mainAxisAlignment: MainAxisAlignment.end, children: [
           IconButton(
             tooltip: 'Edit',
-            icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.primary),
+            icon: Icon(Icons.edit_outlined, size: 20, color: tint),
             onPressed: (canEdit && !offline) ? () => _openDialog(row) : null,
           ),
           IconButton(
@@ -405,9 +411,11 @@ class _AdditionalChargesScreenState extends ConsumerState<AdditionalChargesScree
 
 class _HCol extends StatelessWidget {
   final String text;
-  const _HCol(this.text);
+  final bool numeric;
+  const _HCol(this.text, {this.numeric = false});
   @override
   Widget build(BuildContext context) => Text(text,
+      textAlign: numeric ? TextAlign.right : TextAlign.left,
       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 0.3));
 }
 
@@ -502,64 +510,42 @@ class _ChargeDialogState extends ConsumerState<_ChargeDialog> {
 
   String _displayAccount(Map<String, dynamic> a) => '[${a['account_code']}] ${a['account_name']}';
 
+  // Account Picker convention app-wide: [code] name, search code OR name,
+  // SakalAutocomplete (not a raw Autocomplete) for Up/Down/Enter keyboard
+  // navigation -- same widget Sales Invoice's Customer picker uses.
   Widget _accountPicker(List<Map<String, dynamic>> accounts) {
     final matches  = accounts.where((a) => a['id'] == _glAccountId).toList();
     final selected = matches.isNotEmpty ? matches.first : null;
-    return SizedBox(
-      height: 56,
-      child: Autocomplete<Map<String, dynamic>>(
-        key: ValueKey(_glAccountId ?? 'none'),
-        initialValue: TextEditingValue(text: selected != null ? _displayAccount(selected) : ''),
-        optionsBuilder: (v) {
-          final q = v.text.toLowerCase().trim();
-          final filtered = q.isEmpty
-              ? accounts
-              : accounts.where((a) =>
-                  (a['account_code'] as String? ?? '').toLowerCase().contains(q) ||
-                  (a['account_name']  as String? ?? '').toLowerCase().contains(q));
-          return filtered.take(50);
-        },
-        displayStringForOption: _displayAccount,
-        fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-          controller: textCtrl,
-          focusNode: focusNode,
-          onChanged: (v) { if (v.isEmpty) setState(() => _glAccountId = null); },
-          decoration: const InputDecoration(labelText: 'Default GL Account', prefixIcon: Icon(Icons.account_balance_outlined)),
-          style: const TextStyle(fontSize: 13),
-        ),
-        onSelected: (a) => setState(() => _glAccountId = a['id'] as String?),
-        optionsViewBuilder: (context, onSel, options) => Align(
-          alignment: Alignment.topLeft,
-          child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(4),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 240, maxWidth: 460),
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                shrinkWrap: true,
-                itemCount: options.length,
-                itemBuilder: (context, idx) {
-                  final a = options.elementAt(idx);
-                  return InkWell(
-                    onTap: () => onSel(a),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      child: Text(_displayAccount(a), style: const TextStyle(fontSize: 13)),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ),
-      ),
+    return SakalAutocomplete<Map<String, dynamic>>(
+      key: ValueKey(_glAccountId ?? 'none'),
+      initialValue: TextEditingValue(text: selected != null ? _displayAccount(selected) : ''),
+      displayStringForOption: _displayAccount,
+      optionsBuilder: (v) {
+        final q = v.text.toLowerCase().trim();
+        if (q.isEmpty) return accounts.take(50);
+        return accounts.where((a) =>
+            (a['account_code'] as String? ?? '').toLowerCase().contains(q) ||
+            (a['account_name']  as String? ?? '').toLowerCase().contains(q)).take(50);
+      },
+      onSelected: (a) => setState(() => _glAccountId = a['id'] as String?),
+      decoration: const InputDecoration(labelText: 'Default GL Account', prefixIcon: Icon(Icons.account_balance_outlined)),
+      style: const TextStyle(fontSize: 13),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final accountsAsync = ref.watch(accountsProvider);
+    final tint = ThemePresetConfig.all[ref.watch(themePresetProvider)]!.primary;
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final fieldStyle = SakalFieldCard.valueTextStyle(isCompact);
+    final mobile = Responsive.isMobile(context);
+    InputDecoration bare({String? hint}) => hint == null
+        ? SakalFieldCard.bareDecoration
+        : SakalFieldCard.bareDecoration.copyWith(
+            hintText: hint,
+            hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+          );
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
@@ -574,7 +560,7 @@ class _ChargeDialogState extends ConsumerState<_ChargeDialog> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
-                    Icon(_isEdit ? Icons.edit_outlined : Icons.add_box_outlined, color: AppColors.primary, size: 22),
+                    Icon(_isEdit ? Icons.edit_outlined : Icons.add_box_outlined, color: tint, size: 22),
                     const SizedBox(width: 10),
                     Text(_isEdit ? 'Edit Charge Type' : 'Add Charge Type',
                         style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
@@ -584,20 +570,32 @@ class _ChargeDialogState extends ConsumerState<_ChargeDialog> {
                   ]),
                   const SizedBox(height: 20),
 
-                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Expanded(flex: 2, child: TextFormField(
-                      controller: _codeCtrl,
-                      textCapitalization: TextCapitalization.characters,
-                      enabled: !_isEdit,
-                      decoration: InputDecoration(label: _req('Code'), prefixIcon: const Icon(Icons.tag_outlined)),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                    )),
-                    const SizedBox(width: 12),
-                    Expanded(flex: 3, child: TextFormField(
-                      controller: _nameCtrl,
-                      decoration: InputDecoration(label: _req('Name'), prefixIcon: const Icon(Icons.label_outline)),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                    )),
+                  SakalFieldRow(isMobile: mobile, spans: const [4, 8], children: [
+                    _isEdit
+                        ? SakalFieldCard.readOnly(label: 'Code', value: _codeCtrl.text)
+                        : SakalFieldCard(
+                            label: 'Code',
+                            required: true,
+                            editable: true,
+                            child: TextFormField(
+                              controller: _codeCtrl,
+                              textCapitalization: TextCapitalization.characters,
+                              style: fieldStyle,
+                              decoration: bare(),
+                              validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                            ),
+                          ),
+                    SakalFieldCard(
+                      label: 'Name',
+                      required: true,
+                      editable: true,
+                      child: TextFormField(
+                        controller: _nameCtrl,
+                        style: fieldStyle,
+                        decoration: bare(),
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      ),
+                    ),
                   ]),
                   const SizedBox(height: 14),
 
@@ -644,6 +642,7 @@ class _ChargeDialogState extends ConsumerState<_ChargeDialog> {
                     const SizedBox(width: 12),
                     Expanded(child: TextFormField(
                       controller: _valueCtrl,
+                      textAlign: TextAlign.right,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: InputDecoration(
                           labelText: _amountOrPercent == 'PERCENT' ? 'Default %' : 'Default Amount'),
@@ -692,6 +691,7 @@ class _ChargeDialogState extends ConsumerState<_ChargeDialog> {
                   Row(children: [
                     SizedBox(width: 100, child: TextFormField(
                       controller: _sortCtrl,
+                      textAlign: TextAlign.right,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(labelText: 'Sort Order'),
                     )),
