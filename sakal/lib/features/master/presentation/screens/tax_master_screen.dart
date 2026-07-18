@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
-import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
 import '../../data/datasources/tax_master_remote_ds.dart';
 import '../../data/models/tax_model.dart';
 import '../../data/models/tax_rate_model.dart';
@@ -333,8 +336,10 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
 
   // ── Account picker ──────────────────────────────────────────────────────────
 
+  // Account Picker convention app-wide: [code] name, search code OR name,
+  // SakalAutocomplete (not a raw Autocomplete) for Up/Down/Enter keyboard
+  // navigation -- same widget Sales Invoice's Customer picker uses.
   Widget _accountPicker({
-    required String label,
     required String? selectedId,
     required ValueChanged<String?> onSelected,
   }) {
@@ -344,87 +349,41 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
     final initialText = initial != null && initial['id']!.isNotEmpty
         ? '[${initial['code']}] ${initial['name']}' : '';
 
-    return Autocomplete<Map<String, String>>(
+    return SakalAutocomplete<Map<String, String>>(
+      key: ValueKey(selectedId),
       initialValue: TextEditingValue(text: initialText),
       displayStringForOption: (a) => '[${a['code']}] ${a['name']}',
       optionsBuilder: (v) {
         final q = v.text.toLowerCase();
+        if (q.isEmpty) return _accounts;
         return _accounts.where((a) =>
             a['code']!.toLowerCase().contains(q) ||
             a['name']!.toLowerCase().contains(q));
       },
       onSelected: (a) => onSelected(a['id']),
-      fieldViewBuilder: (ctx, ctrl, fn, onSubmit) => TextFormField(
-        controller: ctrl,
-        focusNode: fn,
-        decoration: InputDecoration(
-          labelText: label,
-          suffixIcon: ctrl.text.isNotEmpty
-              ? IconButton(icon: const Icon(Icons.clear, size: 18),
-                  onPressed: () { ctrl.clear(); onSelected(null); }) : null,
-        ),
-      ),
-      optionsViewBuilder: (ctx, onSel, options) => Align(
-        alignment: Alignment.topLeft,
-        child: Material(
-          elevation: 4,
-          child: SizedBox(
-            width: 400,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: options.length,
-              itemBuilder: (_, i) {
-                final a = options.elementAt(i);
-                return ListTile(
-                  dense: true,
-                  title: Text('[${a['code']}] ${a['name']}', style: const TextStyle(fontSize: 13)),
-                  onTap: () => onSel(a),
-                );
-              },
-            ),
-          ),
-        ),
-      ),
+      decoration: SakalFieldCard.bareDecoration,
+      style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
     );
   }
 
   // ── Build ────────────────────────────────────────────────────────────────────
 
+  // Same isMobile-only split-panel convention as the converted Customer/
+  // Supplier Master screens — AppShell already supplies Scaffold/TopBar/
+  // OfflineBanner, so this screen only ever returns its own content (the
+  // screen used to wrap itself in its own Scaffold+AppBar, duplicating
+  // TopBar's own title bar — removed as part of this conversion).
   @override
   Widget build(BuildContext context) {
-    final isDesktop = Responsive.isDesktop(context);
-    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Tax Master'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          if (_loading) const Padding(
-            padding: EdgeInsets.all(12),
-            child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-          ),
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _load, tooltip: 'Refresh'),
-          if (_canAdd && !offline)
-            IconButton(icon: const Icon(Icons.add), onPressed: _openAdd, tooltip: 'Add Tax'),
-        ],
-      ),
-      body: Column(children: [
-        const OfflineBanner(),
-        Expanded(child: isDesktop ? _desktopLayout() : _mobileLayout()),
-      ]),
-    );
+    if (Responsive.isMobile(context)) {
+      return _panelMode == 'none' ? _listPanel() : _formPanel();
+    }
+    return Row(children: [
+      SizedBox(width: 440, child: _listPanel()),
+      const VerticalDivider(width: 1, thickness: 1, color: AppColors.border),
+      Expanded(child: _panelMode == 'none' ? _emptyPanel() : _formPanel()),
+    ]);
   }
-
-  Widget _desktopLayout() => Row(children: [
-    SizedBox(width: 440, child: _listPanel()),
-    const VerticalDivider(width: 1),
-    Expanded(child: _panelMode == 'none' ? _emptyPanel() : _formPanel()),
-  ]);
-
-  Widget _mobileLayout() => _panelMode == 'none' ? _listPanel() : _formPanel();
 
   Widget _emptyPanel() => Center(
     child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -436,18 +395,47 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
 
   // ── List Panel ───────────────────────────────────────────────────────────────
 
-  Widget _listPanel() => Column(children: [
+  Widget _listPanel() {
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
+    return Column(children: [
+    Container(
+      color: AppColors.surface,
+      padding: const EdgeInsets.all(16),
+      child: Row(children: [
+        const Expanded(child: Text('Taxes',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary))),
+        if (_loading)
+          const Padding(
+            padding: EdgeInsets.only(right: 8),
+            child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+          ),
+        IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _load, tooltip: 'Refresh'),
+        if (_canAdd && !offline)
+          FilledButton.icon(
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add'),
+            onPressed: _openAdd,
+          ),
+      ]),
+    ),
     Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-      child: TextField(
-        decoration: const InputDecoration(
-          hintText: 'Search by code or name…',
-          prefixIcon: Icon(Icons.search),
-          isDense: true,
+      child: SakalFieldCard(
+        label: 'Search',
+        editable: true,
+        child: TextField(
+          style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+          decoration: SakalFieldCard.bareDecoration.copyWith(
+            hintText: 'Search by code or name…',
+            hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+            prefixIcon: const Icon(Icons.search, size: 16),
+          ),
+          onChanged: (v) => setState(() => _search = v.toLowerCase()),
         ),
-        onChanged: (v) => setState(() => _search = v.toLowerCase()),
       ),
     ),
+    const Divider(height: 1, color: AppColors.border),
     if (_error != null) Padding(
       padding: const EdgeInsets.all(12),
       child: Row(children: [
@@ -458,6 +446,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
     Expanded(child: _loading ? const Center(child: CircularProgressIndicator())
         : _buildList()),
   ]);
+  }
 
   Widget _buildList() {
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
@@ -480,7 +469,8 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
         final stdRate  = _stdRateLabel(tax.id ?? '');
         return ListTile(
           selected: selected,
-          selectedTileColor: AppColors.primary.withValues(alpha: 0.08),
+          selectedTileColor: ThemePresetConfig.all[ref.watch(themePresetProvider)]!.accent.withValues(alpha: 0.15),
+          tileColor: tax.isActive ? null : const Color(0xFFF9FAFB),
           leading: CircleAvatar(
             radius: 18,
             backgroundColor: tax.isActive ? AppColors.primary : Colors.grey.shade300,
@@ -509,61 +499,120 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
 
   // ── Form Panel ────────────────────────────────────────────────────────────────
 
+  Widget _formTitleBlock(bool isEdit) => Text(
+      isEdit ? 'Edit Tax' : 'New Tax',
+      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
+          color: AppColors.textPrimary));
+
+  Widget _formCloseButton() => IconButton(
+      icon: const Icon(Icons.close, size: 18), onPressed: _closePanel);
+
+  Widget _formActionButtons(bool isEdit, bool offline) =>
+      Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        if (isEdit ? _canEdit : _canAdd)
+          FilledButton(
+            onPressed: (_saving || offline) ? null : _saveTax,
+            child: _saving
+                ? const SizedBox(width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : Text(isEdit ? 'Update Tax' : 'Save Tax'),
+          ),
+      ]);
+
   Widget _formPanel() {
     final isEdit = _panelMode == 'edit';
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
-    return SingleChildScrollView(
+    final mobile = Responsive.isMobile(context);
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final fieldStyle = SakalFieldCard.valueTextStyle(isCompact);
+    InputDecoration bare({String? hint}) => hint == null
+        ? SakalFieldCard.bareDecoration
+        : SakalFieldCard.bareDecoration.copyWith(
+            hintText: hint,
+            hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+          );
+    return Column(children: [
+      Container(
+        color: AppColors.surface,
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+        child: mobile
+            ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Expanded(child: _formTitleBlock(isEdit)),
+                  _formCloseButton(),
+                ]),
+                const SizedBox(height: 10),
+                _formActionButtons(isEdit, offline),
+              ])
+            : Row(children: [
+                Expanded(child: _formTitleBlock(isEdit)),
+                _formActionButtons(isEdit, offline),
+                const SizedBox(width: 8),
+                _formCloseButton(),
+              ]),
+      ),
+      const Divider(height: 1, color: AppColors.border),
+      Expanded(
+        child: SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Form(
         key: _formKey,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Header
-          Row(children: [
-            Expanded(child: Text(isEdit ? 'Edit Tax' : 'New Tax',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
-            if (Responsive.isMobile(context))
-              IconButton(icon: const Icon(Icons.close), onPressed: _closePanel),
-          ]),
-          const SizedBox(height: 20),
-
           // Code + Name
-          Row(children: [
-            SizedBox(width: 140,
+          SakalFieldRow(isMobile: mobile, spans: const [4, 8], children: [
+            isEdit
+                ? SakalFieldCard.readOnly(label: 'Tax Code', value: _codeCtrl.text)
+                : SakalFieldCard(
+                    label: 'Tax Code',
+                    required: true,
+                    editable: true,
+                    child: TextFormField(
+                      controller: _codeCtrl,
+                      textCapitalization: TextCapitalization.characters,
+                      style: fieldStyle,
+                      decoration: bare(),
+                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                    ),
+                  ),
+            SakalFieldCard(
+              label: 'Tax Name',
+              required: true,
+              editable: true,
               child: TextFormField(
-                controller: _codeCtrl,
-                textCapitalization: TextCapitalization.characters,
-                enabled: !isEdit,
-                decoration: const InputDecoration(labelText: 'Tax Code *'),
+                controller: _nameCtrl,
+                style: fieldStyle,
+                decoration: bare(),
                 validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(child: TextFormField(
-              controller: _nameCtrl,
-              decoration: const InputDecoration(labelText: 'Tax Name *'),
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-            )),
           ]),
           const SizedBox(height: 14),
 
           // Tax Type
-          DropdownButtonFormField<String>(
-            initialValue: _taxTypes.isEmpty ? null : _selTypeCode,
-            decoration: const InputDecoration(labelText: 'Tax Type *'),
-            items: _taxTypes.map((t) => DropdownMenuItem(
-              value: t.taxTypeCode,
-              child: Text(t.typeName),
-            )).toList(),
-            validator: (v) => (v == null || v.isEmpty) ? 'Required — run SQL migration 025 in Supabase first' : null,
-            onChanged: (v) => setState(() {
-              _selTypeCode  = v!;
-              // Auto-clear reverse charge if not a withholding type
-              if (_taxTypes.firstWhere((t) => t.taxTypeCode == v, orElse: () =>
-                    const TaxTypeModel(id:'',taxTypeCode:'',typeName:'',isWithholding:false,sortOrder:0,isActive:true))
-                  .isWithholding == false) {
-                _formReverse = false;
-              }
-            }),
+          SakalFieldCard(
+            label: 'Tax Type',
+            required: true,
+            editable: true,
+            child: DropdownButtonFormField<String>(
+              initialValue: _taxTypes.isEmpty ? null : _selTypeCode,
+              isExpanded: true, isDense: true, itemHeight: null,
+              style: fieldStyle,
+              decoration: bare(),
+              items: _taxTypes.map((t) => DropdownMenuItem(
+                value: t.taxTypeCode,
+                child: Text(t.typeName, overflow: TextOverflow.ellipsis),
+              )).toList(),
+              validator: (v) => (v == null || v.isEmpty) ? 'Required — run SQL migration 025 in Supabase first' : null,
+              onChanged: (v) => setState(() {
+                _selTypeCode  = v!;
+                // Auto-clear reverse charge if not a withholding type
+                if (_taxTypes.firstWhere((t) => t.taxTypeCode == v, orElse: () =>
+                      const TaxTypeModel(id:'',taxTypeCode:'',typeName:'',isWithholding:false,sortOrder:0,isActive:true))
+                    .isWithholding == false) {
+                  _formReverse = false;
+                }
+              }),
+            ),
           ),
           const SizedBox(height: 14),
 
@@ -628,22 +677,25 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
           _sectionLabel('GL Accounts (optional — wire up after COA is configured)'),
           const SizedBox(height: 8),
           if (_accounts.isNotEmpty) ...[
-            _accountPicker(
+            SakalFieldCard(
               label: 'Output Account (Sales — Cr)',
-              selectedId: _outAccountId,
-              onSelected: (id) => setState(() => _outAccountId = id),
+              editable: true,
+              child: _accountPicker(selectedId: _outAccountId,
+                  onSelected: (id) => setState(() => _outAccountId = id)),
             ),
             const SizedBox(height: 10),
-            _accountPicker(
+            SakalFieldCard(
               label: 'Input Account (Purchase — Dr, recoverable)',
-              selectedId: _inAccountId,
-              onSelected: (id) => setState(() => _inAccountId = id),
+              editable: true,
+              child: _accountPicker(selectedId: _inAccountId,
+                  onSelected: (id) => setState(() => _inAccountId = id)),
             ),
             const SizedBox(height: 10),
-            _accountPicker(
+            SakalFieldCard(
               label: 'Expense Account (Non-recoverable / WHT absorbed — Dr)',
-              selectedId: _expAccountId,
-              onSelected: (id) => setState(() => _expAccountId = id),
+              editable: true,
+              child: _accountPicker(selectedId: _expAccountId,
+                  onSelected: (id) => setState(() => _expAccountId = id)),
             ),
             const SizedBox(height: 14),
           ] else
@@ -651,40 +703,27 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
                 style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
 
           // Sort Order + Active
-          Row(children: [
-            SizedBox(width: 100,
+          SakalFieldRow(isMobile: mobile, spans: const [4, 8], children: [
+            SakalFieldCard(
+              label: 'Sort Order',
+              editable: true,
+              numeric: true,
               child: TextFormField(
                 controller: _sortCtrl,
+                textAlign: TextAlign.right,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Sort Order'),
+                style: fieldStyle,
+                decoration: bare(),
               ),
             ),
-            const SizedBox(width: 20),
-            Switch(
+            SwitchListTile.adaptive(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Active', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
               value: _formActive,
+              activeThumbColor: AppColors.positive,
               onChanged: (v) => setState(() => _formActive = v),
-              thumbColor: WidgetStateProperty.resolveWith((s) =>
-                  s.contains(WidgetState.selected) ? Colors.white : Colors.grey.shade400),
-              trackColor: WidgetStateProperty.resolveWith((s) =>
-                  s.contains(WidgetState.selected) ? AppColors.primary : AppColors.surfaceVariant),
-              trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
             ),
-            const SizedBox(width: 8),
-            const Text('Active', style: TextStyle(fontSize: 14)),
-          ]),
-          const SizedBox(height: 24),
-
-          // Save / Cancel
-          Row(children: [
-            FilledButton(
-              onPressed: (_saving || offline) ? null : _saveTax,
-              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-              child: _saving ? const SizedBox(width: 18, height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : Text(isEdit ? 'Update Tax' : 'Save Tax'),
-            ),
-            const SizedBox(width: 12),
-            TextButton(onPressed: _closePanel, child: const Text('Cancel')),
           ]),
 
           // Inline Rates (only in edit mode)
@@ -694,7 +733,9 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
           ],
         ]),
       ),
-    );
+        ),
+      ),
+    ]);
   }
 
   Widget _compoundSourcesSection() => Column(
