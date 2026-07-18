@@ -63,6 +63,13 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
   // Number grouping style — Indian (1,15,356.00) vs International (115,356.00)
   String _numberFormat = 'INTERNATIONAL';
 
+  // Per-currency Rate/Price decimal precision (rim_currencies.rate_decimal_places)
+  // — a USD unit price may need 4-5dp where CDF only needs 2. Only this
+  // company's currently-active currencies are editable here; a fresh
+  // TextEditingController per currency row, keyed by that row's own id.
+  List<Map<String, dynamic>> _currencies = [];
+  final Map<String, TextEditingController> _currencyDecimalCtrls = {};
+
   // Quick Invoice — immediate vs deferred stock dispatch / cash collection
   bool _quickInvoiceDispatchStock = true;
   bool _quickInvoiceCollectCash   = true;
@@ -89,6 +96,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
     _tax2LabelCtrl.dispose(); _tax2ValueCtrl.dispose();
     _tax3LabelCtrl.dispose(); _tax3ValueCtrl.dispose();
     _tax4LabelCtrl.dispose(); _tax4ValueCtrl.dispose();
+    for (final c in _currencyDecimalCtrls.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -104,11 +114,21 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
             queryParameters: {'is_deleted': 'eq.false', 'select': 'id', 'limit': '1'}),
         DioClient.instance.get('/rih_finance_headers',
             queryParameters: {'company_id': 'eq.${session.companyId}', 'select': 'id', 'limit': '1'}),
+        DioClient.instance.get('/rim_currencies', queryParameters: {
+          'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
+          'is_active': 'eq.true', 'select': 'id,currency_id,currency_name,rate_decimal_places',
+          'order': 'currency_id.asc',
+        }),
       ]);
       final list = results[0].data as List<dynamic>;
       if (list.isNotEmpty) _populate(list.first as Map<String, dynamic>);
       _hasProducts     = (results[1].data as List).isNotEmpty;
       _hasTransactions = (results[2].data as List).isNotEmpty;
+      _currencies = List<Map<String, dynamic>>.from(results[3].data as List);
+      for (final c in _currencies) {
+        final id = c['id'] as String;
+        _currencyDecimalCtrls[id] = TextEditingController(text: '${c['rate_decimal_places'] ?? 2}');
+      }
       if (mounted) setState(() => _loading = false);
     } on DioException {
       if (mounted) {
@@ -225,6 +245,23 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
         options: Options(headers: {'Prefer': 'return=minimal'}),
       );
 
+      // Per-currency rate decimal precision — a separate table from
+      // ric_companies, so its own PATCH calls (one per active currency row).
+      await Future.wait(_currencies.map((c) {
+        final id = c['id'] as String;
+        final decimalPlaces = int.tryParse(_currencyDecimalCtrls[id]?.text ?? '') ?? 2;
+        return DioClient.instance.patch(
+          '/rim_currencies',
+          queryParameters: {'id': 'eq.$id'},
+          data: {
+            'rate_decimal_places': decimalPlaces.clamp(0, 6),
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+            'updated_by': session.userId,
+          },
+          options: Options(headers: {'Prefer': 'return=minimal'}),
+        );
+      }));
+
       // Reflect changes in the session immediately
       ref.read(sessionProvider.notifier).state = session.copyWith(
         companyName:      _nameCtrl.text.trim(),
@@ -308,6 +345,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
                     _buildQtyEntryMode(),
                     const SizedBox(height: 20),
                     _buildNumberFormat(),
+                    const SizedBox(height: 20),
+                    _buildCurrencyDecimalPlaces(),
                     const SizedBox(height: 20),
                     _buildQuickInvoiceSection(),
                     const SizedBox(height: 28),
@@ -904,6 +943,65 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
         ),
       ),
     );
+  }
+
+  // ── Section: Currency Decimal Places ────────────────────────────────────
+  // Orthogonal to Number Format above — that's the grouping SEPARATOR
+  // style, this is decimal PRECISION for unit price/rate entry, per
+  // currency (a USD unit price may need 4-5dp, CDF only needs 2). Only
+  // this company's currently-ACTIVE currencies show here — a currency has
+  // to be activated (via its base/local role, or manually elsewhere)
+  // before there's a rate ever entered in it worth configuring precision
+  // for. Calculated totals are NOT affected by this setting at all — they
+  // always round to a fixed 2 decimals regardless of currency, matching
+  // universal accounting practice (see AppNumberFormat.amount()).
+  Widget _buildCurrencyDecimalPlaces() {
+    return _SectionCard(
+      title: 'Currency Decimal Places',
+      icon: Icons.tag_outlined,
+      subtitle: 'Controls how many decimal places a unit price/rate shows and accepts for '
+          'each active currency — e.g. 4-5 for a currency you buy in bulk in, 2 for your '
+          'local currency. Does not affect totals, which always show 2 decimals.',
+      children: _currencies.isEmpty
+          ? [const Text('No active currencies found.', style: TextStyle(fontSize: 13, color: AppColors.textSecondary))]
+          : [
+              for (var i = 0; i < _currencies.length; i++) ...[
+                if (i > 0) const SizedBox(height: 10),
+                _buildCurrencyDecimalRow(_currencies[i]),
+              ],
+            ],
+    );
+  }
+
+  Widget _buildCurrencyDecimalRow(Map<String, dynamic> currency) {
+    final id = currency['id'] as String;
+    final code = currency['currency_id'] as String? ?? '';
+    final name = currency['currency_name'] as String? ?? '';
+    final ctrl = _currencyDecimalCtrls[id]!;
+    return Row(children: [
+      Expanded(
+        child: Text('[$code] $name',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
+      ),
+      SizedBox(
+        width: 100,
+        child: TextFormField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          textAlign: TextAlign.center,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(), isDense: true,
+            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            labelText: 'Decimals',
+          ),
+          validator: (v) {
+            final n = int.tryParse(v ?? '');
+            if (n == null || n < 0 || n > 6) return '0-6';
+            return null;
+          },
+        ),
+      ),
+    ]);
   }
 
   // ── Section: Quick Invoice ────────────────────────────────────────────────

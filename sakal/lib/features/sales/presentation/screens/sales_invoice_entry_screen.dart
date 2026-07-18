@@ -18,6 +18,7 @@ import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_financial_summary_card.dart';
+import '../../../../core/widgets/sakal_formatted_number_field.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/sales_invoice_repository.dart';
@@ -239,6 +240,12 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
   Map<String, double> _taxRatePct = {};
   Map<String, double> _taxGroupRatePct = {};
 
+  // currency_id -> rate_decimal_places (rim_currencies), loaded once in
+  // _init() — the formatted Rate field needs this per the invoice's own
+  // currency (a USD unit price may need 4-5dp, CDF only 2).
+  Map<String, int> _currencyDecimalPlaces = {};
+  int get _rateDecimalPlaces => _currencyDecimalPlaces[_invoiceCurrencyCode] ?? 2;
+
   // Snapshotted once at load time — never re-read mid-edit, matching the
   // backend's own "snapshot at save, never reinterpreted later" rule.
   bool _dispatchStock = true;
@@ -321,11 +328,16 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
         ds.getTaxGroups(clientId: session.clientId, companyId: session.companyId),
         ds.getUsersForAutocomplete(clientId: session.clientId, companyId: session.companyId),
         ds.getAdditionalCharges(clientId: session.clientId, companyId: session.companyId),
+        ref.read(currenciesProvider.future),
       ]);
       final controls = results[0] as Map<String, dynamic>?;
       _taxGroups = results[1] as List<Map<String, dynamic>>;
       _users = results[2] as List<Map<String, dynamic>>;
       _additionalCharges = results[3] as List<Map<String, dynamic>>;
+      _currencyDecimalPlaces = {
+        for (final c in results[4] as List<Map<String, dynamic>>)
+          c['currency_id'] as String: (c['rate_decimal_places'] as num?)?.toInt() ?? 2,
+      };
       _canOverridePrice  = controls?['can_override_price'] as bool? ?? false;
       _canGiveDiscount    = controls?['can_give_discount'] as bool? ?? false;
       _maxDiscountPercent = (controls?['max_discount_percent'] as num?)?.toDouble();
@@ -440,6 +452,13 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
   Future<void> _loadExisting(String invoiceNo, String? invoiceDate) async {
     final session = ref.read(sessionProvider)!;
     final ds = ref.read(salesInvoiceRepositoryProvider);
+    // _resolveCurrencyForCustomer (the Direct-mode customer-picker path)
+    // is the only other place these get set — never called on this
+    // reopen-an-existing-invoice path, so without this they stay at their
+    // '' default and the Rate to Base/Local field labels render as the
+    // empty "Rate to Base ()" a real screenshot caught.
+    _baseCurrency = await ref.read(baseCurrencyProvider.future);
+    _localCurrency = await ref.read(localCurrencyProvider.future);
     final header = await ds.getHeader(clientId: session.clientId, companyId: session.companyId, invoiceNo: invoiceNo, invoiceDate: invoiceDate);
     if (header == null || !mounted) { setState(() => _loading = false); return; }
 
@@ -892,11 +911,21 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
   // an empty DIRECT invoice) — rather than special-case an empty-lines
   // state in the UI, deleting down to zero simply re-seeds one fresh blank
   // line immediately, so there is only ever one line-rendering code path.
-  void _removeLine(_InvoiceLineRow row) => setState(() {
-    _lines.remove(row);
-    row.dispose();
-    if (_lines.isEmpty && !_isAgainstSource) _lines.add(_InvoiceLineRow());
-  });
+  void _removeLine(_InvoiceLineRow row) {
+    setState(() {
+      _lines.remove(row);
+      if (_lines.isEmpty && !_isAgainstSource) _lines.add(_InvoiceLineRow());
+    });
+    // Dispose AFTER this frame's rebuild, not inside the same setState —
+    // a real crash hit deleting the last/focused line: row.productFocusNode
+    // can still be attached to its (about-to-be-unmounted) TextField/
+    // RawAutocomplete for the remainder of THIS frame, and disposing a
+    // FocusNode while Flutter's focus system still holds a live reference
+    // to it throws "A FocusNode was used after being disposed." Waiting
+    // for the post-frame callback guarantees the widget has actually been
+    // unmounted (and detached its FocusNode) before we destroy it.
+    WidgetsBinding.instance.addPostFrameCallback((_) => row.dispose());
+  }
 
   // ── Charges (DIRECT mode only — AGAINST_QUOTATION/AGAINST_ORDER show a
   // read-only carry-forward from the source document, see
@@ -2026,9 +2055,12 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     );
     final rateField = SakalFieldCard(
       label: 'Rate', editable: rateEditable,
-      child: TextFormField(controller: row.rateCtrl, enabled: rateEditable, keyboardType: TextInputType.number,
-          decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle,
-          onChanged: (_) { row.rateEditedByUser = true; setState(() {}); }),
+      child: SakalFormattedNumberField(
+        controller: row.rateCtrl, enabled: rateEditable,
+        decimalPlaces: _rateDecimalPlaces, numberFormatStyle: numberFormat,
+        decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle,
+        onChanged: (_) { row.rateEditedByUser = true; setState(() {}); },
+      ),
     );
     final discField = SakalFieldCard(
       label: 'Disc %', editable: !rowLocked,
