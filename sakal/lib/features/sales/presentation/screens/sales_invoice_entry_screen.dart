@@ -1849,7 +1849,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
           // Customer slot is editable (Direct+Credit only) — every field,
           // position, and width below is shared code, not two parallel
           // layouts that happen to resemble each other.
-          SakalFieldRow(isMobile: isMobile, flexes: const [2, 4, 3], children: [
+          SakalFieldRow(isMobile: isMobile, children: [
             SakalFieldCard.readOnly(label: 'Location', value: _locationName.isEmpty ? '—' : _locationName),
             (_saleType == 'CREDIT' && !_isAgainstSource)
                 ? SakalFieldCard(
@@ -1921,7 +1921,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
           // Credit.
           if (_saleType == 'CASH') ...[
             const SizedBox(height: 12),
-            SakalFieldRow(isMobile: isMobile, flexes: const [4, 3, 4], children: [
+            SakalFieldRow(isMobile: isMobile, children: [
               SakalFieldCard(label: 'Walk-in Customer Name (optional)', editable: !locked,
                   child: TextFormField(controller: _partyNameCtrl, enabled: !locked, decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle)),
               SakalFieldCard(label: 'Mobile (optional)', editable: !locked,
@@ -2269,7 +2269,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Expanded(
-                  child: SakalFieldRow(isMobile: isMobile, flexes: const [3, 2, 2, 2], children: [
+                  child: SakalFieldRow(isMobile: isMobile, spans: const [4, 3, 3, 2], children: [
                     SakalFieldCard(
                       label: 'Charge', editable: !chargesLocked,
                       child: DropdownButtonFormField<String>(
