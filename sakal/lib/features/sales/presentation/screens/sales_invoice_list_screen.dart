@@ -6,6 +6,7 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
@@ -208,7 +209,7 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
             columns: const [
               SakalListColumn('Invoice No', flex: 2),
               SakalListColumn('Date', flex: 2),
-              SakalListColumn('Type', flex: 1),
+              SakalListColumn('Type', flex: 2),
               SakalListColumn('Customer', flex: 3),
               SakalListColumn('Status', flex: 2),
               SakalListColumn('Grand Total', flex: 2),
@@ -236,17 +237,25 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withValues(alpha: 0.4))),
-      child: Text(_statusLabel(status), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color)),
+      child: Text(_statusLabel(status), maxLines: 1, softWrap: false, overflow: TextOverflow.visible, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color)),
     );
   }
 
+  // maxLines:1 + softWrap:false — a badge Container has no explicit width
+  // (sizes to its own content, by design, a "chip" that hugs its text) but
+  // a narrow flex-allotted column can still hand it less width than
+  // "Credit" needs, and without this a Text defaults to wrapping onto a
+  // second line inside the badge rather than the badge simply staying its
+  // natural width — a real screenshot caught "Credit" wrapping into
+  // "Credi"/"t". Widened the Type column's own flex share too (a belt-and-
+  // suspenders fix, not a replacement for this one).
   Widget _saleTypeBadge(String saleType) {
     final isCash = saleType == 'CASH';
     final color = isCash ? AppColors.positive : AppColors.primary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withValues(alpha: 0.4))),
-      child: Text(isCash ? 'Cash' : 'Credit', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color)),
+      child: Text(isCash ? 'Cash' : 'Credit', maxLines: 1, softWrap: false, overflow: TextOverflow.visible, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color)),
     );
   }
 
@@ -271,7 +280,7 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)))),
           Expanded(flex: 2, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad),
               child: Text(_displayDate(r['invoice_date'] as String?), style: const TextStyle(fontSize: 13)))),
-          Expanded(flex: 1, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad),
+          Expanded(flex: 2, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad),
               child: _saleTypeBadge(r['sale_type'] as String? ?? 'CASH'))),
           Expanded(flex: 3, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad),
               child: Text(partyName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
@@ -281,7 +290,7 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
                 if (_pendingIds.contains(r['invoice_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
               ]))),
           Expanded(flex: 2, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad),
-              child: Text('${currency?['currency_id'] ?? ''} ${((r['grand_total'] as num?) ?? 0).toStringAsFixed(2)}',
+              child: Text('${currency?['currency_id'] ?? ''} ${AppNumberFormat.amount((r['grand_total'] as num?) ?? 0, ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL')}',
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)))),
           Expanded(flex: 1, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad * 2 / 3),
               child: IconButton(icon: const Icon(Icons.arrow_forward_ios, size: 14), color: AppColors.primary,
@@ -315,7 +324,7 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
           const SizedBox(height: 4),
           Text(_displayDate(r['invoice_date'] as String?), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
-          Text('${currency?['currency_id'] ?? ''} ${((r['grand_total'] as num?) ?? 0).toStringAsFixed(2)}',
+          Text('${currency?['currency_id'] ?? ''} ${AppNumberFormat.amount((r['grand_total'] as num?) ?? 0, ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL')}',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
         ]),
       ),

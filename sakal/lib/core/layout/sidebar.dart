@@ -7,6 +7,7 @@ import '../providers/session_provider.dart';
 import '../router/route_names.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_presets.dart';
+import '../utils/responsive.dart';
 
 class Sidebar extends ConsumerStatefulWidget {
   const Sidebar({super.key});
@@ -44,8 +45,13 @@ class _SidebarState extends ConsumerState<Sidebar> {
 
   @override
   Widget build(BuildContext context) {
-    final menu      = ref.watch(menuProvider);
-    final collapsed = ref.watch(sidebarCollapsedProvider);
+    final menu = ref.watch(menuProvider);
+    // Tablet zone (600-1024px) forces collapsed regardless of the user's
+    // own toggle — must match AppShell's own identical override exactly,
+    // or the AnimatedContainer there sizes to 56px while this widget
+    // still thinks it should render its full 240px expanded content,
+    // overflowing/clipping inside the now-narrower container.
+    final collapsed = Responsive.isTablet(context) ? true : ref.watch(sidebarCollapsedProvider);
     final path      = GoRouterState.of(context).matchedLocation;
     final activePreset = _activePreset;
 

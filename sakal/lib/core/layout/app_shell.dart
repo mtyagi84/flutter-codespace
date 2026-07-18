@@ -53,7 +53,18 @@ class _AppShellState extends ConsumerState<AppShell> {
       );
     }
 
-    final double sidebarW = collapsed ? 56.0 : 240.0;
+    // Tablet zone (600-1024px, Responsive.isTablet) forces the collapsed
+    // (icon-only) sidebar regardless of the user's own manual toggle --
+    // real overflow/cramping was caught live at 739px width with a full
+    // 240px sidebar leaving barely 498px for content, not nearly enough
+    // for a data table with several columns. True desktop (>=1024px)
+    // still respects whatever the user picked. This is the ONE place
+    // AppShell itself widens beyond a plain isMobile check; individual
+    // screens don't each need their own tablet-width handling as long as
+    // they're already isMobile-aware, since this alone recovers most of
+    // the missing width.
+    final bool effectiveCollapsed = Responsive.isTablet(context) ? true : collapsed;
+    final double sidebarW = effectiveCollapsed ? 56.0 : 240.0;
     final double contentW =
         (MediaQuery.sizeOf(context).width - sidebarW - 1.0).clamp(0.0, double.infinity);
 

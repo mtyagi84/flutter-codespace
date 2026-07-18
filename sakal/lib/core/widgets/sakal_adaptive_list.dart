@@ -48,7 +48,16 @@ class SakalAdaptiveList<T> extends ConsumerWidget {
     if (error != null) return Center(child: Text(error!, style: const TextStyle(color: AppColors.negative)));
     if (rows.isEmpty) return emptyState;
 
-    if (Responsive.isMobile(context)) {
+    // Card layout for anything short of TRUE desktop width (>=1024px),
+    // not just mobile (<600px) — a real overflow/cramping bug was caught
+    // live at 739px (tablet zone): a data table with several columns has
+    // no comfortable way to fit that many columns in under ~700-900px of
+    // content width even after AppShell's own tablet-zone sidebar fix
+    // recovers some room, so this widget reserves the table for the width
+    // that can actually afford it and falls back to cards otherwise. This
+    // is the ONE place that decision is made — every screen built on
+    // SakalAdaptiveList gets the fix for free, no per-screen width logic.
+    if (!Responsive.isDesktop(context)) {
       return ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         itemCount: rows.length,
