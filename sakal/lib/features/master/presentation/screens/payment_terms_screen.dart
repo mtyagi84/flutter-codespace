@@ -4,9 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
 
 /// Payment Terms master — Odoo-shaped (account.payment.term /
 /// account.payment.term.line): a header + installment lines, referenced
@@ -261,6 +264,7 @@ class _PaymentTermsScreenState extends ConsumerState<PaymentTermsScreen>
 
   Widget _buildRow(Map<String, dynamic> row, bool isEven, bool offline) {
     final active = row['is_active'] as bool? ?? true;
+    final tint = ThemePresetConfig.all[ref.watch(themePresetProvider)]!.primary;
     return Container(
       color: isEven ? Colors.transparent : AppColors.surfaceVariant.withValues(alpha: 0.35),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -297,7 +301,7 @@ class _PaymentTermsScreenState extends ConsumerState<PaymentTermsScreen>
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               IconButton(
                 tooltip: 'Edit',
-                icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                icon: Icon(Icons.edit_outlined, size: 18, color: tint),
                 onPressed: (canEdit && !offline) ? () => _openDialog(row) : null,
               ),
               IconButton(
@@ -314,6 +318,7 @@ class _PaymentTermsScreenState extends ConsumerState<PaymentTermsScreen>
 
   Widget _buildMobileCard(Map<String, dynamic> row, bool offline) {
     final active = row['is_active'] as bool? ?? true;
+    final tint = ThemePresetConfig.all[ref.watch(themePresetProvider)]!.primary;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       padding: const EdgeInsets.all(12),
@@ -346,7 +351,7 @@ class _PaymentTermsScreenState extends ConsumerState<PaymentTermsScreen>
         Row(mainAxisAlignment: MainAxisAlignment.end, children: [
           IconButton(
             tooltip: 'Edit',
-            icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.primary),
+            icon: Icon(Icons.edit_outlined, size: 20, color: tint),
             onPressed: (canEdit && !offline) ? () => _openDialog(row) : null,
           ),
           IconButton(
@@ -469,6 +474,16 @@ class _PaymentTermDialogState extends ConsumerState<_PaymentTermDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final tint = ThemePresetConfig.all[ref.watch(themePresetProvider)]!.primary;
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final fieldStyle = SakalFieldCard.valueTextStyle(isCompact);
+    final mobile = Responsive.isMobile(context);
+    InputDecoration bare({String? hint}) => hint == null
+        ? SakalFieldCard.bareDecoration
+        : SakalFieldCard.bareDecoration.copyWith(
+            hintText: hint,
+            hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+          );
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
@@ -483,7 +498,7 @@ class _PaymentTermDialogState extends ConsumerState<_PaymentTermDialog> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
-                    Icon(_isEdit ? Icons.edit_outlined : Icons.add_box_outlined, color: AppColors.primary, size: 22),
+                    Icon(_isEdit ? Icons.edit_outlined : Icons.add_box_outlined, color: tint, size: 22),
                     const SizedBox(width: 10),
                     Text(_isEdit ? 'Edit Payment Term' : 'Add Payment Term',
                         style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
@@ -493,28 +508,42 @@ class _PaymentTermDialogState extends ConsumerState<_PaymentTermDialog> {
                   ]),
                   const SizedBox(height: 20),
 
-                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Expanded(flex: 2, child: TextFormField(
-                      controller: _codeCtrl,
-                      textCapitalization: TextCapitalization.characters,
-                      enabled: !_isEdit,
-                      decoration: InputDecoration(label: _req('Code'), prefixIcon: const Icon(Icons.tag_outlined)),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                    )),
-                    const SizedBox(width: 12),
-                    Expanded(flex: 3, child: TextFormField(
-                      controller: _nameCtrl,
-                      decoration: InputDecoration(label: _req('Name'), prefixIcon: const Icon(Icons.label_outline)),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                    )),
+                  SakalFieldRow(isMobile: mobile, spans: const [4, 8], children: [
+                    _isEdit
+                        ? SakalFieldCard.readOnly(label: 'Code', value: _codeCtrl.text)
+                        : SakalFieldCard(
+                            label: 'Code',
+                            required: true,
+                            editable: true,
+                            child: TextFormField(
+                              controller: _codeCtrl,
+                              textCapitalization: TextCapitalization.characters,
+                              style: fieldStyle,
+                              decoration: bare(),
+                              validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                            ),
+                          ),
+                    SakalFieldCard(
+                      label: 'Name',
+                      required: true,
+                      editable: true,
+                      child: TextFormField(
+                        controller: _nameCtrl,
+                        style: fieldStyle,
+                        decoration: bare(),
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      ),
+                    ),
                   ]),
                   const SizedBox(height: 14),
 
-                  TextFormField(
-                    controller: _descCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Description (printable summary)',
-                      hintText: 'e.g. 30% Advance, 70% in 30 Days',
+                  SakalFieldCard(
+                    label: 'Description (printable summary)',
+                    editable: true,
+                    child: TextFormField(
+                      controller: _descCtrl,
+                      style: fieldStyle,
+                      decoration: bare(hint: 'e.g. 30% Advance, 70% in 30 Days'),
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -539,11 +568,13 @@ class _PaymentTermDialogState extends ConsumerState<_PaymentTermDialog> {
                       )),
                       SizedBox(width: 110, child: TextFormField(
                         controller: row.valueCtrl,
+                        textAlign: TextAlign.right,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         decoration: InputDecoration(labelText: row.valueType == 'PERCENT' ? 'Percent' : 'Amount'),
                       )),
                       SizedBox(width: 100, child: TextFormField(
                         controller: row.dueDaysCtrl,
+                        textAlign: TextAlign.right,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(labelText: 'Due Days'),
                       )),
