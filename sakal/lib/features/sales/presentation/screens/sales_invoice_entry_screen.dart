@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -1687,19 +1688,38 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
         ]),
       );
 
-  Widget _buildTitleBlock() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(_invoiceNo != null ? 'Quick Invoice · $_invoiceNo' : 'New Quick Invoice',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-        const SizedBox(height: 2),
-        Row(children: [
-          _invoiceNo != null ? _statusChip(_status) : const Text('Unsaved', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          const SizedBox(width: 8),
-          Text(_saleType == 'CASH' ? 'Cash Sale' : 'Credit Sale', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          if (_sourceQuotationNo != null) ...[const SizedBox(width: 8), Text('From $_sourceQuotationNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))],
-          if (_sourceOrderNo != null) ...[const SizedBox(width: 8), Text('From $_sourceOrderNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))],
-          if (_invoiceNo != null) ...[const SizedBox(width: 8), PendingSyncBadge(documentType: 'SALES_INVOICE', documentId: _invoiceNo!)],
-        ]),
-      ]);
+  // Back button duplicated here (in addition to TopBar's own, app-wide one)
+  // per explicit user feedback: on an entry screen the user's focus and
+  // mouse/eye are on the document header itself (right next to the Print
+  // button), not the far top-left corner of the chrome -- same reasoning
+  // as why Print/Save/Approve already live here rather than at the bottom.
+  // TopBar's back arrow stays too (it's the only affordance on screens with
+  // no in-content title block, e.g. list screens), this is additive.
+  Widget _buildTitleBlock() => Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (context.canPop())
+            IconButton(
+              icon: const Icon(Icons.arrow_back),
+              tooltip: 'Back',
+              onPressed: () => context.pop(),
+            ),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(_invoiceNo != null ? 'Quick Invoice · $_invoiceNo' : 'New Quick Invoice',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+            const SizedBox(height: 2),
+            Row(children: [
+              _invoiceNo != null ? _statusChip(_status) : const Text('Unsaved', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              const SizedBox(width: 8),
+              Text(_saleType == 'CASH' ? 'Cash Sale' : 'Credit Sale', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              if (_sourceQuotationNo != null) ...[const SizedBox(width: 8), Text('From $_sourceQuotationNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))],
+              if (_sourceOrderNo != null) ...[const SizedBox(width: 8), Text('From $_sourceOrderNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))],
+              if (_invoiceNo != null) ...[const SizedBox(width: 8), PendingSyncBadge(documentType: 'SALES_INVOICE', documentId: _invoiceNo!)],
+            ]),
+          ]),
+        ],
+      );
 
   @override
   Widget build(BuildContext context) {

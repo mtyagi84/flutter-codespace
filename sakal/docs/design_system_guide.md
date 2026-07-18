@@ -215,12 +215,39 @@ uses `activePreset.secondary` (not `.primary`, which would make it blend
 into the now-same-color bar).
 
 ### 5.2 Back button
-`TopBar`'s `leading` slot now shows a back arrow (`context.pop()`)
-whenever `context.canPop()` is true (i.e. the current screen was reached
-via `context.push()` — any entry/detail screen opened from a list), and
+`TopBar`'s `leading` slot shows a back arrow (`context.pop()`) whenever
+`context.canPop()` is true (i.e. the current screen was reached via
+`context.push()` — any entry/detail screen opened from a list), and
 falls back to the existing menu/sidebar-collapse icon otherwise (a
 top-level, sidebar/drawer-navigated screen, reached via `context.go()`).
 No per-screen wiring needed — this is entirely in the shared `TopBar`.
+
+**Additive, in-content back button on entry screens**: per user feedback,
+the TopBar arrow alone sits in the far top-left corner, away from where a
+user's focus/mouse actually is while working a document (the header row
+with the title and Print/Save/Approve buttons). Entry screens with a
+`_buildTitleBlock()`-style header now ALSO show a back arrow immediately
+to the left of the title (only `if (context.canPop())`), styled as a
+plain `IconButton` — no special density overrides, matching the TopBar's
+own. This is additive, not a replacement: TopBar's arrow stays, since
+list screens and anything without an in-content title block still rely
+on it exclusively. Piloted on Sales Order Entry and Sales Invoice Entry
+(`sales_order_entry_screen.dart`, `sales_invoice_entry_screen.dart`) —
+when converting a new entry screen's title block, wrap it the same way:
+```dart
+Widget _buildTitleBlock() => Row(
+  crossAxisAlignment: CrossAxisAlignment.center,
+  mainAxisSize: MainAxisSize.min,
+  children: [
+    if (context.canPop())
+      IconButton(icon: const Icon(Icons.arrow_back), tooltip: 'Back', onPressed: () => context.pop()),
+    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [ /* existing title content */ ]),
+  ],
+);
+```
+Needs `import 'package:go_router/go_router.dart';`. Not yet rolled out to
+every entry screen — same opportunistic, one-batch-at-a-time approach as
+everything else in this doc.
 
 ### 5.3 Mobile drawer (Sidebar)
 Touch-target sizing is now mobile-aware: module/group/feature rows grow
