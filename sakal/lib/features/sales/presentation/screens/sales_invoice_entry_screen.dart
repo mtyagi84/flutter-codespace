@@ -2110,7 +2110,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
           onFieldSubmitted: (_) => row.addButtonFocusNode.requestFocus()),
     );
     final taxField = SakalFieldCard.readOnly(label: 'Tax', value: row.taxGroupName ?? '—');
-    final amountField = SakalFieldCard.readOnly(label: 'Amount', value: AppNumberFormat.amount(row.finalAmount, numberFormat));
+    final amountField = SakalFieldCard.readOnly(label: 'Amount', value: AppNumberFormat.amount(row.finalAmount, numberFormat), numeric: true);
 
     final showActions = !locked && !_isAgainstSource;
     final overrideVisible = !locked && !_isAgainstSource && !row.priceResolved && _canOverridePrice;
@@ -2329,8 +2329,8 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                         onChanged: (_) => setState(() {}),
                       ),
                     ),
-                    SakalFieldCard.readOnly(label: row.nature, value: AppNumberFormat.amount(row.amount, numberFormat)),
-                    if (row.isTaxable) SakalFieldCard.readOnly(label: 'Tax', value: AppNumberFormat.amount(row.taxAmount, numberFormat)),
+                    SakalFieldCard.readOnly(label: row.nature, value: AppNumberFormat.amount(row.amount, numberFormat), numeric: true),
+                    if (row.isTaxable) SakalFieldCard.readOnly(label: 'Tax', value: AppNumberFormat.amount(row.taxAmount, numberFormat), numeric: true),
                   ]),
                 ),
                 if (!chargesLocked) Padding(

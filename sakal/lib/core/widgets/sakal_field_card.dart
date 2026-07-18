@@ -45,6 +45,7 @@ class SakalFieldCard extends ConsumerStatefulWidget {
   final Widget? child;
   final String? value;
   final double? height;
+  final bool numeric;
 
   const SakalFieldCard({
     super.key,
@@ -53,18 +54,26 @@ class SakalFieldCard extends ConsumerStatefulWidget {
     this.required = false,
     this.editable = false,
     this.height,
+    this.numeric = false,
   }) : value = null;
 
   /// Convenience constructor for a plain read-only text value — Location,
   /// Currency-when-locked, a computed line amount, etc. Kept as a `value`
   /// string rather than a pre-built `Text` so its style can be resolved at
   /// build time (density-aware), not frozen at construction time.
+  ///
+  /// [numeric] — standing convention: a card holding a number (amount,
+  /// total, computed line value) right-aligns both its label and its
+  /// value; pass it for anything money/quantity-shaped. Left alignment
+  /// (the default) stays for identity/text fields — Location, Currency
+  /// code, Customer name, etc.
   const SakalFieldCard.readOnly({
     super.key,
     required this.label,
     required this.value,
     this.required = false,
     this.height,
+    this.numeric = false,
   })  : editable = false,
         child = null;
 
@@ -175,11 +184,12 @@ class _SakalFieldCardState extends ConsumerState<SakalFieldCard> {
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: widget.numeric ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             RichText(
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              textAlign: widget.numeric ? TextAlign.right : TextAlign.left,
               text: TextSpan(
                 text: widget.label.toUpperCase(),
                 style: TextStyle(fontSize: labelFontSize, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: AppColors.textSecondary),
@@ -189,7 +199,7 @@ class _SakalFieldCardState extends ConsumerState<SakalFieldCard> {
               ),
             ),
             SizedBox(height: gap),
-            Expanded(child: Align(alignment: Alignment.centerLeft, child: content)),
+            Expanded(child: Align(alignment: widget.numeric ? Alignment.centerRight : Alignment.centerLeft, child: content)),
           ],
         ),
       ),

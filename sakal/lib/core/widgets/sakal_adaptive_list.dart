@@ -5,10 +5,19 @@ import '../theme/theme_presets.dart';
 import '../utils/responsive.dart';
 
 /// Desktop-table header column spec for [SakalAdaptiveList].
+///
+/// [numeric] — standing convention: any column holding a number (amount,
+/// quantity, rate, a count) right-aligns both its header label and its
+/// data cells; text columns (name, code, status, date) stay left. Declare
+/// it here so a screen's own row/card builder and this header stay in
+/// sync automatically rather than each hand-picking a `TextAlign`.
 class SakalListColumn {
   final String label;
   final int flex;
-  const SakalListColumn(this.label, {this.flex = 1});
+  final bool numeric;
+  const SakalListColumn(this.label, {this.flex = 1, this.numeric = false});
+
+  TextAlign get textAlign => numeric ? TextAlign.right : TextAlign.left;
 }
 
 /// Shared mobile-card / desktop-table list body. Every list screen used to
@@ -73,7 +82,7 @@ class SakalAdaptiveList<T> extends ConsumerWidget {
       child: Column(children: [
         Container(
           decoration: BoxDecoration(color: preset.primary, borderRadius: const BorderRadius.vertical(top: Radius.circular(9))),
-          child: Row(children: columns.map((c) => _th(c.label, flex: c.flex)).toList()),
+          child: Row(children: columns.map((c) => _th(c.label, flex: c.flex, textAlign: c.textAlign)).toList()),
         ),
         Expanded(
           child: ListView.separated(
@@ -86,7 +95,7 @@ class SakalAdaptiveList<T> extends ConsumerWidget {
     );
   }
 
-  static Widget _th(String label, {int flex = 1}) => Expanded(
+  static Widget _th(String label, {int flex = 1, TextAlign textAlign = TextAlign.left}) => Expanded(
     flex: flex,
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
@@ -94,6 +103,7 @@ class SakalAdaptiveList<T> extends ConsumerWidget {
         label.toUpperCase(),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
+        textAlign: textAlign,
         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 10.5, letterSpacing: 0.5),
       ),
     ),
