@@ -674,7 +674,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
                           const _Label('Credit Limit'),
                           const SizedBox(height: 6),
                           TextField(controller: _limitCtrl,
-                              keyboardType: TextInputType.number,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
                               decoration: const InputDecoration(isDense: true, hintText: '0.00')),
                         ])),
                       ]),
@@ -704,7 +704,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
                       const _Label('Credit Limit'),
                       const SizedBox(height: 6),
                       TextField(controller: _limitCtrl,
-                          keyboardType: TextInputType.number,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           decoration: const InputDecoration(isDense: true, hintText: '0.00')),
                     ])),
                   ]);

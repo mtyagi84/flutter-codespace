@@ -46,12 +46,22 @@ class _SidebarState extends ConsumerState<Sidebar> {
   @override
   Widget build(BuildContext context) {
     final menu = ref.watch(menuProvider);
+    final mobile = Responsive.isMobile(context);
     // Tablet zone (600-1024px) forces collapsed regardless of the user's
     // own toggle — must match AppShell's own identical override exactly,
     // or the AnimatedContainer there sizes to 56px while this widget
     // still thinks it should render its full 240px expanded content,
     // overflowing/clipping inside the now-narrower container.
-    final collapsed = Responsive.isTablet(context) ? true : ref.watch(sidebarCollapsedProvider);
+    //
+    // Mobile is the OPPOSITE forced case, and a real bug: sidebarCollapsedProvider
+    // is a plain global toggle with no concept of "which layout is looking
+    // at it" — a user who collapsed the sidebar on desktop would have that
+    // SAME state leak into the mobile Drawer, rendering it as tiny
+    // icon-only buttons with no text labels at all (nonsensical for a
+    // drawer, which only ever appears when explicitly opened to navigate,
+    // never needs to save persistent screen space the way a docked
+    // desktop sidebar does).
+    final collapsed = mobile ? false : (Responsive.isTablet(context) ? true : ref.watch(sidebarCollapsedProvider));
     final path      = GoRouterState.of(context).matchedLocation;
     final activePreset = _activePreset;
 
@@ -63,7 +73,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
           Expanded(
             child: collapsed
                 ? _buildCollapsedList(menu, path)
-                : _buildExpandedList(menu, path),
+                : _buildExpandedList(menu, path, mobile),
           ),
         ],
       ),
@@ -154,14 +164,22 @@ class _SidebarState extends ConsumerState<Sidebar> {
   }
 
   // ── Expanded — full 3-level tree ────────────────────────────
-  Widget _buildExpandedList(List<MenuModule> menu, String path) {
+  // [mobile] makes every row touch-friendly (44-48px, the standard
+  // minimum tap-target guideline) with larger text — the desktop sidebar
+  // stays as compact as before (mouse clicks don't need the same target
+  // size, and a persistent 240px column benefits from fitting more without
+  // scrolling); only the mobile Drawer, which has a full screen height to
+  // work with and is opened specifically to be tapped, gets the larger
+  // sizing. A real complaint: the original 32-40px rows/12px text were
+  // sized for the desktop case and never had a mobile-specific pass.
+  Widget _buildExpandedList(List<MenuModule> menu, String path, bool mobile) {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      children: menu.map((m) => _buildModule(m, path)).toList(),
+      children: menu.map((m) => _buildModule(m, path, mobile)).toList(),
     );
   }
 
-  Widget _buildModule(MenuModule module, String path) {
+  Widget _buildModule(MenuModule module, String path, bool mobile) {
     final isExpanded = _expandedModules.contains(module.moduleCode);
     final icon = _moduleIcons[module.moduleCode] ?? Icons.apps_outlined;
     final hasActive = module.groups.any((g) =>
@@ -177,7 +195,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
               ? _expandedModules.remove(module.moduleCode)
               : _expandedModules.add(module.moduleCode)),
           child: Container(
-            height: 40,
+            height: mobile ? 52 : 40,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
               color: hasActive && !isExpanded
@@ -187,7 +205,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
             child: Row(
               children: [
                 Icon(icon,
-                    size: 16,
+                    size: mobile ? 20 : 16,
                     color: hasActive
                         ? Colors.white70
                         : AppColors.sidebarText.withValues(alpha: 0.6)),
@@ -196,7 +214,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
                   child: Text(
                     module.moduleName.toUpperCase(),
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: mobile ? 13 : 11,
                       fontWeight: FontWeight.w700,
                       color: hasActive
                           ? Colors.white
@@ -209,7 +227,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
                   isExpanded
                       ? Icons.keyboard_arrow_up
                       : Icons.keyboard_arrow_down,
-                  size: 16,
+                  size: mobile ? 20 : 16,
                   color: AppColors.sidebarText.withValues(alpha: 0.5),
                 ),
               ],
@@ -219,13 +237,13 @@ class _SidebarState extends ConsumerState<Sidebar> {
 
         // Groups
         if (isExpanded)
-          ...module.groups.map((g) => _buildGroup(g, path)),
+          ...module.groups.map((g) => _buildGroup(g, path, mobile)),
         if (isExpanded) const SizedBox(height: 4),
       ],
     );
   }
 
-  Widget _buildGroup(MenuGroup group, String path) {
+  Widget _buildGroup(MenuGroup group, String path, bool mobile) {
     final groupPath   = RouteNames.groupPath(group.groupCode);
     final isGroupActive = path == groupPath;
     final hasFeatureActive =
@@ -242,7 +260,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
             context.go(groupPath);
           },
           child: Container(
-            height: 34,
+            height: mobile ? 48 : 34,
             padding: const EdgeInsets.only(left: 28, right: 12),
             decoration: BoxDecoration(
               color: active ? _activePreset.accent.withValues(alpha: 0.6) : Colors.transparent,
@@ -254,7 +272,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
             child: Row(
               children: [
                 Icon(Icons.folder_outlined,
-                    size: 13,
+                    size: mobile ? 18 : 13,
                     color: active
                         ? Colors.white70
                         : AppColors.sidebarText.withValues(alpha: 0.5)),
@@ -263,7 +281,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
                   child: Text(
                     group.groupName,
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: mobile ? 13 : 11,
                       fontWeight: FontWeight.w600,
                       color: active
                           ? Colors.white
@@ -273,7 +291,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
                   ),
                 ),
                 Icon(Icons.arrow_forward_ios,
-                    size: 10,
+                    size: mobile ? 12 : 10,
                     color: AppColors.sidebarText.withValues(alpha: 0.4)),
               ],
             ),
@@ -281,13 +299,13 @@ class _SidebarState extends ConsumerState<Sidebar> {
         ),
 
         // Feature items
-        ...group.features.map((f) => _buildFeature(f, path)),
+        ...group.features.map((f) => _buildFeature(f, path, mobile)),
         const SizedBox(height: 2),
       ],
     );
   }
 
-  Widget _buildFeature(MenuFeature feature, String path) {
+  Widget _buildFeature(MenuFeature feature, String path, bool mobile) {
     final isActive =
         path == feature.screenName || path.startsWith('${feature.screenName}/');
 
@@ -297,7 +315,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
         context.go(feature.screenName);
       },
       child: Container(
-        height: 32,
+        height: mobile ? 48 : 32,
         padding: const EdgeInsets.only(left: 48, right: 16),
         decoration: BoxDecoration(
           color: isActive ? _activePreset.accent : Colors.transparent,
@@ -310,7 +328,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
         child: Text(
           feature.featureName,
           style: TextStyle(
-            fontSize: 12,
+            fontSize: mobile ? 14 : 12,
             color: isActive ? Colors.white : AppColors.sidebarText,
             fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
           ),

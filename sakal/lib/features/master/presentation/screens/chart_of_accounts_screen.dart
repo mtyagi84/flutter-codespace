@@ -910,7 +910,7 @@ class _ChartOfAccountsScreenState
                         const _Label('Credit Limit'),
                         const SizedBox(height: 6),
                         TextField(controller: _limitCtrl,
-                            keyboardType: TextInputType.number,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
                             decoration: const InputDecoration(
                                 isDense: true, hintText: '0.00')),
                       ],

@@ -28,26 +28,46 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
     final collapsed = ref.watch(sidebarCollapsedProvider);
     final mobile    = Responsive.isMobile(context);
     final activePreset = ThemePresetConfig.all[ref.watch(themePresetProvider)]!;
+    // Every entry/detail screen reached via context.push() (Sales Invoice
+    // Entry from its list, GRN Entry from GRN List, ...) previously had NO
+    // way back except the drawer/sidebar menu itself — user-requested
+    // uniform Back button. GoRouter's own canPop() already tells us
+    // exactly when there's somewhere to go back TO; when false (a
+    // top-level, sidebar/drawer-navigated screen), the leading icon stays
+    // the existing menu/collapse toggle unchanged.
+    final canPop = context.canPop();
 
+    // Themed to match the sidebar (activePreset.primary) rather than pure
+    // white, per explicit request — every child styled below assuming a
+    // WHITE bar (dark icons/text) needed updating for contrast against a
+    // now-dark one; AppBar's own foregroundColor cascades as a default but
+    // several children set an explicit color that overrides it, so those
+    // needed individual fixes too, not just the two top-level properties.
     return AppBar(
-      backgroundColor: AppColors.surface,
-      foregroundColor: AppColors.textPrimary,
+      backgroundColor: activePreset.primary,
+      foregroundColor: Colors.white,
       elevation: 0,
       scrolledUnderElevation: 1,
       automaticallyImplyLeading: false,
       titleSpacing: 0,
-      leading: IconButton(
-        icon: Icon(
-          mobile ? Icons.menu : (collapsed ? Icons.menu : Icons.menu_open),
-          color: AppColors.textSecondary,
-        ),
-        tooltip: mobile
-            ? 'Open menu'
-            : (collapsed ? 'Expand sidebar' : 'Collapse sidebar'),
-        onPressed: mobile
-            ? () => scaffoldKey?.currentState?.openDrawer()
-            : () => ref.read(sidebarCollapsedProvider.notifier).state = !collapsed,
-      ),
+      leading: canPop
+          ? IconButton(
+              icon: const Icon(Icons.arrow_back, color: AppColors.sidebarText),
+              tooltip: 'Back',
+              onPressed: () => context.pop(),
+            )
+          : IconButton(
+              icon: Icon(
+                mobile ? Icons.menu : (collapsed ? Icons.menu : Icons.menu_open),
+                color: AppColors.sidebarText,
+              ),
+              tooltip: mobile
+                  ? 'Open menu'
+                  : (collapsed ? 'Expand sidebar' : 'Collapse sidebar'),
+              onPressed: mobile
+                  ? () => scaffoldKey?.currentState?.openDrawer()
+                  : () => ref.read(sidebarCollapsedProvider.notifier).state = !collapsed,
+            ),
       // On mobile, `actions` alone (2 status indicators + density toggle +
       // theme dropdown + the user popup, ~150-160px on its own) already
       // claims most of a narrow AppBar's width — a real overflow was
@@ -62,7 +82,7 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
           : Row(
               children: [
                 const Icon(Icons.business_outlined,
-                    size: 15, color: AppColors.textSecondary),
+                    size: 15, color: AppColors.sidebarText),
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(
@@ -71,7 +91,7 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         fontSize: 13,
-                        color: AppColors.textSecondary,
+                        color: AppColors.sidebarText,
                         fontWeight: FontWeight.w500),
                   ),
                 ),
@@ -105,7 +125,10 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
               children: [
                 CircleAvatar(
                   radius: 16,
-                  backgroundColor: activePreset.primary,
+                  // secondary, not primary — the avatar would otherwise be
+                  // the exact same color as the now-dark bar behind it and
+                  // effectively disappear.
+                  backgroundColor: activePreset.secondary,
                   child: Text(
                     session?.fullName.isNotEmpty == true
                         ? session!.fullName[0].toUpperCase()
@@ -132,13 +155,13 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           fontSize: 13,
-                          color: AppColors.textPrimary,
+                          color: Colors.white,
                           fontWeight: FontWeight.w500),
                     ),
                   ),
                 const SizedBox(width: 4),
                 const Icon(Icons.keyboard_arrow_down,
-                    size: 18, color: AppColors.textSecondary),
+                    size: 18, color: AppColors.sidebarText),
                 const SizedBox(width: 16),
               ],
             ),
@@ -220,7 +243,7 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
     return IconButton(
       icon: Icon(
         isCompact ? Icons.view_comfortable_outlined : Icons.view_compact_outlined,
-        color: AppColors.textSecondary,
+        color: AppColors.sidebarText,
         size: 20,
       ),
       tooltip: isCompact ? 'Switch to Comfortable rows' : 'Switch to Dense rows',
@@ -232,7 +255,7 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
     final active = ref.watch(themePresetProvider);
     return PopupMenuButton<ThemePreset>(
       tooltip: 'Switch theme',
-      icon: const Icon(Icons.palette_outlined, color: AppColors.textSecondary, size: 20),
+      icon: const Icon(Icons.palette_outlined, color: AppColors.sidebarText, size: 20),
       onSelected: (preset) => ref.read(themePresetProvider.notifier).state = preset,
       itemBuilder: (_) => ThemePreset.values.map((preset) {
         final config = ThemePresetConfig.all[preset]!;

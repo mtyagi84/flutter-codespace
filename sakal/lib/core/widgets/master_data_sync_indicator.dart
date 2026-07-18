@@ -22,15 +22,20 @@ class MasterDataSyncIndicator extends ConsumerWidget {
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: const Color(0xFF1B3A6B).withValues(alpha: 0.08),
+          // Was a navy-on-near-white tint, correct only when this badge
+          // sat on a plain white TopBar. Switched to white-on-translucent
+          // so it stays legible now that TopBar is themed dark — this
+          // badge lives ONLY in TopBar's actions, so it never needs to
+          // adapt to a light background at all.
+          color: Colors.white.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(12),
         ),
         child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
+            SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
             SizedBox(width: 6),
-            Text('Refreshing offline data…', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1B3A6B))),
+            Text('Refreshing offline data…', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white)),
           ],
         ),
       ),

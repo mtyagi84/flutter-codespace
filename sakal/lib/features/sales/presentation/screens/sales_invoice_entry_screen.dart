@@ -2010,7 +2010,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                 editable: !locked,
                 child: TextFormField(
                   controller: _headerDiscountPctCtrl, enabled: !locked,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: SakalFieldCard.bareDecoration,
                   style: fieldTextStyle,
                   onChanged: locked ? null : _applyHeaderDiscount,
@@ -2082,12 +2082,12 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     );
     final qtyPackField = SakalFieldCard(
       label: showLooseQty ? 'Qty Pack' : 'Quantity', required: true, editable: !rowLocked,
-      child: TextFormField(controller: row.qtyPackCtrl, enabled: !rowLocked, keyboardType: TextInputType.number,
+      child: TextFormField(controller: row.qtyPackCtrl, enabled: !rowLocked, keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle, onChanged: (_) => _onLineQtyChanged(row)),
     );
     final qtyLooseField = SakalFieldCard(
       label: 'Qty Loose', editable: !rowLocked,
-      child: TextFormField(controller: row.qtyLooseCtrl, enabled: !rowLocked, keyboardType: TextInputType.number,
+      child: TextFormField(controller: row.qtyLooseCtrl, enabled: !rowLocked, keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle, onChanged: (_) => _onLineQtyChanged(row)),
     );
     final rateField = SakalFieldCard(
@@ -2101,7 +2101,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     );
     final discField = SakalFieldCard(
       label: 'Disc %', editable: !rowLocked,
-      child: TextFormField(controller: row.discountPctCtrl, enabled: !rowLocked, keyboardType: TextInputType.number,
+      child: TextFormField(controller: row.discountPctCtrl, enabled: !rowLocked, keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle,
           onChanged: (v) => _onDiscountChanged(row, v),
           // Keyboard-only chaining: Enter here jumps to this row's own (+)
@@ -2206,7 +2206,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
             label: '${b.batchNo} (avail ${b.availableBalance})${b.expiryDate != null ? ' · exp ${b.expiryDate}' : ''}',
             editable: !locked,
             child: TextFormField(
-              controller: b.qtyCtrl, enabled: !locked, keyboardType: TextInputType.number,
+              controller: b.qtyCtrl, enabled: !locked, keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: SakalFieldCard.bareDecoration,
               style: fieldTextStyle,
               onChanged: (_) => setState(() {}),
@@ -2262,10 +2262,10 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
           const SizedBox(height: 12),
           SakalFieldRow(isMobile: isMobile, children: [
             SakalFieldCard(label: 'Collected — Local Currency', editable: !locked,
-                child: TextFormField(controller: _collectedLocalCtrl, enabled: !locked, keyboardType: TextInputType.number,
+                child: TextFormField(controller: _collectedLocalCtrl, enabled: !locked, keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle)),
             SakalFieldCard(label: 'Collected — Base Currency', editable: !locked,
-                child: TextFormField(controller: _collectedBaseCtrl, enabled: !locked, keyboardType: TextInputType.number,
+                child: TextFormField(controller: _collectedBaseCtrl, enabled: !locked, keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle)),
           ]),
         ]),

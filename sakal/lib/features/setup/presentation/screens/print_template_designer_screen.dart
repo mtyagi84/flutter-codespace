@@ -688,7 +688,7 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
               child: TextFormField(
                 key: ValueKey('${el.id}_w'),
                 initialValue: el.w.toStringAsFixed(0),
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true,
                     contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8), labelText: 'Width'),
                 onChanged: (v) => setState(() => el.w = double.tryParse(v) ?? el.w),
@@ -700,7 +700,7 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
                 child: TextFormField(
                   key: ValueKey('${el.id}_h'),
                   initialValue: el.h.toStringAsFixed(0),
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true,
                       contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8), labelText: 'Height'),
                   onChanged: (v) => setState(() => el.h = double.tryParse(v) ?? el.h),
@@ -908,7 +908,7 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
           child: TextFormField(
             key: ValueKey('${el.id}_col${colIndex}_width'),
             initialValue: col.width.toStringAsFixed(0),
-            keyboardType: TextInputType.number,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true,
                 contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8), labelText: 'Width'),
             onChanged: (v) => setState(() => col.width = double.tryParse(v) ?? col.width),
@@ -962,7 +962,7 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
         child: TextFormField(
           key: ValueKey('${el.id}_fontsize'),
           initialValue: el.fontSize.toStringAsFixed(0),
-          keyboardType: TextInputType.number,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true,
               contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8), labelText: 'Font Size'),
           onChanged: (v) => setState(() => el.fontSize = double.tryParse(v) ?? el.fontSize),

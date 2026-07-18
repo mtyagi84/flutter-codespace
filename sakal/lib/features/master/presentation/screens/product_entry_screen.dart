@@ -886,7 +886,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
           _TwoCol(
             left: TextFormField(
               controller: _stdCostCtrl,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                   labelText: 'Standard Cost',
                   hintText:  '0.00',
@@ -913,7 +913,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
           _TwoCol(
             left: TextFormField(
               controller: _varCtrl,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                   labelText: 'Allowed Cost Variance %',
                   hintText:  '0.00',
@@ -1010,7 +1010,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
           _TwoCol(
             left: TextFormField(
               controller: _weightCtrl,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(labelText: 'Weight'),
             ),
             right: DropdownButtonFormField<String?>(
@@ -1030,7 +1030,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
           _TwoCol(
             left: TextFormField(
               controller: _volumeCtrl,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(labelText: 'Volume'),
             ),
             right: DropdownButtonFormField<String?>(
@@ -1052,7 +1052,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
               Expanded(
                 child: TextFormField(
                   controller: _lengthCtrl,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'Length'),
                 ),
               ),
@@ -1060,7 +1060,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
               Expanded(
                 child: TextFormField(
                   controller: _widthCtrl,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'Width'),
                 ),
               ),
@@ -1068,7 +1068,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
               Expanded(
                 child: TextFormField(
                   controller: _heightCtrl,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'Height'),
                 ),
               ),
@@ -1364,7 +1364,7 @@ class _UomLevelDialogState extends State<_UomLevelDialog> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _factorCtrl,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
                     labelText: 'Conversion Factor *',
                     helperText: 'How many base units = 1 of this UOM'),
