@@ -94,7 +94,7 @@ final currenciesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) asyn
         'client_id':  'eq.${session.clientId}',
         'company_id': 'eq.${session.companyId}',
         'is_active':  'eq.true',
-        'select':     'id,currency_id,currency_name',
+        'select':     'id,currency_id,currency_name,rate_decimal_places',
         'order':      'currency_id.asc',
       });
       return List<Map<String, dynamic>>.from(res.data as List);

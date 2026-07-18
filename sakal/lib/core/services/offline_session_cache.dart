@@ -135,6 +135,7 @@ class OfflineSessionCache {
     'qtyEntryMode':     s.qtyEntryMode,
     'quickInvoiceDispatchStock': s.quickInvoiceDispatchStock,
     'quickInvoiceCollectCash':   s.quickInvoiceCollectCash,
+    'numberFormat':     s.numberFormat,
   };
 
   static UserSession _decodeSession(Map<String, dynamic> m) => UserSession(
@@ -152,5 +153,6 @@ class OfflineSessionCache {
     qtyEntryMode:     m['qtyEntryMode']     as String? ?? 'PACK_AND_LOOSE',
     quickInvoiceDispatchStock: m['quickInvoiceDispatchStock'] as bool? ?? true,
     quickInvoiceCollectCash:   m['quickInvoiceCollectCash']   as bool? ?? true,
+    numberFormat:     m['numberFormat']     as String? ?? 'INTERNATIONAL',
   );
 }

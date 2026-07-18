@@ -313,6 +313,7 @@ class _SwitchCompanyDialogState extends State<_SwitchCompanyDialog> {
             enableBarcode:    settings['enable_barcode']     as bool? ?? false,
             enablePartNumber: settings['enable_part_number'] as bool? ?? false,
             qtyEntryMode:     settings['qty_entry_mode']     as String? ?? 'PACK_AND_LOOSE',
+            numberFormat:     settings['number_format']      as String? ?? 'INTERNATIONAL',
             quickInvoiceDispatchStock: settings['quick_invoice_dispatch_stock'] as bool? ?? true,
             quickInvoiceCollectCash:   settings['quick_invoice_collect_cash']   as bool? ?? true,
           );

@@ -124,6 +124,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         qtyEntryMode:     d['qty_entry_mode']     as String? ?? 'PACK_AND_LOOSE',
         quickInvoiceDispatchStock: d['quick_invoice_dispatch_stock'] as bool? ?? true,
         quickInvoiceCollectCash:   d['quick_invoice_collect_cash']   as bool? ?? true,
+        numberFormat:     d['number_format']      as String? ?? 'INTERNATIONAL',
       );
 
       // Cache credentials for future offline login
@@ -197,6 +198,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         qtyEntryMode:     result.session.qtyEntryMode,
         quickInvoiceDispatchStock: result.session.quickInvoiceDispatchStock,
         quickInvoiceCollectCash:   result.session.quickInvoiceCollectCash,
+        numberFormat:     result.session.numberFormat,
       );
       ref.read(menuProvider.notifier).state = result.menu;
       context.go(RouteNames.dashboard);

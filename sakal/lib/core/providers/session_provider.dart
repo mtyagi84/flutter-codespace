@@ -16,6 +16,7 @@ class UserSession {
   final String qtyEntryMode;
   final bool   quickInvoiceDispatchStock;
   final bool   quickInvoiceCollectCash;
+  final String numberFormat;
 
   const UserSession({
     required this.userId,
@@ -32,6 +33,7 @@ class UserSession {
     this.qtyEntryMode     = 'PACK_AND_LOOSE',
     this.quickInvoiceDispatchStock = true,
     this.quickInvoiceCollectCash   = true,
+    this.numberFormat = 'INTERNATIONAL',
   });
 
   UserSession copyWith({
@@ -42,6 +44,7 @@ class UserSession {
     String? qtyEntryMode,
     bool?   quickInvoiceDispatchStock,
     bool?   quickInvoiceCollectCash,
+    String? numberFormat,
   }) =>
       UserSession(
         userId:           userId,
@@ -58,6 +61,7 @@ class UserSession {
         qtyEntryMode:     qtyEntryMode     ?? this.qtyEntryMode,
         quickInvoiceDispatchStock: quickInvoiceDispatchStock ?? this.quickInvoiceDispatchStock,
         quickInvoiceCollectCash:   quickInvoiceCollectCash   ?? this.quickInvoiceCollectCash,
+        numberFormat:     numberFormat     ?? this.numberFormat,
       );
 }
 

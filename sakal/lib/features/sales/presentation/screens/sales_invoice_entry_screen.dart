@@ -8,6 +8,7 @@ import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
@@ -1985,6 +1986,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     final rowLocked = locked || _isAgainstSource;
     final rateEditable = !locked && !_isAgainstSource && (row.priceSource == 'MANUAL_OVERRIDE' || (!row.priceResolved && _canOverridePrice));
     const fieldTextStyle = TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary);
+    final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
 
     final productField = rowLocked
         ? SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? '—' : row.productDisplay)
@@ -2039,7 +2041,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
           onFieldSubmitted: (_) => row.addButtonFocusNode.requestFocus()),
     );
     final taxField = SakalFieldCard.readOnly(label: 'Tax', value: row.taxGroupName ?? '—');
-    final amountField = SakalFieldCard.readOnly(label: 'Amount', value: row.finalAmount.toStringAsFixed(2));
+    final amountField = SakalFieldCard.readOnly(label: 'Amount', value: AppNumberFormat.amount(row.finalAmount, numberFormat));
 
     final showActions = !locked && !_isAgainstSource;
     final overrideVisible = !locked && !_isAgainstSource && !row.priceResolved && _canOverridePrice;
@@ -2207,6 +2209,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     // nothing to legitimately edit, same rule already governing this
     // module's line items in those two modes.
     final chargesLocked = locked || _isAgainstSource;
+    final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -2254,8 +2257,8 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                         onChanged: (_) => setState(() {}),
                       ),
                     ),
-                    SakalFieldCard.readOnly(label: row.nature, value: row.amount.toStringAsFixed(2)),
-                    if (row.isTaxable) SakalFieldCard.readOnly(label: 'Tax', value: row.taxAmount.toStringAsFixed(2)),
+                    SakalFieldCard.readOnly(label: row.nature, value: AppNumberFormat.amount(row.amount, numberFormat)),
+                    if (row.isTaxable) SakalFieldCard.readOnly(label: 'Tax', value: AppNumberFormat.amount(row.taxAmount, numberFormat)),
                   ]),
                 ),
                 if (!chargesLocked) Padding(
@@ -2302,6 +2305,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
   // actually creates.
   Widget _buildPostedVoucherSection() {
     if (_voucherLines.isEmpty && !_loadingVoucherLines) return const SizedBox.shrink();
+    final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
 
     Widget cell(String text, {TextAlign align = TextAlign.left, bool bold = false}) => Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -2350,8 +2354,8 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                 child: Row(children: [
                   Expanded(flex: 2, child: cell('${l['serial_no']}')),
                   Expanded(flex: 5, child: cell(ledgerName)),
-                  Expanded(flex: 2, child: cell(isDr ? amount.toStringAsFixed(2) : '—', align: TextAlign.right)),
-                  Expanded(flex: 2, child: cell(!isDr ? amount.toStringAsFixed(2) : '—', align: TextAlign.right)),
+                  Expanded(flex: 2, child: cell(isDr ? AppNumberFormat.amount(amount, numberFormat) : '—', align: TextAlign.right)),
+                  Expanded(flex: 2, child: cell(!isDr ? AppNumberFormat.amount(amount, numberFormat) : '—', align: TextAlign.right)),
                 ]),
               );
             }),
@@ -2362,8 +2366,8 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                   padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   child: Text('Total', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                 )),
-                Expanded(flex: 2, child: cell(totalDebit.toStringAsFixed(2), align: TextAlign.right, bold: true)),
-                Expanded(flex: 2, child: cell(totalCredit.toStringAsFixed(2), align: TextAlign.right, bold: true)),
+                Expanded(flex: 2, child: cell(AppNumberFormat.amount(totalDebit, numberFormat), align: TextAlign.right, bold: true)),
+                Expanded(flex: 2, child: cell(AppNumberFormat.amount(totalCredit, numberFormat), align: TextAlign.right, bold: true)),
               ]),
             ),
           ]),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/session_provider.dart';
 import '../theme/theme_presets.dart';
+import '../utils/app_number_format.dart';
 
 /// One line of a [SakalFinancialSummaryCard] — a label/value pair, e.g.
 /// ('Subtotal', 1250.00) or ('Discount', -80.00, isNegative: true).
@@ -36,13 +38,14 @@ class SakalFinancialSummaryCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final preset = ThemePresetConfig.all[ref.watch(themePresetProvider)]!;
+    final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
 
     Widget buildRow(SakalSummaryRow r) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text(r.label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
             Text(
-              '$currencyCode ${r.value.toStringAsFixed(2)}',
+              '$currencyCode ${AppNumberFormat.amount(r.value, numberFormat)}',
               style: TextStyle(
                 color: r.isNegative ? const Color(0xFFFFCDD2) : Colors.white,
                 fontWeight: FontWeight.bold,
@@ -68,7 +71,7 @@ class SakalFinancialSummaryCard extends ConsumerWidget {
         Text(totalLabel, style: const TextStyle(color: Colors.white70, fontSize: 10)),
         const SizedBox(height: 4),
         Text(
-          '$currencyCode ${total.toStringAsFixed(2)}',
+          '$currencyCode ${AppNumberFormat.amount(total, numberFormat)}',
           style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -0.5),
         ),
       ]),
