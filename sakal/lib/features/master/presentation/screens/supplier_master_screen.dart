@@ -5,7 +5,10 @@ import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
 
 const _partyTypes = ['Individual', 'Company', 'Partnership', 'Government'];
 
@@ -323,10 +326,11 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
         child: Text(_error!, style: const TextStyle(color: AppColors.negative))); }
 
     final showPanel = _isAdd || _selected != null;
+    final mobile = Responsive.isMobile(context);
 
-    if (Responsive.isMobile(context)) {
+    if (mobile) {
       // On mobile: list OR form, never side by side
-      if (showPanel) return _formPanel();
+      if (showPanel) return _formPanel(mobile);
       return _listPanel();
     }
 
@@ -334,7 +338,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
       SizedBox(width: 320, child: _listPanel()),
       if (showPanel) ...[
         const VerticalDivider(width: 1, thickness: 1, color: AppColors.border),
-        Expanded(child: _formPanel()),
+        Expanded(child: _formPanel(mobile)),
       ],
     ]);
   }
@@ -359,12 +363,16 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
     ),
     Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-      child: TextField(
-        controller: _searchCtrl,
-        decoration: const InputDecoration(
-          isDense: true,
-          hintText: 'Search name, code, phone…',
-          prefixIcon: Icon(Icons.search, size: 18),
+      child: SakalFieldCard(
+        label: 'Search',
+        editable: true,
+        child: TextField(
+          controller: _searchCtrl,
+          decoration: SakalFieldCard.bareDecoration.copyWith(
+            hintText: 'Search name, code, phone…',
+            prefixIcon: const Icon(Icons.search, size: 18),
+          ),
+          style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
         ),
       ),
     ),
@@ -381,7 +389,9 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
                 return InkWell(
                   onTap: () => _openEdit(row),
                   child: Container(
-                    color: isSelected ? const Color(0xFFEAF0FB) : null,
+                    color: isSelected
+                        ? ThemePresetConfig.all[ref.watch(themePresetProvider)]!.accent.withValues(alpha: 0.15)
+                        : null,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 10),
                     child: Row(children: [
@@ -447,30 +457,59 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
     ]),
   );
 
-  Widget _formPanel() {
+  Widget _formTitleBlock(bool isAdd) => Text(isAdd ? 'New Supplier' : 'Edit Supplier',
+      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
+          color: AppColors.textPrimary));
+
+  Widget _formCloseButton() => IconButton(
+        icon: const Icon(Icons.close, size: 18),
+        onPressed: () => setState(() { _selected = null; _isAdd = false; }),
+      );
+
+  Widget _formActionButtons(bool isAdd, Map<String, dynamic>? row, bool offline) =>
+      Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        if (!isAdd && row != null && !offline)
+          TextButton.icon(
+            icon: const Icon(Icons.delete_outline, size: 16),
+            label: const Text('Delete'),
+            style: TextButton.styleFrom(foregroundColor: AppColors.negative),
+            onPressed: () => _delete(row['id'] as String),
+          ),
+        if (!offline)
+          FilledButton(
+            onPressed: _saving ? null : _save,
+            child: _saving
+                ? const SizedBox(width: 18, height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : Text(isAdd ? 'Create Supplier' : 'Save Changes'),
+          ),
+      ]);
+
+  Widget _formPanel(bool mobile) {
     final isAdd = _isAdd;
     final row   = _selected;
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
+    final isCompact = ref.watch(isCompactDensityProvider);
     return Column(children: [
       Container(
         color: AppColors.surface,
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
-        child: Row(children: [
-          Expanded(child: Text(isAdd ? 'New Supplier' : 'Edit Supplier',
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary))),
-          if (!isAdd && row != null && !offline)
-            TextButton.icon(
-              icon: const Icon(Icons.delete_outline, size: 16),
-              label: const Text('Delete'),
-              style: TextButton.styleFrom(foregroundColor: AppColors.negative),
-              onPressed: () => _delete(row['id'] as String),
-            ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 18),
-            onPressed: () => setState(() { _selected = null; _isAdd = false; }),
-          ),
-        ]),
+        child: mobile
+            ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Expanded(child: _formTitleBlock(isAdd)),
+                  _formCloseButton(),
+                ]),
+                const SizedBox(height: 10),
+                _formActionButtons(isAdd, row, offline),
+              ])
+            : Row(children: [
+                Expanded(child: _formTitleBlock(isAdd)),
+                _formActionButtons(isAdd, row, offline),
+                const SizedBox(width: 8),
+                _formCloseButton(),
+              ]),
       ),
       const Divider(height: 1, color: AppColors.border),
       Expanded(
@@ -478,28 +517,35 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
           padding: const EdgeInsets.all(24),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             if (!isAdd && row != null) ...[
-              const _Label('Account Code'),
-              const SizedBox(height: 6),
-              _ReadOnlyField(row['account_code'] as String? ?? ''),
+              SakalFieldCard.readOnly(label: 'Account Code', value: row['account_code'] as String? ?? ''),
               const SizedBox(height: 16),
             ],
-            const _Label('Supplier Name *'),
-            const SizedBox(height: 6),
-            TextField(controller: _nameCtrl,
-                decoration: const InputDecoration(isDense: true,
-                    hintText: 'Enter supplier name')),
+            SakalFieldCard(
+              label: 'Supplier Name',
+              required: true,
+              editable: true,
+              child: TextField(
+                controller: _nameCtrl,
+                decoration: SakalFieldCard.bareDecoration.copyWith(hintText: 'Enter supplier name'),
+                style: SakalFieldCard.valueTextStyle(isCompact),
+              ),
+            ),
             const SizedBox(height: 16),
-            const _Label('Ledger Currency'),
-            const SizedBox(height: 6),
-            DropdownButtonFormField<String>(
-              initialValue: _currencyId,
-              decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
-              items: _currencies.map((c) => DropdownMenuItem(
-                value: c['id'] as String,
-                child: Text('${c['currency_id']} — ${c['currency_name']}',
-                    overflow: TextOverflow.ellipsis),
-              )).toList(),
-              onChanged: (v) => setState(() => _currencyId = v),
+            SakalFieldCard(
+              label: 'Ledger Currency',
+              editable: true,
+              child: DropdownButtonFormField<String>(
+                initialValue: _currencyId,
+                isExpanded: true, isDense: true, itemHeight: null,
+                decoration: SakalFieldCard.bareDecoration,
+                style: SakalFieldCard.valueTextStyle(isCompact),
+                items: _currencies.map((c) => DropdownMenuItem(
+                  value: c['id'] as String,
+                  child: Text('${c['currency_id']} — ${c['currency_name']}',
+                      overflow: TextOverflow.ellipsis),
+                )).toList(),
+                onChanged: (v) => setState(() => _currencyId = v),
+              ),
             ),
             const SizedBox(height: 20),
             ExpansionTile(
@@ -515,200 +561,134 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
                 const Divider(height: 1, color: AppColors.border),
                 const SizedBox(height: 16),
                 // Party Type
-                const _Label('Party Type'),
-                const SizedBox(height: 6),
-                DropdownButtonFormField<String>(
-                  initialValue: _partyType,
-                  decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
-                  items: _partyTypes.map((t) => DropdownMenuItem(
-                      value: t, child: Text(t))).toList(),
-                  onChanged: (v) => setState(() => _partyType = v),
+                SakalFieldCard(
+                  label: 'Party Type',
+                  editable: true,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _partyType,
+                    isExpanded: true, isDense: true, itemHeight: null,
+                    decoration: SakalFieldCard.bareDecoration,
+                    style: SakalFieldCard.valueTextStyle(isCompact),
+                    items: _partyTypes.map((t) => DropdownMenuItem(
+                        value: t, child: Text(t))).toList(),
+                    onChanged: (v) => setState(() => _partyType = v),
+                  ),
                 ),
                 const SizedBox(height: 14),
-                Builder(builder: (ctx) {
-                  final mobile = Responsive.isMobile(ctx);
-                  if (mobile) { return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _Label('Contact Person'),
-                      const SizedBox(height: 6),
-                      TextField(controller: _contactCtrl,
-                          decoration: const InputDecoration(isDense: true)),
-                      const SizedBox(height: 14),
-                      const _Label('Phone'),
-                      const SizedBox(height: 6),
-                      TextField(controller: _phoneCtrl,
-                          decoration: const InputDecoration(isDense: true)),
-                    ],
-                  ); }
-                  return Row(children: [
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      const _Label('Contact Person'),
-                      const SizedBox(height: 6),
-                      TextField(controller: _contactCtrl,
-                          decoration: const InputDecoration(isDense: true)),
-                    ])),
-                    const SizedBox(width: 16),
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      const _Label('Phone'),
-                      const SizedBox(height: 6),
-                      TextField(controller: _phoneCtrl,
-                          decoration: const InputDecoration(isDense: true)),
-                    ])),
-                  ]);
-                }),
+                SakalFieldRow(isMobile: mobile, children: [
+                  SakalFieldCard(
+                    label: 'Contact Person',
+                    editable: true,
+                    child: TextField(controller: _contactCtrl,
+                        decoration: SakalFieldCard.bareDecoration,
+                        style: SakalFieldCard.valueTextStyle(isCompact)),
+                  ),
+                  SakalFieldCard(
+                    label: 'Phone',
+                    editable: true,
+                    child: TextField(controller: _phoneCtrl,
+                        decoration: SakalFieldCard.bareDecoration,
+                        style: SakalFieldCard.valueTextStyle(isCompact)),
+                  ),
+                ]),
                 const SizedBox(height: 14),
-                const _Label('Email'),
-                const SizedBox(height: 6),
-                TextField(controller: _emailCtrl,
-                    decoration: const InputDecoration(isDense: true)),
+                SakalFieldCard(
+                  label: 'Email',
+                  editable: true,
+                  child: TextField(controller: _emailCtrl,
+                      decoration: SakalFieldCard.bareDecoration,
+                      style: SakalFieldCard.valueTextStyle(isCompact)),
+                ),
                 const SizedBox(height: 14),
-                const _Label('Address Line 1'),
-                const SizedBox(height: 6),
-                TextField(controller: _addr1Ctrl,
-                    decoration: const InputDecoration(isDense: true)),
+                SakalFieldCard(
+                  label: 'Address Line 1',
+                  editable: true,
+                  child: TextField(controller: _addr1Ctrl,
+                      decoration: SakalFieldCard.bareDecoration,
+                      style: SakalFieldCard.valueTextStyle(isCompact)),
+                ),
                 const SizedBox(height: 10),
-                TextField(controller: _addr2Ctrl,
-                    decoration: const InputDecoration(isDense: true,
-                        hintText: 'Address Line 2')),
+                SakalFieldCard(
+                  label: 'Address Line 2',
+                  editable: true,
+                  child: TextField(controller: _addr2Ctrl,
+                      decoration: SakalFieldCard.bareDecoration,
+                      style: SakalFieldCard.valueTextStyle(isCompact)),
+                ),
                 const SizedBox(height: 14),
-                Builder(builder: (ctx) {
-                  final mobile = Responsive.isMobile(ctx);
-                  if (mobile) { return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _Label('Country'),
-                      const SizedBox(height: 6),
-                      DropdownButtonFormField<String>(
-                        initialValue: _countryId,
-                        decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
-                        items: _countries.map((c) => DropdownMenuItem(
-                            value: c['id'] as String,
-                            child: Text(c['country_name'] as String,
-                                overflow: TextOverflow.ellipsis))).toList(),
-                        onChanged: (v) {
-                          setState(() { _countryId = v; _cityId = null; _cities = []; });
-                          if (v != null) _loadCities(v);
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                      const _Label('City'),
-                      const SizedBox(height: 6),
-                      DropdownButtonFormField<String>(
-                        initialValue: _cityId,
-                        decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
-                        items: _cities.map((c) => DropdownMenuItem(
-                            value: c['id'] as String,
-                            child: Text(c['city_name'] as String,
-                                overflow: TextOverflow.ellipsis))).toList(),
-                        onChanged: (v) => setState(() => _cityId = v),
-                      ),
-                    ],
-                  ); }
-                  return Row(children: [
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      const _Label('Country'),
-                      const SizedBox(height: 6),
-                      DropdownButtonFormField<String>(
-                        initialValue: _countryId,
-                        decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
-                        items: _countries.map((c) => DropdownMenuItem(
-                            value: c['id'] as String,
-                            child: Text(c['country_name'] as String,
-                                overflow: TextOverflow.ellipsis))).toList(),
-                        onChanged: (v) {
-                          setState(() { _countryId = v; _cityId = null; _cities = []; });
-                          if (v != null) _loadCities(v);
-                        },
-                      ),
-                    ])),
-                    const SizedBox(width: 16),
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      const _Label('City'),
-                      const SizedBox(height: 6),
-                      DropdownButtonFormField<String>(
-                        initialValue: _cityId,
-                        decoration: const InputDecoration(isDense: true, hintText: 'Select…'),
-                        items: _cities.map((c) => DropdownMenuItem(
-                            value: c['id'] as String,
-                            child: Text(c['city_name'] as String,
-                                overflow: TextOverflow.ellipsis))).toList(),
-                        onChanged: (v) => setState(() => _cityId = v),
-                      ),
-                    ])),
-                  ]);
-                }),
+                SakalFieldRow(isMobile: mobile, children: [
+                  SakalFieldCard(
+                    label: 'Country',
+                    editable: true,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: _countryId,
+                      isExpanded: true, isDense: true, itemHeight: null,
+                      decoration: SakalFieldCard.bareDecoration,
+                      style: SakalFieldCard.valueTextStyle(isCompact),
+                      items: _countries.map((c) => DropdownMenuItem(
+                          value: c['id'] as String,
+                          child: Text(c['country_name'] as String,
+                              overflow: TextOverflow.ellipsis))).toList(),
+                      onChanged: (v) {
+                        setState(() { _countryId = v; _cityId = null; _cities = []; });
+                        if (v != null) _loadCities(v);
+                      },
+                    ),
+                  ),
+                  SakalFieldCard(
+                    label: 'City',
+                    editable: true,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: _cityId,
+                      isExpanded: true, isDense: true, itemHeight: null,
+                      decoration: SakalFieldCard.bareDecoration,
+                      style: SakalFieldCard.valueTextStyle(isCompact),
+                      items: _cities.map((c) => DropdownMenuItem(
+                          value: c['id'] as String,
+                          child: Text(c['city_name'] as String,
+                              overflow: TextOverflow.ellipsis))).toList(),
+                      onChanged: (v) => setState(() => _cityId = v),
+                    ),
+                  ),
+                ]),
                 const SizedBox(height: 14),
-                const _Label('Tax ID (TVA / TIN)'),
-                const SizedBox(height: 6),
-                TextField(controller: _taxIdCtrl,
-                    decoration: const InputDecoration(isDense: true)),
+                SakalFieldCard(
+                  label: 'Tax ID (TVA / TIN)',
+                  editable: true,
+                  child: TextField(controller: _taxIdCtrl,
+                      decoration: SakalFieldCard.bareDecoration,
+                      style: SakalFieldCard.valueTextStyle(isCompact)),
+                ),
                 const SizedBox(height: 14),
-                Builder(builder: (ctx) {
-                  final mobile = Responsive.isMobile(ctx);
-                  if (mobile) { return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _Label('Category'),
-                      const SizedBox(height: 6),
-                      TextField(controller: _catCtrl,
-                          decoration: const InputDecoration(isDense: true,
-                              hintText: 'e.g. Local / Imported')),
-                      const SizedBox(height: 14),
-                      Row(children: [
-                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                          const _Label('Credit Days'),
-                          const SizedBox(height: 6),
-                          TextField(controller: _daysCtrl,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(isDense: true)),
-                        ])),
-                        const SizedBox(width: 12),
-                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                          const _Label('Credit Limit'),
-                          const SizedBox(height: 6),
-                          TextField(controller: _limitCtrl,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              decoration: const InputDecoration(isDense: true, hintText: '0.00')),
-                        ])),
-                      ]),
-                    ],
-                  ); }
-                  return Row(children: [
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      const _Label('Category'),
-                      const SizedBox(height: 6),
-                      TextField(controller: _catCtrl,
-                          decoration: const InputDecoration(isDense: true,
-                              hintText: 'e.g. Local / Imported')),
-                    ])),
-                    const SizedBox(width: 12),
-                    SizedBox(width: 90, child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const _Label('Credit Days'),
-                      const SizedBox(height: 6),
-                      TextField(controller: _daysCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(isDense: true)),
-                    ])),
-                    const SizedBox(width: 12),
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      const _Label('Credit Limit'),
-                      const SizedBox(height: 6),
-                      TextField(controller: _limitCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: const InputDecoration(isDense: true, hintText: '0.00')),
-                    ])),
-                  ]);
-                }),
+                SakalFieldRow(isMobile: mobile, children: [
+                  SakalFieldCard(
+                    label: 'Category',
+                    editable: true,
+                    child: TextField(controller: _catCtrl,
+                        decoration: SakalFieldCard.bareDecoration.copyWith(hintText: 'e.g. Local / Imported'),
+                        style: SakalFieldCard.valueTextStyle(isCompact)),
+                  ),
+                  SakalFieldCard(
+                    label: 'Credit Days',
+                    editable: true,
+                    numeric: true,
+                    child: TextField(controller: _daysCtrl,
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.right,
+                        decoration: SakalFieldCard.bareDecoration,
+                        style: SakalFieldCard.valueTextStyle(isCompact)),
+                  ),
+                  SakalFieldCard(
+                    label: 'Credit Limit',
+                    editable: true,
+                    numeric: true,
+                    child: TextField(controller: _limitCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        textAlign: TextAlign.right,
+                        decoration: SakalFieldCard.bareDecoration.copyWith(hintText: '0.00'),
+                        style: SakalFieldCard.valueTextStyle(isCompact)),
+                  ),
+                ]),
               ],
             ),
             if (_saveError != null) ...[
@@ -716,54 +696,11 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
               Text(_saveError!,
                   style: const TextStyle(color: AppColors.negative, fontSize: 13)),
             ],
-            const SizedBox(height: 24),
-            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              OutlinedButton(
-                onPressed: () => setState(() { _selected = null; _isAdd = false; }),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 12),
-              if (!offline)
-                FilledButton(
-                  onPressed: _saving ? null : _save,
-                  child: _saving
-                      ? const SizedBox(width: 18, height: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
-                      : Text(isAdd ? 'Create Supplier' : 'Save Changes'),
-                ),
-            ]),
           ]),
         ),
       ),
     ]);
   }
-}
-
-class _Label extends StatelessWidget {
-  final String text;
-  const _Label(this.text);
-  @override
-  Widget build(BuildContext context) => Text(text,
-      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary));
-}
-
-class _ReadOnlyField extends StatelessWidget {
-  final String value;
-  const _ReadOnlyField(this.value);
-  @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    decoration: BoxDecoration(
-      color: AppColors.surfaceVariant,
-      border: Border.all(color: AppColors.border),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Text(value,
-        style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-  );
 }
 
 extension _NullIfEmpty on String {
