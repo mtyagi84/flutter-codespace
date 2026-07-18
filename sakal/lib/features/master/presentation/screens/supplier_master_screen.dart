@@ -7,10 +7,13 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/account_transaction_check.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_formatted_number_field.dart';
 
 const _partyTypes = ['Individual', 'Company', 'Partnership', 'Government'];
 
@@ -29,8 +32,13 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
   List<Map<String, dynamic>> _filtered   = [];
   List<Map<String, dynamic>> _currencies = [];
   List<Map<String, dynamic>> _countries  = [];
+  List<Map<String, dynamic>> _divisions  = [];
   List<Map<String, dynamic>> _cities     = [];
-  String? _supplierGroupId;
+  List<Map<String, dynamic>> _groups     = []; // Supplier group nodes (posting_allowed=false)
+  List<Map<String, dynamic>> _categories = [];
+  String? _supplierGroupId; // selected parent group — user-editable, not fixed
+  String  _groupDisplay = '';
+  bool?   _hasTransactions; // null = not yet checked (Add mode, or still loading)
 
   bool    _loading = true;
   String? _error;
@@ -48,15 +56,17 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
   final _addr1Ctrl   = TextEditingController();
   final _addr2Ctrl   = TextEditingController();
   final _taxIdCtrl   = TextEditingController();
-  final _catCtrl     = TextEditingController();
   final _limitCtrl   = TextEditingController();
   final _daysCtrl    = TextEditingController();
 
   String? _partyType;
   String? _currencyId;
   String? _countryId;
+  String? _divisionId;
   String? _cityId;
+  String? _category;
   bool    _creditBlocked = false;
+  bool    _isActive      = true;
   bool    _partyExpanded = true;
 
   static const int _pageSize = 25;
@@ -74,7 +84,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
   void dispose() {
     _searchCtrl.dispose();
     for (final c in [_nameCtrl, _contactCtrl, _phoneCtrl, _emailCtrl,
-        _addr1Ctrl, _addr2Ctrl, _taxIdCtrl, _catCtrl, _limitCtrl, _daysCtrl]) {
+        _addr1Ctrl, _addr2Ctrl, _taxIdCtrl, _limitCtrl, _daysCtrl]) {
       c.dispose();
     }
     super.dispose();
@@ -98,28 +108,36 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
         },
         options: Options(headers: {'Prefer': 'count=exact'}),
       );
+      // All Supplier group (posting_allowed=false) nodes, at any nesting
+      // depth — feeds the Parent Group picker AND the list row's group-name
+      // resolution. Previously only the FIRST such row was ever fetched
+      // and silently used for every new supplier, with no way to pick a
+      // different (possibly nested) group.
       final groupFuture = DioClient.instance.get('/rim_accounts', queryParameters: {
         'client_id':      'eq.${session.clientId}',
         'company_id':     'eq.${session.companyId}',
         'account_nature': 'eq.Supplier',
         'posting_allowed':'eq.false',
         'is_deleted':     'eq.false',
-        'select':         'id',
-        'limit':          '1',
+        'select':         'id,account_code,account_name',
+        'order':          'account_code.asc',
       });
-      final currenciesFuture = ref.read(currenciesProvider.future);
-      final countriesFuture  = ref.read(countriesProvider.future);
+      final currenciesFuture  = ref.read(currenciesProvider.future);
+      final countriesFuture   = ref.read(countriesProvider.future);
+      final categoriesFuture  = _fetchCategories(session);
 
       final accountsRes = await accountsFuture;
       final groupRes    = await groupFuture;
       final currencies  = await currenciesFuture;
       final countries   = await countriesFuture;
+      final categories  = await categoriesFuture;
 
       if (mounted) {
         final groups = List<Map<String, dynamic>>.from(groupRes.data as List);
         setState(() {
           _suppliers       = List<Map<String, dynamic>>.from(accountsRes.data as List);
-          _supplierGroupId = groups.isEmpty ? null : groups.first['id'] as String;
+          _groups          = groups;
+          _categories      = categories;
           _currencies      = currencies;
           _countries       = countries;
           _totalCount      = _parseTotal(accountsRes) ?? _suppliers.length;
@@ -132,24 +150,100 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
     }
   }
 
+  // Two-step common-masters lookup (type_key -> type_id -> masters), same
+  // pattern as SalesOrderRemoteDs.getIncoterms() (086).
+  Future<List<Map<String, dynamic>>> _fetchCategories(UserSession session) async {
+    final typeRes = await DioClient.instance.get('/rim_common_master_types', queryParameters: {
+      'type_key': 'eq.SUPPLIER_CATEGORY',
+      'select':   'id',
+      'limit':    '1',
+    });
+    final typeList = typeRes.data as List;
+    if (typeList.isEmpty) return [];
+    final typeId = (typeList.first as Map<String, dynamic>)['id'] as String;
+    final res = await DioClient.instance.get('/rim_common_masters', queryParameters: {
+      'type_id':    'eq.$typeId',
+      'client_id':  'eq.${session.clientId}',
+      'company_id': 'eq.${session.companyId}',
+      'is_deleted': 'eq.false',
+      'is_active':  'eq.true',
+      'select':     'id,description',
+      'order':      'sort_order.asc,description.asc',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
+  String _groupDisplayFor(String? id) {
+    if (id == null) return '';
+    final g = _groups.firstWhere((g) => g['id'] == id, orElse: () => const {});
+    if (g.isEmpty) return '';
+    return '[${g['account_code']}] ${g['account_name']}';
+  }
+
   int? _parseTotal(Response res) {
     final raw = res.headers.value('content-range');
     if (raw == null) return null;
     return int.tryParse(raw.split('/').last.trim());
   }
 
-  Future<void> _loadCities(String countryId) async {
+  // rim_cities keys off country_code (TEXT), not a country_id FK -- resolve
+  // it from the already-loaded _countries list. This was the actual root
+  // cause of "city is not selectable": the old query filtered on a
+  // country_id column that doesn't exist on rim_cities at all, so every
+  // request 400'd and was silently swallowed by the catch block below,
+  // leaving _cities permanently empty. Nothing to do with a missing
+  // state/province level.
+  String? get _selectedCountryCode {
+    final c = _countries.firstWhere((c) => c['id'] == _countryId, orElse: () => const {});
+    return c['country_code'] as String?;
+  }
+
+  // Same 3-level cascade as lib/features/setup/presentation/screens/
+  // cities_screen.dart (Country -> Division -> City), reusing the
+  // already-seeded rim_divisions state/province master (009_divisions.sql)
+  // that was never surfaced in this screen before.
+  Future<void> _loadDivisions() async {
+    final countryCode = _selectedCountryCode;
+    if (countryCode == null) { setState(() => _divisions = []); return; }
     final session = ref.read(sessionProvider)!;
     try {
-      final res = await DioClient.instance.get('/rim_cities', queryParameters: {
-        'client_id':  'eq.${session.clientId}',
-        'company_id': 'eq.${session.companyId}',
-        'country_id': 'eq.$countryId',
-        'select':     'id,city_name',
-        'order':      'city_name.asc',
+      final res = await DioClient.instance.get('/rim_divisions', queryParameters: {
+        'country_code': 'eq.$countryCode',
+        'or': '(is_system.eq.true,and(client_id.eq.${session.clientId},company_id.eq.${session.companyId}))',
+        'select': 'id,division_name',
+        'order':  'division_name.asc',
       });
+      if (mounted) setState(() => _divisions = List<Map<String, dynamic>>.from(res.data as List));
+    } on DioException { /* silent */ }
+  }
+
+  Future<void> _loadCities() async {
+    final countryCode = _selectedCountryCode;
+    if (countryCode == null) { setState(() => _cities = []); return; }
+    final session = ref.read(sessionProvider)!;
+    try {
+      final params = <String, dynamic>{
+        'client_id':    'eq.${session.clientId}',
+        'company_id':   'eq.${session.companyId}',
+        'country_code': 'eq.$countryCode',
+        'is_deleted':   'eq.false',
+        'select':       'id,city_name,division_id',
+        'order':        'city_name.asc',
+      };
+      if (_divisionId != null) params['division_id'] = 'eq.$_divisionId';
+      final res = await DioClient.instance.get('/rim_cities', queryParameters: params);
       if (mounted) setState(() => _cities = List<Map<String, dynamic>>.from(res.data as List));
     } on DioException { /* silent */ }
+  }
+
+  void _onCountryChanged(String? v) {
+    setState(() { _countryId = v; _divisionId = null; _cityId = null; _divisions = []; _cities = []; });
+    if (v != null) { _loadDivisions(); _loadCities(); }
+  }
+
+  void _onDivisionChanged(String? v) {
+    setState(() { _divisionId = v; _cityId = null; });
+    _loadCities();
   }
 
   Future<String?> _fetchNextCode(String parentId) async {
@@ -178,7 +272,8 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
               (s['account_name'] as String).toLowerCase().contains(q) ||
               (s['account_code'] as String).toLowerCase().contains(q) ||
               (s['phone'] as String? ?? '').toLowerCase().contains(q) ||
-              (s['email'] as String? ?? '').toLowerCase().contains(q),
+              (s['email'] as String? ?? '').toLowerCase().contains(q) ||
+              (s['contact_person'] as String? ?? '').toLowerCase().contains(q),
             ).toList();
     });
   }
@@ -202,28 +297,57 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
       _addr1Ctrl.text   = row['address_line1']  as String? ?? '';
       _addr2Ctrl.text   = row['address_line2']  as String? ?? '';
       _taxIdCtrl.text   = row['tax_id']         as String? ?? '';
-      _catCtrl.text     = row['party_category'] as String? ?? '';
+      _category         = row['party_category'] as String?;
       _limitCtrl.text   = row['credit_limit'] != null
           ? row['credit_limit'].toString() : '';
       _daysCtrl.text    = (row['credit_days'] ?? 30).toString();
       _partyType        = row['party_type']          as String?;
       _currencyId       = row['account_currency_id'] as String?;
       _countryId        = row['country_id']          as String?;
+      _divisionId       = null;
       _cityId           = row['city_id']             as String?;
       _creditBlocked    = row['is_credit_blocked']   as bool? ?? false;
+      _isActive         = row['is_active'] as bool? ?? true;
+      _supplierGroupId  = row['parent_id'] as String?;
+      _groupDisplay     = _groupDisplayFor(_supplierGroupId);
+      _divisions        = [];
       _cities           = [];
+      _hasTransactions  = null; // unknown until the check below resolves
     });
-    if (_countryId != null) _loadCities(_countryId!);
+    if (_countryId != null) {
+      _loadDivisions();
+      // Cities load unfiltered by division first (division_id is unknown
+      // until we see which city was already picked) -- once loaded, back-
+      // fill the Division dropdown from the selected city's own
+      // division_id purely for display; the City list itself stays as-is.
+      _loadCities().then((_) {
+        if (!mounted || _cityId == null) return;
+        final city = _cities.firstWhere((c) => c['id'] == _cityId, orElse: () => const {});
+        final divId = city['division_id'] as String?;
+        if (divId != null) setState(() => _divisionId = divId);
+      });
+    }
+    _checkHasTransactions(row['id'] as String);
+  }
+
+  Future<void> _checkHasTransactions(String accountId) async {
+    final result = await accountHasTransactions(accountId);
+    if (mounted) setState(() => _hasTransactions = result);
   }
 
   void _clearForm() {
     for (final c in [_nameCtrl, _contactCtrl, _phoneCtrl, _emailCtrl,
-        _addr1Ctrl, _addr2Ctrl, _taxIdCtrl, _catCtrl, _limitCtrl, _daysCtrl]) {
+        _addr1Ctrl, _addr2Ctrl, _taxIdCtrl, _limitCtrl, _daysCtrl]) {
       c.clear();
     }
     _partyType = null; _currencyId = null;
-    _countryId = null; _cityId = null;
-    _creditBlocked = false; _cities = [];
+    _countryId = null; _divisionId = null; _cityId = null;
+    _category  = null;
+    _creditBlocked = false; _isActive = true;
+    _divisions = []; _cities = [];
+    _hasTransactions = false; // a brand-new account never has transactions
+    _supplierGroupId = _groups.isEmpty ? null : _groups.first['id'] as String;
+    _groupDisplay     = _groupDisplayFor(_supplierGroupId);
   }
 
   Future<void> _save() async {
@@ -239,8 +363,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
           return;
         }
         final code = await _fetchNextCode(_supplierGroupId!);
-        await DioClient.instance.post('/rim_accounts', data: _buildPayload(session, name,
-            code: code, parentId: _supplierGroupId));
+        await DioClient.instance.post('/rim_accounts', data: _buildPayload(session, name, code: code));
       } else {
         await DioClient.instance.patch(
           '/rim_accounts',
@@ -265,8 +388,8 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
   }
 
   Map<String, dynamic> _buildPayload(UserSession session, String name,
-      {String? code, String? parentId}) => {
-    if (parentId != null) 'parent_id': parentId,
+      {String? code}) => {
+    'parent_id':         _supplierGroupId,
     if (code != null) 'account_code': code,
     'account_name':      name,
     'account_nature':    'Supplier',
@@ -282,47 +405,20 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
     'country_id':        _countryId,
     'city_id':           _cityId,
     'tax_id':            _taxIdCtrl.text.trim().nullIfEmpty,
-    'party_category':    _catCtrl.text.trim().nullIfEmpty,
+    'party_category':    _category,
     'credit_limit':      _limitCtrl.text.trim().isEmpty
         ? null : double.tryParse(_limitCtrl.text.trim()),
     'credit_days':       int.tryParse(_daysCtrl.text.trim()) ?? 30,
     'is_credit_blocked': _creditBlocked,
+    'is_active':         _isActive,
     'client_id':         session.clientId,
     'company_id':        session.companyId,
     'updated_by':        session.userId,
-    if (parentId != null) ...{
+    if (code != null) ...{
       'accounting_std': 'OHADA',
       'created_by':     session.userId,
     },
   };
-
-  Future<void> _delete(String id) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete Supplier'),
-        content: const Text('Supplier will be soft-deleted. Continue?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.negative),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    final session = ref.read(sessionProvider)!;
-    await DioClient.instance.patch(
-      '/rim_accounts',
-      queryParameters: {'id': 'eq.$id'},
-      data: {'is_deleted': true, 'updated_by': session.userId},
-    );
-    ref.invalidate(accountsProvider);
-    setState(() { _selected = null; _isAdd = false; });
-    await _load();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -374,7 +470,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
         child: TextField(
           controller: _searchCtrl,
           decoration: SakalFieldCard.bareDecoration.copyWith(
-            hintText: 'Search name, code, phone…',
+            hintText: 'Search name, code, phone, contact…',
             prefixIcon: const Icon(Icons.search, size: 18),
           ),
           style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
@@ -391,12 +487,18 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
               itemBuilder: (_, i) {
                 final row = _filtered[i];
                 final isSelected = _selected?['id'] == row['id'];
+                final isInactive = !(row['is_active'] as bool? ?? true);
+                final groupName = _groupDisplayFor(row['parent_id'] as String?);
+                final subtitle2 = [
+                  groupName.isEmpty ? null : groupName,
+                  row['contact_person'] as String?,
+                ].where((s) => s != null && s.isNotEmpty).join(' · ');
                 return InkWell(
                   onTap: () => _openEdit(row),
                   child: Container(
                     color: isSelected
                         ? ThemePresetConfig.all[ref.watch(themePresetProvider)]!.accent.withValues(alpha: 0.15)
-                        : null,
+                        : (isInactive ? const Color(0xFFF9FAFB) : null),
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 10),
                     child: Row(children: [
@@ -407,8 +509,8 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
                           (row['account_name'] as String).isNotEmpty
                               ? (row['account_name'] as String)[0].toUpperCase()
                               : '?',
-                          style: const TextStyle(fontSize: 13,
-                              color: AppColors.info,
+                          style: TextStyle(fontSize: 13,
+                              color: isInactive ? AppColors.textDisabled : AppColors.info,
                               fontWeight: FontWeight.w700),
                         ),
                       ),
@@ -417,9 +519,9 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                         Text(row['account_name'] as String,
-                            style: const TextStyle(fontSize: 13,
+                            style: TextStyle(fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary)),
+                                color: isInactive ? AppColors.textDisabled : AppColors.textPrimary)),
                         Text(
                           [row['account_code'], row['phone']]
                               .where((s) => s != null && (s as String).isNotEmpty)
@@ -427,7 +529,13 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
                           style: const TextStyle(fontSize: 11,
                               color: AppColors.textSecondary),
                         ),
+                        if (subtitle2.isNotEmpty)
+                          Text(subtitle2,
+                              style: const TextStyle(fontSize: 11,
+                                  color: AppColors.textDisabled)),
                       ])),
+                      if (isInactive)
+                        const Icon(Icons.block, size: 14, color: AppColors.negative),
                     ]),
                   ),
                 );
@@ -471,15 +579,8 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
         onPressed: () => setState(() { _selected = null; _isAdd = false; }),
       );
 
-  Widget _formActionButtons(bool isAdd, Map<String, dynamic>? row, bool offline) =>
+  Widget _formActionButtons(bool isAdd, bool offline) =>
       Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-        if (!isAdd && row != null && !offline && canEdit)
-          TextButton.icon(
-            icon: const Icon(Icons.delete_outline, size: 16),
-            label: const Text('Delete'),
-            style: TextButton.styleFrom(foregroundColor: AppColors.negative),
-            onPressed: () => _delete(row['id'] as String),
-          ),
         if (!offline && (isAdd ? canAdd : canEdit))
           FilledButton(
             onPressed: _saving ? null : _save,
@@ -507,11 +608,11 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
                   _formCloseButton(),
                 ]),
                 const SizedBox(height: 10),
-                _formActionButtons(isAdd, row, offline),
+                _formActionButtons(isAdd, offline),
               ])
             : Row(children: [
                 Expanded(child: _formTitleBlock(isAdd)),
-                _formActionButtons(isAdd, row, offline),
+                _formActionButtons(isAdd, offline),
                 const SizedBox(width: 8),
                 _formCloseButton(),
               ]),
@@ -536,9 +637,45 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
               ),
             ),
             const SizedBox(height: 16),
+
+            // Parent Group — nested Chart-of-Accounts group this supplier
+            // is created under. Previously hardcoded to whichever group
+            // happened to load first; now user-selectable at any depth
+            // (additional nested groups are created via Chart of Accounts,
+            // not here). Editable in both Add and Edit — re-parenting an
+            // existing supplier is allowed.
+            SakalFieldCard(
+              label: 'Parent Group',
+              editable: true,
+              child: SakalAutocomplete<Map<String, dynamic>>(
+                key: ValueKey(_supplierGroupId),
+                initialValue: TextEditingValue(text: _groupDisplay),
+                displayStringForOption: (g) => '[${g['account_code']}] ${g['account_name']}',
+                optionsBuilder: (v) {
+                  final q = v.text.toLowerCase().trim();
+                  if (q.isEmpty) return _groups;
+                  return _groups.where((g) =>
+                      (g['account_code'] as String).toLowerCase().contains(q) ||
+                      (g['account_name'] as String).toLowerCase().contains(q));
+                },
+                onSelected: (g) => setState(() {
+                  _supplierGroupId = g['id'] as String;
+                  _groupDisplay    = '[${g['account_code']}] ${g['account_name']}';
+                }),
+                decoration: SakalFieldCard.bareDecoration.copyWith(hintText: 'Select parent group…'),
+                style: SakalFieldCard.valueTextStyle(isCompact),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Currency — locked once this account has any posted GL
+            // transaction (checked in _openEdit via accountHasTransactions),
+            // since changing it after the fact would corrupt historical
+            // multi-currency reporting. Never locked for a new (unsaved)
+            // supplier -- _hasTransactions is seeded false in _clearForm().
             SakalFieldCard(
               label: 'Ledger Currency',
-              editable: true,
+              editable: _hasTransactions != true,
               child: DropdownButtonFormField<String>(
                 initialValue: _currencyId,
                 isExpanded: true, isDense: true, itemHeight: null,
@@ -549,10 +686,38 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
                   child: Text('${c['currency_id']} — ${c['currency_name']}',
                       overflow: TextOverflow.ellipsis),
                 )).toList(),
-                onChanged: (v) => setState(() => _currencyId = v),
+                onChanged: _hasTransactions == true ? null : (v) => setState(() => _currencyId = v),
               ),
             ),
+            if (_hasTransactions == true) ...[
+              const SizedBox(height: 4),
+              const Text('Locked — this account already has posted transactions.',
+                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+            ],
             const SizedBox(height: 20),
+
+            // Active — replaces the old Delete action entirely (no
+            // transaction-existence check needed, since this is always
+            // freely reversible in both directions). Inactive only affects
+            // eligibility as a NEW-transaction picker option (accountsProvider
+            // already filters is_active=true app-wide) -- it never hides
+            // the account from this list or from any report/ledger.
+            if (!isAdd) ...[
+              SwitchListTile.adaptive(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Active',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                subtitle: const Text(
+                    'Inactive accounts cannot be picked for new transactions, but stay visible here and in reports',
+                    style: TextStyle(fontSize: 11)),
+                value: _isActive,
+                activeThumbColor: AppColors.positive,
+                onChanged: (v) => setState(() => _isActive = v),
+              ),
+              const SizedBox(height: 12),
+            ],
+
             ExpansionTile(
               initiallyExpanded: _partyExpanded,
               onExpansionChanged: (v) => setState(() => _partyExpanded = v),
@@ -621,6 +786,10 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
                       style: SakalFieldCard.valueTextStyle(isCompact)),
                 ),
                 const SizedBox(height: 14),
+                // Country + Division (State/Province) + City -- Division
+                // narrows the City list but is not itself stored on
+                // rim_accounts; the picked City already carries its own
+                // division_id via FK.
                 SakalFieldRow(isMobile: mobile, children: [
                   SakalFieldCard(
                     label: 'Country',
@@ -634,10 +803,23 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
                           value: c['id'] as String,
                           child: Text(c['country_name'] as String,
                               overflow: TextOverflow.ellipsis))).toList(),
-                      onChanged: (v) {
-                        setState(() { _countryId = v; _cityId = null; _cities = []; });
-                        if (v != null) _loadCities(v);
-                      },
+                      onChanged: _onCountryChanged,
+                    ),
+                  ),
+                  SakalFieldCard(
+                    label: 'State / Province',
+                    editable: true,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: _divisionId,
+                      isExpanded: true, isDense: true, itemHeight: null,
+                      decoration: SakalFieldCard.bareDecoration.copyWith(
+                          hintText: _countryId == null ? 'Select country first' : 'All'),
+                      style: SakalFieldCard.valueTextStyle(isCompact),
+                      items: _divisions.map((d) => DropdownMenuItem(
+                          value: d['id'] as String,
+                          child: Text(d['division_name'] as String,
+                              overflow: TextOverflow.ellipsis))).toList(),
+                      onChanged: _countryId == null ? null : _onDivisionChanged,
                     ),
                   ),
                   SakalFieldCard(
@@ -669,9 +851,17 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
                   SakalFieldCard(
                     label: 'Category',
                     editable: true,
-                    child: TextField(controller: _catCtrl,
-                        decoration: SakalFieldCard.bareDecoration.copyWith(hintText: 'e.g. Local / Imported'),
-                        style: SakalFieldCard.valueTextStyle(isCompact)),
+                    child: DropdownButtonFormField<String>(
+                      initialValue: _category,
+                      isExpanded: true, isDense: true, itemHeight: null,
+                      decoration: SakalFieldCard.bareDecoration.copyWith(hintText: 'Select…'),
+                      style: SakalFieldCard.valueTextStyle(isCompact),
+                      items: _categories.map((c) => DropdownMenuItem(
+                          value: c['description'] as String,
+                          child: Text(c['description'] as String,
+                              overflow: TextOverflow.ellipsis))).toList(),
+                      onChanged: (v) => setState(() => _category = v),
+                    ),
                   ),
                   SakalFieldCard(
                     label: 'Credit Days',
@@ -687,9 +877,9 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
                     label: 'Credit Limit',
                     editable: true,
                     numeric: true,
-                    child: TextField(controller: _limitCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    child: SakalFormattedNumberField(controller: _limitCtrl,
                         textAlign: TextAlign.right,
+                        numberFormatStyle: ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL',
                         decoration: SakalFieldCard.bareDecoration.copyWith(hintText: '0.00'),
                         style: SakalFieldCard.valueTextStyle(isCompact)),
                   ),

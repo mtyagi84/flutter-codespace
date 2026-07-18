@@ -33,6 +33,7 @@ class SakalFormattedNumberField extends StatefulWidget {
   final FocusNode? focusNode;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onFieldSubmitted;
+  final TextAlign textAlign;
 
   const SakalFormattedNumberField({
     super.key,
@@ -45,6 +46,7 @@ class SakalFormattedNumberField extends StatefulWidget {
     this.focusNode,
     this.onChanged,
     this.onFieldSubmitted,
+    this.textAlign = TextAlign.start,
   });
 
   @override
@@ -131,6 +133,7 @@ class _SakalFormattedNumberFieldState extends State<SakalFormattedNumberField> {
       focusNode: _focusNode,
       enabled: widget.enabled,
       style: widget.style,
+      textAlign: widget.textAlign,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       decoration: widget.decoration,
       onChanged: _onDisplayChanged,
