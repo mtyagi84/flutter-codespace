@@ -2,14 +2,21 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_formatted_number_field.dart';
 import '../../data/models/common_master_model.dart';
 import '../../data/models/item_category_model.dart';
 import '../../data/models/product_flag_type_model.dart';
@@ -500,19 +507,18 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  /// Label widget with a red asterisk — use `label: _req('Field')` on required fields.
-  static Widget _req(String text) => RichText(
-    text: TextSpan(
-      text: text,
-      style: const TextStyle(
-          color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w400),
-      children: const [
-        TextSpan(
-            text: ' *',
-            style: TextStyle(color: AppColors.negative, fontWeight: FontWeight.w600)),
-      ],
-    ),
-  );
+  // Shared bare decoration/style for any input nested inside a SakalFieldCard
+  // — strips the input's own border (the card draws it) and keeps a
+  // consistent hint style app-wide (see SakalFieldCard docs).
+  InputDecoration _bare({String? hint, Widget? suffixIcon, Widget? prefixIcon}) =>
+      SakalFieldCard.bareDecoration.copyWith(
+        hintText:    hint,
+        hintStyle:   const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+        suffixIcon:  suffixIcon,
+        prefixIcon:  prefixIcon,
+      );
+
+  TextStyle get _fieldStyle => SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider));
 
   // ── Build ──────────────────────────────────────────────────────────────────
 
@@ -521,6 +527,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
     final session = ref.watch(sessionProvider);
     final offline = session?.offlineMode ?? false;
     final canSave = !offline && (_isNew ? canAdd : canEdit);
+    final isMobile = Responsive.isMobile(context);
 
     if (_loadingRefs || _loadingProd) {
       return const Center(child: CircularProgressIndicator());
@@ -541,42 +548,22 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // ── Page header ─────────────────────────────────────
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
+                      isMobile
+                          ? Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  _isNew ? 'New Product' : _nameCtrl.text.isNotEmpty
-                                      ? _nameCtrl.text
-                                      : 'Edit Product',
-                                  style: const TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.textPrimary),
-                                ),
-                                const Text('Product Master',
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        color: AppColors.textSecondary)),
+                                _buildTitleBlock(),
+                                const SizedBox(height: 10),
+                                if (canSave) _buildSaveButton(),
+                              ],
+                            )
+                          : Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: _buildTitleBlock()),
+                                if (canSave) _buildSaveButton(),
                               ],
                             ),
-                          ),
-                          if (canSave)
-                            FilledButton.icon(
-                              onPressed: _saving ? null : _save,
-                              icon: _saving
-                                  ? const SizedBox(
-                                      width: 16, height: 16,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2, color: Colors.white))
-                                  : const Icon(Icons.save_outlined, size: 18),
-                              label: Text(_saving ? 'Saving…' : 'Save Product'),
-                            ),
-                        ],
-                      ),
                       if (_error != null) ...[
                         const SizedBox(height: 16),
                         _ErrorBanner(_error!),
@@ -618,19 +605,73 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
     );
   }
 
+  // Back button duplicated here (in addition to TopBar's own, app-wide one)
+  // per the same reasoning as Sales Order/Sales Invoice Entry — the user's
+  // focus is on this header row (right next to Save), not the far
+  // top-left corner of the chrome. TopBar's arrow stays too, this is
+  // additive (only shown when reached via context.push, e.g. from
+  // Product List).
+  Widget _buildTitleBlock() => Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (context.canPop())
+        IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () => context.pop(),
+        ),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _isNew ? 'New Product' : _nameCtrl.text.isNotEmpty
+                ? _nameCtrl.text
+                : 'Edit Product',
+            style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary),
+          ),
+          const Text('Product Master',
+              style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary)),
+        ],
+      ),
+    ],
+  );
+
+  Widget _buildSaveButton() => FilledButton.icon(
+    onPressed: _saving ? null : _save,
+    icon: _saving
+        ? const SizedBox(
+            width: 16, height: 16,
+            child: CircularProgressIndicator(
+                strokeWidth: 2, color: Colors.white))
+        : const Icon(Icons.save_outlined, size: 18),
+    label: Text(_saving ? 'Saving…' : 'Save Product'),
+  );
+
   // ── Section 1: Basic Details ───────────────────────────────────────────────
 
-  Widget _buildBasicDetails(UserSession session) => _SectionCard(
-        title: 'Basic Details',
-        icon:  Icons.inventory_2_outlined,
-        children: [
-          _TwoCol(
-            left: TextFormField(
+  Widget _buildBasicDetails(UserSession session) {
+    final mobile = Responsive.isMobile(context);
+    return _SectionCard(
+      title: 'Basic Details',
+      icon:  Icons.inventory_2_outlined,
+      children: [
+        SakalFieldRow(isMobile: mobile, children: [
+          SakalFieldCard(
+            label:    'Product Code',
+            required: true,
+            editable: true,
+            child: TextFormField(
               controller: _codeCtrl,
               textCapitalization: TextCapitalization.characters,
-              decoration: InputDecoration(
-                label:    _req('Product Code'),
-                hintText: 'e.g. PRD-00001',
+              style: _fieldStyle,
+              decoration: _bare(
+                hint: 'e.g. PRD-00001',
                 suffixIcon: _isNew
                     ? TextButton(
                         onPressed: _generateCode,
@@ -641,165 +682,201 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
                   ? 'Product code is required'
                   : null,
             ),
-            right: TextFormField(
+          ),
+          SakalFieldCard(
+            label:    'Product Name',
+            required: true,
+            editable: true,
+            child: TextFormField(
               controller: _nameCtrl,
-              decoration: InputDecoration(
-                label:    _req('Product Name'),
-                hintText: 'Full product name',
-              ),
+              style: _fieldStyle,
+              decoration: _bare(hint: 'Full product name'),
               validator: (v) => (v == null || v.trim().isEmpty)
                   ? 'Product name is required'
                   : null,
             ),
           ),
-          const SizedBox(height: 16),
-          _TwoCol(
-            left: TextFormField(
+        ]),
+        const SizedBox(height: 16),
+        SakalFieldRow(isMobile: mobile, children: [
+          SakalFieldCard(
+            label:    'Short Name',
+            editable: true,
+            child: TextFormField(
               controller: _shortCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Short Name',
-                hintText:  'Abbreviation shown on receipts',
-              ),
+              style: _fieldStyle,
+              decoration: _bare(hint: 'Abbreviation shown on receipts'),
             ),
-            right: DropdownButtonFormField<String>(
+          ),
+          SakalFieldCard(
+            label:    'Product Nature',
+            editable: true,
+            child: DropdownButtonFormField<String>(
               initialValue: _nature,
-              decoration: const InputDecoration(labelText: 'Product Nature'),
+              isExpanded: true, isDense: true, itemHeight: null,
+              style: _fieldStyle,
+              decoration: _bare(),
               items: ProductModel.natureLabels.entries
-                  .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                  .map((e) => DropdownMenuItem(
+                      value: e.key,
+                      child: Text(e.value, overflow: TextOverflow.ellipsis)))
                   .toList(),
               onChanged: (v) => setState(() => _nature = v ?? 'TRADING'),
             ),
           ),
-          const SizedBox(height: 16),
-          TextFormField(
+        ]),
+        const SizedBox(height: 16),
+        SakalFieldCard(
+          label:    'Description',
+          editable: true,
+          height:   96,
+          child: TextFormField(
             controller: _descCtrl,
             maxLines:   3,
-            decoration: const InputDecoration(
-              labelText: 'Description',
-              hintText:  'Detailed product description',
-              alignLabelWithHint: true,
-            ),
+            style: _fieldStyle,
+            decoration: _bare(hint: 'Detailed product description'),
           ),
-          const SizedBox(height: 16),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Active',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-            value: _isActive,
-            onChanged: (v) => setState(() => _isActive = v),
-          ),
-        ],
-      );
+        ),
+        const SizedBox(height: 16),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Active',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+          value: _isActive,
+          onChanged: (v) => setState(() => _isActive = v),
+        ),
+      ],
+    );
+  }
 
   // ── Section 2: Identifiers ─────────────────────────────────────────────────
 
   Widget _buildIdentifiers(UserSession session) {
     final showBarcode  = session.enableBarcode;
     final showPartNo   = session.enablePartNumber;
+    final mobile       = Responsive.isMobile(context);
     return _SectionCard(
       title: 'Identifiers & Codes',
       icon:  Icons.qr_code_outlined,
       children: [
         if (showBarcode || showPartNo) ...[
-          _TwoCol(
-            left: showBarcode
-                ? TextFormField(
-                    controller: _barcodeCtrl,
-                    decoration: const InputDecoration(
-                        labelText: 'Barcode',
-                        hintText:  'Scan or type barcode',
-                        prefixIcon: Icon(Icons.barcode_reader, size: 18)),
+          SakalFieldRow(isMobile: mobile, children: [
+            showBarcode
+                ? SakalFieldCard(
+                    label:    'Barcode',
+                    editable: true,
+                    child: TextFormField(
+                      controller: _barcodeCtrl,
+                      style: _fieldStyle,
+                      decoration: _bare(
+                        hint: 'Scan or type barcode',
+                        prefixIcon: const Icon(Icons.barcode_reader, size: 18),
+                      ),
+                    ),
                   )
                 : const SizedBox.shrink(),
-            right: showPartNo
-                ? TextFormField(
-                    controller: _partNoCtrl,
-                    decoration: const InputDecoration(
-                        labelText: "Part Number",
-                        hintText:  "Manufacturer's part number"),
+            showPartNo
+                ? SakalFieldCard(
+                    label:    'Part Number',
+                    editable: true,
+                    child: TextFormField(
+                      controller: _partNoCtrl,
+                      style: _fieldStyle,
+                      decoration: _bare(hint: "Manufacturer's part number"),
+                    ),
                   )
                 : const SizedBox.shrink(),
-          ),
+          ]),
           const SizedBox(height: 16),
         ],
-        _TwoCol(
-          left: TextFormField(
-            controller: _hsnCtrl,
-            decoration: const InputDecoration(
-                labelText: 'HSN / SAC Code',
-                hintText:  'For customs / GST classification'),
+        SakalFieldRow(isMobile: mobile, children: [
+          SakalFieldCard(
+            label:    'HSN / SAC Code',
+            editable: true,
+            child: TextFormField(
+              controller: _hsnCtrl,
+              style: _fieldStyle,
+              decoration: _bare(hint: 'For customs / GST classification'),
+            ),
           ),
-          right: TextFormField(
-            controller: _remarksCtrl,
-            decoration: const InputDecoration(
-                labelText: 'Remarks',
-                hintText:  'Internal notes'),
+          SakalFieldCard(
+            label:    'Remarks',
+            editable: true,
+            child: TextFormField(
+              controller: _remarksCtrl,
+              style: _fieldStyle,
+              decoration: _bare(hint: 'Internal notes'),
+            ),
           ),
-        ),
+        ]),
       ],
     );
   }
 
   // ── Section 3: Classification ──────────────────────────────────────────────
 
-  Widget _buildClassification() => _SectionCard(
-        title: 'Classification',
-        icon:  Icons.category_outlined,
-        children: [
-          _TwoCol(
-            left: _buildCategoryPicker(),
-            right: _buildCommonMasterPicker(
-              label:    'Brand',
-              options:  _brands,
-              value:    _brandId,
-              display:  _brandDisplay,
-              onPicked: (id, name) => setState(() { _brandId = id; _brandDisplay = name; }),
-            ),
+  Widget _buildClassification() {
+    final mobile = Responsive.isMobile(context);
+    return _SectionCard(
+      title: 'Classification',
+      icon:  Icons.category_outlined,
+      children: [
+        SakalFieldRow(isMobile: mobile, children: [
+          _buildCategoryPicker(),
+          _buildCommonMasterPicker(
+            label:    'Brand',
+            options:  _brands,
+            value:    _brandId,
+            display:  _brandDisplay,
+            onPicked: (id, name) => setState(() { _brandId = id; _brandDisplay = name; }),
           ),
-          const SizedBox(height: 16),
-          _TwoCol(
-            left: _buildCommonMasterPicker(
-              label:    'Item Size',
-              options:  _sizes,
-              value:    _itemSizeId,
-              display:  _itemSizeDisplay,
-              onPicked: (id, name) => setState(() { _itemSizeId = id; _itemSizeDisplay = name; }),
-            ),
-            right: _buildCommonMasterPicker(
-              label:    'Item Color',
-              options:  _colors,
-              value:    _itemColorId,
-              display:  _itemColorDisplay,
-              onPicked: (id, name) => setState(() { _itemColorId = id; _itemColorDisplay = name; }),
-            ),
+        ]),
+        const SizedBox(height: 16),
+        SakalFieldRow(isMobile: mobile, children: [
+          _buildCommonMasterPicker(
+            label:    'Item Size',
+            options:  _sizes,
+            value:    _itemSizeId,
+            display:  _itemSizeDisplay,
+            onPicked: (id, name) => setState(() { _itemSizeId = id; _itemSizeDisplay = name; }),
           ),
-        ],
-      );
+          _buildCommonMasterPicker(
+            label:    'Item Color',
+            options:  _colors,
+            value:    _itemColorId,
+            display:  _itemColorDisplay,
+            onPicked: (id, name) => setState(() { _itemColorId = id; _itemColorDisplay = name; }),
+          ),
+        ]),
+      ],
+    );
+  }
 
   Widget _buildCategoryPicker() {
     final options = _categories.where((c) => c.id != null).toList();
-    return Autocomplete<ItemCategoryModel>(
-      displayStringForOption: (c) => _catPaths[c.id] ?? c.categoryName,
-      initialValue: TextEditingValue(text: _categoryDisplay ?? ''),
-      optionsBuilder: (val) {
-        final q = val.text.toLowerCase();
-        if (q.isEmpty) return options.take(20);
-        return options.where((c) =>
-            c.categoryName.toLowerCase().contains(q) ||
-            (_catPaths[c.id] ?? '').toLowerCase().contains(q));
-      },
-      onSelected: (c) => setState(() {
-        _categoryId      = c.id;
-        _categoryDisplay = _catPaths[c.id] ?? c.categoryName;
-      }),
-      fieldViewBuilder: (ctx, ctrl, focus, onSubmit) => TextFormField(
-        controller:  ctrl,
-        focusNode:   focus,
-        decoration:  const InputDecoration(
-            labelText: 'Category',
-            hintText:  'Type to search categories',
-            suffixIcon: Icon(Icons.keyboard_arrow_down, size: 18)),
-        onFieldSubmitted: (_) => onSubmit(),
+    return SakalFieldCard(
+      label:    'Category',
+      editable: true,
+      child: SakalAutocomplete<ItemCategoryModel>(
+        key: ValueKey(_categoryId),
+        displayStringForOption: (c) => _catPaths[c.id] ?? c.categoryName,
+        initialValue: TextEditingValue(text: _categoryDisplay ?? ''),
+        optionsBuilder: (val) {
+          final q = val.text.toLowerCase();
+          if (q.isEmpty) return options.take(20);
+          return options.where((c) =>
+              c.categoryName.toLowerCase().contains(q) ||
+              (_catPaths[c.id] ?? '').toLowerCase().contains(q));
+        },
+        onSelected: (c) => setState(() {
+          _categoryId      = c.id;
+          _categoryDisplay = _catPaths[c.id] ?? c.categoryName;
+        }),
+        decoration: _bare(
+          hint: 'Type to search categories',
+          suffixIcon: const Icon(Icons.keyboard_arrow_down, size: 18),
+        ),
+        style: _fieldStyle,
       ),
     );
   }
@@ -812,166 +889,241 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
     required void Function(String? id, String? name) onPicked,
   }) {
     if (options.isEmpty) {
-      return InputDecorator(
-        decoration: InputDecoration(labelText: label),
+      return SakalFieldCard(
+        label: label,
         child: Text('No ${label.toLowerCase()} options defined',
             style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
       );
     }
-    return DropdownButtonFormField<String?>(
-      initialValue: value,
-      decoration: InputDecoration(labelText: label),
-      isExpanded: true,
-      items: [
-        const DropdownMenuItem(value: null, child: Text('— None —')),
-        ...options.map((o) => DropdownMenuItem(value: o.id, child: Text(o.description))),
-      ],
-      onChanged: (id) {
-        final name = id == null ? null : options.firstWhere((o) => o.id == id).description;
-        onPicked(id, name);
-      },
+    return SakalFieldCard(
+      label:    label,
+      editable: true,
+      child: DropdownButtonFormField<String?>(
+        initialValue: value,
+        isExpanded: true, isDense: true, itemHeight: null,
+        style: _fieldStyle,
+        decoration: _bare(),
+        items: [
+          const DropdownMenuItem(value: null, child: Text('— None —')),
+          ...options.map((o) => DropdownMenuItem(
+              value: o.id, child: Text(o.description, overflow: TextOverflow.ellipsis))),
+        ],
+        onChanged: (id) {
+          final name = id == null ? null : options.firstWhere((o) => o.id == id).description;
+          onPicked(id, name);
+        },
+      ),
     );
   }
 
   // ── Section 4: UOM & Tracking ──────────────────────────────────────────────
 
-  Widget _buildUomTracking() => _SectionCard(
-        title: 'UOM & Tracking',
-        icon:  Icons.scale_outlined,
-        children: [
-          _TwoCol(
-            left: DropdownButtonFormField<String?>(
+  Widget _buildUomTracking() {
+    final mobile = Responsive.isMobile(context);
+    return _SectionCard(
+      title: 'UOM & Tracking',
+      icon:  Icons.scale_outlined,
+      children: [
+        SakalFieldRow(isMobile: mobile, children: [
+          SakalFieldCard(
+            label:    'Base UOM',
+            required: true,
+            editable: true,
+            child: DropdownButtonFormField<String?>(
               initialValue: _baseUomId,
-              decoration: InputDecoration(label: _req('Base UOM')),
-              isExpanded: true,
+              isExpanded: true, isDense: true, itemHeight: null,
+              style: _fieldStyle,
+              decoration: _bare(),
               validator: (v) => v == null ? 'Base UOM is required' : null,
               items: [
                 const DropdownMenuItem(value: null, child: Text('— Select —')),
                 ..._uoms.map((u) => DropdownMenuItem(
-                    value: u.id, child: Text(u.description))),
+                    value: u.id, child: Text(u.description, overflow: TextOverflow.ellipsis))),
               ],
               onChanged: (id) => setState(() {
                 _baseUomId = id;
               }),
             ),
-            right: DropdownButtonFormField<String>(
+          ),
+          SakalFieldCard(
+            label:    'Tracking Type',
+            editable: true,
+            child: DropdownButtonFormField<String>(
               initialValue: _trackingType,
-              decoration: const InputDecoration(labelText: 'Tracking Type'),
+              isExpanded: true, isDense: true, itemHeight: null,
+              style: _fieldStyle,
+              decoration: _bare(),
               items: ProductModel.trackingLabels.entries
-                  .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                  .map((e) => DropdownMenuItem(
+                      value: e.key, child: Text(e.value, overflow: TextOverflow.ellipsis)))
                   .toList(),
               onChanged: (v) => setState(() => _trackingType = v ?? 'NONE'),
             ),
           ),
-          const SizedBox(height: 12),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Scalable Item',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-            subtitle: const Text(
-                'Sold by weight on a weighing scale (e.g. loose grains, deli)',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            value: _isScalable,
-            onChanged: (v) => setState(() => _isScalable = v),
-          ),
-        ],
-      );
+        ]),
+        const SizedBox(height: 12),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Scalable Item',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+          subtitle: const Text(
+              'Sold by weight on a weighing scale (e.g. loose grains, deli)',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          value: _isScalable,
+          onChanged: (v) => setState(() => _isScalable = v),
+        ),
+      ],
+    );
+  }
 
   // ── Section 5: Costing ─────────────────────────────────────────────────────
 
-  Widget _buildCosting() => _SectionCard(
-        title: 'Costing',
-        icon:  Icons.attach_money_outlined,
-        children: [
-          _TwoCol(
-            left: TextFormField(
-              controller: _stdCostCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                  labelText: 'Standard Cost',
-                  hintText:  '0.00',
-                  helperText: 'In company base currency'),
+  Widget _buildCosting() {
+    final mobile = Responsive.isMobile(context);
+    final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
+    return _SectionCard(
+      title: 'Costing',
+      icon:  Icons.attach_money_outlined,
+      children: [
+        SakalFieldRow(isMobile: mobile, children: [
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SakalFieldCard(
+              label:    'Standard Cost',
+              editable: true,
+              numeric:  true,
+              child: SakalFormattedNumberField(
+                controller: _stdCostCtrl,
+                textAlign:  TextAlign.right,
+                numberFormatStyle: numberFormat,
+                style: _fieldStyle,
+                decoration: _bare(hint: '0.00'),
+              ),
             ),
-            right: DropdownButtonFormField<String?>(
-              initialValue: _costCurrencyId,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                  labelText: 'Maintain Price In',
-                  helperText: 'Optional: procurement reference currency'),
-              items: [
-                const DropdownMenuItem(value: null, child: Text('— Base currency —')),
-                ..._currencies.map((c) => DropdownMenuItem(
-                    value: c['id'] as String,
-                    child: Text('${c['currency_id']} — ${c['currency_name']}'))),
-              ],
-              onChanged: (id) => setState(() {
-                _costCurrencyId = id;
-              }),
+            const SizedBox(height: 4),
+            const Text('In company base currency',
+                style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          ]),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SakalFieldCard(
+              label:    'Maintain Price In',
+              editable: true,
+              child: DropdownButtonFormField<String?>(
+                initialValue: _costCurrencyId,
+                isExpanded: true, isDense: true, itemHeight: null,
+                style: _fieldStyle,
+                decoration: _bare(),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('— Base currency —')),
+                  ..._currencies.map((c) => DropdownMenuItem(
+                      value: c['id'] as String,
+                      child: Text('${c['currency_id']} — ${c['currency_name']}',
+                          overflow: TextOverflow.ellipsis))),
+                ],
+                onChanged: (id) => setState(() {
+                  _costCurrencyId = id;
+                }),
+              ),
             ),
+            const SizedBox(height: 4),
+            const Text('Optional: procurement reference currency',
+                style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          ]),
+        ]),
+        const SizedBox(height: 16),
+        SakalFieldRow(isMobile: mobile, children: [
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SakalFieldCard(
+              label:    'Allowed Cost Variance %',
+              editable: true,
+              numeric:  true,
+              child: TextFormField(
+                controller: _varCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                textAlign: TextAlign.right,
+                style: _fieldStyle,
+                decoration: _bare(hint: '0.00'),
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text('Variance allowed before GRN alert',
+                style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          ]),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('System-Managed Costs',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary)),
+              const SizedBox(height: 6),
+              Row(children: [
+                Expanded(
+                  child: SakalFieldCard.readOnly(
+                    label: 'Average Cost',
+                    numeric: true,
+                    value: AppNumberFormat.rate(_averageCost,
+                        decimalPlaces: 4, numberFormatStyle: numberFormat),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SakalFieldCard.readOnly(
+                    label: 'Last Purchase',
+                    numeric: true,
+                    value: AppNumberFormat.rate(_lastPurchaseCost,
+                        decimalPlaces: 4, numberFormatStyle: numberFormat),
+                  ),
+                ),
+              ]),
+            ],
           ),
-          const SizedBox(height: 16),
-          _TwoCol(
-            left: TextFormField(
-              controller: _varCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                  labelText: 'Allowed Cost Variance %',
-                  hintText:  '0.00',
-                  helperText: 'Variance allowed before GRN alert'),
-            ),
-            right: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('System-Managed Costs',
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary)),
-                const SizedBox(height: 6),
-                Row(children: [
-                  Expanded(child: _ReadOnlyCost('Average Cost', _averageCost)),
-                  const SizedBox(width: 12),
-                  Expanded(child: _ReadOnlyCost('Last Purchase', _lastPurchaseCost)),
-                ]),
-              ],
-            ),
-          ),
-        ],
-      );
+        ]),
+      ],
+    );
+  }
 
   // ── Section 6: Taxation ────────────────────────────────────────────────────
 
-  Widget _buildTaxation() => _SectionCard(
-        title: 'Taxation & Supplier',
-        icon:  Icons.receipt_long_outlined,
-        children: [
-          _TwoCol(
-            left: _buildTaxGroupPicker(
-              label:    'Sales Tax Group',
-              filter:   ['SALES', 'BOTH'],
-              value:    _salesTaxId,
-              onPicked: (id, name) => setState(() { _salesTaxId = id; }),
-            ),
-            right: _buildTaxGroupPicker(
-              label:    'Purchase Tax Group',
-              filter:   ['PURCHASE', 'BOTH'],
-              value:    _purchTaxId,
-              onPicked: (id, name) => setState(() { _purchTaxId = id; }),
-            ),
+  Widget _buildTaxation() {
+    final mobile = Responsive.isMobile(context);
+    return _SectionCard(
+      title: 'Taxation & Supplier',
+      icon:  Icons.receipt_long_outlined,
+      children: [
+        SakalFieldRow(isMobile: mobile, children: [
+          _buildTaxGroupPicker(
+            label:    'Sales Tax Group',
+            filter:   ['SALES', 'BOTH'],
+            value:    _salesTaxId,
+            onPicked: (id, name) => setState(() { _salesTaxId = id; }),
           ),
-          const SizedBox(height: 16),
-          _TwoCol(
-            left: TextFormField(
+          _buildTaxGroupPicker(
+            label:    'Purchase Tax Group',
+            filter:   ['PURCHASE', 'BOTH'],
+            value:    _purchTaxId,
+            onPicked: (id, name) => setState(() { _purchTaxId = id; }),
+          ),
+        ]),
+        const SizedBox(height: 16),
+        SakalFieldRow(isMobile: mobile, children: [
+          SakalFieldCard(
+            label:    'Lead Time (Days)',
+            editable: true,
+            numeric:  true,
+            child: TextFormField(
               controller: _leadTimeCtrl,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                  labelText: 'Lead Time (Days)',
-                  hintText:  '0'),
+              textAlign: TextAlign.right,
+              style: _fieldStyle,
+              decoration: _bare(hint: '0'),
             ),
-            right: const SizedBox.shrink(),
           ),
-        ],
-      );
+          const SizedBox.shrink(),
+        ]),
+      ],
+    );
+  }
 
   Widget _buildTaxGroupPicker({
     required String label,
@@ -982,40 +1134,59 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
     final options = _taxGroups
         .where((t) => filter.contains(t.applicableOn))
         .toList();
-    return DropdownButtonFormField<String?>(
-      initialValue: value,
-      isExpanded: true,
-      decoration: InputDecoration(labelText: label),
-      items: [
-        const DropdownMenuItem(value: null, child: Text('— None —')),
-        ...options.map((t) => DropdownMenuItem(
-            value: t.id, child: Text(t.groupName))),
-      ],
-      onChanged: (id) {
-        final name = id == null
-            ? null
-            : options.firstWhere((t) => t.id == id).groupName;
-        onPicked(id, name);
-      },
+    return SakalFieldCard(
+      label:    label,
+      editable: true,
+      child: DropdownButtonFormField<String?>(
+        initialValue: value,
+        isExpanded: true, isDense: true, itemHeight: null,
+        style: _fieldStyle,
+        decoration: _bare(),
+        items: [
+          const DropdownMenuItem(value: null, child: Text('— None —')),
+          ...options.map((t) => DropdownMenuItem(
+              value: t.id, child: Text(t.groupName, overflow: TextOverflow.ellipsis))),
+        ],
+        onChanged: (id) {
+          final name = id == null
+              ? null
+              : options.firstWhere((t) => t.id == id).groupName;
+          onPicked(id, name);
+        },
+      ),
     );
   }
 
   // ── Section 7: Physical Dimensions ────────────────────────────────────────
 
-  Widget _buildDimensions() => _SectionCard(
-        title: 'Physical Dimensions',
-        icon:  Icons.straighten_outlined,
-        subtitle: 'Optional — used for shipping calculations and storage planning.',
-        children: [
-          _TwoCol(
-            left: TextFormField(
+  Widget _buildDimensions() {
+    final mobile = Responsive.isMobile(context);
+    return _SectionCard(
+      title: 'Physical Dimensions',
+      icon:  Icons.straighten_outlined,
+      subtitle: 'Optional — used for shipping calculations and storage planning.',
+      children: [
+        SakalFieldRow(isMobile: mobile, children: [
+          SakalFieldCard(
+            label:    'Weight',
+            editable: true,
+            numeric:  true,
+            child: TextFormField(
               controller: _weightCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Weight'),
+              textAlign: TextAlign.right,
+              style: _fieldStyle,
+              decoration: _bare(),
             ),
-            right: DropdownButtonFormField<String?>(
+          ),
+          SakalFieldCard(
+            label:    'Weight Unit',
+            editable: true,
+            child: DropdownButtonFormField<String?>(
               initialValue: _weightUom,
-              decoration: const InputDecoration(labelText: 'Weight Unit'),
+              isExpanded: true, isDense: true, itemHeight: null,
+              style: _fieldStyle,
+              decoration: _bare(),
               items: const [
                 DropdownMenuItem(value: null,  child: Text('—')),
                 DropdownMenuItem(value: 'g',   child: Text('Grams (g)')),
@@ -1026,16 +1197,29 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
               onChanged: (v) => setState(() => _weightUom = v),
             ),
           ),
-          const SizedBox(height: 16),
-          _TwoCol(
-            left: TextFormField(
+        ]),
+        const SizedBox(height: 16),
+        SakalFieldRow(isMobile: mobile, children: [
+          SakalFieldCard(
+            label:    'Volume',
+            editable: true,
+            numeric:  true,
+            child: TextFormField(
               controller: _volumeCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Volume'),
+              textAlign: TextAlign.right,
+              style: _fieldStyle,
+              decoration: _bare(),
             ),
-            right: DropdownButtonFormField<String?>(
+          ),
+          SakalFieldCard(
+            label:    'Volume Unit',
+            editable: true,
+            child: DropdownButtonFormField<String?>(
               initialValue: _volumeUom,
-              decoration: const InputDecoration(labelText: 'Volume Unit'),
+              isExpanded: true, isDense: true, itemHeight: null,
+              style: _fieldStyle,
+              decoration: _bare(),
               items: const [
                 DropdownMenuItem(value: null,     child: Text('—')),
                 DropdownMenuItem(value: 'ml',     child: Text('Millilitres (ml)')),
@@ -1046,51 +1230,67 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
               onChanged: (v) => setState(() => _volumeUom = v),
             ),
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  controller: _lengthCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Length'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextFormField(
-                  controller: _widthCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Width'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextFormField(
-                  controller: _heightCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Height'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonFormField<String?>(
-                  initialValue: _dimensionUom,
-                  decoration: const InputDecoration(labelText: 'Unit'),
-                  items: const [
-                    DropdownMenuItem(value: null,   child: Text('—')),
-                    DropdownMenuItem(value: 'mm',   child: Text('mm')),
-                    DropdownMenuItem(value: 'cm',   child: Text('cm')),
-                    DropdownMenuItem(value: 'inch', child: Text('inch')),
-                    DropdownMenuItem(value: 'm',    child: Text('m')),
-                  ],
-                  onChanged: (v) => setState(() => _dimensionUom = v),
-                ),
-              ),
-            ],
+        ]),
+        const SizedBox(height: 16),
+        SakalFieldRow(isMobile: mobile, children: [
+          SakalFieldCard(
+            label:    'Length',
+            editable: true,
+            numeric:  true,
+            child: TextFormField(
+              controller: _lengthCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              textAlign: TextAlign.right,
+              style: _fieldStyle,
+              decoration: _bare(),
+            ),
           ),
-        ],
-      );
+          SakalFieldCard(
+            label:    'Width',
+            editable: true,
+            numeric:  true,
+            child: TextFormField(
+              controller: _widthCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              textAlign: TextAlign.right,
+              style: _fieldStyle,
+              decoration: _bare(),
+            ),
+          ),
+          SakalFieldCard(
+            label:    'Height',
+            editable: true,
+            numeric:  true,
+            child: TextFormField(
+              controller: _heightCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              textAlign: TextAlign.right,
+              style: _fieldStyle,
+              decoration: _bare(),
+            ),
+          ),
+          SakalFieldCard(
+            label:    'Unit',
+            editable: true,
+            child: DropdownButtonFormField<String?>(
+              initialValue: _dimensionUom,
+              isExpanded: true, isDense: true, itemHeight: null,
+              style: _fieldStyle,
+              decoration: _bare(),
+              items: const [
+                DropdownMenuItem(value: null,   child: Text('—')),
+                DropdownMenuItem(value: 'mm',   child: Text('mm')),
+                DropdownMenuItem(value: 'cm',   child: Text('cm')),
+                DropdownMenuItem(value: 'inch', child: Text('inch')),
+                DropdownMenuItem(value: 'm',    child: Text('m')),
+              ],
+              onChanged: (v) => setState(() => _dimensionUom = v),
+            ),
+          ),
+        ]),
+      ],
+    );
+  }
 
   // ── Section 8: UOM Levels ──────────────────────────────────────────────────
 
@@ -1124,7 +1324,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
                   decoration: BoxDecoration(color: AppColors.surfaceVariant),
                   children: [
                     _TableHdr('UOM'),
-                    _TableHdr('Factor'),
+                    _TableHdr('Factor', alignRight: true),
                     _TableHdr('Barcode'),
                     _TableHdr('Base'),
                     _TableHdr('Buy'),
@@ -1145,6 +1345,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         child: Text(row.conversionFactor.toString(),
+                            textAlign: TextAlign.right,
                             style: const TextStyle(fontSize: 13)),
                       ),
                       Padding(
@@ -1442,7 +1643,11 @@ class _UomLevelDialogState extends State<_UomLevelDialog> {
 
 // ── Image card widget ─────────────────────────────────────────────────────────
 
-class _ImageCard extends StatelessWidget {
+// The "primary image" indicator is a selected-item tint, not a fixed
+// semantic color — resolved from the active theme preset (rule: every
+// AppColors.primary UI-accent usage should follow the reactive theme,
+// see design_system_guide.md §1) rather than the hardcoded navy.
+class _ImageCard extends ConsumerWidget {
   final String    base64Data;
   final bool      isPrimary;
   final String    caption;
@@ -1460,12 +1665,13 @@ class _ImageCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accent = ThemePresetConfig.all[ref.watch(themePresetProvider)]!.primary;
     return Container(
       width:  140,
       decoration: BoxDecoration(
         border: Border.all(
-            color: isPrimary ? AppColors.primary : AppColors.border,
+            color: isPrimary ? accent : AppColors.border,
             width: isPrimary ? 2 : 1),
         borderRadius: BorderRadius.circular(8),
       ),
@@ -1489,7 +1695,7 @@ class _ImageCard extends StatelessWidget {
           ),
           if (isPrimary)
             Container(
-              color: AppColors.primary,
+              color: accent,
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 2),
               child: const Text('PRIMARY',
@@ -1554,7 +1760,10 @@ class _MediaEntry {
 
 // ── Layout helpers ────────────────────────────────────────────────────────────
 
-class _SectionCard extends StatelessWidget {
+// The section icon is a pure branding accent (not semantic), so it's
+// resolved from the active theme preset rather than the hardcoded navy —
+// see design_system_guide.md §1/rule 5.
+class _SectionCard extends ConsumerWidget {
   final String       title;
   final IconData     icon;
   final String?      subtitle;
@@ -1568,73 +1777,55 @@ class _SectionCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: AppColors.border)),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Icon(icon, size: 18, color: AppColors.primary),
-                const SizedBox(width: 8),
-                Text(title,
-                    style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary)),
-              ]),
-              if (subtitle != null) ...[
-                const SizedBox(height: 4),
-                Text(subtitle!,
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary)),
-              ],
-              const SizedBox(height: 16),
-              const Divider(height: 1),
-              const SizedBox(height: 16),
-              ...children,
-            ],
-          ),
-        ),
-      );
-}
-
-// Two-column row for form fields
-class _TwoCol extends StatelessWidget {
-  final Widget left;
-  final Widget right;
-  const _TwoCol({required this.left, required this.right});
-
-  @override
-  Widget build(BuildContext context) {
-    if (Responsive.isMobile(context)) {
-      return Column(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accent = ThemePresetConfig.all[ref.watch(themePresetProvider)]!.primary;
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: AppColors.border)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [left, const SizedBox(height: 16), right]);
-    }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: left),
-        const SizedBox(width: 16),
-        Expanded(child: right),
-      ],
+          children: [
+            Row(children: [
+              Icon(icon, size: 18, color: accent),
+              const SizedBox(width: 8),
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary)),
+            ]),
+            if (subtitle != null) ...[
+              const SizedBox(height: 4),
+              Text(subtitle!,
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary)),
+            ],
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 16),
+            ...children,
+          ],
+        ),
+      ),
     );
   }
 }
 
-// Table header cell
+// Table header cell — numeric columns (e.g. Factor) right-align per the
+// app-wide "numbers always right-align" convention (§2.1 design_system_guide.md).
 class _TableHdr extends StatelessWidget {
   final String text;
-  const _TableHdr(this.text);
+  final bool alignRight;
+  const _TableHdr(this.text, {this.alignRight = false});
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
         child: Text(text,
+            textAlign: alignRight ? TextAlign.right : TextAlign.left,
             style: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
@@ -1654,28 +1845,6 @@ class _BoolCell extends StatelessWidget {
           size: 16,
           color: value ? AppColors.positive : AppColors.border,
         ),
-      );
-}
-
-// Read-only cost display
-class _ReadOnlyCost extends StatelessWidget {
-  final String label;
-  final double value;
-  const _ReadOnlyCost(this.label, this.value);
-  @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 11, color: AppColors.textSecondary)),
-          const SizedBox(height: 2),
-          Text(value.toStringAsFixed(4),
-              style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary)),
-        ],
       );
 }
 
