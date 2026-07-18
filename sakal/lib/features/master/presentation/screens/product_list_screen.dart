@@ -5,9 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_adaptive_list.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
 import '../../data/models/product_model.dart';
 import '../providers/products_providers.dart';
 
@@ -115,7 +116,6 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen>
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider);
-    final mobile  = Responsive.isMobile(context);
 
     return Column(
       children: [
@@ -154,21 +154,21 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen>
               Row(
                 children: [
                   Expanded(
-                    child: SizedBox(
-                      height: 40,
+                    child: SakalFieldCard(
+                      label: 'Search',
+                      editable: true,
                       child: TextField(
                         controller: _searchCtrl,
-                        decoration: InputDecoration(
+                        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+                        decoration: SakalFieldCard.bareDecoration.copyWith(
                           hintText: 'Search by code or name…',
-                          prefixIcon: const Icon(Icons.search, size: 18),
+                          hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+                          prefixIcon: const Icon(Icons.search, size: 16),
                           suffixIcon: _search.isNotEmpty
                               ? IconButton(
                                   icon: const Icon(Icons.clear, size: 16),
                                   onPressed: () { _searchCtrl.clear(); })
                               : null,
-                          contentPadding: EdgeInsets.zero,
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                     ),
@@ -197,15 +197,41 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen>
         const SizedBox(height: 12),
         // ── Body ─────────────────────────────────────────────────────────────
         Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _error != null
-                  ? _buildError()
-                  : _products.isEmpty
-                      ? _buildEmpty()
-                      : mobile
-                          ? _buildCardList()
-                          : _buildTableList(),
+          child: _error != null
+              ? _buildError()
+              : Column(children: [
+                  Expanded(
+                    child: SakalAdaptiveList<ProductModel>(
+                      loading: _loading,
+                      error: null,
+                      rows: _products,
+                      columns: const [
+                        SakalListColumn('Code', flex: 2),
+                        SakalListColumn('Product Name', flex: 3),
+                        SakalListColumn('Nature', flex: 2),
+                        SakalListColumn('Category', flex: 2),
+                        SakalListColumn('Base UOM', flex: 1),
+                        SakalListColumn('Active', flex: 1),
+                      ],
+                      rowBuilder: (p, i) => _buildTableRow(p),
+                      cardBuilder: (p) => _ProductCard(
+                          product: p, onTap: () => _openEntry(productId: p.id)),
+                      emptyState: _buildEmpty(),
+                    ),
+                  ),
+                  if (_hasMore && !_loading)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Center(
+                        child: _loadingMore
+                            ? const CircularProgressIndicator()
+                            : OutlinedButton(
+                                onPressed: _loadMore,
+                                child: const Text('Load More'),
+                              ),
+                      ),
+                    ),
+                ]),
         ),
       ],
     );
@@ -256,154 +282,64 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen>
         ),
       );
 
-  // ── Mobile: card list ─────────────────────────────────────────────────────
+  // ── Desktop table row (SakalAdaptiveList owns the loading/error/empty +
+  // mobile-card/desktop-table switch and its own header; this only builds
+  // one row's content, matching the column flex spec passed to it) ────────
 
-  Widget _buildCardList() => ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        itemCount: _products.length + (_hasMore ? 1 : 0),
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
-        itemBuilder: (ctx, i) {
-          if (i == _products.length) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Center(
-                child: _loadingMore
-                    ? const CircularProgressIndicator()
-                    : OutlinedButton(
-                        onPressed: _loadMore,
-                        child: const Text('Load More'),
-                      ),
+  Widget _buildTableRow(ProductModel p) => InkWell(
+        onTap: () => _openEntry(productId: p.id),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                flex: 2,
+                child: Text(p.productCode,
+                    style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary)),
               ),
-            );
-          }
-          return _ProductCard(
-            product:  _products[i],
-            onTap:    () => _openEntry(productId: _products[i].id),
-          );
-        },
-      );
-
-  // ── Desktop: table ────────────────────────────────────────────────────────
-
-  Widget _buildTableList() => Column(
-        children: [
-          // Header row
-          Container(
-            color: AppColors.surfaceVariant,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            child: const Row(
-              children: [
-                SizedBox(width: 130, child: _TH('Code')),
-                Expanded(flex: 3, child: _TH('Product Name')),
-                SizedBox(width: 130, child: _TH('Nature')),
-                Expanded(flex: 2, child: _TH('Category')),
-                SizedBox(width: 90,  child: _TH('Base UOM')),
-                SizedBox(width: 70,  child: _TH('Active')),
-                SizedBox(width: 40),
-              ],
-            ),
+              Expanded(
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(p.productName,
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w500)),
+                    if (p.shortName != null)
+                      Text(p.shortName!,
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+              Expanded(flex: 2, child: _NatureBadge(p.productNature)),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  p.categoryName ?? '—',
+                  style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                ),
+              ),
+              Expanded(
+                flex: 1,
+                child: Text(p.baseUomName ?? '—', style: const TextStyle(fontSize: 13)),
+              ),
+              Expanded(
+                flex: 1,
+                child: Icon(
+                  p.isActive ? Icons.check_circle_outline : Icons.cancel_outlined,
+                  size: 18,
+                  color: p.isActive ? AppColors.positive : AppColors.textSecondary,
+                ),
+              ),
+            ],
           ),
-          const Divider(height: 1),
-          Expanded(
-            child: ListView.separated(
-              itemCount: _products.length + (_hasMore ? 1 : 0),
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (ctx, i) {
-                if (i == _products.length) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Center(
-                      child: _loadingMore
-                          ? const CircularProgressIndicator()
-                          : OutlinedButton(
-                              onPressed: _loadMore,
-                              child: const Text('Load More'),
-                            ),
-                    ),
-                  );
-                }
-                final p = _products[i];
-                return InkWell(
-                  onTap: () => _openEntry(productId: p.id),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 130,
-                          child: Text(p.productCode,
-                              style: const TextStyle(
-                                  fontFamily: 'monospace',
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.primary)),
-                        ),
-                        Expanded(
-                          flex: 3,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(p.productName,
-                                  style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500)),
-                              if (p.shortName != null)
-                                Text(p.shortName!,
-                                    style: const TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.textSecondary)),
-                            ],
-                          ),
-                        ),
-                        SizedBox(
-                          width: 130,
-                          child: _NatureBadge(p.productNature),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            p.categoryName ?? '—',
-                            style: const TextStyle(
-                                fontSize: 13,
-                                color: AppColors.textSecondary),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 90,
-                          child: Text(
-                            p.baseUomName ?? '—',
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 70,
-                          child: Icon(
-                            p.isActive
-                                ? Icons.check_circle_outline
-                                : Icons.cancel_outlined,
-                            size: 18,
-                            color: p.isActive
-                                ? AppColors.positive
-                                : AppColors.textSecondary,
-                          ),
-                        ),
-                        SizedBox(
-                          width: 40,
-                          child: IconButton(
-                            icon: const Icon(Icons.chevron_right,
-                                size: 18, color: AppColors.textSecondary),
-                            onPressed: () => _openEntry(productId: p.id),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
+        ),
       );
 }
 
@@ -586,18 +522,4 @@ class _ActiveFilter extends StatelessWidget {
           ),
         ),
       );
-}
-
-// ── Table header cell ─────────────────────────────────────────────────────────
-
-class _TH extends StatelessWidget {
-  final String text;
-  const _TH(this.text);
-  @override
-  Widget build(BuildContext context) => Text(text,
-      style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: AppColors.textSecondary,
-          letterSpacing: 0.3));
 }
