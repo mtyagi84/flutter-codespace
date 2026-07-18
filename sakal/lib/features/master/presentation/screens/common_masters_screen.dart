@@ -1,26 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/models/menu_models.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../data/models/common_master_model.dart';
 import '../../data/models/common_master_type_model.dart';
 import '../providers/common_masters_providers.dart';
-
-MenuFeature? _findFeature(List<MenuModule> modules, String screenPath) {
-  for (final mod in modules) {
-    for (final grp in mod.groups) {
-      for (final feat in grp.features) {
-        if (feat.screenName == screenPath) return feat;
-      }
-    }
-  }
-  return null;
-}
 
 // ── Inline edit state for a single row ────────────────────────────────────────
 
@@ -58,7 +47,10 @@ class CommonMastersScreen extends ConsumerStatefulWidget {
       _CommonMastersScreenState();
 }
 
-class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
+class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
+    with ScreenPermissionMixin<CommonMastersScreen> {
+  @override String get screenName => RouteNames.commonMasters;
+
   List<CommonMasterTypeModel> _types   = [];
   List<CommonMasterModel>     _masters = [];
 
@@ -281,25 +273,8 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
     final isOffline = session?.offlineMode ?? false;
     final isMobile  = Responsive.isMobile(context);
 
-    final menus   = ref.watch(menuProvider);
-    final feature = _findFeature(menus, RouteNames.commonMasters);
-
-    if (feature == null) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.lock_outline, size: 48, color: Color(0xFFADB5BD)),
-            SizedBox(height: 12),
-            Text('You do not have access to this screen.',
-                style: TextStyle(color: Color(0xFF6B7280))),
-          ],
-        ),
-      );
-    }
-
-    final canAdd  = feature.addAllowed  && !isOffline;
-    final canEdit = feature.editAllowed && !isOffline;
+    final canAddNow  = canAdd  && !isOffline;
+    final canEditNow = canEdit && !isOffline;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -325,8 +300,8 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: isMobile
-              ? _buildControlsMobile(canAdd)
-              : _buildControlsDesktop(canAdd),
+              ? _buildControlsMobile(canAddNow)
+              : _buildControlsDesktop(canAddNow),
         ),
 
         const SizedBox(height: 12),
@@ -361,10 +336,10 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen> {
           child: _loadingTypes || (_loadingMasters && _masters.isEmpty)
               ? const Center(child: CircularProgressIndicator())
               : _masters.isEmpty && _addState == null
-                  ? _buildEmpty(canAdd)
+                  ? _buildEmpty(canAddNow)
                   : isMobile
-                      ? _buildMobileList(canEdit)
-                      : _buildDesktopTable(canEdit),
+                      ? _buildMobileList(canEditNow)
+                      : _buildDesktopTable(canEditNow),
         ),
       ],
     );

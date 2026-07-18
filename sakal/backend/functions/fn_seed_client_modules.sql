@@ -50,7 +50,16 @@ begin
         (p_client_id, p_company_id, v_ad, 'AD-PAYTERM', 'Payment Terms',         '/master/payment-terms',          5, 'AD-SETG', 'System Setup', 0, false, false, false),
         (p_client_id, p_company_id, v_ad, 'AD-QIS', 'Quick Invoice Setup',       '/setup/quick-invoice-setup',      6, 'AD-SETG', 'System Setup', 0, false, false, false),
         (p_client_id, p_company_id, v_ad, 'MST-CUST', 'Customer Master',        '/master/customers',  0, 'AD-MSTG', 'Master Data', 2, false, false, false),
-        (p_client_id, p_company_id, v_ad, 'MST-SUPP', 'Supplier Master',        '/master/suppliers',  1, 'AD-MSTG', 'Master Data', 2, false, false, false)
+        (p_client_id, p_company_id, v_ad, 'MST-SUPP', 'Supplier Master',        '/master/suppliers',  1, 'AD-MSTG', 'Master Data', 2, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-COA',  'Chart of Accounts',      '/master/accounts',            2, 'AD-MSTG', 'Master Data', 2, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-ITC',  'Item Categories',        '/master/item-categories',     3, 'AD-MSTG', 'Master Data', 2, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-CMN',  'Common Masters',         '/master/common-masters',      4, 'AD-MSTG', 'Master Data', 2, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-TAX',  'Tax Master',             '/master/tax-master',          5, 'AD-MSTG', 'Master Data', 2, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-TXG',  'Tax Groups',             '/master/tax-groups',          6, 'AD-MSTG', 'Master Data', 2, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-CHG',  'Additional Charges',     '/master/additional-charges',  7, 'AD-MSTG', 'Master Data', 2, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-ALS',  'Account Link Setup',     '/master/account-link-setup',  8, 'AD-MSTG', 'Master Data', 2, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-IAL',  'Item Account Links',     '/master/item-account-links',  9, 'AD-MSTG', 'Master Data', 2, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-PRD',  'Product Master',         '/master/products',           10, 'AD-MSTG', 'Master Data', 2, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set group_code      = excluded.group_code,
             group_name      = excluded.group_name,
