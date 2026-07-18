@@ -4,8 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
+import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../../core/utils/screen_permission_mixin.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_formatted_number_field.dart';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -31,7 +37,10 @@ class ChartOfAccountsScreen extends ConsumerStatefulWidget {
 }
 
 class _ChartOfAccountsScreenState
-    extends ConsumerState<ChartOfAccountsScreen> {
+    extends ConsumerState<ChartOfAccountsScreen>
+    with ScreenPermissionMixin<ChartOfAccountsScreen> {
+  @override String get screenName => RouteNames.chartOfAccounts;
+
   // Data
   List<Map<String, dynamic>> _accounts   = [];
   List<Map<String, dynamic>> _currencies = [];
@@ -439,9 +448,11 @@ class _ChartOfAccountsScreenState
   // ── Left panel ────────────────────────────────────────────────────────────
 
   Widget _leftPanel() {
-    final visible = _visibleNodes();
-    final mobile  = Responsive.isMobile(context);
-    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
+    final visible   = _visibleNodes();
+    final mobile    = Responsive.isMobile(context);
+    final offline   = ref.watch(sessionProvider)?.offlineMode ?? false;
+    final highlight = ThemePresetConfig.all[ref.watch(themePresetProvider)]!
+        .accent.withValues(alpha: 0.15);
     return Column(children: [
       Container(
         color: AppColors.surface,
@@ -468,6 +479,9 @@ class _ChartOfAccountsScreenState
               isSelected:       (_panelMode == 'edit' && _editNode?['id'] == item.node['id']),
               alwaysShowActions: mobile,
               offline: offline,
+              canEdit: canEdit,
+              canAdd: canAdd,
+              highlightColor: highlight,
               onToggle: () => setState(() {
                 final id = item.node['id'] as String;
                 if (_expanded.contains(id)) { _expanded.remove(id); }
@@ -479,7 +493,7 @@ class _ChartOfAccountsScreenState
           },
         ),
       ),
-      if (!offline) ...[
+      if (!offline && canAdd) ...[
         const Divider(height: 1, color: AppColors.border),
         Padding(
           padding: const EdgeInsets.all(12),
@@ -526,14 +540,70 @@ class _ChartOfAccountsScreenState
     ]),
   );
 
+  // ── Form panel — header title/actions (Save/Cancel/Delete top-right) ──────
+
+  Widget _formTitleBlock(bool isAdd, String? parentLabel, bool isFixed) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text(isAdd ? 'Add Account' : 'Account Details',
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary)),
+      if (parentLabel != null)
+        Text(parentLabel,
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      if (!isAdd && isFixed)
+        const Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.lock_outline, size: 13, color: AppColors.textSecondary),
+          SizedBox(width: 4),
+          Text('System account — some fields are locked',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        ]),
+    ],
+  );
+
+  Widget _formCloseButton() => IconButton(
+      icon: const Icon(Icons.close, size: 18),
+      onPressed: () => setState(() { _panelMode = 'none'; }));
+
+  Widget _formActionButtons(bool isAdd, bool isFixed, bool canDelete, bool offline) =>
+      Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        if (canDelete)
+          TextButton.icon(
+            icon: const Icon(Icons.delete_outline, size: 16),
+            label: const Text('Delete'),
+            style: TextButton.styleFrom(foregroundColor: AppColors.negative),
+            onPressed: () => _delete(_editNode!['id'] as String),
+          ),
+        if (!isFixed) ...[
+          OutlinedButton(
+            onPressed: () => setState(() => _panelMode = 'none'),
+            child: const Text('Cancel'),
+          ),
+          if (!offline && (isAdd ? canAdd : canEdit))
+            FilledButton(
+              onPressed: _saving ? null : _save,
+              child: _saving
+                  ? const SizedBox(width: 18, height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : Text(isAdd ? 'Save Account' : 'Save Changes'),
+            ),
+        ],
+      ]);
+
   Widget _formPanel() {
     final isAdd     = _panelMode == 'add';
     final isFixed   = _editNode?['is_system_fixed'] == true;
     final isGroup   = !_postingAllowed;
     final isParty   = _nature == 'Customer' || _nature == 'Supplier';
     final offline   = ref.watch(sessionProvider)?.offlineMode ?? false;
-    final canDelete = !isAdd && !isFixed && !offline &&
+    final mobile    = Responsive.isMobile(context);
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final canDelete = !isAdd && !isFixed && !offline && canEdit &&
         (_childMap[_editNode?['id'] as String? ?? '']?.isEmpty ?? true);
+    final chipHighlight = ThemePresetConfig.all[ref.watch(themePresetProvider)]!
+        .accent.withValues(alpha: 0.15);
 
     final parentLabel = isAdd
         ? (_addParent != null
@@ -541,45 +611,46 @@ class _ChartOfAccountsScreenState
             : '(None — Root Group)')
         : null;
 
-    // Labels change for Group vs Ledger
-    final codeLabel  = isGroup ? 'Group Code *'  : 'Account Code *';
-    final nameLabel  = isGroup ? 'Group Name *'  : 'Account Name *';
-    final codeHint   = isGroup ? 'e.g. 6100'     : 'e.g. 6150';
+    // Labels change for Group vs Ledger (SakalFieldCard's own `required`
+    // flag draws the asterisk, so labels here stay plain text).
+    final codeLabel  = isGroup ? 'Group Code'  : 'Account Code';
+    final nameLabel  = isGroup ? 'Group Name'  : 'Account Name';
+    final codeHint   = isGroup ? 'e.g. 6100'   : 'e.g. 6150';
     final nameHint   = isGroup ? 'Enter group name' : 'Enter account name';
+    final fieldStyle = SakalFieldCard.valueTextStyle(isCompact);
+    InputDecoration bare({String? hint}) => hint == null
+        ? SakalFieldCard.bareDecoration
+        : SakalFieldCard.bareDecoration.copyWith(
+            hintText: hint,
+            hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+          );
+
+    // Nature is locked (read-only) whenever it's inherited from a
+    // non-General parent group — same condition the original screen used.
+    final natureLocked = _addParent?['account_nature'] != null &&
+        _addParent!['account_nature'] != 'General';
 
     return Column(children: [
-      // Header
+      // Header — title block left, Delete/Cancel/Save top-right (mandatory
+      // "actions in the header row" convention), Close always last.
       Container(
         color: AppColors.surface,
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
-        child: Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(isAdd ? 'Add Account' : 'Account Details',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary)),
-            if (parentLabel != null)
-              Text(parentLabel,
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            if (!isAdd && isFixed)
-              const Row(children: [
-                Icon(Icons.lock_outline, size: 13, color: AppColors.textSecondary),
-                SizedBox(width: 4),
-                Text('System account — some fields are locked',
-                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        child: mobile
+            ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Expanded(child: _formTitleBlock(isAdd, parentLabel, isFixed)),
+                  _formCloseButton(),
+                ]),
+                const SizedBox(height: 10),
+                _formActionButtons(isAdd, isFixed, canDelete, offline),
+              ])
+            : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: _formTitleBlock(isAdd, parentLabel, isFixed)),
+                _formActionButtons(isAdd, isFixed, canDelete, offline),
+                const SizedBox(width: 8),
+                _formCloseButton(),
               ]),
-          ])),
-          if (canDelete)
-            TextButton.icon(
-              icon: const Icon(Icons.delete_outline, size: 16),
-              label: const Text('Delete'),
-              style: TextButton.styleFrom(foregroundColor: AppColors.negative),
-              onPressed: () => _delete(_editNode!['id'] as String),
-            ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 18),
-            onPressed: () => setState(() { _panelMode = 'none'; }),
-          ),
-        ]),
       ),
       const Divider(height: 1, color: AppColors.border),
 
@@ -597,12 +668,14 @@ class _ChartOfAccountsScreenState
                 _TypeChip(
                   label: 'Group',
                   selected: !_postingAllowed,
+                  selectedColor: chipHighlight,
                   onTap: () => setState(() => _postingAllowed = false),
                 ),
                 const SizedBox(width: 10),
                 _TypeChip(
                   label: 'Ledger',
                   selected: _postingAllowed,
+                  selectedColor: chipHighlight,
                   onTap: _addParent == null
                       ? null
                       : () => setState(() => _postingAllowed = true),
@@ -619,32 +692,50 @@ class _ChartOfAccountsScreenState
               ),
               const SizedBox(height: 20),
             ] else ...[
-              const _Label('Node Type'),
-              const SizedBox(height: 6),
-              _ReadOnlyField(_postingAllowed ? 'Ledger' : 'Group'),
+              SakalFieldCard.readOnly(
+                label: 'Node Type',
+                value: _postingAllowed ? 'Ledger' : 'Group',
+              ),
               const SizedBox(height: 16),
             ],
 
             // ── Code ───────────────────────────────────────────────────────
-            _Label(codeLabel),
-            const SizedBox(height: 6),
-            if (_isAutoCode)
-              _ReadOnlyField(_autoCode ?? 'Generating…', suffix: 'Auto')
-            else
-              TextField(
-                controller: _codeCtrl,
-                enabled: isAdd || !isFixed,
-                decoration: InputDecoration(isDense: true, hintText: codeHint),
+            if (_isAutoCode) ...[
+              SakalFieldCard.readOnly(
+                label: codeLabel,
+                value: _autoCode ?? 'Generating…',
+                required: true,
               ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 4),
+              const Text('Auto-generated from the parent group.',
+                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+              const SizedBox(height: 12),
+            ] else ...[
+              SakalFieldCard(
+                label: codeLabel,
+                required: true,
+                editable: isAdd || !isFixed,
+                child: TextField(
+                  controller: _codeCtrl,
+                  enabled: isAdd || !isFixed,
+                  style: fieldStyle,
+                  decoration: bare(hint: codeHint),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
 
             // ── Name ───────────────────────────────────────────────────────
-            _Label(nameLabel),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _nameCtrl,
-              enabled: !isFixed,
-              decoration: InputDecoration(isDense: true, hintText: nameHint),
+            SakalFieldCard(
+              label: nameLabel,
+              required: true,
+              editable: !isFixed,
+              child: TextField(
+                controller: _nameCtrl,
+                enabled: !isFixed,
+                style: fieldStyle,
+                decoration: bare(hint: nameHint),
+              ),
             ),
             const SizedBox(height: 12),
 
@@ -669,64 +760,43 @@ class _ChartOfAccountsScreenState
             // ── Nature + Currency (Ledger only) ────────────────────────────
             if (_postingAllowed) ...[
               const SizedBox(height: 16),
-              Builder(builder: (ctx) {
-                final mobile = Responsive.isMobile(ctx);
-                final natureField = Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _Label('Nature *'),
-                    const SizedBox(height: 6),
-                    _addParent?['account_nature'] != null &&
-                            _addParent!['account_nature'] != 'General'
-                        ? _ReadOnlyField(_nature)
-                        : DropdownButtonFormField<String>(
-                            initialValue: _nature,
-                            decoration: const InputDecoration(isDense: true),
-                            items: _natures.map((n) => DropdownMenuItem(
-                                value: n, child: Text(n))).toList(),
-                            onChanged: isFixed
-                                ? null
-                                : (v) => setState(() => _nature = v!),
-                          ),
-                  ],
-                );
-                final currencyField = Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _Label('Currency'),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<String>(
-                      initialValue: _currencyId,
-                      decoration: const InputDecoration(
-                          isDense: true, hintText: 'Select…'),
-                      items: _currencies.map((c) => DropdownMenuItem(
-                        value: c['id'] as String,
-                        child: Text('${c['currency_id']} — ${c['currency_name']}',
-                            overflow: TextOverflow.ellipsis),
-                      )).toList(),
-                      onChanged: (v) => setState(() => _currencyId = v),
-                    ),
-                  ],
-                );
-                if (mobile) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      natureField,
-                      const SizedBox(height: 14),
-                      currencyField,
-                    ],
-                  );
-                }
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: natureField),
-                    const SizedBox(width: 16),
-                    Expanded(child: currencyField),
-                  ],
-                );
-              }),
+              SakalFieldRow(isMobile: mobile, children: [
+                natureLocked
+                    ? SakalFieldCard.readOnly(
+                        label: 'Nature', value: _nature, required: true)
+                    : SakalFieldCard(
+                        label: 'Nature',
+                        required: true,
+                        editable: !isFixed,
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _nature,
+                          isExpanded: true, isDense: true, itemHeight: null,
+                          style: fieldStyle,
+                          decoration: bare(),
+                          items: _natures.map((n) => DropdownMenuItem(
+                              value: n, child: Text(n))).toList(),
+                          onChanged: isFixed
+                              ? null
+                              : (v) => setState(() => _nature = v!),
+                        ),
+                      ),
+                SakalFieldCard(
+                  label: 'Currency',
+                  editable: true,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _currencyId,
+                    isExpanded: true, isDense: true, itemHeight: null,
+                    style: fieldStyle,
+                    decoration: bare(hint: 'Select…'),
+                    items: _currencies.map((c) => DropdownMenuItem(
+                      value: c['id'] as String,
+                      child: Text('${c['currency_id']} — ${c['currency_name']}',
+                          overflow: TextOverflow.ellipsis),
+                    )).toList(),
+                    onChanged: (v) => setState(() => _currencyId = v),
+                  ),
+                ),
+              ]),
             ],
 
             // ── Party Details (Customer / Supplier Ledger only) ────────────
@@ -749,206 +819,7 @@ class _ChartOfAccountsScreenState
                   const SizedBox(height: 12),
                   const Divider(height: 1, color: AppColors.border),
                   const SizedBox(height: 16),
-
-                  // Party Type
-                  const _Label('Party Type'),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<String>(
-                    initialValue: _partyType,
-                    decoration: const InputDecoration(
-                        isDense: true, hintText: 'Select…'),
-                    items: _partyTypes.map((t) => DropdownMenuItem(
-                        value: t, child: Text(t))).toList(),
-                    onChanged: (v) => setState(() => _partyType = v),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Contact + Phone
-                  Row(children: [
-                    Expanded(child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      const _Label('Contact Person'),
-                      const SizedBox(height: 6),
-                      TextField(controller: _contactCtrl,
-                          decoration: const InputDecoration(isDense: true)),
-                    ])),
-                    const SizedBox(width: 16),
-                    Expanded(child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      const _Label('Phone'),
-                      const SizedBox(height: 6),
-                      TextField(controller: _phoneCtrl,
-                          decoration: const InputDecoration(isDense: true)),
-                    ])),
-                  ]),
-                  const SizedBox(height: 14),
-
-                  // Email
-                  const _Label('Email'),
-                  const SizedBox(height: 6),
-                  TextField(controller: _emailCtrl,
-                      decoration: const InputDecoration(isDense: true)),
-                  const SizedBox(height: 14),
-
-                  // Address Line 1 & 2
-                  const _Label('Address Line 1'),
-                  const SizedBox(height: 6),
-                  TextField(controller: _addr1Ctrl,
-                      decoration: const InputDecoration(isDense: true)),
-                  const SizedBox(height: 10),
-                  TextField(controller: _addr2Ctrl,
-                      decoration: const InputDecoration(
-                          isDense: true, hintText: 'Address Line 2')),
-                  const SizedBox(height: 14),
-
-                  // Country — searchable
-                  const _Label('Country'),
-                  const SizedBox(height: 6),
-                  _SearchablePicker(
-                    value: _countryId,
-                    hint: 'Select country…',
-                    items: _countries,
-                    labelKey: 'country_name',
-                    valueKey: 'id',
-                    onChanged: (item) {
-                      setState(() {
-                        _countryId   = item?['id'] as String?;
-                        _countryCode = item?['country_code'] as String?;
-                        _divisionId  = null;
-                        _cityId      = null;
-                        _divisions   = [];
-                        _cities      = [];
-                      });
-                      if (_countryCode != null) {
-                        _loadDivisions();
-                        _loadCities();
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Division / State / Province
-                  const _Label('Division / State / Province'),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<String>(
-                    initialValue: _divisionId,
-                    decoration: const InputDecoration(
-                        isDense: true, hintText: 'Select division…'),
-                    items: [
-                      const DropdownMenuItem<String>(
-                          value: null, child: Text('— No division —')),
-                      ..._divisions.map((d) => DropdownMenuItem(
-                        value: d['id'] as String,
-                        child: Text(d['division_name'] as String,
-                            overflow: TextOverflow.ellipsis),
-                      )),
-                    ],
-                    onChanged: _countryCode == null
-                        ? null
-                        : (v) {
-                            setState(() {
-                              _divisionId = v;
-                              _cityId     = null;
-                              _cities     = [];
-                            });
-                            _loadCities();
-                          },
-                  ),
-                  const SizedBox(height: 14),
-
-                  // City
-                  const _Label('City'),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<String>(
-                    initialValue: _cityId,
-                    decoration: const InputDecoration(
-                        isDense: true, hintText: 'Select…'),
-                    items: _cities.map((c) => DropdownMenuItem(
-                      value: c['id'] as String,
-                      child: Text(c['city_name'] as String,
-                          overflow: TextOverflow.ellipsis),
-                    )).toList(),
-                    onChanged: (v) => setState(() => _cityId = v),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Tax ID
-                  const _Label('Tax ID (TVA / TIN / GSTIN)'),
-                  const SizedBox(height: 6),
-                  TextField(controller: _taxIdCtrl,
-                      decoration: const InputDecoration(isDense: true)),
-                  const SizedBox(height: 14),
-
-                  // Category + Credit Days + Credit Limit
-                  Builder(builder: (ctx) {
-                    final mobile = Responsive.isMobile(ctx);
-                    final catField = Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _Label('Category'),
-                        const SizedBox(height: 6),
-                        TextField(controller: _catCtrl,
-                            decoration: const InputDecoration(
-                                isDense: true, hintText: 'e.g. Wholesale')),
-                      ],
-                    );
-                    final daysField = Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _Label('Credit Days'),
-                        const SizedBox(height: 6),
-                        TextField(controller: _daysCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(isDense: true)),
-                      ],
-                    );
-                    final limitField = Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _Label('Credit Limit'),
-                        const SizedBox(height: 6),
-                        TextField(controller: _limitCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: const InputDecoration(
-                                isDense: true, hintText: '0.00')),
-                      ],
-                    );
-                    if (mobile) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          catField,
-                          const SizedBox(height: 14),
-                          Row(children: [
-                            Expanded(child: daysField),
-                            const SizedBox(width: 12),
-                            Expanded(child: limitField),
-                          ]),
-                        ],
-                      );
-                    }
-                    return Row(children: [
-                      Expanded(child: catField),
-                      const SizedBox(width: 12),
-                      SizedBox(width: 90, child: daysField),
-                      const SizedBox(width: 12),
-                      Expanded(child: limitField),
-                    ]);
-                  }),
-                  const SizedBox(height: 14),
-
-                  // Credit Blocked
-                  Row(children: [
-                    Checkbox(
-                      value: _creditBlocked,
-                      onChanged: (v) => setState(() => _creditBlocked = v!),
-                    ),
-                    const Text('Credit Blocked',
-                        style: TextStyle(fontSize: 13,
-                            color: AppColors.textPrimary)),
-                  ]),
+                  ..._partyFields(),
                 ],
               ),
             ],
@@ -959,30 +830,208 @@ class _ChartOfAccountsScreenState
                   style: const TextStyle(
                       color: AppColors.negative, fontSize: 13)),
             ],
-
             const SizedBox(height: 24),
-            if (!isFixed)
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                OutlinedButton(
-                  onPressed: () => setState(() => _panelMode = 'none'),
-                  child: const Text('Cancel'),
-                ),
-                if (!offline) ...[
-                  const SizedBox(width: 12),
-                  FilledButton(
-                    onPressed: _saving ? null : _save,
-                    child: _saving
-                        ? const SizedBox(width: 18, height: 18,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : Text(isAdd ? 'Save Account' : 'Save Changes'),
-                  ),
-                ],
-              ]),
           ]),
         ),
       ),
     ]);
+  }
+
+  List<Widget> _partyFields() {
+    final mobile    = Responsive.isMobile(context);
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final fieldStyle = SakalFieldCard.valueTextStyle(isCompact);
+    InputDecoration bare({String? hint}) => hint == null
+        ? SakalFieldCard.bareDecoration
+        : SakalFieldCard.bareDecoration.copyWith(
+            hintText: hint,
+            hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+          );
+
+    return [
+      // Party Type
+      SakalFieldCard(
+        label: 'Party Type',
+        editable: true,
+        child: DropdownButtonFormField<String>(
+          initialValue: _partyType,
+          isExpanded: true, isDense: true, itemHeight: null,
+          style: fieldStyle,
+          decoration: bare(hint: 'Select…'),
+          items: _partyTypes.map((t) => DropdownMenuItem(
+              value: t, child: Text(t))).toList(),
+          onChanged: (v) => setState(() => _partyType = v),
+        ),
+      ),
+      const SizedBox(height: 14),
+
+      // Contact + Phone
+      SakalFieldRow(isMobile: mobile, children: [
+        SakalFieldCard(
+          label: 'Contact Person',
+          editable: true,
+          child: TextField(controller: _contactCtrl, style: fieldStyle, decoration: bare()),
+        ),
+        SakalFieldCard(
+          label: 'Phone',
+          editable: true,
+          child: TextField(controller: _phoneCtrl, style: fieldStyle, decoration: bare()),
+        ),
+      ]),
+      const SizedBox(height: 14),
+
+      SakalFieldCard(
+        label: 'Email',
+        editable: true,
+        child: TextField(controller: _emailCtrl, style: fieldStyle, decoration: bare()),
+      ),
+      const SizedBox(height: 14),
+
+      SakalFieldCard(
+        label: 'Address Line 1',
+        editable: true,
+        child: TextField(controller: _addr1Ctrl, style: fieldStyle, decoration: bare()),
+      ),
+      const SizedBox(height: 10),
+      SakalFieldCard(
+        label: 'Address Line 2',
+        editable: true,
+        child: TextField(controller: _addr2Ctrl, style: fieldStyle, decoration: bare()),
+      ),
+      const SizedBox(height: 14),
+
+      // Country — searchable dialog picker
+      SakalFieldCard(
+        label: 'Country',
+        editable: true,
+        child: _SearchablePicker(
+          value: _countryId,
+          hint: 'Select country…',
+          items: _countries,
+          labelKey: 'country_name',
+          valueKey: 'id',
+          style: fieldStyle,
+          onChanged: (item) {
+            setState(() {
+              _countryId   = item?['id'] as String?;
+              _countryCode = item?['country_code'] as String?;
+              _divisionId  = null;
+              _cityId      = null;
+              _divisions   = [];
+              _cities      = [];
+            });
+            if (_countryCode != null) {
+              _loadDivisions();
+              _loadCities();
+            }
+          },
+        ),
+      ),
+      const SizedBox(height: 14),
+
+      // Division / State / Province + City
+      SakalFieldRow(isMobile: mobile, children: [
+        SakalFieldCard(
+          label: 'Division / State / Province',
+          editable: true,
+          child: DropdownButtonFormField<String>(
+            initialValue: _divisionId,
+            isExpanded: true, isDense: true, itemHeight: null,
+            style: fieldStyle,
+            decoration: bare(hint: 'Select division…'),
+            items: [
+              const DropdownMenuItem<String>(
+                  value: null, child: Text('— No division —')),
+              ..._divisions.map((d) => DropdownMenuItem(
+                value: d['id'] as String,
+                child: Text(d['division_name'] as String,
+                    overflow: TextOverflow.ellipsis),
+              )),
+            ],
+            onChanged: _countryCode == null
+                ? null
+                : (v) {
+                    setState(() {
+                      _divisionId = v;
+                      _cityId     = null;
+                      _cities     = [];
+                    });
+                    _loadCities();
+                  },
+          ),
+        ),
+        SakalFieldCard(
+          label: 'City',
+          editable: true,
+          child: DropdownButtonFormField<String>(
+            initialValue: _cityId,
+            isExpanded: true, isDense: true, itemHeight: null,
+            style: fieldStyle,
+            decoration: bare(hint: 'Select…'),
+            items: _cities.map((c) => DropdownMenuItem(
+              value: c['id'] as String,
+              child: Text(c['city_name'] as String,
+                  overflow: TextOverflow.ellipsis),
+            )).toList(),
+            onChanged: (v) => setState(() => _cityId = v),
+          ),
+        ),
+      ]),
+      const SizedBox(height: 14),
+
+      SakalFieldCard(
+        label: 'Tax ID (TVA / TIN / GSTIN)',
+        editable: true,
+        child: TextField(controller: _taxIdCtrl, style: fieldStyle, decoration: bare()),
+      ),
+      const SizedBox(height: 14),
+
+      // Category + Credit Days + Credit Limit
+      SakalFieldRow(isMobile: mobile, children: [
+        SakalFieldCard(
+          label: 'Category',
+          editable: true,
+          child: TextField(
+              controller: _catCtrl,
+              style: fieldStyle,
+              decoration: bare(hint: 'e.g. Wholesale')),
+        ),
+        SakalFieldCard(
+          label: 'Credit Days',
+          editable: true,
+          numeric: true,
+          child: TextField(
+              controller: _daysCtrl,
+              textAlign: TextAlign.right,
+              keyboardType: TextInputType.number,
+              style: fieldStyle,
+              decoration: bare()),
+        ),
+        SakalFieldCard(
+          label: 'Credit Limit',
+          editable: true,
+          numeric: true,
+          child: SakalFormattedNumberField(
+              controller: _limitCtrl,
+              textAlign: TextAlign.right,
+              numberFormatStyle: ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL',
+              style: fieldStyle,
+              decoration: bare(hint: '0.00')),
+        ),
+      ]),
+      const SizedBox(height: 14),
+
+      // Credit Blocked
+      Row(children: [
+        Checkbox(
+          value: _creditBlocked,
+          onChanged: (v) => setState(() => _creditBlocked = v!),
+        ),
+        const Text('Credit Blocked',
+            style: TextStyle(fontSize: 13,
+                color: AppColors.textPrimary)),
+      ]),
+    ];
   }
 
   String _partyDetailHint() {
@@ -1006,6 +1055,9 @@ class _NodeRow extends StatefulWidget {
   final bool         isSelected;
   final bool         alwaysShowActions;
   final bool         offline;
+  final bool         canEdit;
+  final bool         canAdd;
+  final Color        highlightColor;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
   final VoidCallback onAdd;
@@ -1018,6 +1070,9 @@ class _NodeRow extends StatefulWidget {
     required this.isSelected,
     required this.alwaysShowActions,
     required this.offline,
+    required this.canEdit,
+    required this.canAdd,
+    required this.highlightColor,
     required this.onToggle,
     required this.onEdit,
     required this.onAdd,
@@ -1049,7 +1104,7 @@ class _NodeRowState extends State<_NodeRow> {
         child: Container(
           height: rowHeight,
           color: widget.isSelected
-              ? const Color(0xFFEAF0FB)
+              ? widget.highlightColor
               : _hovered ? AppColors.surfaceVariant : null,
           padding: EdgeInsets.only(left: 8.0 + widget.depth * 16.0, right: 8),
           child: Row(children: [
@@ -1115,14 +1170,15 @@ class _NodeRowState extends State<_NodeRow> {
                     color: AppColors.textDisabled),
               ),
             if (showActions) ...[
-              IconButton(
-                icon: const Icon(Icons.edit_outlined, size: 15),
-                tooltip: 'Edit',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                onPressed: widget.onEdit,
-              ),
-              if (!isLeaf && !widget.offline)
+              if (widget.canEdit)
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 15),
+                  tooltip: 'Edit',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  onPressed: widget.onEdit,
+                ),
+              if (!isLeaf && !widget.offline && widget.canAdd)
                 IconButton(
                   icon: const Icon(Icons.add, size: 15),
                   tooltip: 'Add account under this group',
@@ -1139,6 +1195,9 @@ class _NodeRowState extends State<_NodeRow> {
 }
 
 // ── Searchable Picker ─────────────────────────────────────────────────────────
+// Bare content only (no outer border/padding of its own) — designed to be
+// used as a SakalFieldCard's `child`, which draws the border/label/focus
+// chrome itself.
 
 class _SearchablePicker extends StatelessWidget {
   final String?                    value;
@@ -1146,6 +1205,7 @@ class _SearchablePicker extends StatelessWidget {
   final List<Map<String, dynamic>> items;
   final String                     labelKey;
   final String                     valueKey;
+  final TextStyle?                 style;
   final ValueChanged<Map<String, dynamic>?> onChanged;
 
   const _SearchablePicker({
@@ -1155,6 +1215,7 @@ class _SearchablePicker extends StatelessWidget {
     required this.labelKey,
     required this.valueKey,
     required this.onChanged,
+    this.style,
   });
 
   String? get _displayLabel {
@@ -1178,36 +1239,26 @@ class _SearchablePicker extends StatelessWidget {
         );
         if (result != null) onChanged(result);
       },
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.border),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(children: [
-          Expanded(
-            child: Text(
-              label ?? hint,
-              style: TextStyle(
-                fontSize: 13,
-                color: label != null
-                    ? AppColors.textPrimary
-                    : AppColors.textDisabled,
-              ),
-            ),
+      child: Row(children: [
+        Expanded(
+          child: Text(
+            label ?? hint,
+            overflow: TextOverflow.ellipsis,
+            style: label != null
+                ? style
+                : const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
           ),
-          if (value != null)
-            GestureDetector(
-              onTap: () => onChanged(null),
-              child: const Icon(Icons.close, size: 16,
-                  color: AppColors.textSecondary),
-            )
-          else
-            const Icon(Icons.arrow_drop_down, size: 20,
+        ),
+        if (value != null)
+          GestureDetector(
+            onTap: () => onChanged(null),
+            child: const Icon(Icons.close, size: 16,
                 color: AppColors.textSecondary),
-        ]),
-      ),
+          )
+        else
+          const Icon(Icons.arrow_drop_down, size: 20,
+              color: AppColors.textSecondary),
+      ]),
     );
   }
 }
@@ -1303,8 +1354,14 @@ class _Label extends StatelessWidget {
 class _TypeChip extends StatelessWidget {
   final String       label;
   final bool         selected;
+  final Color        selectedColor;
   final VoidCallback? onTap;
-  const _TypeChip({required this.label, required this.selected, this.onTap});
+  const _TypeChip({
+    required this.label,
+    required this.selected,
+    required this.selectedColor,
+    this.onTap,
+  });
 
   bool get _disabled => onTap == null;
 
@@ -1321,7 +1378,7 @@ class _TypeChip extends StatelessWidget {
                 : AppColors.border,
             width: selected ? 2 : 1),
         borderRadius: BorderRadius.circular(6),
-        color: selected ? const Color(0xFFEAF0FB)
+        color: selected ? selectedColor
             : _disabled ? AppColors.surfaceVariant
             : AppColors.surface,
       ),
@@ -1332,39 +1389,6 @@ class _TypeChip extends StatelessWidget {
               : _disabled ? AppColors.textDisabled
               : AppColors.textSecondary)),
     ),
-  );
-}
-
-class _ReadOnlyField extends StatelessWidget {
-  final String  value;
-  final String? suffix;
-  const _ReadOnlyField(this.value, {this.suffix});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    decoration: BoxDecoration(
-      color: AppColors.surfaceVariant,
-      border: Border.all(color: AppColors.border),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Row(children: [
-      Expanded(child: Text(value,
-          style: const TextStyle(fontSize: 13,
-              color: AppColors.textSecondary))),
-      if (suffix != null)
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: AppColors.border,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Text(suffix!,
-              style: const TextStyle(fontSize: 10,
-                  color: AppColors.textSecondary)),
-        ),
-    ]),
   );
 }
 

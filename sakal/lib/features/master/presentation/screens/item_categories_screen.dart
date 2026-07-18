@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
 import '../../data/models/category_level_model.dart';
 import '../../data/models/item_category_model.dart';
 import '../../data/models/product_flag_type_model.dart';
@@ -495,7 +498,7 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
           onTap: _canEdit ? () => _openEdit(node) : null,
           child: Container(
             color: isSelected
-                ? AppColors.primary.withValues(alpha: 0.07)
+                ? ThemePresetConfig.all[ref.watch(themePresetProvider)]!.accent.withValues(alpha: 0.15)
                 : Colors.transparent,
             padding: EdgeInsets.only(
               left: 12.0 + depth * 20.0,
@@ -583,9 +586,53 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
   }
 
   // ── Form Panel ──────────────────────────────────────────────────────────────
+
+  Widget _formTitleBlock(bool isEdit) => Text(
+      isEdit
+          ? 'Edit ${_levelLabel(_formLevel ?? 1)}'
+          : 'New ${_levelLabel(_formLevel ?? 1)}',
+      style: const TextStyle(
+          fontWeight: FontWeight.w600, fontSize: 15, color: AppColors.textPrimary));
+
+  Widget _formCloseButton() => IconButton(
+      icon: const Icon(Icons.close, size: 18),
+      onPressed: _closePanel);
+
+  Widget _formActionButtons(bool isEdit, bool offline) =>
+      Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        if (isEdit && _canEdit && !offline)
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.negative,
+                side: const BorderSide(color: AppColors.negative)),
+            onPressed: _saving ? null : () => _delete(_editNode!),
+            icon: const Icon(Icons.delete_outline, size: 16),
+            label: const Text('Delete'),
+          ),
+        if ((isEdit ? _canEdit : _canAdd) && !offline)
+          FilledButton(
+            onPressed: _saving ? null : _save,
+            child: _saving
+                ? const SizedBox(
+                    width: 16, height: 16,
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2))
+                : Text(isEdit ? 'Update' : 'Save'),
+          ),
+      ]);
+
   Widget _buildFormPanel() {
     final isEdit  = _panelMode == 'edit';
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
+    final mobile  = Responsive.isMobile(context);
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final fieldStyle = SakalFieldCard.valueTextStyle(isCompact);
+    InputDecoration bare({String? hint}) => hint == null
+        ? SakalFieldCard.bareDecoration
+        : SakalFieldCard.bareDecoration.copyWith(
+            hintText: hint,
+            hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+          );
 
     // Parent options for the selected level
     final parentLevel = (_formLevel ?? 1) - 1;
@@ -602,31 +649,33 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Panel header
+          // Panel header — title + primary actions top-right, per the
+          // app-wide "actions live next to the title" convention.
           Container(
-            padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
             decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    isEdit
-                        ? 'Edit ${_levelLabel(_formLevel ?? 1)}'
-                        : 'New ${_levelLabel(_formLevel ?? 1)}',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                        color: AppColors.textPrimary),
+            child: mobile
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Expanded(child: _formTitleBlock(isEdit)),
+                        _formCloseButton(),
+                      ]),
+                      const SizedBox(height: 10),
+                      _formActionButtons(isEdit, offline),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(child: _formTitleBlock(isEdit)),
+                      _formActionButtons(isEdit, offline),
+                      const SizedBox(width: 8),
+                      _formCloseButton(),
+                    ],
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 18),
-                  onPressed: _closePanel,
-                ),
-              ],
-            ),
           ),
 
           // Form body
@@ -640,103 +689,127 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
                   children: [
                     // Level selector (only for Add; locked on Edit)
                     if (!isEdit) ...[
-                      DropdownButtonFormField<int>(
-                        initialValue: _formLevel,
-                        isExpanded: true,
-                        decoration: const InputDecoration(labelText: 'Level'),
-                        items: _levels.map((l) => DropdownMenuItem(
-                          value: l.levelNo,
-                          child: Text('${l.levelNo} — ${l.levelLabel}'),
-                        )).toList(),
-                        onChanged: (v) => setState(() {
-                          _formLevel    = v;
-                          _formParentId = null;
-                        }),
-                        validator: (v) => v == null ? 'Select a level' : null,
+                      SakalFieldCard(
+                        label: 'Level',
+                        required: true,
+                        editable: true,
+                        child: DropdownButtonFormField<int>(
+                          initialValue: _formLevel,
+                          isExpanded: true, isDense: true, itemHeight: null,
+                          style: fieldStyle,
+                          decoration: bare(),
+                          items: _levels.map((l) => DropdownMenuItem(
+                            value: l.levelNo,
+                            child: Text('${l.levelNo} — ${l.levelLabel}', overflow: TextOverflow.ellipsis),
+                          )).toList(),
+                          onChanged: (v) => setState(() {
+                            _formLevel    = v;
+                            _formParentId = null;
+                          }),
+                          validator: (v) => v == null ? 'Select a level' : null,
+                        ),
                       ),
                       const SizedBox(height: 16),
                     ] else ...[
-                      // Show level as read-only chip
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Row(
-                          children: [
-                            const Text('Level: ',
-                                style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: _levelColor(_formLevel ?? 1).withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                'L$_formLevel — ${_levelLabel(_formLevel ?? 1)}',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: _levelColor(_formLevel ?? 1),
-                                    fontSize: 13),
-                              ),
-                            ),
-                          ],
+                      // Level shown read-only, colored chip preserved inside
+                      // the field-card shell for at-a-glance level identity.
+                      SakalFieldCard(
+                        label: 'Level',
+                        editable: false,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: _levelColor(_formLevel ?? 1).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'L$_formLevel — ${_levelLabel(_formLevel ?? 1)}',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: _levelColor(_formLevel ?? 1),
+                                fontSize: 12),
+                          ),
                         ),
                       ),
+                      const SizedBox(height: 16),
                     ],
 
                     // Parent selector (hidden for Level 1)
                     if ((_formLevel ?? 1) > 1) ...[
-                      DropdownButtonFormField<String>(
-                        initialValue: _formParentId,
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          labelText: 'Parent ${_levelLabel((_formLevel ?? 2) - 1)}',
+                      SakalFieldCard(
+                        label: 'Parent ${_levelLabel((_formLevel ?? 2) - 1)}',
+                        required: true,
+                        editable: true,
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _formParentId,
+                          isExpanded: true, isDense: true, itemHeight: null,
+                          style: fieldStyle,
+                          decoration: bare(hint: 'Select parent…'),
+                          items: parentOptions.map((p) => DropdownMenuItem(
+                            value: p.id,
+                            child: Text(p.categoryName, overflow: TextOverflow.ellipsis),
+                          )).toList(),
+                          onChanged: (v) => setState(() => _formParentId = v),
+                          validator: (v) => v == null ? 'Parent is required' : null,
                         ),
-                        hint: const Text('Select parent…'),
-                        items: parentOptions.map((p) => DropdownMenuItem(
-                          value: p.id,
-                          child: Text(p.categoryName, overflow: TextOverflow.ellipsis),
-                        )).toList(),
-                        onChanged: (v) => setState(() => _formParentId = v),
-                        validator: (v) => v == null ? 'Parent is required' : null,
                       ),
                       const SizedBox(height: 16),
                     ],
 
                     // Name
-                    TextFormField(
-                      controller: _nameCtrl,
-                      decoration: const InputDecoration(labelText: 'Name *'),
-                      validator: (v) => (v == null || v.trim().isEmpty)
-                          ? 'Name is required' : null,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Short name
-                    TextFormField(
-                      controller: _shortCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Short Name',
-                        hintText: 'Optional abbreviation',
+                    SakalFieldCard(
+                      label: 'Name',
+                      required: true,
+                      editable: true,
+                      child: TextFormField(
+                        controller: _nameCtrl,
+                        style: fieldStyle,
+                        decoration: bare(),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Name is required' : null,
                       ),
                     ),
                     const SizedBox(height: 16),
 
-                    // Sort order
-                    TextFormField(
-                      controller: _sortCtrl,
-                      decoration: const InputDecoration(labelText: 'Sort Order'),
-                      keyboardType: TextInputType.number,
-                      validator: (v) =>
-                          (v != null && v.isNotEmpty && int.tryParse(v) == null)
-                              ? 'Must be a number' : null,
-                    ),
+                    // Short name + Sort order
+                    SakalFieldRow(isMobile: mobile, children: [
+                      SakalFieldCard(
+                        label: 'Short Name',
+                        editable: true,
+                        child: TextFormField(
+                          controller: _shortCtrl,
+                          style: fieldStyle,
+                          decoration: bare(hint: 'Optional abbreviation'),
+                        ),
+                      ),
+                      SakalFieldCard(
+                        label: 'Sort Order',
+                        editable: true,
+                        numeric: true,
+                        child: TextFormField(
+                          controller: _sortCtrl,
+                          textAlign: TextAlign.right,
+                          style: fieldStyle,
+                          decoration: bare(),
+                          keyboardType: TextInputType.number,
+                          validator: (v) =>
+                              (v != null && v.isNotEmpty && int.tryParse(v) == null)
+                                  ? 'Must be a number' : null,
+                        ),
+                      ),
+                    ]),
                     const SizedBox(height: 16),
 
                     // Is Active
-                    SwitchListTile(
+                    SwitchListTile.adaptive(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Active'),
-                      subtitle: const Text('Inactive categories are hidden on product forms'),
+                      dense: true,
+                      title: const Text('Active',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                      subtitle: const Text('Inactive categories are hidden on product forms',
+                          style: TextStyle(fontSize: 11)),
                       value: _formActive,
+                      activeThumbColor: AppColors.positive,
                       onChanged: (v) => setState(() => _formActive = v),
                     ),
 
@@ -753,12 +826,13 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
                               letterSpacing: 0.5)),
                       const SizedBox(height: 4),
                       ..._flagTypes.where((f) => f.isActive).map((ft) =>
-                        SwitchListTile(
+                        SwitchListTile.adaptive(
                           contentPadding: EdgeInsets.zero,
                           dense: true,
                           title: Text(ft.flagLabel,
                               style: const TextStyle(fontSize: 13)),
                           value: _formFlags[ft.flagKey] ?? ft.defaultValue,
+                          activeThumbColor: AppColors.positive,
                           onChanged: (v) => setState(
                               () => _formFlags[ft.flagKey] = v),
                         ),
@@ -766,41 +840,6 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
                     ],
 
                     const SizedBox(height: 24),
-
-                    // Action buttons
-                    Row(
-                      children: [
-                        if (isEdit && _canEdit && !offline)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppColors.negative,
-                                  side: const BorderSide(color: AppColors.negative)),
-                              onPressed: _saving ? null : () => _delete(_editNode!),
-                              icon: const Icon(Icons.delete_outline, size: 16),
-                              label: const Text('Delete'),
-                            ),
-                          ),
-                        const Spacer(),
-                        TextButton(
-                          onPressed: _saving ? null : _closePanel,
-                          child: const Text('Cancel'),
-                        ),
-                        if (!offline) ...[
-                          const SizedBox(width: 8),
-                          FilledButton(
-                            onPressed: _saving ? null : _save,
-                            child: _saving
-                                ? const SizedBox(
-                                    width: 16, height: 16,
-                                    child: CircularProgressIndicator(
-                                        color: Colors.white, strokeWidth: 2))
-                                : Text(isEdit ? 'Update' : 'Save'),
-                          ),
-                        ],
-                      ],
-                    ),
                   ],
                 ),
               ),

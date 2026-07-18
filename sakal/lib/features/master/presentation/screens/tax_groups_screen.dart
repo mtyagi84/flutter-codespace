@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
-import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
 import '../../data/datasources/tax_master_remote_ds.dart';
 import '../../data/models/tax_group_member_model.dart';
 import '../../data/models/tax_group_model.dart';
@@ -287,71 +289,81 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = Responsive.isDesktop(context);
-    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Tax Groups'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          if (_loading) const Padding(padding: EdgeInsets.all(12),
-              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))),
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _load, tooltip: 'Refresh'),
-          if (_canAdd && !offline)
-            IconButton(icon: const Icon(Icons.add), onPressed: _openAdd, tooltip: 'Add Group'),
-        ],
-      ),
-      body: Column(children: [
-        const OfflineBanner(),
-        Expanded(child: isDesktop ? _desktopLayout() : _mobileLayout()),
-      ]),
-    );
+    final showPanel = _panelMode != 'none';
+
+    // Same isMobile-only split-panel convention as the converted Customer/
+    // Supplier Master screens — AppShell already supplies Scaffold/TopBar/
+    // OfflineBanner, so this screen only ever returns its own content.
+    if (Responsive.isMobile(context)) {
+      if (showPanel) return _formPanel();
+      return _listPanel();
+    }
+
+    return Row(children: [
+      SizedBox(width: 440, child: _listPanel()),
+      if (showPanel) ...[
+        const VerticalDivider(width: 1, thickness: 1, color: AppColors.border),
+        Expanded(child: _formPanel()),
+      ],
+    ]);
   }
-
-  Widget _desktopLayout() => Row(children: [
-    SizedBox(width: 440, child: _listPanel()),
-    const VerticalDivider(width: 1),
-    Expanded(child: _panelMode == 'none' ? _emptyPanel() : _formPanel()),
-  ]);
-
-  Widget _mobileLayout() => _panelMode == 'none' ? _listPanel() : _formPanel();
-
-  Widget _emptyPanel() => Center(
-    child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Icon(Icons.playlist_add_check, size: 64, color: AppColors.primary.withValues(alpha: 0.3)),
-      const SizedBox(height: 12),
-      const Text('Select a tax group to edit, or tap Add Group'),
-    ]),
-  );
 
   // ── List Panel ────────────────────────────────────────────────────────────────
 
-  Widget _listPanel() => Column(children: [
-    Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-      child: TextField(
-        decoration: const InputDecoration(
-          hintText: 'Search groups…',
-          prefixIcon: Icon(Icons.search),
-          isDense: true,
-        ),
-        onChanged: (v) => setState(() => _search = v.toLowerCase()),
+  Widget _listPanel() {
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
+    return Column(children: [
+      Container(
+        color: AppColors.surface,
+        padding: const EdgeInsets.all(16),
+        child: Row(children: [
+          const Expanded(child: Text('Tax Groups',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary))),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.only(right: 4),
+              child: SizedBox(width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+          IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _load, tooltip: 'Refresh'),
+          if (_canAdd && !offline)
+            FilledButton.icon(
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Add'),
+              onPressed: _openAdd,
+            ),
+        ]),
       ),
-    ),
-    if (_error != null) Padding(
-      padding: const EdgeInsets.all(12),
-      child: Row(children: [
-        Expanded(child: Text(_error!, style: const TextStyle(color: AppColors.negative))),
-        TextButton(onPressed: _load, child: const Text('Retry')),
-      ]),
-    ),
-    Expanded(child: _loading
-        ? const Center(child: CircularProgressIndicator())
-        : _buildList()),
-  ]);
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+        child: SakalFieldCard(
+          label: 'Search',
+          editable: true,
+          child: TextField(
+            style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+            decoration: SakalFieldCard.bareDecoration.copyWith(
+              hintText: 'Search groups…',
+              hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+              prefixIcon: const Icon(Icons.search, size: 16),
+            ),
+            onChanged: (v) => setState(() => _search = v.toLowerCase()),
+          ),
+        ),
+      ),
+      const Divider(height: 1, color: AppColors.border),
+      if (_error != null) Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(children: [
+          Expanded(child: Text(_error!, style: const TextStyle(color: AppColors.negative))),
+          TextButton(onPressed: _load, child: const Text('Retry')),
+        ]),
+      ),
+      Expanded(child: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _buildList()),
+    ]);
+  }
 
   Widget _buildList() {
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
@@ -362,44 +374,61 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
     }).toList();
 
     if (filtered.isEmpty) {
-      return Center(child: Text(_search.isEmpty ? 'No tax groups configured.' : 'No results.'));
+      return Center(child: Text(_search.isEmpty ? 'No tax groups configured.' : 'No results.',
+          style: const TextStyle(color: AppColors.textSecondary)));
     }
 
     return ListView.builder(
       itemCount: filtered.length,
       itemBuilder: (ctx, i) {
         final g = filtered[i];
-        final selected = _editing?.id == g.id && _panelMode == 'edit';
-        return ListTile(
-          selected: selected,
-          selectedTileColor: AppColors.primary.withValues(alpha: 0.08),
-          leading: CircleAvatar(
-            radius: 18,
-            backgroundColor: g.isActive ? AppColors.secondary : Colors.grey.shade300,
-            child: Text(g.groupCode.substring(0, g.groupCode.length > 2 ? 2 : g.groupCode.length),
-              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+        final isSelected = _editing?.id == g.id && _panelMode == 'edit';
+        final isInactive = !g.isActive;
+        return InkWell(
+          onTap: (_canEdit && !offline) ? () => _openEdit(g) : null,
+          child: Container(
+            color: isSelected
+                ? ThemePresetConfig.all[ref.watch(themePresetProvider)]!.accent.withValues(alpha: 0.15)
+                : (isInactive ? const Color(0xFFF9FAFB) : null),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: g.isActive ? AppColors.secondary : Colors.grey.shade300,
+                child: Text(g.groupCode.substring(0, g.groupCode.length > 2 ? 2 : g.groupCode.length),
+                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(g.groupName, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                    color: isInactive ? AppColors.textDisabled : AppColors.textPrimary)),
+                Row(children: [
+                  Text(g.applicableOn, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                  if (isInactive) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(4)),
+                      child: const Text('Inactive', style: TextStyle(fontSize: 10, color: Colors.deepOrange)),
+                    ),
+                  ],
+                ]),
+              ])),
+              PopupMenuButton<String>(
+                onSelected: (v) {
+                  if (v == 'edit') _openEdit(g);
+                  if (v == 'delete') _deleteGroup(g);
+                },
+                itemBuilder: (_) => [
+                  if (_canEdit && !offline) const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                  if (_canEdit && !offline) const PopupMenuItem(value: 'delete',
+                      child: Text('Delete', style: TextStyle(color: AppColors.negative))),
+                ],
+              ),
+            ]),
           ),
-          title: Text(g.groupName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-          subtitle: Row(children: [
-            Text('${g.applicableOn}  ', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-            if (!g.isActive) Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(4)),
-              child: const Text('Inactive', style: TextStyle(fontSize: 10, color: Colors.deepOrange)),
-            ),
-          ]),
-          trailing: PopupMenuButton<String>(
-            onSelected: (v) {
-              if (v == 'edit') _openEdit(g);
-              if (v == 'delete') _deleteGroup(g);
-            },
-            itemBuilder: (_) => [
-              if (_canEdit && !offline) const PopupMenuItem(value: 'edit', child: Text('Edit')),
-              if (_canEdit && !offline) const PopupMenuItem(value: 'delete',
-                  child: Text('Delete', style: TextStyle(color: AppColors.negative))),
-            ],
-          ),
-          onTap: _canEdit && !offline ? () => _openEdit(g) : null,
         );
       },
     );
@@ -407,110 +436,164 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
 
   // ── Form Panel ────────────────────────────────────────────────────────────────
 
+  Widget _formTitleBlock(bool isEdit) => Text(
+      isEdit ? 'Edit Tax Group' : 'New Tax Group',
+      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
+          color: AppColors.textPrimary));
+
+  Widget _formCloseButton() => IconButton(
+      icon: const Icon(Icons.close, size: 18),
+      onPressed: _closePanel);
+
+  Widget _formActionButtons(bool isEdit) {
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
+    return Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+      if (isEdit ? _canEdit : _canAdd)
+        FilledButton(
+          onPressed: (_saving || offline) ? null : _saveGroup,
+          child: _saving
+              ? const SizedBox(width: 18, height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : Text(isEdit ? 'Update Group' : 'Save Group'),
+        ),
+    ]);
+  }
+
   Widget _formPanel() {
     final isEdit = _panelMode == 'edit';
-    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Form(
-        key: _formKey,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Header
-          Row(children: [
-            Expanded(child: Text(isEdit ? 'Edit Tax Group' : 'New Tax Group',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
-            if (Responsive.isMobile(context))
-              IconButton(icon: const Icon(Icons.close), onPressed: _closePanel),
-          ]),
-          const SizedBox(height: 20),
+    final mobile = Responsive.isMobile(context);
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final fieldStyle = SakalFieldCard.valueTextStyle(isCompact);
+    InputDecoration bare({String? hint}) => hint == null
+        ? SakalFieldCard.bareDecoration
+        : SakalFieldCard.bareDecoration.copyWith(
+            hintText: hint,
+            hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+          );
 
-          // Code + Name
-          Row(children: [
-            SizedBox(width: 160,
-              child: TextFormField(
-                controller: _codeCtrl,
-                textCapitalization: TextCapitalization.characters,
-                enabled: !isEdit,
-                decoration: const InputDecoration(labelText: 'Group Code *'),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: TextFormField(
-              controller: _nameCtrl,
-              decoration: const InputDecoration(labelText: 'Group Name *'),
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-            )),
-          ]),
-          const SizedBox(height: 14),
-
-          // Applicable On
-          Text('Applicable On', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
-          const SizedBox(height: 6),
-          SegmentedButton<String>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: 'SALES',    label: Text('Sales')),
-              ButtonSegment(value: 'PURCHASE', label: Text('Purchase')),
-              ButtonSegment(value: 'BOTH',     label: Text('Both')),
-            ],
-            selected: {_selApplicable},
-            onSelectionChanged: (s) => setState(() => _selApplicable = s.first),
-          ),
-          const SizedBox(height: 14),
-
-          // Description
-          TextFormField(
-            controller: _descCtrl,
-            maxLines: 2,
-            decoration: const InputDecoration(labelText: 'Description'),
-          ),
-          const SizedBox(height: 14),
-
-          // Sort + Active
-          Row(children: [
-            SizedBox(width: 100,
-              child: TextFormField(
-                controller: _sortCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Sort Order'),
-              ),
-            ),
-            const SizedBox(width: 20),
-            Switch(
-              value: _formActive,
-              onChanged: (v) => setState(() => _formActive = v),
-              thumbColor: WidgetStateProperty.resolveWith((s) =>
-                  s.contains(WidgetState.selected) ? Colors.white : Colors.grey.shade400),
-              trackColor: WidgetStateProperty.resolveWith((s) =>
-                  s.contains(WidgetState.selected) ? AppColors.primary : AppColors.surfaceVariant),
-              trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
-            ),
-            const SizedBox(width: 8),
-            const Text('Active', style: TextStyle(fontSize: 14)),
-          ]),
-          const SizedBox(height: 24),
-
-          // Save / Cancel
-          Row(children: [
-            FilledButton(
-              onPressed: (_saving || offline) ? null : _saveGroup,
-              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-              child: _saving
-                  ? const SizedBox(width: 18, height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : Text(isEdit ? 'Update Group' : 'Save Group'),
-            ),
-            const SizedBox(width: 12),
-            TextButton(onPressed: _closePanel, child: const Text('Cancel')),
-          ]),
-
-          // Members section
-          const SizedBox(height: 28),
-          _membersSection(),
-        ]),
+    return Column(children: [
+      Container(
+        color: AppColors.surface,
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+        child: mobile
+            ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Expanded(child: _formTitleBlock(isEdit)),
+                  _formCloseButton(),
+                ]),
+                const SizedBox(height: 10),
+                _formActionButtons(isEdit),
+              ])
+            : Row(children: [
+                Expanded(child: _formTitleBlock(isEdit)),
+                _formActionButtons(isEdit),
+                const SizedBox(width: 8),
+                _formCloseButton(),
+              ]),
       ),
-    );
+      const Divider(height: 1, color: AppColors.border),
+      Expanded(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              // Code + Name — Group Code is only editable while adding
+              // (locked once a group exists, same as the pre-conversion
+              // `enabled: !isEdit`), so it renders as a plain read-only
+              // value on Edit rather than a disabled text field.
+              SakalFieldRow(isMobile: mobile, spans: const [4, 8], children: [
+                isEdit
+                    ? SakalFieldCard.readOnly(label: 'Group Code', value: _codeCtrl.text)
+                    : SakalFieldCard(
+                        label: 'Group Code',
+                        required: true,
+                        editable: true,
+                        child: TextFormField(
+                          controller: _codeCtrl,
+                          textCapitalization: TextCapitalization.characters,
+                          style: fieldStyle,
+                          decoration: bare(),
+                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                        ),
+                      ),
+                SakalFieldCard(
+                  label: 'Group Name',
+                  required: true,
+                  editable: true,
+                  child: TextFormField(
+                    controller: _nameCtrl,
+                    style: fieldStyle,
+                    decoration: bare(),
+                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 14),
+
+              // Applicable On — a 3-way toggle, not a text field/dropdown,
+              // so it stays a plain SegmentedButton (already theme-reactive
+              // app-wide per the design system) with a label styled to
+              // match SakalFieldCard's own label typography.
+              const Text('APPLICABLE ON', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6, color: AppColors.textSecondary)),
+              const SizedBox(height: 6),
+              SegmentedButton<String>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: 'SALES',    label: Text('Sales')),
+                  ButtonSegment(value: 'PURCHASE', label: Text('Purchase')),
+                  ButtonSegment(value: 'BOTH',     label: Text('Both')),
+                ],
+                selected: {_selApplicable},
+                onSelectionChanged: (s) => setState(() => _selApplicable = s.first),
+              ),
+              const SizedBox(height: 14),
+
+              SakalFieldCard(
+                label: 'Description',
+                editable: true,
+                height: 70,
+                child: TextFormField(
+                  controller: _descCtrl,
+                  maxLines: 2,
+                  style: fieldStyle,
+                  decoration: bare(),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              SakalFieldCard(
+                label: 'Sort Order',
+                editable: true,
+                numeric: true,
+                child: TextFormField(
+                  controller: _sortCtrl,
+                  textAlign: TextAlign.right,
+                  keyboardType: TextInputType.number,
+                  style: fieldStyle,
+                  decoration: bare(),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              SwitchListTile.adaptive(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Active', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                value: _formActive,
+                activeThumbColor: AppColors.positive,
+                onChanged: (v) => setState(() => _formActive = v),
+              ),
+
+              // Members section
+              const SizedBox(height: 20),
+              _membersSection(),
+            ]),
+          ),
+        ),
+      ),
+    ]);
   }
 
   // ── Members Section ────────────────────────────────────────────────────────────
@@ -540,8 +623,9 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
       if (_members.isNotEmpty) ReorderableListView(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        onReorderItem: (oldIndex, newIndex) {
+        onReorder: (oldIndex, newIndex) {
           setState(() {
+            if (oldIndex < newIndex) newIndex -= 1;
             final item = _members.removeAt(oldIndex);
             _members.insert(newIndex, item);
             _renumber();
