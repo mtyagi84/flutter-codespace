@@ -22,12 +22,13 @@ class SakalTableHeaderBar extends ConsumerWidget {
   final List<Widget> cells;
   const SakalTableHeaderBar({super.key, required this.cells});
 
-  static Widget label(String text) => Padding(
+  static Widget label(String text, {TextAlign textAlign = TextAlign.left}) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
         child: Text(
           text.toUpperCase(),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
+          textAlign: textAlign,
           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 10.5, letterSpacing: 0.5),
         ),
       );
