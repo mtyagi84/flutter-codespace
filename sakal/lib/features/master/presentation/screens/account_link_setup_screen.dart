@@ -10,9 +10,9 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_adaptive_list.dart';
 
 /// Lists the seeded account-link types (Sales Account, Stock Account,
 /// Purchase Accrual Account…) and the granularity each is currently
@@ -137,89 +137,71 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
 
   @override
   Widget build(BuildContext context) {
-    final offline  = ref.watch(sessionProvider)?.offlineMode ?? false;
-    final isMobile = Responsive.isMobile(context);
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(isMobile ? 16 : 32),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1000),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Account Link Setup',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-              const SizedBox(height: 4),
-              const Text(
-                  'GL account determination — decide which account each posting type uses '
-                  '(company-wide, by category, by location, or per item).',
-                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-              const SizedBox(height: 20),
+    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Account Link Setup',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+            const SizedBox(height: 4),
+            const Text(
+                'GL account determination — decide which account each posting type uses '
+                '(company-wide, by category, by location, or per item).',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          ]),
+        ),
+        const SizedBox(height: 16),
 
-              if (offline) const OfflineBanner(),
-              if (offline) const SizedBox(height: 16),
+        if (offline) const OfflineBanner(),
 
-              if (_error != null) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.negative.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.negative.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(children: [
-                    const Icon(Icons.error_outline, color: AppColors.negative, size: 18),
-                    const SizedBox(width: 10),
-                    Expanded(child: Text(_error!, style: const TextStyle(fontSize: 13, color: AppColors.negative))),
-                    TextButton(onPressed: _load, child: const Text('Retry')),
-                  ]),
-                ),
-                const SizedBox(height: 20),
-              ],
-
-              Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: _loading
-                    ? const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()))
-                    : isMobile
-                        ? Column(children: _types.map((t) => _buildMobileCard(t, offline)).toList())
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildTableHeader(),
-                              const Divider(height: 1),
-                              ..._types.asMap().entries.map((e) => _buildRow(e.value, e.key.isEven)),
-                            ],
-                          ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.negative.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.negative.withValues(alpha: 0.3)),
               ),
+              child: Row(children: [
+                const Icon(Icons.error_outline, color: AppColors.negative, size: 18),
+                const SizedBox(width: 10),
+                Expanded(child: Text(_error!, style: const TextStyle(fontSize: 13, color: AppColors.negative))),
+                TextButton(onPressed: _load, child: const Text('Retry')),
+              ]),
+            ),
+          ),
+
+        Expanded(
+          child: SakalAdaptiveList<Map<String, dynamic>>(
+            loading: _loading,
+            error: null,
+            rows: _types,
+            columns: const [
+              SakalListColumn('Account Type', flex: 3),
+              SakalListColumn('Level', flex: 2),
+              SakalListColumn('Configured', flex: 2),
+              SakalListColumn('', flex: 1),
             ],
+            rowBuilder: (t, i) => _buildRow(t, offline),
+            cardBuilder: (t) => _buildMobileCard(t, offline),
+            emptyState: const Center(child: Text('No account link types found.',
+                style: TextStyle(color: AppColors.textSecondary))),
           ),
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildTableHeader() => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-    decoration: const BoxDecoration(
-      color: AppColors.surfaceVariant,
-      borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-    ),
-    child: const Row(children: [
-      Expanded(flex: 3, child: _HCol('Account Type')),
-      Expanded(flex: 2, child: _HCol('Level')),
-      Expanded(flex: 2, child: _HCol('Configured')),
-      SizedBox(width: 100, child: _HCol('Actions')),
-    ]),
-  );
-
-  Widget _buildRow(Map<String, dynamic> type, bool isEven) {
+  Widget _buildRow(Map<String, dynamic> type, bool offline) {
     final level  = _levelByType[type['id']];
     final count  = _countByType[type['id']] ?? 0;
-    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
-    return Container(
-      color: isEven ? Colors.transparent : AppColors.surfaceVariant.withValues(alpha: 0.35),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -227,24 +209,30 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
           Expanded(
             flex: 2,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: _levelColor(level).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: _levelColor(level).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(_levelLabel(level),
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _levelColor(level))),
               ),
-              child: Text(_levelLabel(level),
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _levelColor(level))),
             ),
           ),
           Expanded(flex: 2, child: Text(
               level == null ? '—' : (level == 'COMPANY' ? (count > 0 ? '1 account' : '—') : '$count assigned'),
               style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
-          SizedBox(
-            width: 100,
-            child: TextButton(
-              onPressed: (canEdit && !offline) ? () => _openConfigure(type) : null,
-              child: const Text('Configure'),
+          Expanded(
+            flex: 1,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: (canEdit && !offline) ? () => _openConfigure(type) : null,
+                child: const Text('Configure'),
+              ),
             ),
           ),
         ],
@@ -292,12 +280,4 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
       ]),
     );
   }
-}
-
-class _HCol extends StatelessWidget {
-  final String text;
-  const _HCol(this.text);
-  @override
-  Widget build(BuildContext context) => Text(text,
-      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 0.3));
 }

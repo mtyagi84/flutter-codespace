@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
@@ -13,6 +14,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../data/models/item_category_model.dart';
 import '../providers/item_categories_providers.dart';
 
@@ -273,7 +275,8 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(children: [
-                IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.of(context).maybePop()),
+                if (context.canPop())
+                  IconButton(icon: const Icon(Icons.arrow_back), tooltip: 'Back', onPressed: () => context.pop()),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Column(
@@ -383,6 +386,9 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
 
   String _displayAccount(Map<String, dynamic> a) => '[${a['account_code']}] ${a['account_name']}';
 
+  // Account Picker convention app-wide: [code] name, search code OR name,
+  // SakalAutocomplete (not a raw Autocomplete) for Up/Down/Enter keyboard
+  // navigation -- same widget Sales Invoice's Customer picker uses.
   Widget _accountAutocomplete({
     required List<Map<String, dynamic>> accounts,
     required String? currentAccountId,
@@ -391,52 +397,21 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
   }) {
     final matches  = accounts.where((a) => a['id'] == currentAccountId).toList();
     final selected = matches.isNotEmpty ? matches.first : null;
-    return Autocomplete<Map<String, dynamic>>(
+    return SakalAutocomplete<Map<String, dynamic>>(
       key: ValueKey(currentAccountId ?? 'none'),
       initialValue: TextEditingValue(text: selected != null ? _displayAccount(selected) : ''),
+      enabled: enabled,
+      displayStringForOption: _displayAccount,
       optionsBuilder: (v) {
         final q = v.text.toLowerCase().trim();
-        final filtered = q.isEmpty
-            ? accounts
-            : accounts.where((a) =>
-                (a['account_code'] as String? ?? '').toLowerCase().contains(q) ||
-                (a['account_name']  as String? ?? '').toLowerCase().contains(q));
-        return filtered.take(50);
+        if (q.isEmpty) return accounts.take(50);
+        return accounts.where((a) =>
+            (a['account_code'] as String? ?? '').toLowerCase().contains(q) ||
+            (a['account_name']  as String? ?? '').toLowerCase().contains(q)).take(50);
       },
-      displayStringForOption: _displayAccount,
-      fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-        controller: textCtrl,
-        focusNode: focusNode,
-        enabled: enabled,
-        decoration: const InputDecoration(labelText: 'Account', prefixIcon: Icon(Icons.account_balance_outlined)),
-        style: const TextStyle(fontSize: 13),
-      ),
       onSelected: (a) => onPicked(a['id'] as String),
-      optionsViewBuilder: (context, onSel, options) => Align(
-        alignment: Alignment.topLeft,
-        child: Material(
-          elevation: 4,
-          borderRadius: BorderRadius.circular(4),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 240, maxWidth: 460),
-            child: ListView.builder(
-              padding: EdgeInsets.zero,
-              shrinkWrap: true,
-              itemCount: options.length,
-              itemBuilder: (context, idx) {
-                final a = options.elementAt(idx);
-                return InkWell(
-                  onTap: () => onSel(a),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    child: Text(_displayAccount(a), style: const TextStyle(fontSize: 13)),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      ),
+      decoration: const InputDecoration(labelText: 'Account', prefixIcon: Icon(Icons.account_balance_outlined)),
+      style: const TextStyle(fontSize: 13),
     );
   }
 
@@ -629,7 +604,8 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
     );
   }
 
-  Widget _productAutocomplete(bool offline) => Autocomplete<Map<String, dynamic>>(
+  Widget _productAutocomplete(bool offline) => SakalAutocomplete<Map<String, dynamic>>(
+    enabled: canEdit && !offline && !_busy,
     displayStringForOption: (p) => '${p['product_code']} — ${p['product_name']}',
     optionsBuilder: (v) {
       final q = v.text.toLowerCase().trim();
@@ -639,37 +615,7 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
           (p['product_name'] as String? ?? '').toLowerCase().contains(q)).take(50);
     },
     onSelected: (p) => setState(() => _pendingKeyId = p['id'] as String),
-    fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-      controller: textCtrl,
-      focusNode: focusNode,
-      enabled: canEdit && !offline && !_busy,
-      decoration: const InputDecoration(labelText: 'Item', prefixIcon: Icon(Icons.inventory_2_outlined)),
-      style: const TextStyle(fontSize: 13),
-    ),
-    optionsViewBuilder: (context, onSel, options) => Align(
-      alignment: Alignment.topLeft,
-      child: Material(
-        elevation: 4,
-        borderRadius: BorderRadius.circular(4),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 240, maxWidth: 400),
-          child: ListView.builder(
-            padding: EdgeInsets.zero,
-            shrinkWrap: true,
-            itemCount: options.length,
-            itemBuilder: (context, idx) {
-              final p = options.elementAt(idx);
-              return InkWell(
-                onTap: () => onSel(p),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Text('${p['product_code']} — ${p['product_name']}', style: const TextStyle(fontSize: 13)),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    ),
+    decoration: const InputDecoration(labelText: 'Item', prefixIcon: Icon(Icons.inventory_2_outlined)),
+    style: const TextStyle(fontSize: 13),
   );
 }
