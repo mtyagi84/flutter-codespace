@@ -4,9 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
+import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 
@@ -19,7 +21,10 @@ class SupplierMasterScreen extends ConsumerStatefulWidget {
   ConsumerState<SupplierMasterScreen> createState() => _SupplierMasterScreenState();
 }
 
-class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
+class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
+    with ScreenPermissionMixin<SupplierMasterScreen> {
+  @override String get screenName => RouteNames.supplierMaster;
+
   List<Map<String, dynamic>> _suppliers  = [];
   List<Map<String, dynamic>> _filtered   = [];
   List<Map<String, dynamic>> _currencies = [];
@@ -353,7 +358,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
         const Expanded(child: Text('Suppliers',
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary))),
-        if (!offline)
+        if (!offline && canAdd)
           FilledButton.icon(
             icon: const Icon(Icons.add, size: 16),
             label: const Text('Add'),
@@ -468,14 +473,14 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen> {
 
   Widget _formActionButtons(bool isAdd, Map<String, dynamic>? row, bool offline) =>
       Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-        if (!isAdd && row != null && !offline)
+        if (!isAdd && row != null && !offline && canEdit)
           TextButton.icon(
             icon: const Icon(Icons.delete_outline, size: 16),
             label: const Text('Delete'),
             style: TextButton.styleFrom(foregroundColor: AppColors.negative),
             onPressed: () => _delete(row['id'] as String),
           ),
-        if (!offline)
+        if (!offline && (isAdd ? canAdd : canEdit))
           FilledButton(
             onPressed: _saving ? null : _save,
             child: _saving

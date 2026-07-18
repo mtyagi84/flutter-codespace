@@ -48,7 +48,9 @@ begin
         (p_client_id, p_company_id, v_ad, 'AD-PDC', 'Period Close',              '/setup/period-close',            3, 'AD-SETG', 'System Setup', 0, true,  false, false),
         (p_client_id, p_company_id, v_ad, 'AD-BDC', 'Backdated Entry Control',   '/setup/backdated-entry-control', 4, 'AD-SETG', 'System Setup', 0, false, false, false),
         (p_client_id, p_company_id, v_ad, 'AD-PAYTERM', 'Payment Terms',         '/master/payment-terms',          5, 'AD-SETG', 'System Setup', 0, false, false, false),
-        (p_client_id, p_company_id, v_ad, 'AD-QIS', 'Quick Invoice Setup',       '/setup/quick-invoice-setup',      6, 'AD-SETG', 'System Setup', 0, false, false, false)
+        (p_client_id, p_company_id, v_ad, 'AD-QIS', 'Quick Invoice Setup',       '/setup/quick-invoice-setup',      6, 'AD-SETG', 'System Setup', 0, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-CUST', 'Customer Master',        '/master/customers',  0, 'AD-MSTG', 'Master Data', 2, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-SUPP', 'Supplier Master',        '/master/suppliers',  1, 'AD-MSTG', 'Master Data', 2, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set group_code      = excluded.group_code,
             group_name      = excluded.group_name,

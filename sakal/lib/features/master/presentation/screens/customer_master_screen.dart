@@ -4,9 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
+import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 
@@ -19,7 +21,10 @@ class CustomerMasterScreen extends ConsumerStatefulWidget {
   ConsumerState<CustomerMasterScreen> createState() => _CustomerMasterScreenState();
 }
 
-class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen> {
+class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
+    with ScreenPermissionMixin<CustomerMasterScreen> {
+  @override String get screenName => RouteNames.customerMaster;
+
   List<Map<String, dynamic>> _customers  = [];
   List<Map<String, dynamic>> _filtered   = [];
   List<Map<String, dynamic>> _currencies = [];
@@ -366,7 +371,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen> {
         const Expanded(child: Text('Customers',
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary))),
-        if (!offline)
+        if (!offline && canAdd)
           FilledButton.icon(
             icon: const Icon(Icons.add, size: 16),
             label: const Text('Add'),
@@ -489,21 +494,22 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen> {
 
   Widget _formActionButtons(bool isAdd, Map<String, dynamic>? row) =>
       Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-        if (!isAdd && row != null)
+        if (!isAdd && row != null && canEdit)
           TextButton.icon(
             icon: const Icon(Icons.delete_outline, size: 16),
             label: const Text('Delete'),
             style: TextButton.styleFrom(foregroundColor: AppColors.negative),
             onPressed: () => _delete(row['id'] as String),
           ),
-        FilledButton(
-          onPressed: _saving ? null : _save,
-          child: _saving
-              ? const SizedBox(width: 18, height: 18,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white))
-              : Text(isAdd ? 'Create Customer' : 'Save Changes'),
-        ),
+        if (isAdd ? canAdd : canEdit)
+          FilledButton(
+            onPressed: _saving ? null : _save,
+            child: _saving
+                ? const SizedBox(width: 18, height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : Text(isAdd ? 'Create Customer' : 'Save Changes'),
+          ),
       ]);
 
   Widget _formPanel() {
