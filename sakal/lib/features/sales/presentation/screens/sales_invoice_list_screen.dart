@@ -10,6 +10,7 @@ import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
 import '../providers/sales_invoice_providers.dart';
 
 class SalesInvoiceListScreen extends ConsumerStatefulWidget {
@@ -143,45 +144,56 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
         const Divider(height: 20),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-          child: Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            DropdownButton<String?>(
-              value: _filterSaleType,
-              hint: const Text('All Types', style: TextStyle(fontSize: 13)),
-              isDense: true,
-              underline: const SizedBox.shrink(),
-              items: const [
-                DropdownMenuItem(value: null, child: Text('All Types', style: TextStyle(fontSize: 13))),
-                DropdownMenuItem(value: 'CASH', child: Text('Cash', style: TextStyle(fontSize: 13))),
-                DropdownMenuItem(value: 'CREDIT', child: Text('Credit', style: TextStyle(fontSize: 13))),
-              ],
-              onChanged: (v) { setState(() => _filterSaleType = v); _load(); },
-            ),
-            DropdownButton<String?>(
-              value: _filterStatus,
-              hint: const Text('All Status', style: TextStyle(fontSize: 13)),
-              isDense: true,
-              underline: const SizedBox.shrink(),
-              items: [
-                const DropdownMenuItem(value: null, child: Text('All Status', style: TextStyle(fontSize: 13))),
-                ..._statusColors.keys.map((s) => DropdownMenuItem(value: s, child: Text(_statusLabel(s), style: const TextStyle(fontSize: 13)))),
-              ],
-              onChanged: (v) { setState(() => _filterStatus = v); _load(); },
+          child: Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            SizedBox(
+              width: 160,
+              child: SakalFieldCard(
+                label: 'Type', editable: true,
+                child: DropdownButtonFormField<String?>(
+                  initialValue: _filterSaleType,
+                  isExpanded: true, isDense: true, itemHeight: null,
+                  decoration: SakalFieldCard.bareDecoration,
+                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+                  items: const [
+                    DropdownMenuItem(value: null, child: Text('All Types')),
+                    DropdownMenuItem(value: 'CASH', child: Text('Cash')),
+                    DropdownMenuItem(value: 'CREDIT', child: Text('Credit')),
+                  ],
+                  onChanged: (v) { setState(() => _filterSaleType = v); _load(); },
+                ),
+              ),
             ),
             SizedBox(
-              width: 260, height: 36,
-              child: TextField(
-                controller: _searchCtrl,
-                style: const TextStyle(fontSize: 13),
-                decoration: InputDecoration(
-                  hintText: 'Search invoice no / customer…',
-                  hintStyle: const TextStyle(fontSize: 12),
-                  prefixIcon: const Icon(Icons.search, size: 16),
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
-                  suffixIcon: _searchText.isNotEmpty
-                      ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear)
-                      : null,
+              width: 160,
+              child: SakalFieldCard(
+                label: 'Status', editable: true,
+                child: DropdownButtonFormField<String?>(
+                  initialValue: _filterStatus,
+                  isExpanded: true, isDense: true, itemHeight: null,
+                  decoration: SakalFieldCard.bareDecoration,
+                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('All Status')),
+                    ..._statusColors.keys.map((s) => DropdownMenuItem(value: s, child: Text(_statusLabel(s)))),
+                  ],
+                  onChanged: (v) { setState(() => _filterStatus = v); _load(); },
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 280,
+              child: SakalFieldCard(
+                label: 'Search', editable: true,
+                child: TextField(
+                  controller: _searchCtrl,
+                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+                  decoration: SakalFieldCard.bareDecoration.copyWith(
+                    hintText: 'Invoice no / customer…',
+                    hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+                    suffixIcon: _searchText.isNotEmpty
+                        ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear, padding: EdgeInsets.zero, constraints: const BoxConstraints())
+                        : null,
+                  ),
                 ),
               ),
             ),

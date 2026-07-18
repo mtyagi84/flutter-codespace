@@ -10,6 +10,22 @@ import '../theme/theme_presets.dart';
 /// regardless of what's inside, instead of every screen hand-rolling its
 /// own `InputDecorator`/`TextFormField` border treatment.
 ///
+/// Three distinct visual states, not two — a real gap found live: every
+/// editable field's `child` uses [bareDecoration] (`InputBorder.none` on
+/// EVERY border state, including `focusedBorder`), so the inner
+/// TextFormField/SakalAutocomplete/DropdownButtonFormField has ZERO native
+/// focus feedback — the only border came from this card's own `editable`
+/// flag, identical whether the field was merely editABLE or actually the
+/// one currently being typed into, which a real user found genuinely
+/// confusing ("which field am I in?"). Fixed by tracking focus internally:
+/// [child] is wrapped in a non-focusable ancestor `Focus` node whose
+/// `hasFocus` becomes true whenever ANY descendant gains focus (Flutter's
+/// own documented `FocusNode.hasFocus` semantics: true for the node
+/// itself OR any node in the current primary focus's ancestor chain) —
+/// zero call-site changes needed, existing/implicit FocusNodes on the
+/// child widgets keep working exactly as before. Read-only < editable-
+/// idle < editable-focused, each visually distinct.
+///
 /// Density-aware by default: height follows the active
 /// [isCompactDensityProvider] setting (40px dense / 54px comfortable) so
 /// "Dense" mode compacts every field on a screen, not just literal
@@ -22,7 +38,7 @@ import '../theme/theme_presets.dart';
 /// once Flutter's actual line-height (never exactly the font-size number)
 /// was added in — dense mode needs the WHOLE stack to shrink, not just the
 /// outer box.
-class SakalFieldCard extends ConsumerWidget {
+class SakalFieldCard extends ConsumerStatefulWidget {
   final String label;
   final bool required;
   final bool editable;
@@ -85,49 +101,97 @@ class SakalFieldCard extends ConsumerWidget {
       );
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SakalFieldCard> createState() => _SakalFieldCardState();
+}
+
+class _SakalFieldCardState extends ConsumerState<SakalFieldCard> {
+  late final FocusNode _focusWithinNode;
+
+  @override
+  void initState() {
+    super.initState();
+    // canRequestFocus: false / skipTraversal: true — this node never
+    // becomes the primary focus itself; it exists purely as an ancestor
+    // marker so hasFocus reflects whatever descendant field currently has
+    // real focus.
+    _focusWithinNode = FocusNode(canRequestFocus: false, skipTraversal: true, debugLabel: 'SakalFieldCard(${widget.label})');
+    _focusWithinNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _focusWithinNode.removeListener(_onFocusChange);
+    _focusWithinNode.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isCompact = ref.watch(isCompactDensityProvider);
     final preset = ThemePresetConfig.all[ref.watch(themePresetProvider)]!;
-    final resolvedHeight = height ?? DensityMetrics.of(isCompact).rowHeight;
-    final borderColor = editable ? preset.secondary : AppColors.border;
+    final resolvedHeight = widget.height ?? DensityMetrics.of(isCompact).rowHeight;
+    final isFocused = widget.editable && _focusWithinNode.hasFocus;
     final labelFontSize = isCompact ? 8.5 : 10.0;
     final gap = isCompact ? 1.0 : 2.0;
     final vPad = isCompact ? 3.0 : 6.0;
 
-    final content = child ??
+    final Color borderColor;
+    final double borderWidth;
+    if (isFocused) {
+      borderColor = preset.secondary;
+      borderWidth = 2;
+    } else if (widget.editable) {
+      borderColor = AppColors.textDisabled;
+      borderWidth = 1;
+    } else {
+      borderColor = AppColors.border;
+      borderWidth = 1;
+    }
+
+    final content = widget.child ??
         Text(
-          value!,
+          widget.value!,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: valueTextStyle(isCompact),
+          style: SakalFieldCard.valueTextStyle(isCompact),
         );
 
-    return Container(
-      height: resolvedHeight,
-      padding: EdgeInsets.symmetric(horizontal: 12, vertical: vPad),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: borderColor, width: editable ? 1.4 : 1),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          RichText(
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            text: TextSpan(
-              text: label.toUpperCase(),
-              style: TextStyle(fontSize: labelFontSize, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: AppColors.textSecondary),
-              children: required
-                  ? const [TextSpan(text: ' *', style: TextStyle(color: AppColors.negative, fontWeight: FontWeight.w700))]
-                  : null,
+    return Focus(
+      focusNode: _focusWithinNode,
+      child: Container(
+        height: resolvedHeight,
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: vPad),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: borderColor, width: borderWidth),
+          boxShadow: isFocused
+              ? [BoxShadow(color: preset.secondary.withValues(alpha: 0.14), blurRadius: 0, spreadRadius: 3)]
+              : null,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            RichText(
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              text: TextSpan(
+                text: widget.label.toUpperCase(),
+                style: TextStyle(fontSize: labelFontSize, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: AppColors.textSecondary),
+                children: widget.required
+                    ? const [TextSpan(text: ' *', style: TextStyle(color: AppColors.negative, fontWeight: FontWeight.w700))]
+                    : null,
+              ),
             ),
-          ),
-          SizedBox(height: gap),
-          Expanded(child: Align(alignment: Alignment.centerLeft, child: content)),
-        ],
+            SizedBox(height: gap),
+            Expanded(child: Align(alignment: Alignment.centerLeft, child: content)),
+          ],
+        ),
       ),
     );
   }

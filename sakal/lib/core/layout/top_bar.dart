@@ -48,20 +48,35 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
             ? () => scaffoldKey?.currentState?.openDrawer()
             : () => ref.read(sidebarCollapsedProvider.notifier).state = !collapsed,
       ),
-      title: Row(
-        children: [
-          const Icon(Icons.business_outlined,
-              size: 15, color: AppColors.textSecondary),
-          const SizedBox(width: 6),
-          Text(
-            session?.companyName ?? '',
-            style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w500),
-          ),
-        ],
-      ),
+      // On mobile, `actions` alone (2 status indicators + density toggle +
+      // theme dropdown + the user popup, ~150-160px on its own) already
+      // claims most of a narrow AppBar's width — a real overflow was
+      // caught live on a 360px-wide screen because the company-name Text
+      // here was a bare Row child with no Flexible/ellipsis, rendering at
+      // its full natural width regardless of what was actually left.
+      // Simplest correct fix on mobile is to not compete for that space at
+      // all (the drawer/sidebar already carries company context there);
+      // desktop keeps the title but now truncates instead of overflowing.
+      title: mobile
+          ? null
+          : Row(
+              children: [
+                const Icon(Icons.business_outlined,
+                    size: 15, color: AppColors.textSecondary),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    session?.companyName ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
       actions: [
         const MasterDataSyncIndicator(),
         const SyncStatusIndicator(),
@@ -86,6 +101,7 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
               }
             },
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 CircleAvatar(
                   radius: 16,
@@ -101,13 +117,25 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  session?.fullName ?? '',
-                  style: const TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w500),
-                ),
+                // A longer name on a narrow screen is the same class of
+                // overflow the company-name title just had — bounded +
+                // ellipsis instead of an unconstrained Text, and hidden
+                // outright on mobile (same reasoning as the title: the
+                // AppBar has very little spare width there, and the
+                // popup's own dropdown already shows the full name).
+                if (!mobile)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 140),
+                    child: Text(
+                      session?.fullName ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ),
                 const SizedBox(width: 4),
                 const Icon(Icons.keyboard_arrow_down,
                     size: 18, color: AppColors.textSecondary),

@@ -226,6 +226,17 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
   final _collectedBaseCtrl = TextEditingController();
 
   List<_InvoiceLineRow> _lines = [];
+  // A row removed from _lines (single delete, or a whole-list replace on
+  // reload-after-save / mode-switch) is NEVER disposed at that moment —
+  // its widget (and FocusNode) can still be mounted for the rest of the
+  // CURRENT frame even after setState() schedules a rebuild, and disposing
+  // a still-attached FocusNode throws "used after being disposed" (a real,
+  // repeat crash). Deferring to a postFrameCallback was tried and still
+  // didn't reliably avoid it, so disposal is deferred further still — all
+  // the way to this screen's own dispose() — trading a few short-lived
+  // controllers/focus nodes staying alive slightly longer per edit session
+  // for a guaranteed-safe disposal point with zero timing assumptions.
+  final List<_InvoiceLineRow> _pendingRowDisposal = [];
   final List<_InvoiceChargeRow> _charges = [];
   List<Map<String, dynamic>> _additionalCharges = [];
 
@@ -285,6 +296,9 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     _collectedLocalCtrl.dispose();
     _collectedBaseCtrl.dispose();
     for (final l in _lines) {
+      l.dispose();
+    }
+    for (final l in _pendingRowDisposal) {
       l.dispose();
     }
     for (final c in _charges) {
@@ -508,9 +522,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     _baseReceiptVoucherDate = header['base_receipt_voucher_date'] as String?;
 
     final lines = await ds.getLines(clientId: session.clientId, companyId: session.companyId, invoiceNo: _invoiceNo!, invoiceDate: _fmtDate(_invoiceDate));
-    for (final l in _lines) {
-      l.dispose();
-    }
+    _pendingRowDisposal.addAll(_lines);
     _lines = lines.map(_lineRowFromMap).toList();
 
     await _prefillChargesFromSource(await ds.getCharges(
@@ -793,7 +805,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
 
   Future<void> _resetToDirect() async {
     setState(() => _loading = true);
-    for (final l in _lines) { l.dispose(); }
+    _pendingRowDisposal.addAll(_lines);
     _lines = [];
     for (final c in _charges) { c.dispose(); }
     _charges.clear();
@@ -813,7 +825,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
 
   Future<void> _switchToQuotation(Map<String, dynamic> picked) async {
     setState(() { _loading = true; _invoiceMode = 'AGAINST_QUOTATION'; });
-    for (final l in _lines) { l.dispose(); }
+    _pendingRowDisposal.addAll(_lines);
     _lines = [];
     final ds = ref.read(salesInvoiceRepositoryProvider);
     final session = ref.read(sessionProvider)!;
@@ -824,7 +836,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
 
   Future<void> _switchToOrder(Map<String, dynamic> picked) async {
     setState(() { _loading = true; _invoiceMode = 'AGAINST_ORDER'; });
-    for (final l in _lines) { l.dispose(); }
+    _pendingRowDisposal.addAll(_lines);
     _lines = [];
     final ds = ref.read(salesInvoiceRepositoryProvider);
     final session = ref.read(sessionProvider)!;
@@ -917,15 +929,10 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
       _lines.remove(row);
       if (_lines.isEmpty && !_isAgainstSource) _lines.add(_InvoiceLineRow());
     });
-    // Dispose AFTER this frame's rebuild, not inside the same setState —
-    // a real crash hit deleting the last/focused line: row.productFocusNode
-    // can still be attached to its (about-to-be-unmounted) TextField/
-    // RawAutocomplete for the remainder of THIS frame, and disposing a
-    // FocusNode while Flutter's focus system still holds a live reference
-    // to it throws "A FocusNode was used after being disposed." Waiting
-    // for the post-frame callback guarantees the widget has actually been
-    // unmounted (and detached its FocusNode) before we destroy it.
-    WidgetsBinding.instance.addPostFrameCallback((_) => row.dispose());
+    // See _pendingRowDisposal's own doc comment — never dispose a just-
+    // removed row synchronously (or even in "the next frame"); defer all
+    // the way to this screen's own dispose().
+    _pendingRowDisposal.add(row);
   }
 
   // ── Charges (DIRECT mode only — AGAINST_QUOTATION/AGAINST_ORDER show a
@@ -1361,6 +1368,33 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     if (collectedBase != null && collectedBase < 0) {
       _showSnack('Collected amount (base currency) cannot be negative.', color: AppColors.negative);
       return false;
+    }
+    // Collect Cash Immediately: a NONZERO but insufficient amount is a
+    // partial payment, which this fast-entry POS screen has no mechanism
+    // to track as a remaining balance — reject it outright rather than
+    // silently under-collecting. Zero (both fields blank/0) stays allowed
+    // — that's the documented "leave blank to defer" path, unrelated to
+    // this check. Each collected amount is converted back into the
+    // invoice's own currency (dividing by the same rate that produces
+    // base_amount/local_amount from it) before summing, since local and
+    // base collections are two different currencies that can't be added
+    // directly, and the invoice's own currency may be neither of them.
+    if (_collectCash) {
+      final rateToBase = double.tryParse(_rateToBaseCtrl.text) ?? 1;
+      final rateToLocal = double.tryParse(_rateToLocalCtrl.text) ?? 1;
+      final collectedInInvoiceCcy =
+          (rateToBase > 0 ? (collectedBase ?? 0) / rateToBase : 0) +
+          (rateToLocal > 0 ? (collectedLocal ?? 0) / rateToLocal : 0);
+      const tolerance = 0.01;
+      if (collectedInInvoiceCcy > tolerance && collectedInInvoiceCcy < _grandTotal - tolerance) {
+        _showSnack(
+          'Collected amount ($_invoiceCurrencyCode ${collectedInInvoiceCcy.toStringAsFixed(2)}) is less than the invoice total '
+          '($_invoiceCurrencyCode ${_grandTotal.toStringAsFixed(2)}). Partial collection is not accepted — collect the full '
+          'amount now or leave both fields blank to defer.',
+          color: AppColors.negative,
+        );
+        return false;
+      }
     }
 
     setState(() { _saving = true; _actionError = null; });
