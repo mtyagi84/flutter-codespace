@@ -18,6 +18,7 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../providers/finance_voucher_providers.dart';
 
 MenuFeature? _findFeature(List<MenuModule> modules, String screenPath) {
@@ -946,7 +947,7 @@ class _FinanceVoucherEntryScreenState
   }) {
     return SizedBox(
       height: height,
-      child: Autocomplete<Map<String, dynamic>>(
+      child: SakalAutocomplete<Map<String, dynamic>>(
         key: ValueKey(keyValue ?? selectedId ?? 'none'),
         initialValue: TextEditingValue(
           text: selectedId != null
@@ -963,54 +964,23 @@ class _FinanceVoucherEntryScreenState
           return filtered.take(50);
         },
         displayStringForOption: _displayAccount,
-        fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) =>
-            TextFormField(
-              controller: textCtrl,
-              focusNode: focusNode,
-              enabled: !locked,
-              onChanged: (v) { if (v.isEmpty) onCleared(); },
-              decoration: decoration,
-              style: const TextStyle(fontSize: 13),
-            ),
-        optionsViewBuilder: (context, onSel, options) => Align(
-          alignment: Alignment.topLeft,
-          child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(4),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 260),
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                shrinkWrap: true,
-                itemCount: options.length,
-                itemBuilder: (context, idx) {
-                  final a          = options.elementAt(idx);
-                  final parentName = _extractParentName(a);
-                  return InkWell(
-                    onTap: () => onSel(a),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(_displayAccount(a),
-                              style: const TextStyle(fontSize: 13)),
-                          if (parentName.isNotEmpty)
-                            Text(parentName,
-                                style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.textSecondary)),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ),
+        enabled: !locked,
+        onChanged: (v) { if (v.isEmpty) onCleared(); },
+        decoration: decoration,
+        style: const TextStyle(fontSize: 13),
+        optionBuilder: (context, a, isHighlighted) {
+          final parentName = _extractParentName(a);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_displayAccount(a), style: const TextStyle(fontSize: 13)),
+              if (parentName.isNotEmpty)
+                Text(parentName,
+                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+            ],
+          );
+        },
         onSelected: (a) { if (!locked) onSelected(a); },
       ),
     );

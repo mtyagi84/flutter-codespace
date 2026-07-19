@@ -15,6 +15,7 @@ import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../domain/repositories/stock_transfer_request_repository.dart';
 import '../providers/stock_transfer_request_providers.dart';
 
@@ -586,7 +587,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
                 child: Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
                   SizedBox(
                     width: 260,
-                    child: Autocomplete<Map<String, dynamic>>(
+                    child: SakalAutocomplete<Map<String, dynamic>>(
                       key: ValueKey('${row.hashCode}-${row.productDisplay}'),
                       initialValue: TextEditingValue(text: row.productDisplay),
                       displayStringForOption: (p) => '[${p['product_code']}] ${p['product_name']}',
@@ -596,33 +597,9 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
                         return _ds.getProductsForPicker(clientId: session.clientId, companyId: session.companyId, search: v.text);
                       },
                       onSelected: (p) => _onProductSelected(row, p),
-                      fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-                        controller: textCtrl, focusNode: focusNode, enabled: !locked,
-                        decoration: dec.copyWith(labelText: 'Product'),
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                      optionsViewBuilder: (context, onSel, opts) => Align(
-                        alignment: Alignment.topLeft,
-                        child: Material(
-                          elevation: 4, borderRadius: BorderRadius.circular(4),
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxHeight: 260, minWidth: 260),
-                            child: ListView.builder(
-                              padding: EdgeInsets.zero, shrinkWrap: true, itemCount: opts.length,
-                              itemBuilder: (context, idx) {
-                                final p = opts.elementAt(idx);
-                                return InkWell(
-                                  onTap: () => onSel(p),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    child: Text('[${p['product_code']}] ${p['product_name']}', style: const TextStyle(fontSize: 13)),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
+                      enabled: !locked,
+                      decoration: dec.copyWith(labelText: 'Product'),
+                      style: const TextStyle(fontSize: 13),
                     ),
                   ),
                   if (showBarcode) SizedBox(width: 140, height: 48, child: TextFormField(

@@ -12,6 +12,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
 
 class LocationGroupsScreen extends ConsumerStatefulWidget {
   const LocationGroupsScreen({super.key});
@@ -569,7 +570,7 @@ class _LocationGroupDialogState extends ConsumerState<_LocationGroupDialog> {
     final selected = matches.isNotEmpty ? matches.first : null;
     return SizedBox(
       height: 56,
-      child: Autocomplete<Map<String, dynamic>>(
+      child: SakalAutocomplete<Map<String, dynamic>>(
         key: ValueKey(selectedId ?? 'none-$label'),
         initialValue: TextEditingValue(text: selected != null ? _displayAccount(selected) : ''),
         optionsBuilder: (v) {
@@ -582,39 +583,10 @@ class _LocationGroupDialogState extends ConsumerState<_LocationGroupDialog> {
           return filtered.take(50);
         },
         displayStringForOption: _displayAccount,
-        fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-          controller: textCtrl,
-          focusNode: focusNode,
-          onChanged: (v) { if (v.isEmpty) onSelected(null); },
-          decoration: InputDecoration(labelText: label, prefixIcon: const Icon(Icons.account_balance_outlined)),
-          style: const TextStyle(fontSize: 13),
-        ),
+        onChanged: (v) { if (v.isEmpty) onSelected(null); },
+        decoration: InputDecoration(labelText: label, prefixIcon: const Icon(Icons.account_balance_outlined)),
+        style: const TextStyle(fontSize: 13),
         onSelected: (a) => onSelected(a['id'] as String?),
-        optionsViewBuilder: (context, onSel, options) => Align(
-          alignment: Alignment.topLeft,
-          child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(4),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 240, maxWidth: 460),
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                shrinkWrap: true,
-                itemCount: options.length,
-                itemBuilder: (context, idx) {
-                  final a = options.elementAt(idx);
-                  return InkWell(
-                    onTap: () => onSel(a),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      child: Text(_displayAccount(a), style: const TextStyle(fontSize: 13)),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

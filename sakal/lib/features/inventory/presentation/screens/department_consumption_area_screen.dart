@@ -7,6 +7,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../domain/repositories/department_consumption_area_repository.dart';
 import '../providers/department_consumption_area_providers.dart';
 
@@ -284,7 +285,7 @@ class _DepartmentConsumptionAreaScreenState extends ConsumerState<DepartmentCons
             SizedBox(
               width: 280,
               child: accountsAsync.when(
-                data: (accounts) => Autocomplete<Map<String, dynamic>>(
+                data: (accounts) => SakalAutocomplete<Map<String, dynamic>>(
                   key: ValueKey('${row.hashCode}-${row.accountDisplay}'),
                   initialValue: TextEditingValue(text: row.accountDisplay),
                   displayStringForOption: (a) => '[${a['account_code']}] ${a['account_name']}',
@@ -299,42 +300,18 @@ class _DepartmentConsumptionAreaScreenState extends ConsumerState<DepartmentCons
                     row.accountId = a['id'] as String;
                     row.accountDisplay = '[${a['account_code']}] ${a['account_name']}';
                   }),
-                  fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-                    controller: textCtrl, focusNode: focusNode, enabled: canEdit,
-                    decoration: dec.copyWith(labelText: 'Expense Account'),
-                    style: const TextStyle(fontSize: 13),
-                  ),
-                  optionsViewBuilder: (context, onSel, opts) => Align(
-                    alignment: Alignment.topLeft,
-                    child: Material(
-                      elevation: 4,
-                      borderRadius: BorderRadius.circular(4),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 260, minWidth: 260),
-                        child: ListView.builder(
-                          padding: EdgeInsets.zero,
-                          shrinkWrap: true,
-                          itemCount: opts.length,
-                          itemBuilder: (context, idx) {
-                            final a = opts.elementAt(idx);
-                            final parentRaw = a['parent'];
-                            final parent = parentRaw is Map<String, dynamic> ? parentRaw : null;
-                            return InkWell(
-                              onTap: () => onSel(a),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                  Text('[${a['account_code']}] ${a['account_name']}', style: const TextStyle(fontSize: 13)),
-                                  if (parent?['account_name'] != null)
-                                    Text(parent!['account_name'] as String, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                                ]),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
+                  enabled: canEdit,
+                  decoration: dec.copyWith(labelText: 'Expense Account'),
+                  style: const TextStyle(fontSize: 13),
+                  optionBuilder: (context, a, isHighlighted) {
+                    final parentRaw = a['parent'];
+                    final parent = parentRaw is Map<String, dynamic> ? parentRaw : null;
+                    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('[${a['account_code']}] ${a['account_name']}', style: const TextStyle(fontSize: 13)),
+                      if (parent?['account_name'] != null)
+                        Text(parent!['account_name'] as String, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                    ]);
+                  },
                 ),
                 loading: () => const SizedBox(height: 48, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
                 error: (e, _) => Text('Could not load accounts: $e'),

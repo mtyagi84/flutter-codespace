@@ -8,6 +8,7 @@ import '../../../../core/network/dio_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
 
 /// Quick Invoice Setup — per-user cash-sale defaults (088_quick_invoice_config.sql:
 /// ric_user_quick_invoice_setup). Admin-facing, same "pick a user, edit their
@@ -356,7 +357,7 @@ class _QuickInvoiceSetupScreenState extends ConsumerState<QuickInvoiceSetupScree
         child: Text(display.isEmpty ? '—' : display, style: const TextStyle(fontSize: 13)),
       );
     }
-    return Autocomplete<Map<String, dynamic>>(
+    return SakalAutocomplete<Map<String, dynamic>>(
       initialValue: TextEditingValue(text: display),
       displayStringForOption: (a) => '[${a['account_code']}] ${a['account_name']}',
       optionsBuilder: (v) async {
@@ -371,33 +372,8 @@ class _QuickInvoiceSetupScreenState extends ConsumerState<QuickInvoiceSetupScree
             (a['account_name'] as String).toLowerCase().contains(q));
       },
       onSelected: onSelected,
-      fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-        controller: textCtrl, focusNode: focusNode,
-        decoration: InputDecoration(label: required ? _req(label) : Text(label), border: const OutlineInputBorder()),
-        style: const TextStyle(fontSize: 13),
-      ),
-      optionsViewBuilder: (context, onSel, opts) => Align(
-        alignment: Alignment.topLeft,
-        child: Material(
-          elevation: 4, borderRadius: BorderRadius.circular(4),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 260, minWidth: 280),
-            child: ListView.builder(
-              padding: EdgeInsets.zero, shrinkWrap: true, itemCount: opts.length,
-              itemBuilder: (context, idx) {
-                final a = opts.elementAt(idx);
-                return InkWell(
-                  onTap: () => onSel(a),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    child: Text('[${a['account_code']}] ${a['account_name']}', style: const TextStyle(fontSize: 13)),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      ),
+      decoration: InputDecoration(label: required ? _req(label) : Text(label), border: const OutlineInputBorder()),
+      style: const TextStyle(fontSize: 13),
     );
   }
 }

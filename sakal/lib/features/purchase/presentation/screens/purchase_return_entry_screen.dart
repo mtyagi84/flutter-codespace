@@ -15,6 +15,7 @@ import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../domain/repositories/purchase_return_repository.dart';
 import '../providers/purchase_return_providers.dart';
 
@@ -1094,7 +1095,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
           Builder(builder: (_) {
             final f1 = SizedBox(
               height: fh,
-              child: Autocomplete<Map<String, dynamic>>(
+              child: SakalAutocomplete<Map<String, dynamic>>(
                 key: ValueKey(_supplierDisplay ?? ''),
                 initialValue: TextEditingValue(text: _supplierDisplay ?? ''),
                 displayStringForOption: (s) => '[${s['account_code']}] ${s['account_name']}',
@@ -1106,38 +1107,11 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
                       (s['account_name'] as String? ?? '').toLowerCase().contains(q));
                 },
                 onSelected: (s) => _onSupplierSelected(s),
-                fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-                  controller: textCtrl, focusNode: focusNode, enabled: !supplierLocked,
-                  decoration: dec.copyWith(label: _req('Supplier'),
-                      helperText: supplierLocked && !locked ? 'Locked once a GRN is picked' : null,
-                      helperStyle: const TextStyle(fontSize: 10)),
-                  style: const TextStyle(fontSize: 13),
-                ),
-                optionsViewBuilder: (context, onSel, opts) => Align(
-                  alignment: Alignment.topLeft,
-                  child: Material(
-                    elevation: 4,
-                    borderRadius: BorderRadius.circular(4),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 260, minWidth: 260),
-                      child: ListView.builder(
-                        padding: EdgeInsets.zero,
-                        shrinkWrap: true,
-                        itemCount: opts.length,
-                        itemBuilder: (context, idx) {
-                          final s = opts.elementAt(idx);
-                          return InkWell(
-                            onTap: () => onSel(s),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              child: Text('[${s['account_code']}] ${s['account_name']}', style: const TextStyle(fontSize: 13)),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ),
+                enabled: !supplierLocked,
+                decoration: dec.copyWith(label: _req('Supplier'),
+                    helperText: supplierLocked && !locked ? 'Locked once a GRN is picked' : null,
+                    helperStyle: const TextStyle(fontSize: 10)),
+                style: const TextStyle(fontSize: 13),
               ),
             );
             final f2 = field(InputDecorator(

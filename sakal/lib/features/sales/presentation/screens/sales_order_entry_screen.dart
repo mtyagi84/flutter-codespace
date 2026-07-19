@@ -16,6 +16,7 @@ import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../domain/repositories/sales_order_repository.dart';
 import '../providers/sales_order_providers.dart';
 import '../widgets/prospect_conversion_dialog.dart';
@@ -1316,7 +1317,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
                 child: Text(_displayDate(_orderDate), style: const TextStyle(fontSize: 13)),
               ),
             ));
-            final f3 = field(Autocomplete<Map<String, dynamic>>(
+            final f3 = field(SakalAutocomplete<Map<String, dynamic>>(
               initialValue: TextEditingValue(text: _salesPersonDisplay),
               displayStringForOption: (u) => u['full_name'] as String,
               optionsBuilder: (v) {
@@ -1326,11 +1327,9 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
                 return _users.where((u) => (u['full_name'] as String).toLowerCase().contains(q));
               },
               onSelected: (u) => setState(() { _salesPersonId = u['id'] as String; _salesPersonDisplay = u['full_name'] as String; }),
-              fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-                controller: textCtrl, focusNode: focusNode, enabled: !locked,
-                decoration: dec.copyWith(labelText: 'Sales Person'),
-                style: const TextStyle(fontSize: 13),
-              ),
+              enabled: !locked,
+              decoration: dec.copyWith(labelText: 'Sales Person'),
+              style: const TextStyle(fontSize: 13),
             ));
             return isMobile
                 ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1350,7 +1349,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
                     decoration: dec.copyWith(labelText: 'Customer'),
                     child: Text(_customerDisplay.isEmpty ? '—' : _customerDisplay, style: const TextStyle(fontSize: 13)),
                   )
-                : Autocomplete<Map<String, dynamic>>(
+                : SakalAutocomplete<Map<String, dynamic>>(
                     initialValue: TextEditingValue(text: _customerDisplay),
                     displayStringForOption: (a) => '[${a['account_code']}] ${a['account_name']}',
                     optionsBuilder: (v) async {
@@ -1367,25 +1366,8 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
                           (a['account_name'] as String).toLowerCase().contains(q));
                     },
                     onSelected: _onCustomerSelected,
-                    fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-                      controller: textCtrl, focusNode: focusNode,
-                      decoration: dec.copyWith(label: _req('Customer')),
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                    optionsViewBuilder: (context, onSel, opts) => Align(
-                      alignment: Alignment.topLeft,
-                      child: Material(elevation: 4, borderRadius: BorderRadius.circular(4),
-                        child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 260, minWidth: 280),
-                          child: ListView.builder(padding: EdgeInsets.zero, shrinkWrap: true, itemCount: opts.length,
-                            itemBuilder: (context, idx) {
-                              final a = opts.elementAt(idx);
-                              return InkWell(onTap: () => onSel(a),
-                                child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  child: Text('[${a['account_code']}] ${a['account_name']}', style: const TextStyle(fontSize: 13))));
-                            }),
-                        ),
-                      ),
-                    ),
+                    decoration: dec.copyWith(label: _req('Customer')),
+                    style: const TextStyle(fontSize: 13),
                   ));
             final f2 = field(DropdownButtonFormField<String>(
               decoration: dec.copyWith(label: _req('Location')),
@@ -1570,7 +1552,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
           Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
             SizedBox(
               width: 220,
-              child: Autocomplete<Map<String, dynamic>>(
+              child: SakalAutocomplete<Map<String, dynamic>>(
                 key: ValueKey('${row.hashCode}-${row.productDisplay}'),
                 initialValue: TextEditingValue(text: row.productDisplay),
                 displayStringForOption: (p) => '[${p['product_code']}] ${p['product_name']}',
@@ -1583,25 +1565,9 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
                       (p['product_name'] as String).toLowerCase().contains(q));
                 },
                 onSelected: (p) => _onProductSelected(row, p),
-                fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-                  controller: textCtrl, focusNode: focusNode, enabled: !locked,
-                  decoration: dec.copyWith(labelText: 'Product'),
-                  style: const TextStyle(fontSize: 13),
-                ),
-                optionsViewBuilder: (context, onSel, opts) => Align(
-                  alignment: Alignment.topLeft,
-                  child: Material(elevation: 4, borderRadius: BorderRadius.circular(4),
-                    child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 260, minWidth: 260),
-                      child: ListView.builder(padding: EdgeInsets.zero, shrinkWrap: true, itemCount: opts.length,
-                        itemBuilder: (context, idx) {
-                          final p = opts.elementAt(idx);
-                          return InkWell(onTap: () => onSel(p),
-                              child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  child: Text('[${p['product_code']}] ${p['product_name']}', style: const TextStyle(fontSize: 13))));
-                        }),
-                    ),
-                  ),
-                ),
+                enabled: !locked,
+                decoration: dec.copyWith(labelText: 'Product'),
+                style: const TextStyle(fontSize: 13),
               ),
             ),
             if (showBarcode) SizedBox(width: 110, child: TextFormField(

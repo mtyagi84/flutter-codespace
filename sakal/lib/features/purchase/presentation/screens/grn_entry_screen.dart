@@ -15,6 +15,7 @@ import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../domain/repositories/grn_repository.dart';
 import '../providers/grn_providers.dart';
 
@@ -2244,7 +2245,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
   }) {
     return SizedBox(
       height: height,
-      child: Autocomplete<T>(
+      child: SakalAutocomplete<T>(
         key: ValueKey(initialText),
         initialValue: TextEditingValue(text: initialText),
         optionsBuilder: (v) {
@@ -2253,40 +2254,11 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
           return filtered.take(50);
         },
         displayStringForOption: displayString,
-        fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-          controller: textCtrl,
-          focusNode: focusNode,
-          enabled: !locked,
-          onChanged: (v) { if (v.isEmpty) onCleared(); },
-          decoration: decoration,
-          style: const TextStyle(fontSize: 13),
-        ),
+        enabled: !locked,
+        onChanged: (v) { if (v.isEmpty) onCleared(); },
+        decoration: decoration,
+        style: const TextStyle(fontSize: 13),
         onSelected: (o) { if (!locked) onSelected(o); },
-        optionsViewBuilder: (context, onSel, opts) => Align(
-          alignment: Alignment.topLeft,
-          child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(4),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 260),
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                shrinkWrap: true,
-                itemCount: opts.length,
-                itemBuilder: (context, idx) {
-                  final o = opts.elementAt(idx);
-                  return InkWell(
-                    onTap: () => onSel(o),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      child: Text(displayString(o), style: const TextStyle(fontSize: 13)),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

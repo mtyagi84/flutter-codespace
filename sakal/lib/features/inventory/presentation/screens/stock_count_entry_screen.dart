@@ -15,6 +15,7 @@ import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../master/data/models/item_category_model.dart';
 import '../../../master/data/models/product_model.dart';
 import '../../../master/presentation/providers/item_categories_providers.dart';
@@ -682,7 +683,8 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
         child: Text(_displayDate(_countDate), style: const TextStyle(fontSize: 13)),
       ),
     ));
-    final categoryField = field(Autocomplete<ItemCategoryModel>(
+    final categoryField = field(SakalAutocomplete<ItemCategoryModel>(
+      key: ValueKey('$_categoryId-$_categoryDisplay'),
       initialValue: TextEditingValue(text: _categoryDisplay),
       displayStringForOption: (c) => _categoryPaths[c.id] ?? c.categoryName,
       optionsBuilder: (v) {
@@ -692,31 +694,14 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
         return _categories.where((c) => (_categoryPaths[c.id] ?? c.categoryName).toLowerCase().contains(s));
       },
       onSelected: (c) => setState(() { _categoryId = c.id; _categoryDisplay = _categoryPaths[c.id] ?? c.categoryName; }),
-      fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-        controller: textCtrl, focusNode: focusNode, enabled: !filtersLocked,
-        decoration: dec.copyWith(
-          labelText: 'Category (All if blank)',
-          suffixIcon: (_categoryId != null && !filtersLocked)
-              ? IconButton(icon: const Icon(Icons.clear, size: 16), onPressed: () { textCtrl.clear(); setState(() { _categoryId = null; _categoryDisplay = ''; }); })
-              : null,
-        ),
-        style: const TextStyle(fontSize: 13),
+      enabled: !filtersLocked,
+      decoration: dec.copyWith(
+        labelText: 'Category (All if blank)',
+        suffixIcon: (_categoryId != null && !filtersLocked)
+            ? IconButton(icon: const Icon(Icons.clear, size: 16), onPressed: () => setState(() { _categoryId = null; _categoryDisplay = ''; }))
+            : null,
       ),
-      optionsViewBuilder: (context, onSel, opts) => Align(
-        alignment: Alignment.topLeft,
-        child: Material(elevation: 4, borderRadius: BorderRadius.circular(4),
-          child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 260, minWidth: 240),
-            child: ListView.builder(padding: EdgeInsets.zero, shrinkWrap: true, itemCount: opts.length,
-              itemBuilder: (context, idx) {
-                final c = opts.elementAt(idx);
-                return InkWell(onTap: () => onSel(c),
-                  child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    child: Text(_categoryPaths[c.id] ?? c.categoryName, style: const TextStyle(fontSize: 13))));
-              },
-            ),
-          ),
-        ),
-      ),
+      style: const TextStyle(fontSize: 13),
     ));
     final natureField = field(DropdownButtonFormField<String?>(
       decoration: dec.copyWith(labelText: 'Item Type (All if blank)'),

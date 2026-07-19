@@ -15,6 +15,7 @@ import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../domain/repositories/material_requisition_repository.dart';
 import '../providers/material_requisition_providers.dart';
 
@@ -576,8 +577,10 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
           }),
           const SizedBox(height: 12),
           Builder(builder: (_) {
-            final f1 = field(Autocomplete<String>(
+            final f1 = field(SakalAutocomplete<String>(
+              key: ValueKey(_requestedByCtrl.text),
               initialValue: TextEditingValue(text: _requestedByCtrl.text),
+              displayStringForOption: (s) => s,
               optionsBuilder: (v) {
                 if (locked) return const [];
                 final q = v.text.toLowerCase().trim();
@@ -585,15 +588,10 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
                 return q.isEmpty ? names : names.where((n) => n.toLowerCase().contains(q));
               },
               onSelected: (v) => _requestedByCtrl.text = v,
-              fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) {
-                textCtrl.text = _requestedByCtrl.text.isNotEmpty && textCtrl.text.isEmpty ? _requestedByCtrl.text : textCtrl.text;
-                return TextFormField(
-                  controller: textCtrl, focusNode: focusNode, enabled: !locked,
-                  decoration: dec.copyWith(labelText: 'Requested By'),
-                  style: const TextStyle(fontSize: 13),
-                  onChanged: (v) => _requestedByCtrl.text = v,
-                );
-              },
+              enabled: !locked,
+              decoration: dec.copyWith(labelText: 'Requested By'),
+              style: const TextStyle(fontSize: 13),
+              onChanged: (v) => _requestedByCtrl.text = v,
             ));
             final f2 = field(TextFormField(
               controller: _reasonCtrl, enabled: !locked,
@@ -640,7 +638,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
                 child: Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
                   SizedBox(
                     width: 260,
-                    child: Autocomplete<Map<String, dynamic>>(
+                    child: SakalAutocomplete<Map<String, dynamic>>(
                       key: ValueKey('${row.hashCode}-${row.productDisplay}'),
                       initialValue: TextEditingValue(text: row.productDisplay),
                       displayStringForOption: (p) => '[${p['product_code']}] ${p['product_name']}',
@@ -650,33 +648,9 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
                         return _ds.getProductsForPicker(clientId: session.clientId, companyId: session.companyId, search: v.text);
                       },
                       onSelected: (p) => _onProductSelected(row, p),
-                      fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-                        controller: textCtrl, focusNode: focusNode, enabled: !locked,
-                        decoration: dec.copyWith(labelText: 'Product'),
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                      optionsViewBuilder: (context, onSel, opts) => Align(
-                        alignment: Alignment.topLeft,
-                        child: Material(
-                          elevation: 4, borderRadius: BorderRadius.circular(4),
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxHeight: 260, minWidth: 260),
-                            child: ListView.builder(
-                              padding: EdgeInsets.zero, shrinkWrap: true, itemCount: opts.length,
-                              itemBuilder: (context, idx) {
-                                final p = opts.elementAt(idx);
-                                return InkWell(
-                                  onTap: () => onSel(p),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    child: Text('[${p['product_code']}] ${p['product_name']}', style: const TextStyle(fontSize: 13)),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
+                      enabled: !locked,
+                      decoration: dec.copyWith(labelText: 'Product'),
+                      style: const TextStyle(fontSize: 13),
                     ),
                   ),
                   if (showBarcode) SizedBox(width: 130, child: TextFormField(
