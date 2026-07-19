@@ -240,16 +240,16 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
               onToggle: () => _toggleActive(row),
               onDelete: () => _confirmDelete(row['id'] as String),
             ),
-            emptyState: Center(
+            emptyState: const Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.store_mall_directory_outlined,
+                  Icon(Icons.store_mall_directory_outlined,
                       size: 40, color: AppColors.textSecondary),
-                  const SizedBox(height: 12),
-                  const Text('No locations yet.',
+                  SizedBox(height: 12),
+                  Text('No locations yet.',
                       style: TextStyle(color: AppColors.textSecondary)),
-                  const Text('Click "Add Location" to create one.',
+                  Text('Click "Add Location" to create one.',
                       style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                 ],
               ),

@@ -1321,11 +1321,11 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ColoredBox(
+                  const ColoredBox(
                     color: AppColors.surfaceVariant,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
+                      children: [
                         _TableHdr('UOM', width: 140),
                         _TableHdr('Factor', width: 80, alignRight: true),
                         _TableHdr('Barcode', width: 140),

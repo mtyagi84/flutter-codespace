@@ -261,14 +261,14 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
               onDelete: () => _confirmDelete(row['id'] as String),
               onResetPassword: () => _openResetPassword(row),
             ),
-            emptyState: Center(
+            emptyState: const Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.group_outlined, size: 40, color: AppColors.textSecondary),
-                  const SizedBox(height: 12),
-                  const Text('No users yet.', style: TextStyle(color: AppColors.textSecondary)),
-                  const Text('Click "Add User" to create one.',
+                  Icon(Icons.group_outlined, size: 40, color: AppColors.textSecondary),
+                  SizedBox(height: 12),
+                  Text('No users yet.', style: TextStyle(color: AppColors.textSecondary)),
+                  Text('Click "Add User" to create one.',
                       style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                 ],
               ),
