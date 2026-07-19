@@ -1327,10 +1327,15 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
                       ]),
                     ),
                     const SizedBox(width: 8),
+                    SizedBox(width: 70, child: InputDecorator(
+                      decoration: dec.copyWith(labelText: 'Unit'),
+                      child: Text(row.uomLabel ?? '—', style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+                    )),
+                    const SizedBox(width: 8),
                     SizedBox(width: 100, child: TextFormField(
                       controller: row.qtyPackCtrl, enabled: !locked,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: showLooseQty ? 'Return Qty Pack' : 'Return Qty', suffixText: row.uomLabel),
+                      decoration: dec.copyWith(labelText: showLooseQty ? 'Return Qty Pack' : 'Return Qty'),
                       style: const TextStyle(fontSize: 12),
                       onChanged: (_) => _recomputeTotals(),
                     )),
@@ -1339,7 +1344,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
                       SizedBox(width: 100, child: TextFormField(
                         controller: row.qtyLooseCtrl, enabled: !locked,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: dec.copyWith(labelText: 'Return Qty Loose', suffixText: row.uomLabel),
+                        decoration: dec.copyWith(labelText: 'Return Qty Loose'),
                         style: const TextStyle(fontSize: 12),
                         onChanged: (_) => _recomputeTotals(),
                       )),
@@ -1419,7 +1424,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
               SizedBox(width: 100, child: TextFormField(
                 controller: b.qtyCtrl, enabled: !locked,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: dec.copyWith(labelText: 'Return Qty', suffixText: row.uomLabel),
+                decoration: dec.copyWith(labelText: 'Return Qty'),
                 style: const TextStyle(fontSize: 12),
                 onChanged: (_) => setState(() {}),
               )),

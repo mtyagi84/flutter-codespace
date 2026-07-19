@@ -817,10 +817,15 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
                         style: const TextStyle(fontSize: 11, color: AppColors.negative, fontWeight: FontWeight.w600)),
                   ])),
                   const SizedBox(width: 8),
+                  SizedBox(width: 70, child: InputDecorator(
+                    decoration: dec.copyWith(labelText: 'Unit'),
+                    child: Text(row.uomLabel ?? '—', style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+                  )),
+                  const SizedBox(width: 8),
                   SizedBox(width: 100, child: TextFormField(
                     controller: row.qtyPackCtrl, enabled: !locked,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: dec.copyWith(labelText: showLooseQty ? 'Received Qty Pack' : 'Received Qty', suffixText: row.uomLabel),
+                    decoration: dec.copyWith(labelText: showLooseQty ? 'Received Qty Pack' : 'Received Qty'),
                     style: const TextStyle(fontSize: 12),
                     onChanged: (_) => setState(() {}),
                   )),
@@ -829,7 +834,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
                     SizedBox(width: 100, child: TextFormField(
                       controller: row.qtyLooseCtrl, enabled: !locked,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: 'Received Qty Loose', suffixText: row.uomLabel),
+                      decoration: dec.copyWith(labelText: 'Received Qty Loose'),
                       style: const TextStyle(fontSize: 12),
                       onChanged: (_) => setState(() {}),
                     )),
@@ -876,7 +881,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
               SizedBox(width: 100, child: TextFormField(
                 controller: b.qtyCtrl, enabled: !locked,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: dec.copyWith(labelText: 'Received', suffixText: row.uomLabel),
+                decoration: dec.copyWith(labelText: 'Received'),
                 style: const TextStyle(fontSize: 12),
                 onChanged: (_) => setState(() {}),
               )),

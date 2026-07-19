@@ -846,17 +846,21 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
                       controller: row.serialNoCtrl, enabled: !locked,
                       decoration: dec.copyWith(labelText: 'Serial No'), style: const TextStyle(fontSize: 12),
                     )),
+                    SizedBox(width: 70, child: InputDecorator(
+                      decoration: dec.copyWith(labelText: 'Unit'),
+                      child: Text(row.uomLabel ?? '—', style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+                    )),
                     SizedBox(width: 100, child: TextFormField(
                       controller: row.qtyPackCtrl, enabled: !locked,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: showLooseQty ? 'Qty Pack' : 'Quantity', suffixText: row.uomLabel),
+                      decoration: dec.copyWith(labelText: showLooseQty ? 'Qty Pack' : 'Quantity'),
                       style: const TextStyle(fontSize: 12),
                       onChanged: (_) => setState(() {}),
                     )),
                     if (showLooseQty) SizedBox(width: 100, child: TextFormField(
                       controller: row.qtyLooseCtrl, enabled: !locked,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: 'Qty Loose', suffixText: row.uomLabel),
+                      decoration: dec.copyWith(labelText: 'Qty Loose'),
                       style: const TextStyle(fontSize: 12),
                       onChanged: (_) => setState(() {}),
                     )),

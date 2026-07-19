@@ -1079,17 +1079,21 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
                         style: const TextStyle(fontSize: 12),
                         onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
                       )),
+                    SizedBox(width: 70, child: InputDecorator(
+                      decoration: dec.copyWith(labelText: 'Unit'),
+                      child: Text(row.uomLabel ?? '—', style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+                    )),
                     SizedBox(width: 100, child: TextFormField(
                       controller: row.qtyPackCtrl, enabled: !locked,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: showLooseQty ? 'Qty Pack' : 'Quantity', suffixText: row.uomLabel),
+                      decoration: dec.copyWith(labelText: showLooseQty ? 'Qty Pack' : 'Quantity'),
                       style: const TextStyle(fontSize: 12),
                       onChanged: (_) { setState(() {}); unawaited(_refreshCostPrices()); },
                     )),
                     if (showLooseQty) SizedBox(width: 100, child: TextFormField(
                       controller: row.qtyLooseCtrl, enabled: !locked,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: 'Qty Loose', suffixText: row.uomLabel),
+                      decoration: dec.copyWith(labelText: 'Qty Loose'),
                       style: const TextStyle(fontSize: 12),
                       onChanged: (_) { setState(() {}); unawaited(_refreshCostPrices()); },
                     )),
@@ -1151,7 +1155,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
               SizedBox(width: 100, child: TextFormField(
                 controller: b.qtyCtrl, enabled: !locked,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: dec.copyWith(labelText: 'Qty', suffixText: row.uomLabel),
+                decoration: dec.copyWith(labelText: 'Qty'),
                 style: const TextStyle(fontSize: 12),
                 onChanged: (_) => setState(() {}),
               )),
