@@ -722,6 +722,13 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
           _showSnack('${l.productDisplay}: no active price configured, and you are not authorized to override it.', color: AppColors.negative);
           return false;
         }
+        // Real bug found live: a line could be saved with rate=0 (e.g. an
+        // override left blank) with no pushback at all -- an order with
+        // real quantity but zero price/value.
+        if (l.rate <= 0) {
+          _showSnack('${l.productDisplay}: rate must be greater than zero.', color: AppColors.negative);
+          return false;
+        }
         if (l.priceSource == 'MANUAL_OVERRIDE' && l.overrideReasonCtrl.text.trim().isEmpty) {
           _showSnack('${l.productDisplay}: enter a reason for the price override.', color: AppColors.negative);
           return false;
@@ -729,6 +736,15 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
         if (l.discountPct > 0) {
           if (!_canGiveDiscount) {
             _showSnack('${l.productDisplay}: you are not authorized to give a discount.', color: AppColors.negative);
+            return false;
+          }
+          // Absolute ceiling, independent of whether this user has a
+          // configured per-user limit at all -- real bug found live: a
+          // user with no ric_user_sales_controls row (max_discount_percent
+          // = null) could enter e.g. 150% since the limit check below was
+          // only ever skipped, never replaced with a hard ceiling.
+          if (l.discountPct > 100) {
+            _showSnack('${l.productDisplay}: discount cannot exceed 100%.', color: AppColors.negative);
             return false;
           }
           if (_maxDiscountPercent != null && l.discountPct > _maxDiscountPercent!) {
@@ -746,7 +762,22 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
       }
     }
 
+    // Real bug found live: a charge's Amount field accepted a negative
+    // number with no validation at all.
+    for (final c in _charges.where((c) => c.chargeId != null)) {
+      if (c.value < 0) {
+        _showSnack('${c.chargeName}: amount cannot be negative.', color: AppColors.negative);
+        return false;
+      }
+    }
+
     _recompute();
+    // Grand total must never go negative -- a legitimate DEDUCT charge or
+    // discount could otherwise push the order below zero with no warning.
+    if (_grandTotal < 0) {
+      _showSnack('Order total cannot be negative -- check discounts and charges.', color: AppColors.negative);
+      return false;
+    }
     setState(() { _saving = true; _actionError = null; });
     final session = ref.read(sessionProvider)!;
     try {
@@ -785,7 +816,17 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
         'barcode':                      e.value.matchedBarcode ?? '',
         'uom_id':                       e.value.uomId,
         'uom_conversion_factor':        e.value.uomConversionFactor,
-        'qty_pack':                     _isAgainstQuotation ? 0 : e.value.qtyPack,
+        // AGAINST_QUOTATION: qtyPackCtrl holds the "Qty to Convert" value
+        // (see _loadFromQuotation/_recompute's own comments) -- it must
+        // still be sent, not zeroed. fn_save_sales_order does NOT copy
+        // quantity verbatim from the source line for this mode (unlike
+        // rate/discount_percent, which it does) -- partial-quantity
+        // conversion needs the client's own qty_pack/base_qty. Sending 0
+        // here silently saved every against-quotation order line with
+        // zero qty and zero value (real bug, found live). qty_loose has
+        // no meaning in this mode (base_qty = qtyPack directly, see
+        // _recompute), so 0 there is correct.
+        'qty_pack':                     e.value.qtyPack,
         'qty_loose':                    _isAgainstQuotation ? 0 : e.value.qtyLoose,
         'base_qty':                     e.value.baseQty,
         'rate':                         e.value.rate,
@@ -1234,6 +1275,51 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Order No/Date moved to the top row — real user feedback: date
+          // should be picked first, before Customer/Location/PO Ref, not
+          // buried in a "weird" middle row.
+          Builder(builder: (_) {
+            final f1 = field(InputDecorator(
+              decoration: dec.copyWith(labelText: 'Order No'),
+              child: Text(_orderNo ?? '(auto on save)',
+                  style: TextStyle(fontSize: 13, color: _orderNo != null ? AppColors.textPrimary : AppColors.textDisabled)),
+            ));
+            final f2 = field(InkWell(
+              onTap: locked ? null : () => _pickDate(_orderDate, (d) { setState(() => _orderDate = d); unawaited(_fetchRates()); }),
+              child: InputDecorator(
+                decoration: dec.copyWith(label: _req('Order Date'),
+                    suffixIcon: Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary)),
+                child: Text(_displayDate(_orderDate), style: const TextStyle(fontSize: 13)),
+              ),
+            ));
+            final f3 = field(Autocomplete<Map<String, dynamic>>(
+              initialValue: TextEditingValue(text: _salesPersonDisplay),
+              displayStringForOption: (u) => u['full_name'] as String,
+              optionsBuilder: (v) {
+                if (locked) return const [];
+                final q = v.text.toLowerCase().trim();
+                if (q.isEmpty) return _users;
+                return _users.where((u) => (u['full_name'] as String).toLowerCase().contains(q));
+              },
+              onSelected: (u) => setState(() { _salesPersonId = u['id'] as String; _salesPersonDisplay = u['full_name'] as String; }),
+              fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
+                controller: textCtrl, focusNode: focusNode, enabled: !locked,
+                decoration: dec.copyWith(labelText: 'Sales Person'),
+                style: const TextStyle(fontSize: 13),
+              ),
+            ));
+            return isMobile
+                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [Expanded(child: f1), const SizedBox(width: 12), Expanded(child: f2)]), const SizedBox(height: 8),
+                    SizedBox(width: double.infinity, child: f3),
+                  ])
+                : Row(children: [
+                    Expanded(flex: 2, child: f1), const SizedBox(width: 12),
+                    Expanded(flex: 2, child: f2), const SizedBox(width: 12),
+                    Expanded(flex: 2, child: f3),
+                  ]);
+          }),
+          const SizedBox(height: 12),
           Builder(builder: (_) {
             final f1 = field(customerLocked
                 ? InputDecorator(
@@ -1245,7 +1331,11 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
                     displayStringForOption: (a) => '[${a['account_code']}] ${a['account_name']}',
                     optionsBuilder: (v) async {
                       final accounts = await ref.read(accountsProvider.future);
-                      final customers = accounts.where((a) => a['account_nature'] == 'Customer');
+                      // posting_allowed=false rows are the Customer group/parent
+                      // node itself (Chart of Accounts hierarchy), not a real
+                      // customer to bill against -- real bug found live: the
+                      // group node was showing up as a selectable "customer".
+                      final customers = accounts.where((a) => a['account_nature'] == 'Customer' && a['posting_allowed'] == true);
                       final q = v.text.toLowerCase().trim();
                       if (q.isEmpty) return customers;
                       return customers.where((a) =>
@@ -1307,48 +1397,6 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
                   color: _customerInfo!['is_credit_blocked'] == true ? AppColors.negative : AppColors.textSecondary),
             ),
           ),
-          const SizedBox(height: 12),
-          Builder(builder: (_) {
-            final f1 = field(InputDecorator(
-              decoration: dec.copyWith(labelText: 'Order No'),
-              child: Text(_orderNo ?? '(auto on save)',
-                  style: TextStyle(fontSize: 13, color: _orderNo != null ? AppColors.textPrimary : AppColors.textDisabled)),
-            ));
-            final f2 = field(InkWell(
-              onTap: locked ? null : () => _pickDate(_orderDate, (d) { setState(() => _orderDate = d); unawaited(_fetchRates()); }),
-              child: InputDecorator(
-                decoration: dec.copyWith(label: _req('Order Date'),
-                    suffixIcon: Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary)),
-                child: Text(_displayDate(_orderDate), style: const TextStyle(fontSize: 13)),
-              ),
-            ));
-            final f3 = field(Autocomplete<Map<String, dynamic>>(
-              initialValue: TextEditingValue(text: _salesPersonDisplay),
-              displayStringForOption: (u) => u['full_name'] as String,
-              optionsBuilder: (v) {
-                if (locked) return const [];
-                final q = v.text.toLowerCase().trim();
-                if (q.isEmpty) return _users;
-                return _users.where((u) => (u['full_name'] as String).toLowerCase().contains(q));
-              },
-              onSelected: (u) => setState(() { _salesPersonId = u['id'] as String; _salesPersonDisplay = u['full_name'] as String; }),
-              fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) => TextFormField(
-                controller: textCtrl, focusNode: focusNode, enabled: !locked,
-                decoration: dec.copyWith(labelText: 'Sales Person'),
-                style: const TextStyle(fontSize: 13),
-              ),
-            ));
-            return isMobile
-                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [Expanded(child: f1), const SizedBox(width: 12), Expanded(child: f2)]), const SizedBox(height: 8),
-                    SizedBox(width: double.infinity, child: f3),
-                  ])
-                : Row(children: [
-                    Expanded(flex: 2, child: f1), const SizedBox(width: 12),
-                    Expanded(flex: 2, child: f2), const SizedBox(width: 12),
-                    Expanded(flex: 2, child: f3),
-                  ]);
-          }),
           const SizedBox(height: 12),
           Builder(builder: (_) {
             final f1 = field(DropdownButtonFormField<String>(

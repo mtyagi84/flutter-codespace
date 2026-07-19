@@ -374,7 +374,9 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
           return;
         }
         final code = await _fetchNextCode(_customerGroupId!);
-        await DioClient.instance.post('/rim_accounts', data: _buildPayload(session, name, code: code));
+        final accountingStd = await ref.read(accountingStdProvider.future);
+        await DioClient.instance.post('/rim_accounts',
+            data: _buildPayload(session, name, code: code, accountingStd: accountingStd));
       } else {
         await DioClient.instance.patch(
           '/rim_accounts',
@@ -398,7 +400,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
   }
 
   Map<String, dynamic> _buildPayload(UserSession session, String name,
-      {String? code}) => {
+      {String? code, String? accountingStd}) => {
     'parent_id':       _customerGroupId,
     if (code != null) 'account_code': code,
     'account_name':    name,
@@ -425,7 +427,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
     'company_id':      session.companyId,
     'updated_by':      session.userId,
     if (code != null) ...{
-      'accounting_std': 'OHADA', // derived from seeded data
+      'accounting_std': accountingStd ?? 'OHADA', // rim_accounting_setup — real bug: was always hardcoded 'OHADA'
       'created_by':    session.userId,
     },
   };

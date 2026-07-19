@@ -83,6 +83,28 @@ final localCurrencyProvider = FutureProvider<String>((ref) async {
   return list.isNotEmpty ? (list.first['local_currency'] as String? ?? '') : '';
 });
 
+// The company's real chosen accounting standard (rim_accounting_setup,
+// set once via the Accounting Setup screen) — 'INDIAN' or 'OHADA'. Every
+// place that inserts a new rim_accounts row must read this instead of
+// hardcoding 'OHADA' (real bug found live: Customer Master, Supplier
+// Master, Chart of Accounts, and fn_convert_prospect_to_customer all
+// hardcoded the literal regardless of what the company actually chose
+// at setup). Falls back to 'OHADA' only if no setup row exists yet
+// (shouldn't happen once past onboarding), matching this provider's own
+// established scalar-lookup shape (baseCurrencyProvider/localCurrencyProvider).
+final accountingStdProvider = FutureProvider<String>((ref) async {
+  final session = ref.watch(sessionProvider);
+  if (session == null) return 'OHADA';
+  final res = await DioClient.instance.get('/rim_accounting_setup', queryParameters: {
+    'client_id':  'eq.${session.clientId}',
+    'company_id': 'eq.${session.companyId}',
+    'select':     'accounting_std',
+    'limit':      '1',
+  });
+  final list = List<Map<String, dynamic>>.from(res.data as List);
+  return list.isNotEmpty ? (list.first['accounting_std'] as String? ?? 'OHADA') : 'OHADA';
+});
+
 final currenciesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final session = ref.watch(sessionProvider);
   if (session == null) return [];

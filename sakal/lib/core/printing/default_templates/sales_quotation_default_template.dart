@@ -36,11 +36,15 @@ const salesQuotationDefaultTemplate = PrintTemplate(
       x: 1, y: 5, w: 180,
       font: PrintFont(size: 18, bold: true, align: PrintAlign.center, colorHex: '#1B3A6B'),
     ),
+    // Was 'notEquals: APPROVED', which kept showing "DRAFT — NOT APPROVED"
+    // for SENT/ACCEPTED/REJECTED/CONVERTED quotations too, not just actual
+    // drafts (Sales Quotation has no CANCELLED status, unlike Sales Order
+    // — see rih_sales_quotations' own status CHECK constraint).
     PrintElement(
       id: 'draft_watermark', type: PrintElementType.watermark,
       text: 'DRAFT — NOT APPROVED',
       x: 1, y: 6, w: 180,
-      showWhen: PrintCondition(field: 'header.status', notEquals: 'APPROVED'),
+      showWhen: PrintCondition(field: 'header.status', equals: 'DRAFT'),
     ),
     PrintElement(
       id: 'quotation_no', type: PrintElementType.field, bind: 'header.quotation_no', label: 'Quotation No: ',

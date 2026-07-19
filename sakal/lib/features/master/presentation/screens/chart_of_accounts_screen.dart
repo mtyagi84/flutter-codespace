@@ -318,6 +318,13 @@ class _ChartOfAccountsScreenState
     final session = ref.read(sessionProvider)!;
     setState(() { _saving = true; _saveError = null; });
 
+    // Real bug: falling back to a hardcoded 'OHADA' when creating a
+    // root-level account with no parent to inherit from — a company that
+    // chose INDIAN at setup would still get an OHADA-tagged root account.
+    final accountingStd = _panelMode == 'add' && _addParent?['accounting_std'] == null
+        ? await ref.read(accountingStdProvider.future)
+        : null;
+
     final isParty = _nature == 'Customer' || _nature == 'Supplier';
     final payload = <String, dynamic>{
       'client_id':           session.clientId,
@@ -332,7 +339,7 @@ class _ChartOfAccountsScreenState
       'updated_by':          session.userId,
       if (_panelMode == 'add') ...{
         'parent_id':       _addParent?['id'],
-        'accounting_std':  _addParent?['accounting_std'] ?? 'OHADA',
+        'accounting_std':  _addParent?['accounting_std'] ?? accountingStd ?? 'OHADA',
         'created_by':      session.userId,
       },
       if (_postingAllowed && isParty) ...{

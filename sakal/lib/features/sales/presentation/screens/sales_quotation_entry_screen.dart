@@ -113,6 +113,8 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
   final _partyAddressCtrl = TextEditingController();
   String?  _salesPersonId;
   String   _salesPersonDisplay = '';
+  String?  _preparedByName;
+  String?  _authorisedByName;
   String?  _quotationCurrencyId;
   String?  _quotationCurrencyCode;
   final _rateToBaseCtrl  = TextEditingController(text: '1');
@@ -236,6 +238,8 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
     _quotationDate        = DateTime.parse(header['quotation_date'] as String);
     _validUntilDate        = DateTime.tryParse(header['valid_until_date'] as String? ?? '') ?? _validUntilDate;
     _status                 = header['status'] as String;
+    _preparedByName          = _resolveUserName(header['created_by'] as String?);
+    _authorisedByName        = _resolveUserName(header['approved_by'] as String?);
     _locationId              = header['location_id'] as String?;
     _customerType             = header['customer_type'] as String? ?? 'CUSTOMER';
     _customerId               = header['customer_id'] as String?;
@@ -504,14 +508,41 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
     }
     if (_quotationCurrencyId == null) { _showSnack('Select a currency.', color: AppColors.negative); return false; }
     if (_locationId == null) { _showSnack('Select a location.', color: AppColors.negative); return false; }
+    final emailInput = _partyEmailCtrl.text.trim();
+    if (emailInput.isNotEmpty && !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(emailInput)) {
+      _showSnack('Enter a valid email address.', color: AppColors.negative);
+      return false;
+    }
     if (_validUntilDate.isBefore(_quotationDate)) {
       _showSnack('Valid Until date cannot be before the Quotation date.', color: AppColors.negative);
       return false;
     }
     final validLines = _lines.where((l) => l.productId != null && l.baseQty > 0).toList();
     if (validLines.isEmpty) { _showSnack('Add at least one line with a product and quantity.', color: AppColors.negative); return false; }
+    for (final l in validLines) {
+      if (l.rate <= 0) {
+        _showSnack('${l.productDisplay}: rate must be greater than zero.', color: AppColors.negative);
+        return false;
+      }
+      if (l.discountPct > 100) {
+        _showSnack('${l.productDisplay}: discount cannot exceed 100%.', color: AppColors.negative);
+        return false;
+      }
+    }
+    // Real bug found live: a charge's Amount field accepted a negative
+    // number with no validation at all (same fix as Sales Order).
+    for (final c in _charges.where((c) => c.chargeId != null)) {
+      if (c.value < 0) {
+        _showSnack('${c.chargeName}: amount cannot be negative.', color: AppColors.negative);
+        return false;
+      }
+    }
 
     _recompute();
+    if (_grandTotal < 0) {
+      _showSnack('Quotation total cannot be negative -- check discounts and charges.', color: AppColors.negative);
+      return false;
+    }
     setState(() { _saving = true; _actionError = null; });
     final session = ref.read(sessionProvider)!;
     try {
@@ -722,7 +753,21 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
         'charges_amount':  _chargesTotal,
         'grand_total':     _grandTotal,
       },
+      // Real bug found live: never supplied, so the default template's
+      // Prepared By/Authorised By lines printed with no name under them
+      // (registry+template already bind these correctly app-wide —
+      // this screen just never resolved/sent the values).
+      'signatures': {
+        'prepared_by':   _preparedByName ?? '',
+        'authorised_by': _authorisedByName ?? '',
+      },
     };
+  }
+
+  String? _resolveUserName(String? userId) {
+    if (userId == null) return null;
+    final match = _users.firstWhere((u) => u['id'] == userId, orElse: () => const {});
+    return match['full_name'] as String?;
   }
 
   Future<void> _printQuotation() async {
@@ -931,6 +976,46 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Quotation No/Date moved to the very top row — real user
+          // feedback: date should be picked first, before anything else,
+          // rather than after the customer-type toggle further down.
+          Builder(builder: (_) {
+            final f1 = field(InputDecorator(
+              decoration: dec.copyWith(labelText: 'Quotation No'),
+              child: Text(_quotationNo ?? '(auto on save)',
+                  style: TextStyle(fontSize: 13, color: _quotationNo != null ? AppColors.textPrimary : AppColors.textDisabled)),
+            ));
+            final f2 = field(InkWell(
+              onTap: locked ? null : () => _pickDate(_quotationDate, (d) {
+                setState(() => _quotationDate = d);
+                unawaited(_fetchRates());
+              }),
+              child: InputDecorator(
+                decoration: dec.copyWith(label: _req('Quotation Date'),
+                    suffixIcon: Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary)),
+                child: Text(_displayDate(_quotationDate), style: const TextStyle(fontSize: 13)),
+              ),
+            ));
+            final f3 = field(InkWell(
+              onTap: locked ? null : () => _pickDate(_validUntilDate, (d) => setState(() => _validUntilDate = d)),
+              child: InputDecorator(
+                decoration: dec.copyWith(label: _req('Valid Until'),
+                    suffixIcon: Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary)),
+                child: Text(_displayDate(_validUntilDate), style: const TextStyle(fontSize: 13)),
+              ),
+            ));
+            return isMobile
+                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [Expanded(child: f1), const SizedBox(width: 12), Expanded(child: f2)]), const SizedBox(height: 8),
+                    SizedBox(width: double.infinity, child: f3),
+                  ])
+                : Row(children: [
+                    Expanded(flex: 2, child: f1), const SizedBox(width: 12),
+                    Expanded(flex: 2, child: f2), const SizedBox(width: 12),
+                    Expanded(flex: 2, child: f3),
+                  ]);
+          }),
+          const SizedBox(height: 12),
           SegmentedButton<String>(
             segments: const [
               ButtonSegment(value: 'CUSTOMER', label: Text('Existing Customer'), icon: Icon(Icons.person_outline, size: 16)),
@@ -949,7 +1034,10 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
                     optionsBuilder: (v) async {
                       if (locked) return const [];
                       final accounts = await ref.read(accountsProvider.future);
-                      final customers = accounts.where((a) => a['account_nature'] == 'Customer');
+                      // posting_allowed=false rows are the Customer group/parent
+                      // node itself (Chart of Accounts hierarchy), not a real
+                      // customer to quote against -- same fix as Sales Order.
+                      final customers = accounts.where((a) => a['account_nature'] == 'Customer' && a['posting_allowed'] == true);
                       final q = v.text.toLowerCase().trim();
                       if (q.isEmpty) return customers;
                       return customers.where((a) =>
@@ -1039,6 +1127,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
             ));
             final f2 = field(TextFormField(
               controller: _partyEmailCtrl, enabled: !locked,
+              keyboardType: TextInputType.emailAddress,
               decoration: dec.copyWith(labelText: 'Email'),
               style: const TextStyle(fontSize: 13),
             ));
@@ -1053,43 +1142,6 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
                     SizedBox(width: double.infinity, child: f3),
                   ])
                 : Row(children: [Expanded(child: f1), const SizedBox(width: 12), Expanded(child: f2), const SizedBox(width: 12), Expanded(flex: 2, child: f3)]);
-          }),
-          const SizedBox(height: 12),
-          Builder(builder: (_) {
-            final f1 = field(InputDecorator(
-              decoration: dec.copyWith(labelText: 'Quotation No'),
-              child: Text(_quotationNo ?? '(auto on save)',
-                  style: TextStyle(fontSize: 13, color: _quotationNo != null ? AppColors.textPrimary : AppColors.textDisabled)),
-            ));
-            final f2 = field(InkWell(
-              onTap: locked ? null : () => _pickDate(_quotationDate, (d) {
-                setState(() => _quotationDate = d);
-                unawaited(_fetchRates());
-              }),
-              child: InputDecorator(
-                decoration: dec.copyWith(label: _req('Quotation Date'),
-                    suffixIcon: Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary)),
-                child: Text(_displayDate(_quotationDate), style: const TextStyle(fontSize: 13)),
-              ),
-            ));
-            final f3 = field(InkWell(
-              onTap: locked ? null : () => _pickDate(_validUntilDate, (d) => setState(() => _validUntilDate = d)),
-              child: InputDecorator(
-                decoration: dec.copyWith(label: _req('Valid Until'),
-                    suffixIcon: Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary)),
-                child: Text(_displayDate(_validUntilDate), style: const TextStyle(fontSize: 13)),
-              ),
-            ));
-            return isMobile
-                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [Expanded(child: f1), const SizedBox(width: 12), Expanded(child: f2)]), const SizedBox(height: 8),
-                    SizedBox(width: double.infinity, child: f3),
-                  ])
-                : Row(children: [
-                    Expanded(flex: 2, child: f1), const SizedBox(width: 12),
-                    Expanded(flex: 2, child: f2), const SizedBox(width: 12),
-                    Expanded(flex: 2, child: f3),
-                  ]);
           }),
           const SizedBox(height: 12),
           Builder(builder: (_) {

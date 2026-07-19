@@ -36,11 +36,23 @@ const salesOrderDefaultTemplate = PrintTemplate(
       x: 1, y: 5, w: 180,
       font: PrintFont(size: 18, bold: true, align: PrintAlign.center, colorHex: '#1B3A6B'),
     ),
+    // Two separate watermark elements, each gated on its own exact status
+    // — a single "notEquals APPROVED" condition with static "DRAFT — NOT
+    // APPROVED" text meant a CANCELLED order printed with the same DRAFT
+    // wording (real bug, found live: watermark text can't be dynamically
+    // bound to a field, only its visibility can, so each real status needs
+    // its own element).
     PrintElement(
       id: 'draft_watermark', type: PrintElementType.watermark,
       text: 'DRAFT — NOT APPROVED',
       x: 1, y: 6, w: 180,
-      showWhen: PrintCondition(field: 'header.status', notEquals: 'APPROVED'),
+      showWhen: PrintCondition(field: 'header.status', equals: 'DRAFT'),
+    ),
+    PrintElement(
+      id: 'cancelled_watermark', type: PrintElementType.watermark,
+      text: 'CANCELLED',
+      x: 1, y: 6, w: 180,
+      showWhen: PrintCondition(field: 'header.status', equals: 'CANCELLED'),
     ),
     PrintElement(
       id: 'order_no', type: PrintElementType.field, bind: 'header.order_no', label: 'Order No: ',

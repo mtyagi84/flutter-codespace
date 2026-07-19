@@ -363,7 +363,9 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
           return;
         }
         final code = await _fetchNextCode(_supplierGroupId!);
-        await DioClient.instance.post('/rim_accounts', data: _buildPayload(session, name, code: code));
+        final accountingStd = await ref.read(accountingStdProvider.future);
+        await DioClient.instance.post('/rim_accounts',
+            data: _buildPayload(session, name, code: code, accountingStd: accountingStd));
       } else {
         await DioClient.instance.patch(
           '/rim_accounts',
@@ -388,7 +390,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
   }
 
   Map<String, dynamic> _buildPayload(UserSession session, String name,
-      {String? code}) => {
+      {String? code, String? accountingStd}) => {
     'parent_id':         _supplierGroupId,
     if (code != null) 'account_code': code,
     'account_name':      name,

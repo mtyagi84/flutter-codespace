@@ -1918,7 +1918,10 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                         displayStringForOption: (a) => '[${a['account_code']}] ${a['account_name']}',
                         optionsBuilder: (v) async {
                           final accounts = await ref.read(accountsProvider.future);
-                          final customers = accounts.where((a) => a['account_nature'] == 'Customer');
+                          // posting_allowed=false rows are the Customer group/parent
+                          // node itself (Chart of Accounts hierarchy), not a real
+                          // customer to invoice -- same fix as Sales Order/Quotation.
+                          final customers = accounts.where((a) => a['account_nature'] == 'Customer' && a['posting_allowed'] == true);
                           final q = v.text.toLowerCase().trim();
                           if (q.isEmpty) return customers;
                           return customers.where((a) => (a['account_code'] as String).toLowerCase().contains(q) || (a['account_name'] as String).toLowerCase().contains(q));

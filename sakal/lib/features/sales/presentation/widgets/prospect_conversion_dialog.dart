@@ -164,6 +164,12 @@ class _ProspectConversionDialogState extends ConsumerState<_ProspectConversionDi
         notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
         userId: session.userId,
       );
+      // accountsProvider (shared account/customer picker cache) is fetched
+      // once per app session — real bug found live: without invalidating
+      // it here, a newly-converted customer didn't show up anywhere else
+      // in the app (other pickers, lists) until the user logged out and
+      // back in. Same fix already applied to Customer Master's own save.
+      ref.invalidate(accountsProvider);
       if (mounted) Navigator.of(context, rootNavigator: true).pop(true);
     } on DioException catch (e) {
       setState(() { _saving = false; _error = e.response?.data?['message'] ?? e.message ?? '$e'; });
@@ -228,7 +234,16 @@ class _ProspectConversionDialogState extends ConsumerState<_ProspectConversionDi
                     Row(children: [
                       Expanded(child: TextFormField(controller: _phoneCtrl, decoration: dec.copyWith(labelText: 'Phone'))),
                       const SizedBox(width: 10),
-                      Expanded(child: TextFormField(controller: _emailCtrl, decoration: dec.copyWith(labelText: 'Email'))),
+                      Expanded(child: TextFormField(
+                        controller: _emailCtrl,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: dec.copyWith(labelText: 'Email'),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return null;
+                          if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v.trim())) return 'Enter a valid email';
+                          return null;
+                        },
+                      )),
                     ]),
                     const SizedBox(height: 10),
                     TextFormField(controller: _addressCtrl, decoration: dec.copyWith(labelText: 'Address')),
