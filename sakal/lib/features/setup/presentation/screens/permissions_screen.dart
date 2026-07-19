@@ -540,59 +540,85 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                                 CrossAxisAlignment.start,
                             children: [
                               // ── Action bar ──────────────────────────
-                              Card(
-                                shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(12)),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 12),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: _CopyFromDropdown(
-                                          users: _users,
-                                          excludeId: _selectedUserId!,
-                                          onCopy: _copyFrom,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      OutlinedButton.icon(
-                                        onPressed: _saving.isNotEmpty
-                                            ? null
-                                            : _grantAll,
-                                        icon: const Icon(
-                                            Icons.check_box_outlined,
-                                            size: 16),
-                                        label:
-                                            const Text('Grant All'),
-                                        style:
-                                            OutlinedButton.styleFrom(
-                                          foregroundColor:
-                                              AppColors.positive,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      OutlinedButton.icon(
-                                        onPressed: _saving.isNotEmpty
-                                            ? null
-                                            : _revokeAll,
-                                        icon: const Icon(
-                                            Icons
-                                                .check_box_outline_blank,
-                                            size: 16),
-                                        label:
-                                            const Text('Revoke All'),
-                                        style:
-                                            OutlinedButton.styleFrom(
-                                          foregroundColor:
-                                              AppColors.negative,
-                                        ),
-                                      ),
-                                    ],
+                              // Mobile: Copy-from dropdown gets its own
+                              // full-width row, Grant/Revoke share the row
+                              // below — a fixed-width icon+label Row plus
+                              // two full-text buttons never fits a narrow
+                              // screen (real overflow reported live).
+                              Builder(builder: (context) {
+                                final isMobile =
+                                    Responsive.isMobile(context);
+                                final grantButton = OutlinedButton.icon(
+                                  onPressed: _saving.isNotEmpty
+                                      ? null
+                                      : _grantAll,
+                                  icon: const Icon(
+                                      Icons.check_box_outlined,
+                                      size: 16),
+                                  label: const Text('Grant All'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.positive,
                                   ),
-                                ),
-                              ),
+                                );
+                                final revokeButton = OutlinedButton.icon(
+                                  onPressed: _saving.isNotEmpty
+                                      ? null
+                                      : _revokeAll,
+                                  icon: const Icon(
+                                      Icons.check_box_outline_blank,
+                                      size: 16),
+                                  label: const Text('Revoke All'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.negative,
+                                  ),
+                                );
+                                final copyDropdown = _CopyFromDropdown(
+                                  users: _users,
+                                  excludeId: _selectedUserId!,
+                                  onCopy: _copyFrom,
+                                );
+                                return Card(
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(12)),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 12),
+                                    child: isMobile
+                                        ? Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment
+                                                    .stretch,
+                                            children: [
+                                              copyDropdown,
+                                              const SizedBox(height: 10),
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                      child:
+                                                          grantButton),
+                                                  const SizedBox(
+                                                      width: 8),
+                                                  Expanded(
+                                                      child:
+                                                          revokeButton),
+                                                ],
+                                              ),
+                                            ],
+                                          )
+                                        : Row(
+                                            children: [
+                                              Expanded(
+                                                  child: copyDropdown),
+                                              const SizedBox(width: 12),
+                                              grantButton,
+                                              const SizedBox(width: 8),
+                                              revokeButton,
+                                            ],
+                                          ),
+                                  ),
+                                );
+                              }),
                               const SizedBox(height: 12),
 
                               if (_error != null) ...[
