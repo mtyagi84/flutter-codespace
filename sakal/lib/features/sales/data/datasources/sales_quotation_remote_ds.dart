@@ -4,6 +4,34 @@ import '../../../../core/network/dio_client.dart';
 class SalesQuotationRemoteDs {
   final Dio _dio = DioClient.instance;
 
+  // Real gap found live: Sales Quotation predates Price Master (migration
+  // 081 vs 083) and was never wired to it -- every line's rate had to be
+  // typed manually. Same fn_get_active_price call Sales Order/Invoice
+  // already use (086's currency-aware version).
+  Future<Map<String, dynamic>?> getActivePrice({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String productId,
+    required String uomId,
+    required String? customerId,
+    required String asOfDate,
+    required String currencyCode,
+  }) async {
+    final res = await _dio.post('/rpc/fn_get_active_price', data: {
+      'p_client_id':       clientId,
+      'p_company_id':      companyId,
+      'p_location_id':     locationId,
+      'p_product_id':      productId,
+      'p_uom_id':          uomId,
+      'p_customer_id':     customerId,
+      'p_as_of_date':      asOfDate,
+      'p_target_currency': currencyCode,
+    });
+    final list = res.data as List;
+    return list.isNotEmpty ? list.first as Map<String, dynamic> : null;
+  }
+
   static const _headerSelect = '*,'
       'location:ric_locations!location_id(location_name),'
       'customer:rim_accounts!customer_id(account_code,account_name),'

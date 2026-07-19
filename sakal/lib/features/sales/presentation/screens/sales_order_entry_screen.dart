@@ -468,6 +468,30 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
       _lines.add(row);
     }
 
+    // Real gap found live: charges never carried forward from the
+    // quotation to the order -- carried verbatim here, same as every
+    // other AGAINST_QUOTATION field, since there's nothing left for the
+    // client to legitimately choose about a charge that already applied.
+    final qCharges = await _ds.getQuotationCharges(
+      clientId: session.clientId, companyId: session.companyId,
+      quotationNo: quotationNo, quotationDate: quotationDate,
+    );
+    for (final c in _charges) { c.dispose(); }
+    _charges.clear();
+    for (final qc in qCharges) {
+      final row = _OrderChargeRow()
+        ..chargeId = qc['charge_id'] as String?
+        ..chargeName = qc['charge_name'] as String? ?? ''
+        ..isTaxable = qc['is_taxable'] as bool? ?? false
+        ..taxId = qc['tax_id'] as String?
+        ..nature = qc['nature'] as String? ?? 'ADD'
+        ..glAccountId = qc['gl_account_id'] as String?
+        ..amountOrPercent = qc['amount_or_percent'] as String? ?? 'AMOUNT';
+      final raw = qc['amount_or_percent'] == 'PERCENT' ? qc['percent'] : qc['amount'];
+      row.valueCtrl.text = (raw as num? ?? 0).toString();
+      _charges.add(row);
+    }
+
     if (mounted) setState(() => _loading = false);
   }
 

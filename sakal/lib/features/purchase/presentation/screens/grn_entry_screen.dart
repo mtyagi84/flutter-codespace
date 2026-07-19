@@ -960,6 +960,11 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
       final err = _batchSerialError(l);
       if (err != null) { _showSnack(err, color: AppColors.negative); return false; }
     }
+    // Real bug found live (Sales Order/Quotation) applies here too: a
+    // charge's Amount field accepted a negative number with no check.
+    for (final c in _charges) {
+      if (c.value < 0) { _showSnack('${c.chargeName}: amount cannot be negative.', color: AppColors.negative); return false; }
+    }
 
     setState(() { _saving = true; _actionError = null; });
     final session = ref.read(sessionProvider)!;

@@ -176,6 +176,29 @@ class SalesOrderRemoteDs {
     return List<Map<String, dynamic>>.from(res.data as List);
   }
 
+  // Real gap found live: converting a Quotation to an Order never carried
+  // its charges (freight/packing/etc.) forward -- _loadFromQuotation only
+  // ever pulled lines, never charges, so an against-quotation order always
+  // started with zero charges even when the source quotation had real ones.
+  Future<List<Map<String, dynamic>>> getQuotationCharges({
+    required String clientId,
+    required String companyId,
+    required String quotationNo,
+    required String quotationDate,
+  }) async {
+    final res = await _dio.get('/rid_sales_quotation_charges', queryParameters: {
+      'client_id':      'eq.$clientId',
+      'company_id':     'eq.$companyId',
+      'quotation_no':   'eq.$quotationNo',
+      'quotation_date': 'eq.$quotationDate',
+      'is_deleted':     'eq.false',
+      'select':         'serial_no,charge_id,charge_name,is_taxable,tax_id,nature,'
+          'gl_account_id,amount_or_percent,percent,amount,tax_amount,allocation_factor',
+      'order':          'serial_no.asc',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
   Future<void> convertProspectToCustomer({
     required String clientId,
     required String companyId,

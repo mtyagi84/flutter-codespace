@@ -133,6 +133,22 @@ class SalesQuotationRepositoryImpl implements SalesQuotationRepository {
       );
 
   @override
+  Future<Map<String, dynamic>?> getActivePrice({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String productId,
+    required String uomId,
+    required String? customerId,
+    required String asOfDate,
+    required String currencyCode,
+  }) => _remote.getActivePrice(
+        clientId: clientId, companyId: companyId, locationId: locationId,
+        productId: productId, uomId: uomId, customerId: customerId,
+        asOfDate: asOfDate, currencyCode: currencyCode,
+      );
+
+  @override
   Future<String> save({
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,

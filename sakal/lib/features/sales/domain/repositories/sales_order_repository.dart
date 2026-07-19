@@ -52,6 +52,13 @@ abstract class SalesOrderRepository {
     required String quotationDate,
   });
 
+  Future<List<Map<String, dynamic>>> getQuotationCharges({
+    required String clientId,
+    required String companyId,
+    required String quotationNo,
+    required String quotationDate,
+  });
+
   /// Online-only — creates a real rim_accounts row, updates the source
   /// quotation's customer_id/customer_type, and logs the conversion.
   Future<void> convertProspectToCustomer({

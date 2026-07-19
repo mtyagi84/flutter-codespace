@@ -103,6 +103,14 @@ class SalesOrderRepositoryImpl implements SalesOrderRepository {
   }) => _remote.getQuotationLines(clientId: clientId, companyId: companyId, quotationNo: quotationNo, quotationDate: quotationDate);
 
   @override
+  Future<List<Map<String, dynamic>>> getQuotationCharges({
+    required String clientId,
+    required String companyId,
+    required String quotationNo,
+    required String quotationDate,
+  }) => _remote.getQuotationCharges(clientId: clientId, companyId: companyId, quotationNo: quotationNo, quotationDate: quotationDate);
+
+  @override
   Future<void> convertProspectToCustomer({
     required String clientId,
     required String companyId,

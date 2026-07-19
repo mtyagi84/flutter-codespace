@@ -20,12 +20,26 @@ class PrintEngine {
         : PdfCanvasRenderer.render(template, document);
     final bytes = await doc.save();
 
-    final isMobile = !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
-    if (isMobile) {
-      await Printing.sharePdf(bytes: bytes, filename: filename);
-    } else {
+    // Real bug found live: kIsWeb is true even when the app is opened in a
+    // *mobile browser* (this project is primarily deployed as a Flutter Web
+    // build, viewed on phones via the browser, not as a native mobile app)
+    // -- the old `!kIsWeb && (Android || iOS)` check could therefore never
+    // be true on mobile web, so every mobile print fell into the
+    // Printing.layoutPdf() branch, which opens an in-page preview/print
+    // overlay with no back navigation on a phone-sized viewport ("PDF
+    // appears on the same screen, no way to go back", reported on every
+    // print button). Printing.sharePdf() has its own Web implementation --
+    // on web it triggers a normal browser file download (or the native
+    // share sheet on a real mobile app) instead of an in-app overlay, so
+    // route Web there too, not just native Android/iOS. layoutPdf's real
+    // OS print dialog is kept only for a genuine native desktop build,
+    // where there's an actual print dialog to open.
+    final isNativeDesktop = !kIsWeb &&
+        defaultTargetPlatform != TargetPlatform.android && defaultTargetPlatform != TargetPlatform.iOS;
+    if (isNativeDesktop) {
       await Printing.layoutPdf(onLayout: (_) async => bytes, name: filename);
+    } else {
+      await Printing.sharePdf(bytes: bytes, filename: filename);
     }
   }
 }

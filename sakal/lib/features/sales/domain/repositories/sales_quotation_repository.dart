@@ -73,6 +73,17 @@ abstract class SalesQuotationRepository {
     required String rateDate,
   });
 
+  Future<Map<String, dynamic>?> getActivePrice({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String productId,
+    required String uomId,
+    required String? customerId,
+    required String asOfDate,
+    required String currencyCode,
+  });
+
   Future<String> save({
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,

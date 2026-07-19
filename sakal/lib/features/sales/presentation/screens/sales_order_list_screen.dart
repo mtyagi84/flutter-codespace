@@ -5,6 +5,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
@@ -282,7 +283,7 @@ class _SalesOrderListScreenState extends ConsumerState<SalesOrderListScreen>
               SakalListColumn('Date', flex: 2),
               SakalListColumn('Mode', flex: 2),
               SakalListColumn('Customer', flex: 3),
-              SakalListColumn('Source SQ', flex: 2),
+              SakalListColumn('Quotation', flex: 2),
               SakalListColumn('Status', flex: 2),
               SakalListColumn('Grand Total', flex: 2),
               SakalListColumn('', flex: 1),
@@ -350,7 +351,7 @@ class _SalesOrderListScreenState extends ConsumerState<SalesOrderListScreen>
                 if (_pendingIds.contains(r['order_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
               ]))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text('${currency?['currency_id'] ?? ''} ${((r['grand_total'] as num?) ?? 0).toStringAsFixed(2)}',
+              child: Text('${currency?['currency_id'] ?? ''} ${AppNumberFormat.amount((r['grand_total'] as num?) ?? 0, ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL')}',
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)))),
           Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
               child: IconButton(icon: const Icon(Icons.arrow_forward_ios, size: 14), color: AppColors.primary,
@@ -387,7 +388,7 @@ class _SalesOrderListScreenState extends ConsumerState<SalesOrderListScreen>
           const SizedBox(height: 4),
           Text(_displayDate(r['order_date'] as String?), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
-          Text('${currency?['currency_id'] ?? ''} ${((r['grand_total'] as num?) ?? 0).toStringAsFixed(2)}',
+          Text('${currency?['currency_id'] ?? ''} ${AppNumberFormat.amount((r['grand_total'] as num?) ?? 0, ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL')}',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
         ]),
       ),

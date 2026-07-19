@@ -34,6 +34,7 @@ class _QuotationLineRow {
   String? taxGroupId;
   final TextEditingController remarksCtrl = TextEditingController();
   double  convertedQty = 0; // rollup, only set when reloading an existing line
+  bool    priceLoading = false;
 
   // Recomputed every build by _recompute()
   double baseQty        = 0;
@@ -345,6 +346,12 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
       final match = _currencies.where((c) => c['currency_id'] == customerCurrency).toList();
       if (match.isNotEmpty && mounted) await _onCurrencySelected(match.first);
     }
+    // Price can be customer-specific -- re-resolve every existing line even
+    // when the currency itself didn't change (_onCurrencySelected's own
+    // resolve loop only fires on an actual currency switch).
+    for (final row in _lines) {
+      if (row.productId != null) unawaited(_resolvePrice(row));
+    }
   }
 
   void _onCustomerTypeChanged(String type) {
@@ -368,6 +375,9 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
       _rateToLocalCtrl.text = '1';
     });
     await _fetchRates();
+    for (final row in _lines) {
+      if (row.productId != null) unawaited(_resolvePrice(row));
+    }
   }
 
   Future<void> _fetchRates() async {
@@ -411,6 +421,37 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
       row.uomLabel = uom?['description'] as String?;
       row.taxGroupId ??= product['sales_tax_group_id'] as String?;
     });
+    unawaited(_resolvePrice(row));
+  }
+
+  /// Real gap found live: Sales Quotation predates Price Master (081 vs
+  /// 083) and never fetched a price at all -- rate had to be typed
+  /// manually every time. Unlike Sales Order, this screen has no
+  /// ric_user_sales_controls governance (no override-reason requirement,
+  /// no hard block on save) -- a Quotation is a pre-commitment offer, not
+  /// a final transaction, so this is deliberately just a prefill: found
+  /// price fills the Rate field, not found leaves it for manual entry,
+  /// always freely editable either way.
+  Future<void> _resolvePrice(_QuotationLineRow row) async {
+    if (row.productId == null || row.uomId == null || _locationId == null || _quotationCurrencyCode == null) return;
+    setState(() => row.priceLoading = true);
+    final session = ref.read(sessionProvider)!;
+    try {
+      final price = await _ds.getActivePrice(
+        clientId: session.clientId, companyId: session.companyId,
+        locationId: _locationId!, productId: row.productId!, uomId: row.uomId!,
+        customerId: _customerType == 'CUSTOMER' ? _customerId : null,
+        asOfDate: _fmtDate(_quotationDate),
+        currencyCode: _quotationCurrencyCode!,
+      );
+      if (!mounted) return;
+      setState(() {
+        row.priceLoading = false;
+        if (price != null) row.rateCtrl.text = (price['selling_price'] as num).toString();
+      });
+    } catch (e) {
+      if (mounted) setState(() => row.priceLoading = false);
+    }
   }
 
   Future<void> _onBarcodeSubmitted(_QuotationLineRow row, String rawBarcode) async {
