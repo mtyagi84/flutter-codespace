@@ -1,9 +1,11 @@
 name: CI
 
+# Manual-only: automatic push/pull_request triggers were consuming the
+# repo's free GitHub Actions minutes on every commit. Run it on demand
+# from the Actions tab (Run workflow) or via `gh workflow run ci.yml`
+# instead of every push.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   flutter:
