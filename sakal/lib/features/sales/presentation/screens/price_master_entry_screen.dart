@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -10,12 +11,16 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_autocomplete.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../domain/repositories/price_master_repository.dart';
 import '../providers/price_master_providers.dart';
 
@@ -716,14 +721,6 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
     if (d != null) onPicked(d);
   }
 
-  static Widget _req(String text) => RichText(
-    text: TextSpan(
-      text: text,
-      style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w400),
-      children: const [TextSpan(text: ' *', style: TextStyle(color: AppColors.negative, fontWeight: FontWeight.w600))],
-    ),
-  );
-
   @override
   Widget build(BuildContext context) {
     final session   = ref.watch(sessionProvider);
@@ -779,19 +776,27 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
     );
   }
 
-  Widget _buildTitleBlock() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Text(_entryNo != null ? 'Sales Price Master · $_entryNo' : 'New Price Master Batch',
-        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-    const SizedBox(height: 2),
-    Row(children: [
-      _status == 'APPROVED' ? _statusChip() : Text(_entryNo != null ? 'Draft' : 'Unsaved draft',
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-      if (_entryNo != null) ...[
-        const SizedBox(width: 8),
-        PendingSyncBadge(documentType: 'PRICE_MASTER', documentId: _entryNo!),
-      ],
-    ]),
-  ]);
+  Widget _buildTitleBlock() => Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (context.canPop())
+        IconButton(icon: const Icon(Icons.arrow_back), tooltip: 'Back', onPressed: () => context.pop()),
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(_entryNo != null ? 'Sales Price Master · $_entryNo' : 'New Price Master Batch',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+        const SizedBox(height: 2),
+        Row(children: [
+          _status == 'APPROVED' ? _statusChip() : Text(_entryNo != null ? 'Draft' : 'Unsaved draft',
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          if (_entryNo != null) ...[
+            const SizedBox(width: 8),
+            PendingSyncBadge(documentType: 'PRICE_MASTER', documentId: _entryNo!),
+          ],
+        ]),
+      ]),
+    ],
+  );
 
   Widget _statusChip() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -831,111 +836,121 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
   );
 
   Widget _buildHeaderCard(bool locked, bool isMobile, bool showScan) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
-    const fh = 56.0;
-    Widget field(Widget child) => SizedBox(height: fh, child: child);
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
     final priceTypeLocked = locked || _lines.isNotEmpty;
     final locationLocked  = locked || _lines.isNotEmpty;
     final showRate = _priceCurrencyCode != null && _priceCurrencyCode != _baseCurrency;
 
-    final entryNoField = field(InputDecorator(
-      decoration: dec.copyWith(labelText: 'Entry No'),
-      child: Text(_entryNo ?? '(auto on save)',
-          style: TextStyle(fontSize: 13, color: _entryNo != null ? AppColors.textPrimary : AppColors.textDisabled)),
-    ));
-    final entryDateField = field(InkWell(
-      onTap: locked ? null : () => _pickDate(_entryDate, (d) {
-        setState(() => _entryDate = d);
-        unawaited(_fetchRates());
-      }),
-      child: InputDecorator(
-        decoration: dec.copyWith(label: _req('Entry Date'),
-            suffixIcon: Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary)),
-        child: Text(_displayDate(_entryDate), style: const TextStyle(fontSize: 13)),
+    final entryNoField = SakalFieldCard.readOnly(label: 'Entry No', value: _entryNo ?? '(auto on save)');
+    final entryDateField = SakalFieldCard(
+      label: 'Entry Date', required: true, editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(_entryDate, (d) {
+          setState(() => _entryDate = d);
+          unawaited(_fetchRates());
+        }),
+        child: Row(children: [
+          Expanded(child: Text(_displayDate(_entryDate), style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
       ),
-    ));
-    final effDateField = field(InkWell(
-      onTap: locked ? null : () => _pickDate(_effectiveDate, (d) => setState(() => _effectiveDate = d), bounded: false),
-      child: InputDecorator(
-        decoration: dec.copyWith(label: _req('Effective Date'),
-            suffixIcon: Icon(Icons.event_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary)),
-        child: Text(_displayDate(_effectiveDate), style: const TextStyle(fontSize: 13)),
+    );
+    final effDateField = SakalFieldCard(
+      label: 'Effective Date', required: true, editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(_effectiveDate, (d) => setState(() => _effectiveDate = d), bounded: false),
+        child: Row(children: [
+          Expanded(child: Text(_displayDate(_effectiveDate), style: style)),
+          Icon(Icons.event_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
       ),
-    ));
-
-    final locationField = field(DropdownButtonFormField<String>(
-      decoration: dec.copyWith(label: _req('Location')),
-      isExpanded: true, isDense: true, itemHeight: null,
-      initialValue: _locationId,
-      items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
-          child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
-      onChanged: locationLocked ? null : (v) {
-        setState(() => _locationId = v);
-        unawaited(_fetchRates());
-      },
-    ));
-    final currencyField = field(DropdownButtonFormField<String>(
-      decoration: dec.copyWith(label: _req('Currency')),
-      isExpanded: true, isDense: true, itemHeight: null,
-      initialValue: _priceCurrencyId,
-      items: _currencies.map((c) => DropdownMenuItem(value: c['id'] as String,
-          child: Text(c['currency_id'] as String, style: const TextStyle(fontSize: 13)))).toList(),
-      onChanged: locked ? null : (v) {
-        final c = _currencies.firstWhere((e) => e['id'] == v);
-        unawaited(_onCurrencySelected(c));
-      },
-    ));
-    final rateField = field(TextFormField(
-      controller: _rateToBaseCtrl, enabled: !locked && showRate,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      decoration: dec.copyWith(labelText: 'Rate to Base ($_baseCurrency)'),
-      style: const TextStyle(fontSize: 13),
-      onChanged: (_) {
-        setState(() {});
-        for (final row in _lines) {
-          if (row.productId != null) unawaited(_refreshLineCost(row));
-        }
-      },
-    ));
-
-    final customerField = SakalAutocomplete<Map<String, dynamic>>(
-      initialValue: TextEditingValue(text: _customerDisplay),
-      displayStringForOption: (a) => '[${a['account_code']}] ${a['account_name']}',
-      optionsBuilder: (v) async {
-        if (locked) return const [];
-        final accounts = await ref.read(accountsProvider.future);
-        // posting_allowed=false rows are the Customer group/parent node
-        // itself (Chart of Accounts hierarchy), not a real customer to
-        // price for -- same fix as Sales Order/Quotation/Invoice.
-        final customers = accounts.where((a) => a['account_nature'] == 'Customer' && a['posting_allowed'] == true);
-        final q = v.text.toLowerCase().trim();
-        if (q.isEmpty) return customers;
-        return customers.where((a) =>
-            (a['account_code'] as String).toLowerCase().contains(q) ||
-            (a['account_name'] as String).toLowerCase().contains(q));
-      },
-      onSelected: (a) => setState(() {
-        _customerId = a['id'] as String;
-        _customerDisplay = '[${a['account_code']}] ${a['account_name']}';
-      }),
-      enabled: !locked,
-      decoration: dec.copyWith(label: _req('Customer')),
-      style: const TextStyle(fontSize: 13),
     );
 
-    final scanField = field(TextFormField(
-      controller: _scanCtrl, enabled: !locked,
-      decoration: dec.copyWith(labelText: 'Scan Barcode / Part Number', prefixIcon: const Icon(Icons.qr_code_scanner, size: 18)),
-      style: const TextStyle(fontSize: 13),
-      onFieldSubmitted: (v) => _onHeaderScanSubmitted(v),
-    ));
+    final locationField = SakalFieldCard(
+      label: 'Location', required: true, editable: !locationLocked,
+      child: DropdownButtonFormField<String>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: _locationId,
+        items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
+            child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: style))).toList(),
+        onChanged: locationLocked ? null : (v) {
+          setState(() => _locationId = v);
+          unawaited(_fetchRates());
+        },
+      ),
+    );
+    final currencyField = SakalFieldCard(
+      label: 'Currency', required: true, editable: !locked,
+      child: DropdownButtonFormField<String>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: _priceCurrencyId,
+        items: _currencies.map((c) => DropdownMenuItem(value: c['id'] as String,
+            child: Text(c['currency_id'] as String, style: style))).toList(),
+        onChanged: locked ? null : (v) {
+          final c = _currencies.firstWhere((e) => e['id'] == v);
+          unawaited(_onCurrencySelected(c));
+        },
+      ),
+    );
+    final rateField = SakalFieldCard(
+      label: 'Rate to Base ($_baseCurrency)', editable: !locked && showRate,
+      child: TextFormField(
+        controller: _rateToBaseCtrl, enabled: !locked && showRate,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: bare, style: style,
+        onChanged: (_) {
+          setState(() {});
+          for (final row in _lines) {
+            if (row.productId != null) unawaited(_refreshLineCost(row));
+          }
+        },
+      ),
+    );
 
-    final remarksField = field(TextFormField(
-      controller: _remarksCtrl, enabled: !locked,
-      decoration: dec.copyWith(labelText: 'Remarks'),
-      style: const TextStyle(fontSize: 13),
-    ));
+    final customerField = SakalFieldCard(
+      label: 'Customer', required: true, editable: !locked,
+      child: SakalAutocomplete<Map<String, dynamic>>(
+        initialValue: TextEditingValue(text: _customerDisplay),
+        displayStringForOption: (a) => '[${a['account_code']}] ${a['account_name']}',
+        optionsBuilder: (v) async {
+          if (locked) return const [];
+          final accounts = await ref.read(accountsProvider.future);
+          // posting_allowed=false rows are the Customer group/parent node
+          // itself (Chart of Accounts hierarchy), not a real customer to
+          // price for -- same fix as Sales Order/Quotation/Invoice.
+          final customers = accounts.where((a) => a['account_nature'] == 'Customer' && a['posting_allowed'] == true);
+          final q = v.text.toLowerCase().trim();
+          if (q.isEmpty) return customers;
+          return customers.where((a) =>
+              (a['account_code'] as String).toLowerCase().contains(q) ||
+              (a['account_name'] as String).toLowerCase().contains(q));
+        },
+        onSelected: (a) => setState(() {
+          _customerId = a['id'] as String;
+          _customerDisplay = '[${a['account_code']}] ${a['account_name']}';
+        }),
+        enabled: !locked,
+        decoration: bare,
+        style: style,
+      ),
+    );
+
+    final scanField = SakalFieldCard(
+      label: 'Scan Barcode / Part Number', editable: !locked,
+      child: TextFormField(
+        controller: _scanCtrl, enabled: !locked,
+        decoration: bare.copyWith(prefixIcon: const Icon(Icons.qr_code_scanner, size: 18)),
+        style: style,
+        onFieldSubmitted: (v) => _onHeaderScanSubmitted(v),
+      ),
+    );
+
+    final remarksField = SakalFieldCard(
+      label: 'Remarks', editable: !locked,
+      child: TextFormField(controller: _remarksCtrl, enabled: !locked, decoration: bare, style: style),
+    );
 
     return Card(
       elevation: 0,
@@ -943,27 +958,9 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          isMobile
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  entryNoField, const SizedBox(height: 8),
-                  Row(children: [Expanded(child: entryDateField), const SizedBox(width: 12), Expanded(child: effDateField)]),
-                ])
-              : Row(children: [
-                  Expanded(flex: 2, child: entryNoField), const SizedBox(width: 12),
-                  Expanded(flex: 2, child: entryDateField), const SizedBox(width: 12),
-                  Expanded(flex: 2, child: effDateField),
-                ]),
+          SakalFieldRow(isMobile: isMobile, children: [entryNoField, entryDateField, effDateField]),
           const SizedBox(height: 12),
-          isMobile
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  locationField, const SizedBox(height: 8),
-                  Row(children: [Expanded(child: currencyField), const SizedBox(width: 12), Expanded(child: rateField)]),
-                ])
-              : Row(children: [
-                  Expanded(flex: 2, child: locationField), const SizedBox(width: 12),
-                  Expanded(flex: 2, child: currencyField), const SizedBox(width: 12),
-                  Expanded(flex: 2, child: rateField),
-                ]),
+          SakalFieldRow(isMobile: isMobile, children: [locationField, currencyField, rateField]),
           if (locationLocked && !locked)
             const Padding(
               padding: EdgeInsets.only(top: 4),
@@ -988,7 +985,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
             ),
           if (_priceType == 'CUSTOMER') ...[
             const SizedBox(height: 12),
-            isMobile ? field(customerField) : SizedBox(width: 400, height: fh, child: customerField),
+            isMobile ? customerField : SizedBox(width: 400, child: customerField),
           ],
           if (showScan) ...[
             const SizedBox(height: 12),
@@ -1002,8 +999,9 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
   }
 
   Widget _buildLinesCard(bool locked) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -1022,101 +1020,102 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
             ..._lines.asMap().entries.map((entry) {
               final idx = entry.key;
               final row = entry.value;
-              return Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                elevation: 0,
-                color: AppColors.background,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                    SizedBox(width: 20, child: Text('${idx + 1}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary))),
-                    SizedBox(
-                      width: 210,
-                      child: SakalAutocomplete<Map<String, dynamic>>(
-                        key: ValueKey('${row.hashCode}-${row.productDisplay}'),
-                        initialValue: TextEditingValue(text: row.productDisplay),
-                        displayStringForOption: (p) => '[${p['product_code']}] ${p['product_name']}',
-                        optionsBuilder: (v) {
-                          if (locked) return const [];
-                          final q = v.text.toLowerCase().trim();
-                          if (q.isEmpty) return _products;
-                          return _products.where((p) =>
-                              (p['product_code'] as String).toLowerCase().contains(q) ||
-                              (p['product_name'] as String).toLowerCase().contains(q));
-                        },
-                        onSelected: (p) => _onProductSelected(row, p),
-                        enabled: !locked,
-                        decoration: dec.copyWith(label: _req('Product')),
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 130, height: 48,
-                      child: row.uomLoading
-                          ? const Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))
-                          : DropdownButtonFormField<String>(
-                              decoration: dec.copyWith(label: _req('UOM')),
-                              isExpanded: true, isDense: true, itemHeight: null,
-                              initialValue: row.uomId,
-                              items: row.uomOptions.map((u) => DropdownMenuItem(
-                                  value: u['uom_id'] as String,
-                                  child: Text((u['uom'] as Map<String, dynamic>?)?['description'] as String? ?? '',
-                                      overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
-                              onChanged: (locked || row.productId == null) ? null : (v) {
-                                final opt = row.uomOptions.firstWhere((u) => u['uom_id'] == v);
-                                _onUomSelected(row, opt);
-                              },
-                            ),
-                    ),
-                    SizedBox(width: 90, height: 48, child: InputDecorator(
-                      decoration: dec.copyWith(labelText: 'Cost Price'),
-                      child: row.costLoading
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                          : Text(row.costPrice.toStringAsFixed(2), style: const TextStyle(fontSize: 13)),
-                    )),
-                    SizedBox(width: 90, child: TextFormField(
-                      controller: row.marginPercentCtrl, enabled: !locked && row.costPrice > 0,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                      decoration: dec.copyWith(labelText: 'Margin %'),
-                      focusNode: row.marginFocusNode,
-                      style: const TextStyle(fontSize: 13),
-                      onChanged: locked ? null : (_) => _onMarginChanged(row),
-                    )),
-                    SizedBox(width: 110, child: TextFormField(
-                      controller: row.sellingPriceCtrl, enabled: !locked,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(label: _req('Selling Price')),
-                      style: const TextStyle(fontSize: 13),
-                      onChanged: locked ? null : (_) => _onSellingPriceChanged(row),
-                    )),
-                    if (row.isBelowCost)
-                      SizedBox(width: 170, height: 48, child: DropdownButtonFormField<String>(
-                        decoration: dec.copyWith(label: _req('Below-Cost Reason')),
-                        isExpanded: true, isDense: true, itemHeight: null,
-                        initialValue: row.belowCostReasonId,
-                        items: _belowCostReasons.map((r) => DropdownMenuItem(value: r['id'] as String,
-                            child: Text(r['description'] as String, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
-                        onChanged: locked ? null : (v) => setState(() => row.belowCostReasonId = v),
-                      )),
-                    SizedBox(
-                      width: 100,
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Checkbox(
-                          value: row.isTaxInclusive,
-                          onChanged: locked ? null : (v) => setState(() => row.isTaxInclusive = v ?? false),
-                        ),
-                        const Text('Incl. Tax', style: TextStyle(fontSize: 12)),
-                      ]),
-                    ),
-                    if (row.barcode != null && row.barcode!.isNotEmpty)
-                      Tooltip(message: 'Scanned: ${row.barcode}', child: const Icon(Icons.qr_code, size: 18, color: AppColors.textSecondary)),
-                    if (!locked) IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
-                      onPressed: () => _removeLine(row),
-                    ),
-                  ]),
+
+              final productField = SakalFieldCard(
+                label: 'Product', required: true, editable: !locked,
+                child: SakalAutocomplete<Map<String, dynamic>>(
+                  key: ValueKey('${row.hashCode}-${row.productDisplay}'),
+                  initialValue: TextEditingValue(text: row.productDisplay),
+                  displayStringForOption: (p) => '[${p['product_code']}] ${p['product_name']}',
+                  optionsBuilder: (v) {
+                    if (locked) return const [];
+                    final q = v.text.toLowerCase().trim();
+                    if (q.isEmpty) return _products;
+                    return _products.where((p) =>
+                        (p['product_code'] as String).toLowerCase().contains(q) ||
+                        (p['product_name'] as String).toLowerCase().contains(q));
+                  },
+                  onSelected: (p) => _onProductSelected(row, p),
+                  enabled: !locked,
+                  decoration: bare,
+                  style: style,
                 ),
+              );
+              final uomField = SakalFieldCard(
+                label: 'UOM', required: true, editable: !locked && row.productId != null,
+                child: row.uomLoading
+                    ? const Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))
+                    : DropdownButtonFormField<String>(
+                        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+                        initialValue: row.uomId,
+                        items: row.uomOptions.map((u) => DropdownMenuItem(
+                            value: u['uom_id'] as String,
+                            child: Text((u['uom'] as Map<String, dynamic>?)?['description'] as String? ?? '',
+                                overflow: TextOverflow.ellipsis, style: style))).toList(),
+                        onChanged: (locked || row.productId == null) ? null : (v) {
+                          final opt = row.uomOptions.firstWhere((u) => u['uom_id'] == v);
+                          _onUomSelected(row, opt);
+                        },
+                      ),
+              );
+              final costPriceField = row.costLoading
+                  ? SakalFieldCard(label: 'Cost Price', child: const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)))
+                  : SakalFieldCard.readOnly(label: 'Cost Price', value: row.costPrice.toStringAsFixed(2), numeric: true);
+              final marginField = SakalFieldCard(
+                label: 'Margin %', editable: !locked && row.costPrice > 0,
+                child: TextFormField(
+                  controller: row.marginPercentCtrl, enabled: !locked && row.costPrice > 0,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                  decoration: bare, focusNode: row.marginFocusNode, style: style,
+                  onChanged: locked ? null : (_) => _onMarginChanged(row),
+                ),
+              );
+              final sellingPriceField = SakalFieldCard(
+                label: 'Selling Price', required: true, editable: !locked,
+                child: TextFormField(
+                  controller: row.sellingPriceCtrl, enabled: !locked,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: bare, style: style,
+                  onChanged: locked ? null : (_) => _onSellingPriceChanged(row),
+                ),
+              );
+              final belowCostReasonField = SakalFieldCard(
+                label: 'Below-Cost Reason', required: true, editable: !locked,
+                child: DropdownButtonFormField<String>(
+                  decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+                  initialValue: row.belowCostReasonId,
+                  items: _belowCostReasons.map((r) => DropdownMenuItem(value: r['id'] as String,
+                      child: Text(r['description'] as String, overflow: TextOverflow.ellipsis, style: style))).toList(),
+                  onChanged: locked ? null : (v) => setState(() => row.belowCostReasonId = v),
+                ),
+              );
+              final taxInclusiveField = Row(mainAxisSize: MainAxisSize.min, children: [
+                Checkbox(
+                  value: row.isTaxInclusive,
+                  onChanged: locked ? null : (v) => setState(() => row.isTaxInclusive = v ?? false),
+                ),
+                const Text('Incl. Tax', style: TextStyle(fontSize: 12)),
+              ]);
+
+              return SakalLineItemCard(
+                title: '${idx + 1}. ${row.productDisplay.isEmpty ? 'New Line' : row.productDisplay}',
+                onDelete: locked ? null : () => _removeLine(row),
+                fields: [
+                  SizedBox(width: 220, child: productField),
+                  SizedBox(width: 140, height: 56, child: uomField),
+                  SizedBox(width: 100, child: costPriceField),
+                  SizedBox(width: 90, child: marginField),
+                  SizedBox(width: 110, child: sellingPriceField),
+                  if (row.isBelowCost) SizedBox(width: 180, height: 56, child: belowCostReasonField),
+                  taxInclusiveField,
+                ],
+                footer: (row.barcode != null && row.barcode!.isNotEmpty)
+                    ? Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.qr_code, size: 14, color: AppColors.textSecondary),
+                        const SizedBox(width: 4),
+                        Text('Scanned: ${row.barcode}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                      ])
+                    : null,
               );
             }),
         ]),

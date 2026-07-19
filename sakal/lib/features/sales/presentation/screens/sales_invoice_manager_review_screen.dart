@@ -4,8 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
 import '../providers/sales_invoice_providers.dart';
 
 /// Sales Invoice — Manager Review. Online-only (per docs/screens/sales_invoice.md):
@@ -133,12 +136,17 @@ class _SalesInvoiceManagerReviewScreenState extends ConsumerState<SalesInvoiceMa
             error: (_, __) => const Text('Could not load locations.', style: TextStyle(color: AppColors.negative)),
             data: (locations) => SizedBox(
               width: isMobile ? double.infinity : 320,
-              child: DropdownButtonFormField<String>(
-                decoration: const InputDecoration(labelText: 'Location', border: OutlineInputBorder(), isDense: true),
-                isExpanded: true, isDense: true, itemHeight: null,
-                initialValue: _locationId,
-                items: locations.map((l) => DropdownMenuItem(value: l['id'] as String, child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis))).toList(),
-                onChanged: _onLocationChanged,
+              child: SakalFieldCard(
+                label: 'Location',
+                editable: true,
+                child: DropdownButtonFormField<String>(
+                  decoration: SakalFieldCard.bareDecoration,
+                  isExpanded: true, isDense: true, itemHeight: null,
+                  initialValue: _locationId,
+                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+                  items: locations.map((l) => DropdownMenuItem(value: l['id'] as String, child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis))).toList(),
+                  onChanged: _onLocationChanged,
+                ),
               ),
             ),
           ),
@@ -169,6 +177,12 @@ class _SalesInvoiceManagerReviewScreenState extends ConsumerState<SalesInvoiceMa
     final lines = _linesByInvoice[invoiceNo] ?? [];
     final isPosting = _posting.contains(invoiceNo);
     final rowError = _rowErrors[invoiceNo];
+    final numberFormat = ref.read(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
+    final grandTotalText = Text(
+      '${currency?['currency_id'] ?? ''} ${AppNumberFormat.amount((invoice['grand_total'] as num?) ?? 0, numberFormat)}',
+      style: const TextStyle(fontSize: 13),
+      textAlign: TextAlign.right,
+    );
 
     return Card(
       elevation: 0,
@@ -178,11 +192,11 @@ class _SalesInvoiceManagerReviewScreenState extends ConsumerState<SalesInvoiceMa
         title: isMobile
             ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('$invoiceNo — ${customer?['account_name'] ?? invoice['party_name'] ?? '—'}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                Text('${currency?['currency_id'] ?? ''} ${((invoice['grand_total'] as num?) ?? 0).toStringAsFixed(2)}', style: const TextStyle(fontSize: 13)),
+                grandTotalText,
               ])
             : Row(children: [
                 Expanded(child: Text('$invoiceNo — ${customer?['account_name'] ?? invoice['party_name'] ?? '—'}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14))),
-                Text('${currency?['currency_id'] ?? ''} ${((invoice['grand_total'] as num?) ?? 0).toStringAsFixed(2)}', style: const TextStyle(fontSize: 13)),
+                grandTotalText,
               ]),
         subtitle: Text('${invoice['sale_type']} · ${invoice['invoice_mode']} · ${invoice['invoice_date']}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
         children: [
@@ -196,10 +210,11 @@ class _SalesInvoiceManagerReviewScreenState extends ConsumerState<SalesInvoiceMa
                 final requested = (l['base_qty'] as num?) ?? 0;
                 final insufficient = currentStock < requested;
                 final productLabel = Text(product == null ? '—' : '[${product['product_code']}] ${product['product_name']}', style: const TextStyle(fontSize: 13));
-                final reqLabel = Text('Req: $requested', style: const TextStyle(fontSize: 12));
+                final reqLabel = Text('Req: ${AppNumberFormat.amount(requested, numberFormat)}', style: const TextStyle(fontSize: 12), textAlign: TextAlign.right);
                 final onHandLabel = Text(
-                  'On hand: $currentStock',
+                  'On hand: ${AppNumberFormat.amount(currentStock, numberFormat)}',
                   style: TextStyle(fontSize: 12, color: insufficient ? AppColors.negative : AppColors.textSecondary, fontWeight: insufficient ? FontWeight.w700 : FontWeight.normal),
+                  textAlign: TextAlign.right,
                 );
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
