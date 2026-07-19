@@ -144,10 +144,10 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
         const Padding(
           padding: EdgeInsets.fromLTRB(24, 20, 24, 4),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Account Link Setup',
+            Text('Account Link Setup',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-            const SizedBox(height: 4),
-            const Text(
+            SizedBox(height: 4),
+            Text(
                 'GL account determination — decide which account each posting type uses '
                 '(company-wide, by category, by location, or per item).',
                 style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
