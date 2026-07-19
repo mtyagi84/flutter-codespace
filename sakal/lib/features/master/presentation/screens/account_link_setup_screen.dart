@@ -141,8 +141,8 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(24, 20, 24, 4),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Account Link Setup',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),

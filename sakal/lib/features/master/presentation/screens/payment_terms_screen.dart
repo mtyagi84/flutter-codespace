@@ -406,14 +406,6 @@ class _PaymentTermDialogState extends ConsumerState<_PaymentTermDialog> {
 
   bool get _isEdit => widget.existing != null;
 
-  static Widget _req(String text) => RichText(
-    text: TextSpan(
-      text: text,
-      style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w400),
-      children: const [TextSpan(text: ' *', style: TextStyle(color: AppColors.negative, fontWeight: FontWeight.w600))],
-    ),
-  );
-
   @override
   void initState() {
     super.initState();
