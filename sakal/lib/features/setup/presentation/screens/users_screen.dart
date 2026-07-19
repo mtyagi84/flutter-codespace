@@ -13,6 +13,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../data/user_location_access_helper.dart';
 import '../widgets/location_access_picker.dart';
 
@@ -167,11 +168,10 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
   @override
   Widget build(BuildContext context) {
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1100),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -202,7 +202,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                     ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
 
               if (offline) const OfflineBanner(),
               if (offline) const SizedBox(height: 16),
@@ -229,62 +229,149 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
               ],
-
-              // ── Table ─────────────────────────────────────────────────
-              Card(
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                child: _loading
-                    ? const Padding(
-                        padding: EdgeInsets.all(40),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    : _rows.isEmpty
-                        ? const Padding(
-                            padding: EdgeInsets.all(40),
-                            child: Center(
-                              child: Column(
-                                children: [
-                                  Icon(Icons.group_outlined,
-                                      size: 40, color: AppColors.textSecondary),
-                                  SizedBox(height: 12),
-                                  Text('No users yet.',
-                                      style: TextStyle(
-                                          color: AppColors.textSecondary)),
-                                  Text('Click "Add User" to create one.',
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.textSecondary)),
-                                ],
-                              ),
-                            ),
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _TableHeader(),
-                              const Divider(height: 1),
-                              ..._rows.asMap().entries.map((e) => _TableRow(
-                                    row: e.value,
-                                    isEven: e.key.isEven,
-                                    canEdit: canEdit && !offline,
-                                    onEdit: () => _openDialog(e.value),
-                                    onToggle: () => _toggleActive(e.value),
-                                    onDelete: () => _confirmDelete(
-                                        e.value['id'] as String),
-                                    onResetPassword: () =>
-                                        _openResetPassword(e.value),
-                                  )),
-                            ],
-                          ),
-              ),
             ],
           ),
         ),
+        // ── List — SakalAdaptiveList owns loading/error/empty +
+        // mobile-card/desktop-table switch; the raw fixed-width table here
+        // overflowed by 182px even at 841px (tablet zone), which is exactly
+        // the width class SakalAdaptiveList's own desktop threshold
+        // (isDesktop >= 1024px) deliberately falls back to cards for.
+        Expanded(
+          child: SakalAdaptiveList<Map<String, dynamic>>(
+            loading: _loading,
+            error: null,
+            rows: _rows,
+            columns: const [
+              SakalListColumn('Name / Username', flex: 3),
+              SakalListColumn('Email', flex: 3),
+              SakalListColumn('Phone', flex: 2),
+              SakalListColumn('Language', flex: 1),
+              SakalListColumn('Active', flex: 1),
+              SakalListColumn('Actions', flex: 2),
+            ],
+            rowBuilder: (row, i) => _buildTableRow(row, canEdit && !offline),
+            cardBuilder: (row) => _UserCard(
+              row: row,
+              canEdit: canEdit && !offline,
+              onEdit: () => _openDialog(row),
+              onToggle: () => _toggleActive(row),
+              onDelete: () => _confirmDelete(row['id'] as String),
+              onResetPassword: () => _openResetPassword(row),
+            ),
+            emptyState: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.group_outlined, size: 40, color: AppColors.textSecondary),
+                  const SizedBox(height: 12),
+                  const Text('No users yet.', style: TextStyle(color: AppColors.textSecondary)),
+                  const Text('Click "Add User" to create one.',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTableRow(Map<String, dynamic> row, bool canEditRow) {
+    final active     = row['is_active'] as bool? ?? true;
+    final fullName   = row['full_name']  as String? ?? '';
+    final salutation = row['salutation'] as String?;
+    final username   = row['username']   as String? ?? '';
+    final langCode    = row['language_code'] as String? ?? 'en';
+    final photoBase64 = row['photo'] as String?;
+
+    final displayName = [if (salutation != null) salutation, fullName]
+        .where((s) => s.isNotEmpty)
+        .join(' ');
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            flex: 3,
+            child: Row(
+              children: [
+                _Avatar(photoBase64: photoBase64, initials: _initials(fullName), active: active),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(displayName,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                      Text('@$username',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(row['email'] as String? ?? '—',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(row['phone'] as String? ?? '—',
+                style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
+          ),
+          Expanded(flex: 1, child: _LangChip(code: langCode)),
+          Expanded(
+            flex: 1,
+            child: Switch(
+              value: active,
+              onChanged: canEditRow ? (_) => _toggleActive(row) : null,
+              activeThumbColor: AppColors.positive,
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Edit',
+                  icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                  onPressed: canEditRow ? () => _openDialog(row) : null,
+                ),
+                IconButton(
+                  tooltip: 'Reset Password',
+                  icon: const Icon(Icons.lock_reset_outlined, size: 18, color: AppColors.secondary),
+                  onPressed: canEditRow ? () => _openResetPassword(row) : null,
+                ),
+                IconButton(
+                  tooltip: 'Delete',
+                  icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
+                  onPressed: canEditRow ? () => _confirmDelete(row['id'] as String) : null,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  static String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    if (parts.isNotEmpty && parts[0].isNotEmpty) return parts[0][0].toUpperCase();
+    return '?';
   }
 
   Future<void> _confirmDelete(String id) async {
@@ -309,62 +396,17 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
   }
 }
 
-// ── Table header ──────────────────────────────────────────────────────────────
+// ── Mobile card ───────────────────────────────────────────────────────────────
 
-class _TableHeader extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceVariant,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-      ),
-      child: const Row(
-        children: [
-          SizedBox(width: 48),
-          SizedBox(width: 12),
-          SizedBox(width: 200, child: _HCol('Name / Username')),
-          SizedBox(width: 190, child: _HCol('Email')),
-          SizedBox(width: 130, child: _HCol('Phone')),
-          SizedBox(width: 80,  child: _HCol('Language')),
-          SizedBox(width: 80,  child: _HCol('Active')),
-          SizedBox(width: 130, child: _HCol('Actions')),
-        ],
-      ),
-    );
-  }
-}
-
-class _HCol extends StatelessWidget {
-  final String text;
-  const _HCol(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(text,
-        style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textSecondary,
-            letterSpacing: 0.3));
-  }
-}
-
-// ── Table row ─────────────────────────────────────────────────────────────────
-
-class _TableRow extends StatelessWidget {
+class _UserCard extends StatelessWidget {
   final Map<String, dynamic> row;
-  final bool isEven;
   final bool canEdit;
   final VoidCallback onEdit;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
   final VoidCallback onResetPassword;
-
-  const _TableRow({
+  const _UserCard({
     required this.row,
-    required this.isEven,
     required this.canEdit,
     required this.onEdit,
     required this.onToggle,
@@ -385,108 +427,83 @@ class _TableRow extends StatelessWidget {
         .where((s) => s.isNotEmpty)
         .join(' ');
 
-    return Container(
-      color: isEven
-          ? Colors.transparent
-          : AppColors.surfaceVariant.withValues(alpha: 0.35),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          _Avatar(
-            photoBase64: photoBase64,
-            initials: _initials(fullName),
-            active: active,
-          ),
-          const SizedBox(width: 12),
-
-          SizedBox(
-            width: 200,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Text(displayName,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary)),
-                Text('@$username',
-                    style: const TextStyle(
-                        fontSize: 11, color: AppColors.textSecondary)),
-              ],
-            ),
-          ),
-
-          SizedBox(
-            width: 190,
-            child: Text(row['email'] as String? ?? '—',
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontSize: 13, color: AppColors.textPrimary)),
-          ),
-
-          SizedBox(
-            width: 130,
-            child: Text(row['phone'] as String? ?? '—',
-                style: const TextStyle(
-                    fontSize: 13, color: AppColors.textPrimary)),
-          ),
-
-          SizedBox(
-            width: 80,
-            child: _LangChip(code: langCode),
-          ),
-
-          SizedBox(
-            width: 80,
-            child: Switch(
-              value: active,
-              onChanged: canEdit ? (_) => onToggle() : null,
-              activeThumbColor: AppColors.positive,
-            ),
-          ),
-
-          SizedBox(
-            width: 130,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  tooltip: 'Edit',
-                  icon: const Icon(Icons.edit_outlined,
-                      size: 18, color: AppColors.primary),
-                  onPressed: canEdit ? onEdit : null,
+                _Avatar(
+                  photoBase64: photoBase64,
+                  initials: _UsersScreenState._initials(fullName),
+                  active: active,
                 ),
-                IconButton(
-                  tooltip: 'Reset Password',
-                  icon: const Icon(Icons.lock_reset_outlined,
-                      size: 18, color: AppColors.secondary),
-                  onPressed: canEdit ? onResetPassword : null,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(displayName,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                      Text('@$username',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    ],
+                  ),
                 ),
-                IconButton(
-                  tooltip: 'Delete',
-                  icon: const Icon(Icons.delete_outline,
-                      size: 18, color: AppColors.negative),
-                  onPressed: canEdit ? onDelete : null,
+                Switch(
+                  value: active,
+                  onChanged: canEdit ? (_) => onToggle() : null,
+                  activeThumbColor: AppColors.positive,
                 ),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _LangChip(code: langCode),
+                if ((row['email'] as String? ?? '').isNotEmpty)
+                  Text(row['email'] as String,
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                if ((row['phone'] as String? ?? '').isNotEmpty)
+                  Text(row['phone'] as String,
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              ],
+            ),
+            if (canEdit) ...[
+              const Divider(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    tooltip: 'Edit',
+                    icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                    onPressed: onEdit,
+                  ),
+                  IconButton(
+                    tooltip: 'Reset Password',
+                    icon: const Icon(Icons.lock_reset_outlined, size: 18, color: AppColors.secondary),
+                    onPressed: onResetPassword,
+                  ),
+                  IconButton(
+                    tooltip: 'Delete',
+                    icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
+                    onPressed: onDelete,
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
-  }
-
-  String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    }
-    if (parts.isNotEmpty && parts[0].isNotEmpty) {
-      return parts[0][0].toUpperCase();
-    }
-    return '?';
   }
 }
 
@@ -806,6 +823,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                       width: 120,
                       child: DropdownButtonFormField<String>(
                         initialValue: _salutation,
+                        isExpanded: true,
                         decoration: const InputDecoration(labelText: 'Title'),
                         items: [
                           const DropdownMenuItem(
@@ -888,6 +906,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         initialValue: _language,
+                        isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Language',
                           prefixIcon: Icon(Icons.language_outlined),
@@ -906,6 +925,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         initialValue: _theme,
+                        isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Theme',
                           prefixIcon: Icon(Icons.palette_outlined),

@@ -1308,78 +1308,97 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
                       fontSize: 13, color: AppColors.textSecondary)),
             )
           else
-            Table(
-              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-              columnWidths: const {
-                0: FlexColumnWidth(2),
-                1: FlexColumnWidth(1.5),
-                2: FlexColumnWidth(2),
-                3: FixedColumnWidth(36),
-                4: FixedColumnWidth(36),
-                5: FixedColumnWidth(36),
-                6: FixedColumnWidth(64),
-              },
-              children: [
-                const TableRow(
-                  decoration: BoxDecoration(color: AppColors.surfaceVariant),
-                  children: [
-                    _TableHdr('UOM'),
-                    _TableHdr('Factor', alignRight: true),
-                    _TableHdr('Barcode'),
-                    _TableHdr('Base'),
-                    _TableHdr('Buy'),
-                    _TableHdr('Sell'),
-                    _TableHdr(''),
-                  ],
-                ),
-                ..._uomRows.asMap().entries.map((entry) {
-                  final i   = entry.key;
-                  final row = entry.value;
-                  return TableRow(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                        child: Text(row.uomName ?? row.uomId,
-                            style: const TextStyle(fontSize: 13)),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Text(row.conversionFactor.toString(),
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(fontSize: 13)),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Text(row.barcode ?? '—',
-                            style: const TextStyle(
-                                fontSize: 13, color: AppColors.textSecondary)),
-                      ),
-                      _BoolCell(row.isBaseUom),
-                      _BoolCell(row.isPurchaseUom),
-                      _BoolCell(row.isSalesUom),
-                      if (canSave)
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit_outlined, size: 16),
-                              onPressed: () => _addOrEditUomRow(existing: row, index: i),
-                              tooltip: 'Edit',
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline,
-                                  size: 16, color: AppColors.negative),
-                              onPressed: () => _confirmDeleteUomRow(i),
-                              tooltip: 'Remove',
-                            ),
-                          ],
-                        )
-                      else
-                        const SizedBox.shrink(),
-                    ],
-                  );
-                }),
-              ],
+            // A raw Table() widget inside this screen's outer SingleChildScrollView
+            // resolves to zero width / throws "RenderBox was not laid out" on Flutter
+            // Web (FlexColumnWidth needs a bounded parent width, which a loose-constraint
+            // scrollable Column never gives it — see feedback_flutter_web_table memory,
+            // originally debugged on the Master Menu screen). Same fix here: fixed-width
+            // Row(mainAxisSize: min)+SizedBox cells, wrapped in its own horizontal scroll
+            // so it never depends on the outer scroll view's width at all.
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ColoredBox(
+                    color: AppColors.surfaceVariant,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        _TableHdr('UOM', width: 140),
+                        _TableHdr('Factor', width: 80, alignRight: true),
+                        _TableHdr('Barcode', width: 140),
+                        _TableHdr('Base', width: 48, center: true),
+                        _TableHdr('Buy', width: 48, center: true),
+                        _TableHdr('Sell', width: 48, center: true),
+                        _TableHdr('', width: 72),
+                      ],
+                    ),
+                  ),
+                  ..._uomRows.asMap().entries.map((entry) {
+                    final i   = entry.key;
+                    final row = entry.value;
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 140,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                            child: Text(row.uomName ?? row.uomId,
+                                style: const TextStyle(fontSize: 13)),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 80,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(row.conversionFactor.toString(),
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(fontSize: 13)),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 140,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(row.barcode ?? '—',
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 13, color: AppColors.textSecondary)),
+                          ),
+                        ),
+                        SizedBox(width: 48, child: _BoolCell(row.isBaseUom)),
+                        SizedBox(width: 48, child: _BoolCell(row.isPurchaseUom)),
+                        SizedBox(width: 48, child: _BoolCell(row.isSalesUom)),
+                        SizedBox(
+                          width: 72,
+                          child: canSave
+                              ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_outlined, size: 16),
+                                      onPressed: () => _addOrEditUomRow(existing: row, index: i),
+                                      tooltip: 'Edit',
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline,
+                                          size: 16, color: AppColors.negative),
+                                      onPressed: () => _confirmDeleteUomRow(i),
+                                      tooltip: 'Remove',
+                                    ),
+                                  ],
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    );
+                  }),
+                ],
+              ),
             ),
           if (canSave) ...[
             const SizedBox(height: 12),
@@ -1819,18 +1838,26 @@ class _SectionCard extends ConsumerWidget {
 // app-wide "numbers always right-align" convention (§2.1 design_system_guide.md).
 class _TableHdr extends StatelessWidget {
   final String text;
+  final double width;
   final bool alignRight;
-  const _TableHdr(this.text, {this.alignRight = false});
+  final bool center;
+  const _TableHdr(this.text,
+      {required this.width, this.alignRight = false, this.center = false});
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-        child: Text(text,
-            textAlign: alignRight ? TextAlign.right : TextAlign.left,
-            style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textSecondary,
-                letterSpacing: 0.3)),
+  Widget build(BuildContext context) => SizedBox(
+        width: width,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+          child: Text(text,
+              textAlign: center
+                  ? TextAlign.center
+                  : (alignRight ? TextAlign.right : TextAlign.left),
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textSecondary,
+                  letterSpacing: 0.3)),
+        ),
       );
 }
 

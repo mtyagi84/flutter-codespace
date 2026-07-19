@@ -208,7 +208,10 @@ class _CategoryLevelsScreenState extends ConsumerState<CategoryLevelsScreen>
       backgroundColor: AppColors.background,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : Padding(
+          // No scroll wrapper previously — with 4 level cards added, the
+          // Column's content simply ran past the bottom of the screen
+          // ("BOTTOM OVERFLOWED BY 19 PIXELS" on the 4th card).
+          : SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

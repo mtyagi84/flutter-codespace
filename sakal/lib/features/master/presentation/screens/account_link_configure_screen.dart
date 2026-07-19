@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
@@ -274,10 +273,13 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // No in-content back arrow here — the TopBar's own corner
+              // arrow already provides it; this screen used to duplicate
+              // it with a second back button right next to the title,
+              // which read as confusing ("two back buttons") rather than
+              // matching the deliberate in-content-back pilot on Sales
+              // Order/Sales Invoice (a different, additive convention).
               Row(children: [
-                if (context.canPop())
-                  IconButton(icon: const Icon(Icons.arrow_back), tooltip: 'Back', onPressed: () => context.pop()),
-                const SizedBox(width: 4),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

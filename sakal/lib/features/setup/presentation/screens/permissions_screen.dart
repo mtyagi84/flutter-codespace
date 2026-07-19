@@ -7,6 +7,7 @@ import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/permission_cascade.dart';
+import '../../../../core/utils/responsive.dart';
 
 class PermissionsScreen extends ConsumerStatefulWidget {
   const PermissionsScreen({super.key});
@@ -398,8 +399,9 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = Responsive.isMobile(context);
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
+      padding: EdgeInsets.all(isMobile ? 16 : 32),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
@@ -424,14 +426,33 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                 const SizedBox(height: 20),
               ],
 
-              // ── Two-panel body ────────────────────────────────────────
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Left: User list ─────────────────────────────────
-                  SizedBox(
-                    width: 220,
-                    child: Card(
+              // ── Two-panel body — a fixed 220px Users column left almost
+              // no room for the Expanded detail panel on mobile (down to
+              // ~112px, the direct cause of the Sales Controls/permission
+              // grid text wrapping one character per line). Stack instead
+              // of side-by-side there.
+              if (isMobile) ...[
+                _buildUsersCard(),
+                const SizedBox(height: 16),
+                _buildDetailPanel(),
+              ] else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(width: 220, child: _buildUsersCard()),
+                    const SizedBox(width: 16),
+                    Expanded(child: _buildDetailPanel()),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUsersCard() {
+    return Card(
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12)),
                       child: Column(
@@ -484,13 +505,11 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                                 )),
                         ],
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
+    );
+  }
 
-                  // ── Right: Permissions panel ────────────────────────
-                  Expanded(
-                    child: _selectedUserId == null
+  Widget _buildDetailPanel() {
+    return _selectedUserId == null
                         ? Card(
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12)),
@@ -632,15 +651,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                                       onToggle: _toggle,
                                     )),
                             ],
-                          ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+                          );
   }
 }
 
@@ -1024,48 +1035,68 @@ class _ModuleCardState extends State<_ModuleCard> {
 
           if (_expanded) ...[
             const Divider(height: 1),
-
-            // ── Column header ──────────────────────────────────────
-            _PermHeader(),
-
-            // ── Groups ─────────────────────────────────────────────
-            ...sortedGroups.map((group) {
-              final featureRows = group.featureCodes
-                  .asMap()
-                  .entries
-                  .where((e) => widget.features.containsKey(e.value))
-                  .toList();
-
-              return Column(
+            Builder(builder: (context) {
+              final grid = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (group.name.isNotEmpty)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 7),
-                      color:
-                          AppColors.surfaceVariant.withValues(alpha: 0.6),
-                      child: Text(
-                        group.name,
-                        style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textSecondary,
-                            letterSpacing: 0.3),
-                      ),
-                    ),
-                  ...featureRows.map((e) {
-                    final fc = e.value;
-                    final f  = widget.features[fc]!;
-                    return _FeatureRow(
-                      feature:  f,
-                      isEven:   e.key.isEven,
-                      saving:   widget.saving.contains(fc),
-                      onToggle: (field) => widget.onToggle(fc, field),
+                  // ── Column header ────────────────────────────
+                  _PermHeader(),
+
+                  // ── Groups ───────────────────────────────────
+                  ...sortedGroups.map((group) {
+                    final featureRows = group.featureCodes
+                        .asMap()
+                        .entries
+                        .where((e) => widget.features.containsKey(e.value))
+                        .toList();
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (group.name.isNotEmpty)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 7),
+                            color:
+                                AppColors.surfaceVariant.withValues(alpha: 0.6),
+                            child: Text(
+                              group.name,
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textSecondary,
+                                  letterSpacing: 0.3),
+                            ),
+                          ),
+                        ...featureRows.map((e) {
+                          final fc = e.value;
+                          final f  = widget.features[fc]!;
+                          return _FeatureRow(
+                            feature:  f,
+                            isEven:   e.key.isEven,
+                            saving:   widget.saving.contains(fc),
+                            onToggle: (field) => widget.onToggle(fc, field),
+                          );
+                        }),
+                      ],
                     );
                   }),
                 ],
+              );
+
+              // 6 fixed-width boolean columns (View/Add/Edit/Approve/Copy/
+              // Excel) plus a Feature-name column never fit a phone width —
+              // there's no card-style simplification that keeps every
+              // permission visible, so scroll horizontally on mobile instead
+              // of letting the Feature-name column squeeze into a vertical
+              // letter-wrap (real bug: "Product Category Level Setup"
+              // wrapping one word per line at ~325px). Desktop is already
+              // wide enough (Expanded fills it) — leave it untouched.
+              if (!Responsive.isMobile(context)) return grid;
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(width: 520, child: grid),
               );
             }),
           ],

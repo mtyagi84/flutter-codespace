@@ -402,6 +402,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
   Widget _typeDropdown() {
     if (_loadingTypes) {
       return DropdownButtonFormField<String>(
+        isExpanded: true,
         decoration: const InputDecoration(
           labelText: 'Master Type',
           border: OutlineInputBorder(),
@@ -424,6 +425,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
 
     if (_types.isEmpty) {
       return DropdownButtonFormField<String>(
+        isExpanded: true,
         decoration: const InputDecoration(
           labelText: 'Master Type',
           border: OutlineInputBorder(),
@@ -438,6 +440,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
     }
 
     return DropdownButtonFormField<String>(
+      isExpanded: true,
       decoration: const InputDecoration(
         labelText: 'Master Type',
         border: OutlineInputBorder(),

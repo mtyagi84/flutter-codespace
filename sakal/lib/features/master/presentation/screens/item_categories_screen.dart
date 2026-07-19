@@ -387,7 +387,10 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
                 width: 18, height: 18,
                 child: CircularProgressIndicator(strokeWidth: 2)),
           ),
-        if (_canAdd && _levels.isNotEmpty &&
+        // Hidden while the add/edit panel is already open — having both
+        // "+Add {Level}" and the panel's own Save visible at once left the
+        // user unsure which one to use.
+        if (_canAdd && _levels.isNotEmpty && _panelMode == 'none' &&
             !(ref.read(sessionProvider)?.offlineMode ?? false))
           FilledButton.icon(
             onPressed: _saving ? null : () => _openAdd(),

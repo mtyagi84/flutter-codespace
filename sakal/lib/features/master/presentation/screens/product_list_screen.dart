@@ -6,6 +6,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
@@ -151,47 +152,56 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen>
                 ],
               ),
               const SizedBox(height: 12),
-              // Search + filters
-              Row(
-                children: [
-                  Expanded(
-                    child: SakalFieldCard(
-                      label: 'Search',
-                      editable: true,
-                      child: TextField(
-                        controller: _searchCtrl,
-                        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
-                        decoration: SakalFieldCard.bareDecoration.copyWith(
-                          hintText: 'Search by code or name…',
-                          hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
-                          prefixIcon: const Icon(Icons.search, size: 16),
-                          suffixIcon: _search.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.clear, size: 16),
-                                  onPressed: () { _searchCtrl.clear(); })
-                              : null,
-                        ),
-                      ),
+              // Search + filters — the two dropdowns + refresh button are
+              // fixed-intrinsic-width siblings of the search field's own
+              // Expanded; on mobile their combined width doesn't leave room
+              // for the search field's own minimum content width, so the
+              // Row overflows. Stack search above a wrapped filter row on
+              // mobile instead of forcing everything onto one line.
+              if (Responsive.isMobile(context)) ...[
+                _buildSearchField(),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _NatureFilter(
+                      value: _nature,
+                      onChanged: (v) { _nature = v; _reload(); },
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  _NatureFilter(
-                    value: _nature,
-                    onChanged: (v) { _nature = v; _reload(); },
-                  ),
-                  const SizedBox(width: 8),
-                  _ActiveFilter(
-                    value: _activeFilter,
-                    onChanged: (v) { _activeFilter = v; _reload(); },
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    tooltip: 'Refresh',
-                    icon: const Icon(Icons.refresh, size: 18),
-                    onPressed: _loading ? null : _reload,
-                  ),
-                ],
-              ),
+                    _ActiveFilter(
+                      value: _activeFilter,
+                      onChanged: (v) { _activeFilter = v; _reload(); },
+                    ),
+                    IconButton(
+                      tooltip: 'Refresh',
+                      icon: const Icon(Icons.refresh, size: 18),
+                      onPressed: _loading ? null : _reload,
+                    ),
+                  ],
+                ),
+              ] else
+                Row(
+                  children: [
+                    Expanded(child: _buildSearchField()),
+                    const SizedBox(width: 10),
+                    _NatureFilter(
+                      value: _nature,
+                      onChanged: (v) { _nature = v; _reload(); },
+                    ),
+                    const SizedBox(width: 8),
+                    _ActiveFilter(
+                      value: _activeFilter,
+                      onChanged: (v) { _activeFilter = v; _reload(); },
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: 'Refresh',
+                      icon: const Icon(Icons.refresh, size: 18),
+                      onPressed: _loading ? null : _reload,
+                    ),
+                  ],
+                ),
             ],
           ),
         ),
@@ -237,6 +247,25 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen>
       ],
     );
   }
+
+  Widget _buildSearchField() => SakalFieldCard(
+        label: 'Search',
+        editable: true,
+        child: TextField(
+          controller: _searchCtrl,
+          style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+          decoration: SakalFieldCard.bareDecoration.copyWith(
+            hintText: 'Search by code or name…',
+            hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+            prefixIcon: const Icon(Icons.search, size: 16),
+            suffixIcon: _search.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear, size: 16),
+                    onPressed: () { _searchCtrl.clear(); })
+                : null,
+          ),
+        ),
+      );
 
   Widget _buildError() => Center(
         child: Column(

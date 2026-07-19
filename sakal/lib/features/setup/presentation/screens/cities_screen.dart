@@ -8,6 +8,7 @@ import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/sakal_adaptive_list.dart';
 
 class CitiesScreen extends ConsumerStatefulWidget {
   const CitiesScreen({super.key});
@@ -296,19 +297,18 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
     return d['division_name'] as String? ?? '—';
   }
 
-  // ── Column widths ─────────────────────────────────────────────────
-  static const _w = [220.0, 200.0, 72.0, 88.0];
-  static const _tableWidth = 602.0;
-
   @override
   Widget build(BuildContext context) {
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     final filtered = _filtered;
     final activeCount = _cities.where((c) => c['is_active'] == true).length;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(32, 28, 32, 32),
-      child: Column(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+          child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Header ────────────────────────────────────────────────
@@ -436,156 +436,122 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
               child: Text(_error!,
                   style: const TextStyle(color: AppColors.negative, fontSize: 13)),
             ),
-
-          // ── No country ────────────────────────────────────────────
-          if (_selectedCountry == null)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 48),
-              decoration: BoxDecoration(
-                border: Border.all(color: AppColors.border),
-                borderRadius: BorderRadius.circular(8),
-                color: Colors.white,
-              ),
-              child: const Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.location_city_outlined, size: 40, color: AppColors.textDisabled),
-                    SizedBox(height: 12),
-                    Text('Select a country above to view its cities',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                  ],
-                ),
-              ),
-            )
-
-          else if (_loadingCities)
-            const Center(child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 48),
-              child: CircularProgressIndicator(),
-            ))
-
-          // ── Table ─────────────────────────────────────────────────
-          else
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.border),
-                  borderRadius: BorderRadius.circular(8),
-                  color: Colors.white,
-                ),
-                clipBehavior: Clip.hardEdge,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildHeader(),
-                    if (filtered.isEmpty)
-                      const SizedBox(
-                        width: _tableWidth,
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 32),
-                          child: Center(
-                            child: Text('No cities found. Add one using the button above.',
-                                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                                textAlign: TextAlign.center),
-                          ),
-                        ),
-                      )
-                    else
-                      ...filtered.expand((c) => [
-                            Container(width: _tableWidth, height: 1, color: AppColors.border),
-                            _buildRow(c),
-                          ]),
-                  ],
-                ),
-              ),
-            ),
         ],
-      ),
+          ),
+        ),
+        const SizedBox(height: 4),
+
+        // ── List — SakalAdaptiveList owns loading/error/empty +
+        // mobile-card/desktop-table switch; the raw horizontal-scroll-only
+        // table here was hard to use on mobile (Edit/Delete scrolled off
+        // screen with no visible scrollbar hint).
+        Expanded(
+          child: _selectedCountry == null
+              ? Center(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 24),
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 48),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(8),
+                      color: Colors.white,
+                    ),
+                    child: const Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.location_city_outlined, size: 40, color: AppColors.textDisabled),
+                        SizedBox(height: 12),
+                        Text('Select a country above to view its cities',
+                            style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                )
+              : SakalAdaptiveList<Map<String, dynamic>>(
+                  loading: _loadingCities,
+                  error: null,
+                  rows: filtered,
+                  columns: const [
+                    SakalListColumn('City Name', flex: 3),
+                    SakalListColumn('Division', flex: 3),
+                    SakalListColumn('Active', flex: 1),
+                    SakalListColumn('Actions', flex: 2),
+                  ],
+                  rowBuilder: (c, i) => _buildTableRow(c, offline),
+                  cardBuilder: (c) => _CityCard(
+                    row: c,
+                    divisionName: _divisionName(c['division_id'] as String?),
+                    offline: offline,
+                    toggling: _toggling.contains(c['id'] as String?),
+                    onToggle: () => _toggleActive(c['id'] as String, c['is_active'] as bool? ?? true),
+                    onEdit: () => _openDialog(c),
+                    onDelete: () => _delete(c['id'] as String),
+                  ),
+                  emptyState: const Center(
+                    child: Text('No cities found. Add one using the button above.',
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        textAlign: TextAlign.center),
+                  ),
+                ),
+        ),
+      ],
     );
   }
 
-  Widget _buildHeader() {
-    const style = TextStyle(
-        fontSize: 11, fontWeight: FontWeight.w700,
-        color: AppColors.textSecondary, letterSpacing: 0.5);
-    return ColoredBox(
-      color: AppColors.surfaceVariant,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _hcell('CITY NAME',  _w[0], style),
-          _vd(), _hcell('DIVISION',   _w[1], style),
-          _vd(), _hcell('ACTIVE',     _w[2], style, center: true),
-          _vd(), SizedBox(width: _w[3], height: 40),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRow(Map<String, dynamic> c) {
+  Widget _buildTableRow(Map<String, dynamic> c, bool offline) {
     final active = c['is_active'] as bool? ?? true;
     final id     = c['id'] as String;
-    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
 
-    return ColoredBox(
-      color: active ? Colors.white : const Color(0xFFF9FAFB),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _dcell(c['city_name'] as String? ?? '', _w[0],
-              TextStyle(fontSize: 13,
-                  color: active ? AppColors.textPrimary : AppColors.textDisabled)),
-          _vd(),
-          _dcell(_divisionName(c['division_id'] as String?), _w[1],
-              TextStyle(fontSize: 12,
-                  color: active ? AppColors.textSecondary : AppColors.textDisabled)),
-          _vd(),
-          SizedBox(
-            width: _w[2], height: 48,
-            child: Center(
-              child: offline
-                  ? Icon(
-                      active ? Icons.check_circle : Icons.cancel,
-                      size: 18,
-                      color: active ? AppColors.positive : AppColors.textDisabled,
-                    )
-                  : Switch.adaptive(
-                      value: active,
-                      activeThumbColor: AppColors.positive,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      onChanged: _toggling.contains(id)
-                          ? null
-                          : (_) => _toggleActive(id, active),
-                    ),
-            ),
+          Expanded(
+            flex: 3,
+            child: Text(c['city_name'] as String? ?? '',
+                style: TextStyle(fontSize: 13,
+                    color: active ? AppColors.textPrimary : AppColors.textDisabled)),
           ),
-          _vd(),
-          SizedBox(
-            width: _w[3], height: 48,
+          Expanded(
+            flex: 3,
+            child: Text(_divisionName(c['division_id'] as String?),
+                style: TextStyle(fontSize: 12,
+                    color: active ? AppColors.textSecondary : AppColors.textDisabled)),
+          ),
+          Expanded(
+            flex: 1,
+            child: offline
+                ? Icon(
+                    active ? Icons.check_circle : Icons.cancel,
+                    size: 18,
+                    color: active ? AppColors.positive : AppColors.textDisabled,
+                  )
+                : Switch.adaptive(
+                    value: active,
+                    activeThumbColor: AppColors.positive,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    onChanged: _toggling.contains(id) ? null : (_) => _toggleActive(id, active),
+                  ),
+          ),
+          Expanded(
+            flex: 2,
             child: offline
                 ? const SizedBox()
                 : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
                         icon: const Icon(Icons.edit_outlined, size: 17),
                         color: AppColors.primary,
                         tooltip: 'Edit',
-                        constraints: const BoxConstraints(),
-                        padding: EdgeInsets.zero,
                         onPressed: () => _openDialog(c),
                       ),
-                      const SizedBox(width: 12),
                       IconButton(
                         icon: const Icon(Icons.delete_outline, size: 17),
                         color: AppColors.negative,
                         tooltip: 'Delete',
-                        constraints: const BoxConstraints(),
-                        padding: EdgeInsets.zero,
                         onPressed: () => _delete(id),
                       ),
                     ],
@@ -595,29 +561,95 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
       ),
     );
   }
+}
 
-  Widget _vd() => const SizedBox(width: 1, height: 48, child: ColoredBox(color: AppColors.border));
+// ── Mobile card ───────────────────────────────────────────────────────────────
 
-  Widget _hcell(String text, double w, TextStyle style, {bool center = false}) =>
-      SizedBox(
-        width: w,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Text(text, textAlign: center ? TextAlign.center : TextAlign.left, style: style),
+class _CityCard extends StatelessWidget {
+  final Map<String, dynamic> row;
+  final String divisionName;
+  final bool offline;
+  final bool toggling;
+  final VoidCallback onToggle;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  const _CityCard({
+    required this.row,
+    required this.divisionName,
+    required this.offline,
+    required this.toggling,
+    required this.onToggle,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final active = row['is_active'] as bool? ?? true;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(row['city_name'] as String? ?? '',
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: active ? AppColors.textPrimary : AppColors.textDisabled)),
+                      if (divisionName != '—')
+                        Text(divisionName,
+                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    ],
+                  ),
+                ),
+                toggling
+                    ? const SizedBox(
+                        width: 20, height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : offline
+                        ? Icon(
+                            active ? Icons.check_circle : Icons.cancel,
+                            size: 18,
+                            color: active ? AppColors.positive : AppColors.textDisabled,
+                          )
+                        : Switch(
+                            value: active,
+                            onChanged: (_) => onToggle(),
+                            activeThumbColor: AppColors.positive,
+                          ),
+              ],
+            ),
+            if (!offline) ...[
+              const Divider(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    tooltip: 'Edit',
+                    icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                    onPressed: onEdit,
+                  ),
+                  IconButton(
+                    tooltip: 'Delete',
+                    icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
+                    onPressed: onDelete,
+                  ),
+                ],
+              ),
+            ],
+          ],
         ),
-      );
-
-  Widget _dcell(String text, double w, TextStyle style, {bool center = false}) =>
-      SizedBox(
-        width: w,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          child: Text(text,
-              overflow: TextOverflow.ellipsis,
-              textAlign: center ? TextAlign.center : TextAlign.left,
-              style: style),
-        ),
-      );
+      ),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -729,6 +761,7 @@ class _CityDialogState extends State<_CityDialog> {
                     // Country
                     DropdownButtonFormField<String>(
                       initialValue: _countryCode,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Country *',
                         prefixIcon: Icon(Icons.public_outlined),
@@ -748,6 +781,7 @@ class _CityDialogState extends State<_CityDialog> {
                     // Division (optional)
                     DropdownButtonFormField<String>(
                       initialValue: _divisionId,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Division (optional)',
                         prefixIcon: Icon(Icons.layers_outlined),

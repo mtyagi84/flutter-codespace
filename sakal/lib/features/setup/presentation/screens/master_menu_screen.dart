@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/responsive.dart';
 
 class MasterMenuScreen extends ConsumerStatefulWidget {
   const MasterMenuScreen({super.key});
@@ -113,6 +114,27 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
     return map;
   }
 
+  // Entries load ordered only by group_serial_no/serial_no (a PostgREST
+  // order on the joined module's own name isn't practical here) — sort
+  // client-side by each entry's module position in _modules (itself
+  // already ordered by serial_no) so the list reads module-by-module.
+  List<Map<String, dynamic>> get _sortedEntries {
+    final moduleOrder = <String, int>{
+      for (var i = 0; i < _modules.length; i++) _modules[i]['id'] as String: i,
+    };
+    final sorted = List<Map<String, dynamic>>.from(_entries);
+    sorted.sort((a, b) {
+      final ai = moduleOrder[a['module_id'] as String?] ?? _modules.length;
+      final bi = moduleOrder[b['module_id'] as String?] ?? _modules.length;
+      if (ai != bi) return ai.compareTo(bi);
+      final ag = a['group_serial_no'] as int? ?? 0;
+      final bg = b['group_serial_no'] as int? ?? 0;
+      if (ag != bg) return ag.compareTo(bg);
+      return (a['serial_no'] as int? ?? 0).compareTo(b['serial_no'] as int? ?? 0);
+    });
+    return sorted;
+  }
+
   String _moduleName(String? id) {
     if (id == null) return '—';
     return _modules.firstWhere(
@@ -198,31 +220,53 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
             ),
             const SizedBox(height: 16),
 
-            // ── Table — horizontal scroll only ───────────────────────
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.border),
-                  borderRadius: BorderRadius.circular(8),
-                  color: Colors.white,
-                ),
-                clipBehavior: Clip.hardEdge,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeaderRow(),
-                    ..._entries.expand((e) => [
-                          Container(
-                              width: _tableWidth, height: 1,
-                              color: AppColors.border),
-                          _buildDataRow(e),
-                        ]),
-                  ],
+            // ── List: mobile gets cards (an 8-column config table never
+            // fits a phone width, and horizontal-scroll-only was reported
+            // as hard to use with no visible scroll affordance); desktop
+            // keeps the table, now wrapped in a visible Scrollbar so the
+            // "more columns to the right" hint is no longer invisible.
+            if (Responsive.isMobile(context))
+              Column(
+                children: _sortedEntries
+                    .map((e) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _MenuEntryCard(
+                            entry: e,
+                            moduleName: _moduleName(e['module_id'] as String?),
+                            onEdit: () => _openDialog(e),
+                            onToggle: () => _toggleActive(e['id'] as String, e['is_active'] as bool? ?? true),
+                          ),
+                        ))
+                    .toList(),
+              )
+            else
+              Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(8),
+                      color: Colors.white,
+                    ),
+                    clipBehavior: Clip.hardEdge,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildHeaderRow(),
+                        ..._sortedEntries.expand((e) => [
+                              Container(
+                                  width: _tableWidth, height: 1,
+                                  color: AppColors.border),
+                              _buildDataRow(e),
+                            ]),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
           ],
         ),
     );
@@ -345,6 +389,66 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
               style: style),
         ),
       );
+}
+
+// ── Mobile card ───────────────────────────────────────────────────────────────
+
+class _MenuEntryCard extends StatelessWidget {
+  final Map<String, dynamic> entry;
+  final String moduleName;
+  final VoidCallback onEdit;
+  final VoidCallback onToggle;
+  const _MenuEntryCard({
+    required this.entry,
+    required this.moduleName,
+    required this.onEdit,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final active = entry['is_active'] as bool? ?? true;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(entry['feature_name'] as String? ?? '',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$moduleName  ·  ${entry['feature_code'] ?? ''}',
+                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                  Text(
+                    entry['screen_name'] as String? ?? '',
+                    style: const TextStyle(
+                        fontSize: 11, color: AppColors.textSecondary, fontFamily: 'monospace'),
+                  ),
+                ],
+              ),
+            ),
+            Switch.adaptive(
+              value: active,
+              activeThumbColor: AppColors.positive,
+              onChanged: (_) => onToggle(),
+            ),
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              color: AppColors.primary,
+              tooltip: 'Edit',
+              onPressed: onEdit,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════

@@ -8,6 +8,7 @@ import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/sakal_adaptive_list.dart';
 
 class DivisionsScreen extends ConsumerStatefulWidget {
   const DivisionsScreen({super.key});
@@ -194,16 +195,14 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
     return counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
   }
 
-  // ── Column widths ──────────────────────────────────────────────────
-  static const _w = [120.0, 240.0, 110.0, 80.0, 88.0];
-  static const _tableWidth = 660.0;
-
   @override
   Widget build(BuildContext context) {
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(32, 28, 32, 32),
-      child: Column(
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+          child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Header ────────────────────────────────────────────────
@@ -247,6 +246,7 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
                 ? const LinearProgressIndicator()
                 : DropdownButtonFormField<String>(
                     initialValue: _selectedCountry,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Country',
                       prefixIcon: Icon(Icons.public_outlined),
@@ -271,162 +271,107 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
               child: Text(_error!,
                   style: const TextStyle(color: AppColors.negative, fontSize: 13)),
             ),
-
-          // ── No country selected ───────────────────────────────────
-          if (_selectedCountry == null)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 48),
-              decoration: BoxDecoration(
-                border: Border.all(color: AppColors.border),
-                borderRadius: BorderRadius.circular(8),
-                color: Colors.white,
-              ),
-              child: const Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.map_outlined, size: 40, color: AppColors.textDisabled),
-                    SizedBox(height: 12),
-                    Text('Select a country above to view its divisions',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                  ],
-                ),
-              ),
-            )
-
-          // ── Loading divisions ─────────────────────────────────────
-          else if (_loadingDivisions)
-            const Center(child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 48),
-              child: CircularProgressIndicator(),
-            ))
-
-          // ── Table ─────────────────────────────────────────────────
-          else
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.border),
-                  borderRadius: BorderRadius.circular(8),
-                  color: Colors.white,
-                ),
-                clipBehavior: Clip.hardEdge,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildHeader(),
-                    if (_divisions.isEmpty)
-                      const SizedBox(
-                        width: _tableWidth,
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 32),
-                          child: Center(
-                            child: Text('No divisions found. Add a custom one.',
-                                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                                textAlign: TextAlign.center),
-                          ),
-                        ),
-                      )
-                    else
-                      ..._divisions.expand((d) => [
-                            Container(width: _tableWidth, height: 1, color: AppColors.border),
-                            _buildRow(d),
-                          ]),
-                  ],
-                ),
-              ),
-            ),
         ],
-      ),
-    );
-  }
+          ),
+        ),
+        const SizedBox(height: 4),
 
-  Widget _buildHeader() {
-    const style = TextStyle(
-        fontSize: 11, fontWeight: FontWeight.w700,
-        color: AppColors.textSecondary, letterSpacing: 0.5);
-    return ColoredBox(
-      color: AppColors.surfaceVariant,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _hcell('CODE',       _w[0], style),
-          _vd(), _hcell('NAME',       _w[1], style),
-          _vd(), _hcell('TYPE',       _w[2], style),
-          _vd(), _hcell('SOURCE',     _w[3], style, center: true),
-          _vd(), SizedBox(width: _w[4], height: 40),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRow(Map<String, dynamic> d) {
-    final isSystem = d['is_system'] as bool? ?? true;
-    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
-    final tc = isSystem ? AppColors.textSecondary : AppColors.textPrimary;
-
-    return ColoredBox(
-      color: Colors.white,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          _dcell(d['division_code'] as String? ?? '', _w[0],
-              const TextStyle(fontSize: 12, color: AppColors.primary, fontFamily: 'monospace')),
-          _vd(),
-          _dcell(d['division_name'] as String? ?? '', _w[1],
-              TextStyle(fontSize: 13, color: tc)),
-          _vd(),
-          _dcell(d['division_type'] as String? ?? '', _w[2],
-              const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          _vd(),
-          SizedBox(
-            width: _w[3], height: 48,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isSystem
-                      ? const Color(0xFFE8EAF6)
-                      : const Color(0xFFFFF8E1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  isSystem ? 'System' : 'Custom',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: isSystem ? const Color(0xFF3949AB) : AppColors.secondary,
+        // ── List — SakalAdaptiveList owns loading/error/empty +
+        // mobile-card/desktop-table switch, replacing the raw fixed-width
+        // table that never adapted for mobile.
+        Expanded(
+          child: _selectedCountry == null
+              ? Center(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 24),
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 48),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(8),
+                      color: Colors.white,
+                    ),
+                    child: const Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.map_outlined, size: 40, color: AppColors.textDisabled),
+                        SizedBox(height: 12),
+                        Text('Select a country above to view its divisions',
+                            style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                )
+              : SakalAdaptiveList<Map<String, dynamic>>(
+                  loading: _loadingDivisions,
+                  error: null,
+                  rows: _divisions,
+                  columns: const [
+                    SakalListColumn('Code', flex: 2),
+                    SakalListColumn('Name', flex: 3),
+                    SakalListColumn('Type', flex: 2),
+                    SakalListColumn('Source', flex: 2),
+                    SakalListColumn('Actions', flex: 2),
+                  ],
+                  rowBuilder: (d, i) => _buildTableRow(d, offline),
+                  cardBuilder: (d) => _DivisionCard(
+                    row: d,
+                    offline: offline,
+                    onEdit: () => _openDialog(d),
+                    onDelete: () => _delete(d['id'] as String),
+                  ),
+                  emptyState: const Center(
+                    child: Text('No divisions found. Add a custom one.',
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        textAlign: TextAlign.center),
                   ),
                 ),
-              ),
-            ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTableRow(Map<String, dynamic> d, bool offline) {
+    final isSystem = d['is_system'] as bool? ?? true;
+    final tc = isSystem ? AppColors.textSecondary : AppColors.textPrimary;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(d['division_code'] as String? ?? '',
+                style: const TextStyle(fontSize: 12, color: AppColors.primary, fontFamily: 'monospace')),
           ),
-          _vd(),
-          SizedBox(
-            width: _w[4], height: 48,
+          Expanded(
+            flex: 3,
+            child: Text(d['division_name'] as String? ?? '', style: TextStyle(fontSize: 13, color: tc)),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(d['division_type'] as String? ?? '',
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          ),
+          Expanded(flex: 2, child: _SourceBadge(isSystem: isSystem)),
+          Expanded(
+            flex: 2,
             child: (isSystem || offline)
                 ? const SizedBox()
                 : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
                         icon: const Icon(Icons.edit_outlined, size: 17),
                         color: AppColors.primary,
                         tooltip: 'Edit',
-                        constraints: const BoxConstraints(),
-                        padding: EdgeInsets.zero,
                         onPressed: () => _openDialog(d),
                       ),
-                      const SizedBox(width: 12),
                       IconButton(
                         icon: const Icon(Icons.delete_outline, size: 17),
                         color: AppColors.negative,
                         tooltip: 'Delete',
-                        constraints: const BoxConstraints(),
-                        padding: EdgeInsets.zero,
                         onPressed: () => _delete(d['id'] as String),
                       ),
                     ],
@@ -436,29 +381,97 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
       ),
     );
   }
+}
 
-  Widget _vd() => const SizedBox(width: 1, height: 48, child: ColoredBox(color: AppColors.border));
+// ── Source badge ──────────────────────────────────────────────────────────────
 
-  Widget _hcell(String text, double w, TextStyle style, {bool center = false}) =>
-      SizedBox(
-        width: w,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Text(text, textAlign: center ? TextAlign.center : TextAlign.left, style: style),
+class _SourceBadge extends StatelessWidget {
+  final bool isSystem;
+  const _SourceBadge({required this.isSystem});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: isSystem ? const Color(0xFFE8EAF6) : const Color(0xFFFFF8E1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          isSystem ? 'System' : 'Custom',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: isSystem ? const Color(0xFF3949AB) : AppColors.secondary,
+          ),
         ),
       );
+}
 
-  Widget _dcell(String text, double w, TextStyle style, {bool center = false}) =>
-      SizedBox(
-        width: w,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          child: Text(text,
-              overflow: TextOverflow.ellipsis,
-              textAlign: center ? TextAlign.center : TextAlign.left,
-              style: style),
+// ── Mobile card ───────────────────────────────────────────────────────────────
+
+class _DivisionCard extends StatelessWidget {
+  final Map<String, dynamic> row;
+  final bool offline;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  const _DivisionCard({
+    required this.row,
+    required this.offline,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isSystem = row['is_system'] as bool? ?? true;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(row['division_name'] as String? ?? '',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      Text(
+                        '${row['division_code'] ?? ''} · ${row['division_type'] ?? ''}',
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                _SourceBadge(isSystem: isSystem),
+              ],
+            ),
+            if (!isSystem && !offline) ...[
+              const Divider(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    tooltip: 'Edit',
+                    icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                    onPressed: onEdit,
+                  ),
+                  IconButton(
+                    tooltip: 'Delete',
+                    icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
+                    onPressed: onDelete,
+                  ),
+                ],
+              ),
+            ],
+          ],
         ),
-      );
+      ),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -572,6 +585,7 @@ class _DivisionDialogState extends State<_DivisionDialog> {
                     // Country
                     DropdownButtonFormField<String>(
                       initialValue: _countryCode,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Country *',
                         prefixIcon: Icon(Icons.public_outlined),
@@ -606,6 +620,7 @@ class _DivisionDialogState extends State<_DivisionDialog> {
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           initialValue: _type,
+                          isExpanded: true,
                           decoration: const InputDecoration(labelText: 'Type *'),
                           items: _types.map((t) => DropdownMenuItem(
                             value: t, child: Text(t),

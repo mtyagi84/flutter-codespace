@@ -160,14 +160,24 @@ class _BackdatedEntryControlScreenState extends ConsumerState<BackdatedEntryCont
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Backdated Entry Control',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-              const SizedBox(height: 4),
-              const Text(
-                  'Per-screen guardrail for how far back a new entry can normally be dated. '
-                  'Leave Max Days blank for unlimited. This is separate from Period Close — '
-                  'a locked period always blocks posting regardless of this setting.',
-                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+              // Save button belongs top-right next to the title on every
+              // entry screen (mandatory placement convention) — it was
+              // previously only reachable at the bottom of the form.
+              // Mobile stacks it below the title block to avoid overflow.
+              if (isMobile) ...[
+                _buildTitleBlock(),
+                if (canEdit && !offline) ...[
+                  const SizedBox(height: 12),
+                  _buildSaveButton(),
+                ],
+              ] else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: _buildTitleBlock()),
+                    if (canEdit && !offline) _buildSaveButton(),
+                  ],
+                ),
               const SizedBox(height: 20),
 
               if (offline) const OfflineBanner(),
@@ -199,23 +209,6 @@ class _BackdatedEntryControlScreenState extends ConsumerState<BackdatedEntryCont
                         child: Column(children: _rows.map((r) => _buildRow(r, offline, isMobile)).toList()),
                       ),
               ),
-
-              if (canEdit && !offline) ...[
-                const SizedBox(height: 20),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: SizedBox(
-                    width: 160,
-                    child: ElevatedButton(
-                      onPressed: _saving ? null : _save,
-                      child: _saving
-                          ? const SizedBox(height: 18, width: 18,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Text('Save Changes'),
-                    ),
-                  ),
-                ),
-              ],
             ],
           ),
         ),
@@ -223,46 +216,87 @@ class _BackdatedEntryControlScreenState extends ConsumerState<BackdatedEntryCont
     );
   }
 
+  Widget _buildTitleBlock() => const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Backdated Entry Control',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          SizedBox(height: 4),
+          Text(
+              'Per-screen guardrail for how far back a new entry can normally be dated. '
+              'Leave Max Days blank for unlimited. This is separate from Period Close — '
+              'a locked period always blocks posting regardless of this setting.',
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+        ],
+      );
+
+  Widget _buildSaveButton() => SizedBox(
+        width: 160,
+        child: ElevatedButton(
+          onPressed: _saving ? null : _save,
+          child: _saving
+              ? const SizedBox(height: 18, width: 18,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : const Text('Save Changes'),
+        ),
+      );
+
   Widget _buildRow(_TxnTypeRow row, bool offline, bool isMobile) {
     final locked = !canEdit || offline;
+    final daysField = TextFormField(
+      controller: row.daysCtrl,
+      enabled: !locked,
+      keyboardType: TextInputType.number,
+      decoration: const InputDecoration(
+        isDense: true,
+        labelText: 'Max Days',
+        hintText: 'Unlimited',
+        border: OutlineInputBorder(),
+      ),
+    );
+    final futureSwitch = Row(mainAxisSize: MainAxisSize.min, children: [
+      Switch(
+        value: row.allowFuture,
+        onChanged: locked ? null : (v) => setState(() => row.allowFuture = v),
+        thumbColor: WidgetStateProperty.resolveWith((s) =>
+            s.contains(WidgetState.selected) ? Colors.white : Colors.grey.shade400),
+        trackColor: WidgetStateProperty.resolveWith((s) =>
+            s.contains(WidgetState.selected) ? AppColors.primary : AppColors.surfaceVariant),
+        trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
+      ),
+      const SizedBox(width: 8),
+      const Text('Allow future date', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+    ]);
+    final label = Text(row.label,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary));
+
+    // The label + a 130px field + a switch-and-label group never fit one
+    // Row on mobile (overflowed by 103px in the field report) — stack
+    // vertically there instead of forcing three columns into ~340px.
+    if (isMobile) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            label,
+            const SizedBox(height: 8),
+            SizedBox(width: 160, child: daysField),
+            const SizedBox(height: 4),
+            futureSwitch,
+          ],
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(children: [
-        Expanded(
-          flex: 3,
-          child: Text(row.label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-        ),
-        SizedBox(
-          width: 130,
-          child: TextFormField(
-            controller: row.daysCtrl,
-            enabled: !locked,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              isDense: true,
-              labelText: 'Max Days',
-              hintText: 'Unlimited',
-              border: OutlineInputBorder(),
-            ),
-          ),
-        ),
+        Expanded(flex: 3, child: label),
+        SizedBox(width: 130, child: daysField),
         const SizedBox(width: 16),
-        Expanded(
-          flex: 2,
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Switch(
-              value: row.allowFuture,
-              onChanged: locked ? null : (v) => setState(() => row.allowFuture = v),
-              thumbColor: WidgetStateProperty.resolveWith((s) =>
-                  s.contains(WidgetState.selected) ? Colors.white : Colors.grey.shade400),
-              trackColor: WidgetStateProperty.resolveWith((s) =>
-                  s.contains(WidgetState.selected) ? AppColors.primary : AppColors.surfaceVariant),
-              trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
-            ),
-            const SizedBox(width: 8),
-            const Text('Allow future date', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          ]),
-        ),
+        Expanded(flex: 2, child: futureSwitch),
       ]),
     );
   }

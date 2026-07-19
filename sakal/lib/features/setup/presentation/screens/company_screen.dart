@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/responsive.dart';
 
 class CompanyScreen extends ConsumerStatefulWidget {
   const CompanyScreen({super.key});
@@ -298,15 +299,22 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Page header ──────────────────────────────────────────
-              const Text('Company Information',
-                  style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary)),
-              const SizedBox(height: 4),
-              const Text('Edit your company profile, contact details and tax information.',
-                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+              // ── Page header — Save moved here (top-right of the title,
+              // mandatory placement convention) from the bottom of what is
+              // a very long scrolling form; mobile stacks it below the
+              // title instead of inline to avoid overflow.
+              if (Responsive.isMobile(context)) ...[
+                _buildTitleBlock(),
+                const SizedBox(height: 12),
+                _buildSaveButton(),
+              ] else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: _buildTitleBlock()),
+                    _buildSaveButton(),
+                  ],
+                ),
               const SizedBox(height: 28),
 
               // ── Success / Error banners ──────────────────────────────
@@ -349,27 +357,6 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
                     _buildCurrencyDecimalPlaces(),
                     const SizedBox(height: 20),
                     _buildQuickInvoiceSection(),
-                    const SizedBox(height: 28),
-
-                    // ── Save button ──────────────────────────────────
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        SizedBox(
-                          width: 200,
-                          child: ElevatedButton(
-                            onPressed: _saving ? null : _save,
-                            child: _saving
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                        color: Colors.white, strokeWidth: 2))
-                                : const Text('Save Changes'),
-                          ),
-                        ),
-                      ],
-                    ),
                     const SizedBox(height: 40),
                   ],
                 ),
@@ -380,6 +367,30 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
       ),
     );
   }
+
+  Widget _buildTitleBlock() => const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Company Information',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          SizedBox(height: 4),
+          Text('Edit your company profile, contact details and tax information.',
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+        ],
+      );
+
+  Widget _buildSaveButton() => SizedBox(
+        width: 200,
+        child: ElevatedButton(
+          onPressed: _saving ? null : _save,
+          child: _saving
+              ? const SizedBox(
+                  height: 20, width: 20,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : const Text('Save Changes'),
+        ),
+      );
 
   // ── Section: Basic Information ────────────────────────────────────────────
 
@@ -595,9 +606,11 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
               children: [
                 Icon(Icons.lock_outline, size: 16, color: AppColors.secondary),
                 SizedBox(width: 8),
-                Text(
-                  'Settings are locked because products already exist in this company.',
-                  style: TextStyle(fontSize: 13, color: AppColors.secondary),
+                Expanded(
+                  child: Text(
+                    'Settings are locked because products already exist in this company.',
+                    style: TextStyle(fontSize: 13, color: AppColors.secondary),
+                  ),
                 ),
               ],
             ),
@@ -714,9 +727,11 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
               children: [
                 Icon(Icons.lock_outline, size: 16, color: AppColors.secondary),
                 SizedBox(width: 8),
-                Text(
-                  'Settings are locked because transactions already exist in this company.',
-                  style: TextStyle(fontSize: 13, color: AppColors.secondary),
+                Expanded(
+                  child: Text(
+                    'Settings are locked because transactions already exist in this company.',
+                    style: TextStyle(fontSize: 13, color: AppColors.secondary),
+                  ),
                 ),
               ],
             ),
@@ -1040,45 +1055,56 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
   // ── Section: Company Images ───────────────────────────────────────────────
 
   Widget _buildImages() {
+    final logo = _ImagePicker(
+      label: 'Company Logo',
+      hint: '(printed at top of documents)',
+      base64: _logoBase64,
+      onPick: () => _pickImage('logo'),
+      onClear: () => _clearImage('logo'),
+    );
+    final watermark = _ImagePicker(
+      label: 'Watermark',
+      hint: '(background on document pages)',
+      base64: _watermarkBase64,
+      onPick: () => _pickImage('watermark'),
+      onClear: () => _clearImage('watermark'),
+    );
+    final stamp = _ImagePicker(
+      label: 'Company Stamp',
+      hint: '(printed at bottom of documents)',
+      base64: _stampBase64,
+      onPick: () => _pickImage('stamp'),
+      onClear: () => _clearImage('stamp'),
+    );
     return _SectionCard(
       title: 'Company Images',
       icon: Icons.image_outlined,
       subtitle: 'Images are printed on invoices and official documents.',
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _ImagePicker(
-                label: 'Company Logo',
-                hint: '(printed at top of documents)',
-                base64: _logoBase64,
-                onPick: () => _pickImage('logo'),
-                onClear: () => _clearImage('logo'),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _ImagePicker(
-                label: 'Watermark',
-                hint: '(background on document pages)',
-                base64: _watermarkBase64,
-                onPick: () => _pickImage('watermark'),
-                onClear: () => _clearImage('watermark'),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _ImagePicker(
-                label: 'Company Stamp',
-                hint: '(printed at bottom of documents)',
-                base64: _stampBase64,
-                onPick: () => _pickImage('stamp'),
-                onClear: () => _clearImage('stamp'),
-              ),
-            ),
-          ],
-        ),
+        // 3 equal Expanded columns squeezed the "Pick Image" button's label
+        // down to one character per line on mobile — stack full-width
+        // instead of forcing three columns into a phone screen.
+        Builder(builder: (context) {
+          if (Responsive.isMobile(context)) {
+            return Column(children: [
+              logo,
+              const SizedBox(height: 16),
+              watermark,
+              const SizedBox(height: 16),
+              stamp,
+            ]);
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: logo),
+              const SizedBox(width: 16),
+              Expanded(child: watermark),
+              const SizedBox(width: 16),
+              Expanded(child: stamp),
+            ],
+          );
+        }),
       ],
     );
   }
@@ -1211,7 +1237,7 @@ class _ImagePicker extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: onPick,
                 icon: const Icon(Icons.upload_outlined, size: 16),
-                label: const Text('Pick Image'),
+                label: const Text('Pick Image', maxLines: 1, overflow: TextOverflow.ellipsis, softWrap: false),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   textStyle: const TextStyle(fontSize: 12),

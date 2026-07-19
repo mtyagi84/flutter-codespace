@@ -7,6 +7,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_adaptive_list.dart';
 
 const _locationTypes = ['Store', 'Warehouse', 'Office', 'Head Office', 'Distribution Centre'];
 
@@ -146,11 +147,10 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
   @override
   Widget build(BuildContext context) {
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1100),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -181,7 +181,7 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
                     ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
 
               if (offline) const OfflineBanner(),
               if (offline) const SizedBox(height: 16),
@@ -210,58 +210,132 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
               ],
-
-              // ── Table ─────────────────────────────────────────────────
-              Card(
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                child: _loading
-                    ? const Padding(
-                        padding: EdgeInsets.all(40),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    : _rows.isEmpty
-                        ? const Padding(
-                            padding: EdgeInsets.all(40),
-                            child: Center(
-                              child: Column(
-                                children: [
-                                  Icon(Icons.store_mall_directory_outlined,
-                                      size: 40, color: AppColors.textSecondary),
-                                  SizedBox(height: 12),
-                                  Text('No locations yet.',
-                                      style: TextStyle(
-                                          color: AppColors.textSecondary)),
-                                  Text('Click "Add Location" to create one.',
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.textSecondary)),
-                                ],
-                              ),
-                            ),
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _TableHeader(),
-                              const Divider(height: 1),
-                              ..._rows.asMap().entries.map((e) =>
-                                  _TableRow(
-                                    row: e.value,
-                                    isEven: e.key.isEven,
-                                    canEdit: canEdit && !offline,
-                                    onEdit: () => _openDialog(e.value),
-                                    onToggle: () => _toggleActive(e.value),
-                                    onDelete: () => _confirmDelete(e.value['id'] as String),
-                                  )),
-                            ],
-                          ),
-              ),
             ],
           ),
         ),
+        // ── List — SakalAdaptiveList owns the loading/error/empty +
+        // mobile-card/desktop-table switch; a raw fixed-width Row table
+        // here overflowed by 616px on mobile since it never adapted at all.
+        Expanded(
+          child: SakalAdaptiveList<Map<String, dynamic>>(
+            loading: _loading,
+            error: null,
+            rows: _rows,
+            columns: const [
+              SakalListColumn('Location Name', flex: 3),
+              SakalListColumn('Short', flex: 1),
+              SakalListColumn('Type', flex: 2),
+              SakalListColumn('Group', flex: 2),
+              SakalListColumn('Phone', flex: 2),
+              SakalListColumn('Active', flex: 1),
+              SakalListColumn('Actions', flex: 1),
+            ],
+            rowBuilder: (row, i) => _buildTableRow(row, canEdit && !offline),
+            cardBuilder: (row) => _LocationCard(
+              row: row,
+              canEdit: canEdit && !offline,
+              onEdit: () => _openDialog(row),
+              onToggle: () => _toggleActive(row),
+              onDelete: () => _confirmDelete(row['id'] as String),
+            ),
+            emptyState: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.store_mall_directory_outlined,
+                      size: 40, color: AppColors.textSecondary),
+                  const SizedBox(height: 12),
+                  const Text('No locations yet.',
+                      style: TextStyle(color: AppColors.textSecondary)),
+                  const Text('Click "Add Location" to create one.',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTableRow(Map<String, dynamic> row, bool canEditRow) {
+    final active = row['is_active'] as bool? ?? true;
+    final group  = row['group'] as Map<String, dynamic>?;
+    final city   = row['city']  as Map<String, dynamic>?;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(row['location_name'] ?? '',
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary)),
+                if ((row['address_line1'] ?? '').isNotEmpty || city != null)
+                  Text(
+                    [
+                      if ((row['address_line1'] ?? '').isNotEmpty) row['address_line1'] as String,
+                      if (city != null) city['city_name'] as String,
+                    ].join(', '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                  ),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Text(row['location_short'] ?? '—',
+                style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
+          ),
+          Expanded(flex: 2, child: _TypeChip(type: row['location_type'] as String?)),
+          Expanded(
+            flex: 2,
+            child: Text(group?['group_name'] as String? ?? '—',
+                style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(row['phone'] ?? '—',
+                style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
+          ),
+          Expanded(
+            flex: 1,
+            child: Switch(
+              value: active,
+              onChanged: canEditRow ? (_) => _toggleActive(row) : null,
+              activeThumbColor: AppColors.positive,
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Edit',
+                  icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                  onPressed: canEditRow ? () => _openDialog(row) : null,
+                ),
+                IconButton(
+                  tooltip: 'Delete',
+                  icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
+                  onPressed: canEditRow ? () => _confirmDelete(row['id'] as String) : null,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -288,59 +362,16 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
   }
 }
 
-// ── Table header ──────────────────────────────────────────────────────────────
+// ── Mobile card ───────────────────────────────────────────────────────────────
 
-class _TableHeader extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceVariant,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-      ),
-      child: const Row(
-        children: [
-          SizedBox(width: 200, child: _HCol('Location Name')),
-          SizedBox(width: 90,  child: _HCol('Short')),
-          SizedBox(width: 120, child: _HCol('Type')),
-          SizedBox(width: 140, child: _HCol('Group')),
-          SizedBox(width: 150, child: _HCol('Phone')),
-          SizedBox(width: 80,  child: _HCol('Active')),
-          SizedBox(width: 100, child: _HCol('Actions')),
-        ],
-      ),
-    );
-  }
-}
-
-class _HCol extends StatelessWidget {
-  final String text;
-  const _HCol(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(text,
-        style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textSecondary,
-            letterSpacing: 0.3));
-  }
-}
-
-// ── Table row ─────────────────────────────────────────────────────────────────
-
-class _TableRow extends StatelessWidget {
+class _LocationCard extends StatelessWidget {
   final Map<String, dynamic> row;
-  final bool isEven;
   final bool canEdit;
   final VoidCallback onEdit;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
-  const _TableRow({
+  const _LocationCard({
     required this.row,
-    required this.isEven,
     required this.canEdit,
     required this.onEdit,
     required this.onToggle,
@@ -352,85 +383,82 @@ class _TableRow extends StatelessWidget {
     final active = row['is_active'] as bool? ?? true;
     final group  = row['group'] as Map<String, dynamic>?;
     final city   = row['city']  as Map<String, dynamic>?;
-    return Container(
-      color: isEven ? Colors.transparent : AppColors.surfaceVariant.withValues(alpha: 0.35),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 200,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Text(row['location_name'] ?? '',
-                    style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary)),
-                if ((row['address_line1'] ?? '').isNotEmpty || city != null)
-                  Text(
-                    [
-                      if ((row['address_line1'] ?? '').isNotEmpty) row['address_line1'] as String,
-                      if (city != null) city['city_name'] as String,
-                    ].join(', '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 11, color: AppColors.textSecondary),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(row['location_name'] ?? '',
+                          style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary)),
+                      if ((row['address_line1'] ?? '').isNotEmpty || city != null)
+                        Text(
+                          [
+                            if ((row['address_line1'] ?? '').isNotEmpty) row['address_line1'] as String,
+                            if (city != null) city['city_name'] as String,
+                          ].join(', '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                    ],
                   ),
+                ),
+                Switch(
+                  value: active,
+                  onChanged: canEdit ? (_) => onToggle() : null,
+                  activeThumbColor: AppColors.positive,
+                ),
               ],
             ),
-          ),
-          SizedBox(
-            width: 90,
-            child: Text(row['location_short'] ?? '—',
-                style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
-          ),
-          SizedBox(
-            width: 120,
-            child: _TypeChip(type: row['location_type'] as String?),
-          ),
-          SizedBox(
-            width: 140,
-            child: Text(group?['group_name'] as String? ?? '—',
-                style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
-                maxLines: 1, overflow: TextOverflow.ellipsis),
-          ),
-          SizedBox(
-            width: 150,
-            child: Text(row['phone'] ?? '—',
-                style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
-          ),
-          SizedBox(
-            width: 80,
-            child: Switch(
-              value: active,
-              onChanged: canEdit ? (_) => onToggle() : null,
-              activeThumbColor: AppColors.positive,
-            ),
-          ),
-          SizedBox(
-            width: 100,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                IconButton(
-                  tooltip: 'Edit',
-                  icon: const Icon(Icons.edit_outlined,
-                      size: 18, color: AppColors.primary),
-                  onPressed: canEdit ? onEdit : null,
-                ),
-                IconButton(
-                  tooltip: 'Delete',
-                  icon: const Icon(Icons.delete_outline,
-                      size: 18, color: AppColors.negative),
-                  onPressed: canEdit ? onDelete : null,
-                ),
+                _TypeChip(type: row['location_type'] as String?),
+                if ((row['location_short'] as String? ?? '').isNotEmpty)
+                  Text(row['location_short'] as String,
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                if (group != null)
+                  Text(group['group_name'] as String,
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                if ((row['phone'] as String? ?? '').isNotEmpty)
+                  Text(row['phone'] as String,
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
               ],
             ),
-          ),
-        ],
+            if (canEdit) ...[
+              const Divider(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    tooltip: 'Edit',
+                    icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                    onPressed: onEdit,
+                  ),
+                  IconButton(
+                    tooltip: 'Delete',
+                    icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
+                    onPressed: onDelete,
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

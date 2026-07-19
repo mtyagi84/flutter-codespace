@@ -244,40 +244,48 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
     final level = _levelByType[type['id']];
     final count = _countByType[type['id']] ?? 0;
     final configuredText = level == null ? 'Not configured' : (level == 'COMPANY' ? (count > 0 ? '1 account' : '—') : '$count assigned');
-    return Container(
+    final canTap = canEdit && !offline;
+    // The whole card is now tappable — it used to be a plain Container with
+    // only the small "Configure" text reacting to taps, which a real user
+    // reported as "don't know where to click, card is not clickable".
+    return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.border),
+      child: InkWell(
         borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(
-            child: Text(type['link_name'] ?? '',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: _levelColor(level).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(_levelLabel(level),
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _levelColor(level))),
-          ),
-        ]),
-        const SizedBox(height: 6),
-        Text(configuredText, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: (canEdit && !offline) ? () => _openConfigure(type) : null,
-            child: const Text('Configure'),
-          ),
+        onTap: canTap ? () => _openConfigure(type) : null,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(
+                child: Text(type['link_name'] ?? '',
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: _levelColor(level).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(_levelLabel(level),
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _levelColor(level))),
+              ),
+            ]),
+            const SizedBox(height: 6),
+            Row(children: [
+              Expanded(
+                child: Text(configuredText, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              ),
+              if (canTap) ...[
+                const Text('Configure',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                const SizedBox(width: 2),
+                const Icon(Icons.chevron_right, size: 16, color: AppColors.primary),
+              ],
+            ]),
+          ]),
         ),
-      ]),
+      ),
     );
   }
 }
