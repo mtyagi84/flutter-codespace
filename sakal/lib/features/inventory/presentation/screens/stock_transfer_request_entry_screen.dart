@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -10,12 +11,16 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_autocomplete.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../domain/repositories/stock_transfer_request_repository.dart';
 import '../providers/stock_transfer_request_providers.dart';
 
@@ -430,19 +435,29 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
     );
   }
 
-  Widget _buildTitleBlock() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Text(_requestNo != null ? 'Stock Transfer Request · $_requestNo' : 'New Stock Transfer Request',
-        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-    const SizedBox(height: 2),
-    Row(children: [
-      _status != 'DRAFT' ? _statusChip(_status) : Text(_requestNo != null ? 'Draft' : 'Unsaved draft',
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-      if (_requestNo != null) ...[
-        const SizedBox(width: 8),
-        PendingSyncBadge(documentType: 'STOCK_TRANSFER_REQUEST', documentId: _requestNo!),
-      ],
-    ]),
-  ]);
+  // In-content back button, additive to TopBar's own corner arrow — see
+  // design_system_guide.md §5.2.
+  Widget _buildTitleBlock() => Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (context.canPop())
+        IconButton(icon: const Icon(Icons.arrow_back), tooltip: 'Back', onPressed: () => context.pop()),
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(_requestNo != null ? 'Stock Transfer Request · $_requestNo' : 'New Stock Transfer Request',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+        const SizedBox(height: 2),
+        Row(children: [
+          _status != 'DRAFT' ? _statusChip(_status) : Text(_requestNo != null ? 'Draft' : 'Unsaved draft',
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          if (_requestNo != null) ...[
+            const SizedBox(width: 8),
+            PendingSyncBadge(documentType: 'STOCK_TRANSFER_REQUEST', documentId: _requestNo!),
+          ],
+        ]),
+      ]),
+    ],
+  );
 
   Widget _statusChip(String status) {
     final color = status == 'DRAFT' ? AppColors.secondary
@@ -487,10 +502,45 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
   );
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
-    const fh = 56.0;
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
-    Widget field(Widget child) => SizedBox(height: fh, child: child);
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
+
+    final fromLocationField = SakalFieldCard(
+      label: 'From Location', required: true, editable: !locked,
+      child: DropdownButtonFormField<String>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: _fromLocationId,
+        items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
+            child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: style))).toList(),
+        onChanged: locked ? null : (v) => setState(() => _fromLocationId = v),
+      ),
+    );
+    final toLocationField = SakalFieldCard(
+      label: 'To Location', required: true, editable: !locked,
+      child: DropdownButtonFormField<String>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: _toLocationId,
+        items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
+            child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: style))).toList(),
+        onChanged: locked ? null : (v) => setState(() => _toLocationId = v),
+      ),
+    );
+    final requestNoField = SakalFieldCard.readOnly(label: 'Request No', value: _requestNo ?? '(auto on save)');
+    final requestDateField = SakalFieldCard(
+      label: 'Request Date', required: true, editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(_requestDate, (d) => setState(() => _requestDate = d)),
+        child: Row(children: [
+          Expanded(child: Text(_displayDate(_requestDate), style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
+      ),
+    );
+    final remarksField = SakalFieldCard(
+      label: 'Remarks', editable: !locked,
+      child: TextFormField(controller: _remarksCtrl, enabled: !locked, decoration: bare, style: style),
+    );
 
     return Card(
       elevation: 0,
@@ -498,150 +548,97 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(children: [
-          Builder(builder: (_) {
-            final f1 = field(DropdownButtonFormField<String>(
-              decoration: dec.copyWith(labelText: 'From Location *'),
-              isExpanded: true, isDense: true, itemHeight: null,
-              initialValue: _fromLocationId,
-              items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
-                  child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
-              onChanged: locked ? null : (v) => setState(() => _fromLocationId = v),
-            ));
-            final f2 = field(DropdownButtonFormField<String>(
-              decoration: dec.copyWith(labelText: 'To Location *'),
-              isExpanded: true, isDense: true, itemHeight: null,
-              initialValue: _toLocationId,
-              items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
-                  child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
-              onChanged: locked ? null : (v) => setState(() => _toLocationId = v),
-            ));
-            return isMobile
-                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    SizedBox(width: double.infinity, child: f1), const SizedBox(height: 8),
-                    SizedBox(width: double.infinity, child: f2),
-                  ])
-                : Row(children: [Expanded(child: f1), const SizedBox(width: 12), Expanded(child: f2)]);
-          }),
+          SakalFieldRow(isMobile: isMobile, children: [fromLocationField, toLocationField]),
           const SizedBox(height: 12),
-          Builder(builder: (_) {
-            final f1 = field(InputDecorator(
-              decoration: dec.copyWith(labelText: 'Request No'),
-              child: Text(_requestNo ?? '(auto on save)',
-                  style: TextStyle(fontSize: 13, color: _requestNo != null ? AppColors.textPrimary : AppColors.textDisabled)),
-            ));
-            final f2 = field(InkWell(
-              onTap: locked ? null : () => _pickDate(_requestDate, (d) => setState(() => _requestDate = d)),
-              child: InputDecorator(
-                decoration: dec.copyWith(labelText: 'Request Date *',
-                    suffixIcon: Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary)),
-                child: Text(_displayDate(_requestDate), style: const TextStyle(fontSize: 13)),
-              ),
-            ));
-            final f3 = field(TextFormField(
-              controller: _remarksCtrl, enabled: !locked,
-              decoration: dec.copyWith(labelText: 'Remarks'),
-              style: const TextStyle(fontSize: 13),
-            ));
-            return isMobile
-                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    SizedBox(width: double.infinity, child: f1), const SizedBox(height: 8),
-                    SizedBox(width: double.infinity, child: f2), const SizedBox(height: 8),
-                    SizedBox(width: double.infinity, child: f3),
-                  ])
-                : Row(children: [
-                    Expanded(flex: 2, child: f1), const SizedBox(width: 12),
-                    Expanded(flex: 2, child: f2), const SizedBox(width: 12),
-                    Expanded(flex: 3, child: f3),
-                  ]);
-          }),
+          SakalFieldRow(isMobile: isMobile, spans: const [2, 2, 3], children: [requestNoField, requestDateField, remarksField]),
         ]),
       ),
     );
   }
 
   Widget _buildLinesCard(bool locked, bool showLooseQty, bool showBarcode) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const Expanded(child: Text('Lines', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
-            if (!locked) TextButton.icon(onPressed: _addLine, icon: const Icon(Icons.add, size: 16), label: const Text('Add Line')),
-          ]),
-          const SizedBox(height: 8),
-          if (_lines.isEmpty)
-            const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No lines yet — add a product.',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
-          else
-            ..._lines.map((row) => Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              elevation: 0,
-              color: AppColors.background,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                  SizedBox(
-                    width: 260,
-                    child: SakalAutocomplete<Map<String, dynamic>>(
-                      key: ValueKey('${row.hashCode}-${row.productDisplay}'),
-                      initialValue: TextEditingValue(text: row.productDisplay),
-                      displayStringForOption: (p) => '[${p['product_code']}] ${p['product_name']}',
-                      optionsBuilder: (v) async {
-                        if (locked) return const [];
-                        final session = ref.read(sessionProvider)!;
-                        return _ds.getProductsForPicker(clientId: session.clientId, companyId: session.companyId, search: v.text);
-                      },
-                      onSelected: (p) => _onProductSelected(row, p),
-                      enabled: !locked,
-                      decoration: dec.copyWith(labelText: 'Product'),
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                  ),
-                  if (showBarcode) SizedBox(width: 140, height: 48, child: TextFormField(
-                    controller: row.barcodeCtrl, enabled: !locked,
-                    decoration: dec.copyWith(labelText: 'Scan/Enter Barcode'),
-                    style: const TextStyle(fontSize: 12),
-                    onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
-                  )),
-                  SizedBox(width: 70, child: InputDecorator(
-                    decoration: dec.copyWith(labelText: 'Unit'),
-                    child: Text(row.uomLabel ?? '—', style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
-                  )),
-                  SizedBox(width: 100, child: TextFormField(
-                    controller: row.qtyPackCtrl, enabled: !locked,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: dec.copyWith(labelText: showLooseQty ? 'Qty Pack' : 'Quantity'),
-                    style: const TextStyle(fontSize: 13),
-                    onChanged: (_) => setState(() {}),
-                  )),
-                  if (showLooseQty) SizedBox(width: 100, child: TextFormField(
-                    controller: row.qtyLooseCtrl, enabled: !locked,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: dec.copyWith(labelText: 'Qty Loose'),
-                    style: const TextStyle(fontSize: 13),
-                    onChanged: (_) => setState(() {}),
-                  )),
-                  SizedBox(width: 220, child: TextFormField(
-                    controller: row.remarksCtrl, enabled: !locked,
-                    decoration: dec.copyWith(labelText: 'Remarks'),
-                    style: const TextStyle(fontSize: 13),
-                  )),
-                  if (row.transferredQty > 0) SizedBox(width: 110, child: Text('Transferred: ${row.transferredQty.toStringAsFixed(2)}',
-                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
-                  if (!locked) IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
-                    onPressed: () => _removeLine(row),
-                  ),
-                ]),
-              ),
-            )),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          const Expanded(child: Text('Lines', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
+          if (!locked) TextButton.icon(onPressed: _addLine, icon: const Icon(Icons.add, size: 16), label: const Text('Add Line')),
         ]),
+        const SizedBox(height: 8),
+        if (_lines.isEmpty)
+          const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No lines yet — add a product.',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
+        else
+          ..._lines.asMap().entries.map((e) => _buildLineCard(e.value, e.key, locked, showLooseQty, showBarcode)),
+      ],
+    );
+  }
+
+  Widget _buildLineCard(_RequestLineRow row, int idx, bool locked, bool showLooseQty, bool showBarcode) {
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
+
+    final barcodeField = SakalFieldCard(
+      label: 'Scan/Enter Barcode', editable: !locked,
+      child: TextFormField(
+        controller: row.barcodeCtrl, enabled: !locked, decoration: bare, style: style,
+        onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
       ),
+    );
+    final productField = SakalFieldCard(
+      label: 'Product', required: true, editable: !locked,
+      child: SakalAutocomplete<Map<String, dynamic>>(
+        key: ValueKey('${row.hashCode}-${row.productDisplay}'),
+        initialValue: TextEditingValue(text: row.productDisplay),
+        displayStringForOption: (p) => '[${p['product_code']}] ${p['product_name']}',
+        optionsBuilder: (v) async {
+          if (locked) return const [];
+          final session = ref.read(sessionProvider)!;
+          return _ds.getProductsForPicker(clientId: session.clientId, companyId: session.companyId, search: v.text);
+        },
+        onSelected: (p) => _onProductSelected(row, p),
+        enabled: !locked,
+        decoration: bare,
+        style: style,
+      ),
+    );
+    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
+    final qtyPackField = SakalFieldCard(
+      label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked,
+      child: TextFormField(
+        controller: row.qtyPackCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: bare, style: style,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+    final qtyLooseField = SakalFieldCard(
+      label: 'Qty Loose', editable: !locked,
+      child: TextFormField(
+        controller: row.qtyLooseCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: bare, style: style,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+    final remarksField = SakalFieldCard(
+      label: 'Remarks', editable: !locked,
+      child: TextFormField(controller: row.remarksCtrl, enabled: !locked, decoration: bare, style: style),
+    );
+
+    return SakalLineItemCard(
+      title: '${idx + 1}. ${row.productDisplay.isEmpty ? 'New Line' : row.productDisplay}',
+      subtitle: row.transferredQty > 0 ? 'Transferred: ${row.transferredQty.toStringAsFixed(2)}' : null,
+      onDelete: locked ? null : () => _removeLine(row),
+      fields: [
+        if (showBarcode) SizedBox(width: 160, child: barcodeField),
+        SizedBox(width: 260, child: productField),
+        SizedBox(width: 100, child: unitField),
+        SizedBox(width: 100, child: qtyPackField),
+        if (showLooseQty) SizedBox(width: 100, child: qtyLooseField),
+        SizedBox(width: 220, child: remarksField),
+      ],
     );
   }
 }
