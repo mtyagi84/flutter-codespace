@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -10,12 +11,18 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_autocomplete.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/stock_transfer_repository.dart';
 import '../providers/stock_transfer_providers.dart';
 
@@ -840,19 +847,27 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
     );
   }
 
-  Widget _buildTitleBlock() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Text(_transferNo != null ? 'Stock Transfer · $_transferNo' : 'New Stock Transfer',
-        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-    const SizedBox(height: 2),
-    Row(children: [
-      _status != 'DRAFT' ? _statusChip(_status) : Text(_transferNo != null ? 'Draft' : 'Unsaved draft',
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-      if (_transferNo != null) ...[
-        const SizedBox(width: 8),
-        PendingSyncBadge(documentType: 'STOCK_TRANSFER', documentId: _transferNo!),
-      ],
-    ]),
-  ]);
+  Widget _buildTitleBlock() => Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (context.canPop())
+        IconButton(icon: const Icon(Icons.arrow_back), tooltip: 'Back', onPressed: () => context.pop()),
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(_transferNo != null ? 'Stock Transfer · $_transferNo' : 'New Stock Transfer',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+        const SizedBox(height: 2),
+        Row(children: [
+          _status != 'DRAFT' ? _statusChip(_status) : Text(_transferNo != null ? 'Draft' : 'Unsaved draft',
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          if (_transferNo != null) ...[
+            const SizedBox(width: 8),
+            PendingSyncBadge(documentType: 'STOCK_TRANSFER', documentId: _transferNo!),
+          ],
+        ]),
+      ]),
+    ],
+  );
 
   Widget _statusChip(String status) {
     final color = status == 'APPROVED' ? AppColors.positive : status == 'CLOSED' ? AppColors.textSecondary : AppColors.secondary;
@@ -888,10 +903,58 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
   );
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
-    const fh = 56.0;
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
-    Widget field(Widget child) => SizedBox(height: fh, child: child);
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
     final modeLocked = locked || _lines.isNotEmpty;
+
+    final modeField = SakalFieldCard(
+      label: 'Mode', editable: !modeLocked,
+      child: DropdownButtonFormField<String>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: _mode,
+        items: const [
+          DropdownMenuItem(value: 'DIRECT', child: Text('Direct')),
+          DropdownMenuItem(value: 'AGAINST_REQUEST', child: Text('Against Request')),
+        ],
+        onChanged: modeLocked ? null : (v) => _onModeChanged(v!),
+      ),
+    );
+    final fromField = SakalFieldCard(
+      label: 'From Location', required: true, editable: !modeLocked,
+      child: DropdownButtonFormField<String>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: _fromLocationId,
+        items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
+            child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis))).toList(),
+        onChanged: modeLocked ? null : (v) => _onFromLocationChanged(v),
+      ),
+    );
+    final toField = SakalFieldCard(
+      label: 'To Location', required: true, editable: !(locked || _requestLocked),
+      child: DropdownButtonFormField<String>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: _toLocationId,
+        items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
+            child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis))).toList(),
+        onChanged: (locked || _requestLocked) ? null : (v) => setState(() => _toLocationId = v),
+      ),
+    );
+    final transferNoField = SakalFieldCard.readOnly(label: 'Transfer No', value: _transferNo ?? '(auto on save)');
+    final transferDateField = SakalFieldCard(
+      label: 'Transfer Date', required: true, editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(_transferDate, (d) => setState(() => _transferDate = d)),
+        child: Row(children: [
+          Expanded(child: Text(_displayDate(_transferDate), style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
+      ),
+    );
+    final remarksField = SakalFieldCard(
+      label: 'Remarks', editable: !locked,
+      child: TextFormField(controller: _remarksCtrl, enabled: !locked, decoration: bare, style: style),
+    );
 
     return Card(
       elevation: 0,
@@ -899,63 +962,9 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(children: [
-          Builder(builder: (_) {
-            final modeField = field(DropdownButtonFormField<String>(
-              decoration: dec.copyWith(labelText: 'Mode'),
-              isExpanded: true, isDense: true, itemHeight: null,
-              initialValue: _mode,
-              items: const [
-                DropdownMenuItem(value: 'DIRECT', child: Text('Direct', style: TextStyle(fontSize: 13))),
-                DropdownMenuItem(value: 'AGAINST_REQUEST', child: Text('Against Request', style: TextStyle(fontSize: 13))),
-              ],
-              onChanged: modeLocked ? null : (v) => _onModeChanged(v!),
-            ));
-            final f1 = field(DropdownButtonFormField<String>(
-              decoration: dec.copyWith(labelText: 'From Location *'),
-              isExpanded: true, isDense: true, itemHeight: null,
-              initialValue: _fromLocationId,
-              items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
-                  child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
-              onChanged: modeLocked ? null : (v) => _onFromLocationChanged(v),
-            ));
-            final f2 = field(DropdownButtonFormField<String>(
-              decoration: dec.copyWith(labelText: 'To Location *'),
-              isExpanded: true, isDense: true, itemHeight: null,
-              initialValue: _toLocationId,
-              items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
-                  child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
-              onChanged: (locked || _requestLocked) ? null : (v) => setState(() => _toLocationId = v),
-            ));
-            return isMobile
-                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    SizedBox(width: double.infinity, child: modeField), const SizedBox(height: 8),
-                    SizedBox(width: double.infinity, child: f1), const SizedBox(height: 8),
-                    SizedBox(width: double.infinity, child: f2),
-                  ])
-                : Row(children: [Expanded(child: modeField), const SizedBox(width: 12), Expanded(child: f1), const SizedBox(width: 12), Expanded(child: f2)]);
-          }),
+          SakalFieldRow(isMobile: isMobile, children: [modeField, fromField, toField]),
           const SizedBox(height: 12),
-          Builder(builder: (_) {
-            final f1 = field(InputDecorator(
-              decoration: dec.copyWith(labelText: 'Transfer No'),
-              child: Text(_transferNo ?? '(auto on save)', style: TextStyle(fontSize: 13, color: _transferNo != null ? AppColors.textPrimary : AppColors.textDisabled)),
-            ));
-            final f2 = field(InkWell(
-              onTap: locked ? null : () => _pickDate(_transferDate, (d) => setState(() => _transferDate = d)),
-              child: InputDecorator(
-                decoration: dec.copyWith(labelText: 'Transfer Date *', suffixIcon: Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary)),
-                child: Text(_displayDate(_transferDate), style: const TextStyle(fontSize: 13)),
-              ),
-            ));
-            final f3 = field(TextFormField(controller: _remarksCtrl, enabled: !locked, decoration: dec.copyWith(labelText: 'Remarks'), style: const TextStyle(fontSize: 13)));
-            return isMobile
-                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    SizedBox(width: double.infinity, child: f1), const SizedBox(height: 8),
-                    SizedBox(width: double.infinity, child: f2), const SizedBox(height: 8),
-                    SizedBox(width: double.infinity, child: f3),
-                  ])
-                : Row(children: [Expanded(flex: 2, child: f1), const SizedBox(width: 12), Expanded(flex: 2, child: f2), const SizedBox(width: 12), Expanded(flex: 3, child: f3)]);
-          }),
+          SakalFieldRow(isMobile: isMobile, spans: const [3, 3, 6], children: [transferNoField, transferDateField, remarksField]),
         ]),
       ),
     );
@@ -1002,7 +1011,6 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
   }
 
   Widget _buildLinesCard(bool locked, bool showLooseQty, bool showBarcode) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -1019,92 +1027,114 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
                 _mode == 'AGAINST_REQUEST' ? 'No lines yet — pick a request above.' : 'No lines yet — add a product.',
                 style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)))
           else
-            ..._lines.map((row) => Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              elevation: 0,
-              color: AppColors.background,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                    if (_mode == 'DIRECT')
-                      SizedBox(
-                        width: 240,
-                        child: SakalAutocomplete<Map<String, dynamic>>(
-                          key: ValueKey('${row.hashCode}-${row.productDisplay}'),
-                          initialValue: TextEditingValue(text: row.productDisplay),
-                          displayStringForOption: (p) => '[${p['product_code']}] ${p['product_name']}',
-                          optionsBuilder: (v) async {
-                            if (locked) return const [];
-                            final session = ref.read(sessionProvider)!;
-                            return _ds.getProductsForPicker(clientId: session.clientId, companyId: session.companyId, search: v.text);
-                          },
-                          onSelected: (p) => _onProductSelected(row, p),
-                          enabled: !locked,
-                          decoration: dec.copyWith(labelText: 'Product'),
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                      )
-                    else
-                      SizedBox(width: 240, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(row.productDisplay, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
-                        Text('Remaining ${row.requestRemainingQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}',
-                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                      ])),
-                    if (_mode == 'DIRECT' && showBarcode)
-                      SizedBox(width: 140, height: 48, child: TextFormField(
-                        controller: row.barcodeCtrl, enabled: !locked,
-                        decoration: dec.copyWith(labelText: 'Scan/Enter Barcode'),
-                        style: const TextStyle(fontSize: 12),
-                        onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
-                      )),
-                    SizedBox(width: 70, child: InputDecorator(
-                      decoration: dec.copyWith(labelText: 'Unit'),
-                      child: Text(row.uomLabel ?? '—', style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
-                    )),
-                    SizedBox(width: 100, child: TextFormField(
-                      controller: row.qtyPackCtrl, enabled: !locked,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: showLooseQty ? 'Qty Pack' : 'Quantity'),
-                      style: const TextStyle(fontSize: 12),
-                      onChanged: (_) { setState(() {}); unawaited(_refreshCostPrices()); },
-                    )),
-                    if (showLooseQty) SizedBox(width: 100, child: TextFormField(
-                      controller: row.qtyLooseCtrl, enabled: !locked,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: 'Qty Loose'),
-                      style: const TextStyle(fontSize: 12),
-                      onChanged: (_) { setState(() {}); unawaited(_refreshCostPrices()); },
-                    )),
-                    if (_isLikelyInterEntity) SizedBox(width: 100, child: TextFormField(
-                      controller: row.salesPriceCtrl, enabled: !locked,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: 'Sales Price'),
-                      style: const TextStyle(fontSize: 12),
-                      onChanged: (_) => setState(_recalculateChargeApportionment),
-                    )),
-                    if (row.costPriceHint > 0) SizedBox(width: 100, child: Text('Cost: ${row.costPriceHint.toStringAsFixed(2)}',
-                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
-                    if (row.chargeAmount > 0) SizedBox(width: 110, child: Text('+ Charges: ${row.chargeAmount.toStringAsFixed(2)}',
-                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
-                    if (_mode == 'DIRECT' && !locked) IconButton(icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative), onPressed: () => _removeLine(row)),
-                  ]),
-                  if (row.isBatchTracked || row.isSerialTracked) _buildBatchSerialEditor(row, locked),
-                ]),
-              ),
-            )),
+            ..._lines.map((row) => _buildLineCard(row, locked, showLooseQty, showBarcode)),
         ]),
       ),
     );
   }
 
+  Widget _buildLineCard(_TransferLineRow row, bool locked, bool showLooseQty, bool showBarcode) {
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
+    final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
+
+    final productField = SakalFieldCard(
+      label: 'Product', required: true, editable: !locked,
+      child: SakalAutocomplete<Map<String, dynamic>>(
+        key: ValueKey('${row.hashCode}-${row.productDisplay}'),
+        initialValue: TextEditingValue(text: row.productDisplay),
+        displayStringForOption: (p) => '[${p['product_code']}] ${p['product_name']}',
+        optionsBuilder: (v) async {
+          if (locked) return const [];
+          final session = ref.read(sessionProvider)!;
+          return _ds.getProductsForPicker(clientId: session.clientId, companyId: session.companyId, search: v.text);
+        },
+        onSelected: (p) => _onProductSelected(row, p),
+        enabled: !locked,
+        decoration: bare,
+        style: style,
+      ),
+    );
+    final barcodeField = SakalFieldCard(
+      label: 'Scan/Enter Barcode', editable: !locked,
+      child: TextFormField(
+        controller: row.barcodeCtrl, enabled: !locked, decoration: bare, style: style,
+        onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
+      ),
+    );
+    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
+    final qtyPackField = SakalFieldCard(
+      label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked,
+      child: TextFormField(
+        controller: row.qtyPackCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: bare, style: style,
+        onChanged: (_) { setState(() {}); unawaited(_refreshCostPrices()); },
+      ),
+    );
+    final qtyLooseField = SakalFieldCard(
+      label: 'Qty Loose', editable: !locked,
+      child: TextFormField(
+        controller: row.qtyLooseCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: bare, style: style,
+        onChanged: (_) { setState(() {}); unawaited(_refreshCostPrices()); },
+      ),
+    );
+    final salesPriceField = SakalFieldCard(
+      label: 'Sales Price', editable: !locked,
+      child: TextFormField(
+        controller: row.salesPriceCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: bare, style: style,
+        onChanged: (_) => setState(_recalculateChargeApportionment),
+      ),
+    );
+
+    return SakalLineItemCard(
+      title: row.productDisplay.isEmpty ? 'Line' : row.productDisplay,
+      subtitle: _mode == 'AGAINST_REQUEST'
+          ? 'Remaining ${row.requestRemainingQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}'
+          : null,
+      onDelete: (_mode == 'DIRECT' && !locked) ? () => _removeLine(row) : null,
+      fields: [
+        if (_mode == 'DIRECT') SizedBox(width: 240, child: productField),
+        if (_mode == 'DIRECT' && showBarcode) SizedBox(width: 140, child: barcodeField),
+        SizedBox(width: 70, height: 56, child: unitField),
+        SizedBox(width: 100, child: qtyPackField),
+        if (showLooseQty) SizedBox(width: 100, child: qtyLooseField),
+        if (_isLikelyInterEntity) SizedBox(width: 100, child: salesPriceField),
+        if (row.costPriceHint > 0)
+          SizedBox(width: 100, height: 56, child: SakalFieldCard.readOnly(label: 'Cost', value: AppNumberFormat.amount(row.costPriceHint.toDouble(), numberFormat), numeric: true)),
+        if (row.chargeAmount > 0)
+          SizedBox(width: 110, height: 56, child: SakalFieldCard.readOnly(label: '+ Charges', value: AppNumberFormat.amount(row.chargeAmount, numberFormat), numeric: true)),
+      ],
+      body: (row.isBatchTracked || row.isSerialTracked) ? _buildBatchSerialEditor(row, locked) : null,
+    );
+  }
+
   Widget _buildBatchSerialEditor(_TransferLineRow row, bool locked) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final style = SakalFieldCard.valueTextStyle(isCompact);
     final isBatch = row.isBatchTracked;
 
     if (!row.candidatesLoaded) {
-      return const Padding(padding: EdgeInsets.only(top: 10), child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)));
+      return const Padding(padding: EdgeInsets.only(top: 10), child: LinearProgressIndicator());
+    }
+
+    Widget batchFields() {
+      final fields = row.batchCandidates.map((b) => SakalFieldCard(
+            label: '${b.batchNo} (avail ${b.availableBalance})${b.expiryDate != null ? ' · exp ${b.expiryDate}' : ''}',
+            editable: !locked,
+            child: TextFormField(
+              controller: b.qtyCtrl, enabled: !locked, keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: SakalFieldCard.bareDecoration,
+              style: style,
+              onChanged: (_) => setState(() {}),
+            ),
+          )).toList();
+      return Wrap(spacing: 10, runSpacing: 10, children: fields.map((f) => SizedBox(width: 220, child: f)).toList());
     }
 
     return Container(
@@ -1126,37 +1156,22 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
         else if (!isBatch && row.serialCandidates.isEmpty)
           const Text('No serial numbers currently in stock.', style: TextStyle(fontSize: 11, color: AppColors.negative))
         else if (isBatch)
-          ...row.batchCandidates.map((b) => Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Wrap(spacing: 10, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              SizedBox(width: 130, child: Text(b.batchNo, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
-              SizedBox(width: 150, child: Text('Available: ${b.availableBalance.toStringAsFixed(2)}${b.expiryDate != null ? ' · Exp ${b.expiryDate}' : ''}',
-                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
-              SizedBox(width: 100, child: TextFormField(
-                controller: b.qtyCtrl, enabled: !locked,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: dec.copyWith(labelText: 'Qty'),
-                style: const TextStyle(fontSize: 12),
-                onChanged: (_) => setState(() {}),
-              )),
-            ]),
-          ))
+          batchFields()
         else
-          ...row.serialCandidates.map((s) => Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: CheckboxListTile(
-              dense: true, contentPadding: EdgeInsets.zero, controlAffinity: ListTileControlAffinity.leading,
-              value: s.selected,
-              onChanged: locked ? null : (v) => setState(() => s.selected = v ?? false),
-              title: Text(s.serialNo, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-            ),
-          )),
+          Wrap(spacing: 8, runSpacing: 8, children: row.serialCandidates.map((s) => FilterChip(
+                label: Text(s.serialNo, style: const TextStyle(fontSize: 12)),
+                selected: s.selected,
+                onSelected: locked ? null : (v) => setState(() => s.selected = v),
+              )).toList()),
       ]),
     );
   }
 
   Widget _buildChargesCard(bool locked, bool isMobile) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
+    final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -1176,38 +1191,49 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
           else
             ..._charges.map((row) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                SizedBox(width: 200, child: DropdownButtonFormField<String>(
-                  decoration: dec.copyWith(labelText: 'Charge Type'),
-                  isExpanded: true, isDense: true, itemHeight: null,
-                  initialValue: row.chargeId,
-                  items: _additionalCharges.map((c) => DropdownMenuItem(value: c['id'] as String,
-                      child: Text(c['charge_name'] as String, style: const TextStyle(fontSize: 13)))).toList(),
-                  onChanged: locked ? null : (v) {
-                    final c = _additionalCharges.where((x) => x['id'] == v).firstOrNull;
-                    if (c == null) return;
-                    setState(() {
-                      row.chargeId = c['id'] as String;
-                      row.chargeName = c['charge_name'] as String;
-                      row.nature = c['nature'] as String? ?? 'ADD';
-                      row.glAccountId = c['default_gl_account_id'] as String?;
-                    });
-                  },
-                )),
-                SizedBox(width: 90, child: Text(row.nature, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
-                SizedBox(width: 110, child: TextFormField(
-                  controller: row.amountCtrl, enabled: !locked,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: dec.copyWith(labelText: 'Amount'),
-                  style: const TextStyle(fontSize: 12),
-                  onChanged: (_) => setState(_recalculateChargeApportionment),
-                )),
-                if (!locked) IconButton(icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative), onPressed: () => _removeCharge(row)),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(
+                  child: SakalFieldRow(isMobile: isMobile, spans: const [6, 3, 3], children: [
+                    SakalFieldCard(
+                      label: 'Charge Type', editable: !locked,
+                      child: DropdownButtonFormField<String>(
+                        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+                        initialValue: row.chargeId,
+                        items: _additionalCharges.map((c) => DropdownMenuItem(value: c['id'] as String,
+                            child: Text(c['charge_name'] as String, overflow: TextOverflow.ellipsis))).toList(),
+                        onChanged: locked ? null : (v) {
+                          final c = _additionalCharges.where((x) => x['id'] == v).firstOrNull;
+                          if (c == null) return;
+                          setState(() {
+                            row.chargeId = c['id'] as String;
+                            row.chargeName = c['charge_name'] as String;
+                            row.nature = c['nature'] as String? ?? 'ADD';
+                            row.glAccountId = c['default_gl_account_id'] as String?;
+                          });
+                        },
+                      ),
+                    ),
+                    SakalFieldCard.readOnly(label: 'Nature', value: row.nature),
+                    SakalFieldCard(
+                      label: 'Amount', editable: !locked,
+                      child: TextFormField(
+                        controller: row.amountCtrl, enabled: !locked,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: bare, style: style,
+                        onChanged: (_) => setState(_recalculateChargeApportionment),
+                      ),
+                    ),
+                  ]),
+                ),
+                if (!locked) Padding(
+                  padding: const EdgeInsets.only(left: 8, top: 4),
+                  child: IconButton(icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative), onPressed: () => _removeCharge(row)),
+                ),
               ]),
             )),
           if (_charges.isNotEmpty) ...[
             const Divider(height: 20),
-            Align(alignment: Alignment.centerRight, child: Text('Total Charges: ${_chargesTotal.toStringAsFixed(2)}',
+            Align(alignment: Alignment.centerRight, child: Text('Total Charges: ${AppNumberFormat.amount(_chargesTotal, numberFormat)}',
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary))),
           ],
         ]),
@@ -1216,10 +1242,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
   }
 
   Widget _buildPostedVouchersSection() {
-    Widget colHeader(String label, {TextAlign align = TextAlign.left}) => Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Text(label, textAlign: align, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12)),
-    );
+    final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
     Widget cell(String text, {TextAlign align = TextAlign.left, bool bold = false}) => Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Text(text, textAlign: align, style: TextStyle(fontSize: 13, fontWeight: bold ? FontWeight.w700 : FontWeight.w400)),
@@ -1260,15 +1283,12 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
                   clipBehavior: Clip.antiAlias,
                   child: Column(children: [
-                    Container(
-                      color: AppColors.primary,
-                      child: Row(children: [
-                        Expanded(flex: 2, child: colHeader('Serial No')),
-                        Expanded(flex: 4, child: colHeader('Ledger Name')),
-                        Expanded(flex: 2, child: colHeader('Debit', align: TextAlign.right)),
-                        Expanded(flex: 2, child: colHeader('Credit', align: TextAlign.right)),
-                      ]),
-                    ),
+                    SakalTableHeaderBar(cells: [
+                      Expanded(flex: 2, child: SakalTableHeaderBar.label('Serial No')),
+                      Expanded(flex: 4, child: SakalTableHeaderBar.label('Ledger Name')),
+                      Expanded(flex: 2, child: SakalTableHeaderBar.label('Debit', textAlign: TextAlign.right)),
+                      Expanded(flex: 2, child: SakalTableHeaderBar.label('Credit', textAlign: TextAlign.right)),
+                    ]),
                     for (var i = 0; i < lines.length; i++) Builder(builder: (_) {
                       final l = lines[i];
                       final account = l['account'] as Map<String, dynamic>?;
@@ -1280,8 +1300,8 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
                         child: Row(children: [
                           Expanded(flex: 2, child: cell('${l['serial_no']}')),
                           Expanded(flex: 4, child: cell(ledgerName)),
-                          Expanded(flex: 2, child: cell(isDr ? amount.toStringAsFixed(2) : '—', align: TextAlign.right)),
-                          Expanded(flex: 2, child: cell(!isDr ? amount.toStringAsFixed(2) : '—', align: TextAlign.right)),
+                          Expanded(flex: 2, child: cell(isDr ? AppNumberFormat.amount(amount, numberFormat) : '—', align: TextAlign.right)),
+                          Expanded(flex: 2, child: cell(!isDr ? AppNumberFormat.amount(amount, numberFormat) : '—', align: TextAlign.right)),
                         ]),
                       );
                     }),
@@ -1289,8 +1309,8 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
                       decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.06), border: const Border(top: BorderSide(color: AppColors.border))),
                       child: Row(children: [
                         const Expanded(flex: 6, child: Padding(padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10), child: Text('Total', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)))),
-                        Expanded(flex: 2, child: cell(totalDebit.toStringAsFixed(2), align: TextAlign.right, bold: true)),
-                        Expanded(flex: 2, child: cell(totalCredit.toStringAsFixed(2), align: TextAlign.right, bold: true)),
+                        Expanded(flex: 2, child: cell(AppNumberFormat.amount(totalDebit, numberFormat), align: TextAlign.right, bold: true)),
+                        Expanded(flex: 2, child: cell(AppNumberFormat.amount(totalCredit, numberFormat), align: TextAlign.right, bold: true)),
                       ]),
                     ),
                   ]),
