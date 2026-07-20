@@ -837,7 +837,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
 
   Widget _buildHeaderCard(bool locked, bool isMobile, bool showScan) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final priceTypeLocked = locked || _lines.isNotEmpty;
     final locationLocked  = locked || _lines.isNotEmpty;
@@ -1000,7 +1000,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
 
   Widget _buildLinesCard(bool locked) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     return Card(
       elevation: 0,
@@ -1059,7 +1059,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
                       ),
               );
               final costPriceField = row.costLoading
-                  ? SakalFieldCard(label: 'Cost Price', child: const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)))
+                  ? const SakalFieldCard(label: 'Cost Price', child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)))
                   : SakalFieldCard.readOnly(label: 'Cost Price', value: row.costPrice.toStringAsFixed(2), numeric: true);
               final marginField = SakalFieldCard(
                 label: 'Margin %', editable: !locked && row.costPrice > 0,

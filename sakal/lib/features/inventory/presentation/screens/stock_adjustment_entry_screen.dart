@@ -788,7 +788,7 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
     final adjustmentNoField = SakalFieldCard.readOnly(label: 'Adjustment No', value: _adjustmentNo ?? '(auto on save)');
@@ -865,7 +865,7 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
 
   Widget _buildLineCard(_AdjLineRow row, bool locked, bool showLooseQty, bool showBarcode) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
     final productField = SakalFieldCard(

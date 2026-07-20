@@ -503,7 +503,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
     final fromLocationField = SakalFieldCard(
@@ -576,7 +576,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
 
   Widget _buildLineCard(_RequestLineRow row, int idx, bool locked, bool showLooseQty, bool showBarcode) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
     final barcodeField = SakalFieldCard(

@@ -539,7 +539,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
     final locationField = SakalFieldCard(
@@ -625,7 +625,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
 
   Widget _buildLineCard(_RequisitionLineRow row, int idx, bool locked, bool isMobile, bool showLooseQty, bool showBarcode) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
     final barcodeField = SakalFieldCard(

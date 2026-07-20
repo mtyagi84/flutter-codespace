@@ -1014,7 +1014,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final showRate = _quotationCurrencyCode != null && _quotationCurrencyCode != _baseCurrency;
 
@@ -1185,7 +1185,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
 
   Widget _buildLinesCard(bool locked, bool showLooseQty, bool showBarcode) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     return Card(
       elevation: 0,

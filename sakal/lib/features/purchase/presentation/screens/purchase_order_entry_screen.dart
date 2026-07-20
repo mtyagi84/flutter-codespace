@@ -1035,7 +1035,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
     final poTypeField = SakalFieldCard(
@@ -1156,7 +1156,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
 
   Widget _buildAdditionalDetails(bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
     Widget textField(String label, TextEditingController ctrl) => SakalFieldCard(
@@ -1251,7 +1251,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
 
   Widget _buildPaymentTermCard(_PaymentTermRow row, bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -1308,7 +1308,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
 
   Widget _buildLineCard(_POLineRow row, int idx, bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
     // Field stays hidden but not force-cleared — an existing line loaded with a

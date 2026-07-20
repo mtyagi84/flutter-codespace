@@ -1209,7 +1209,7 @@ class _FinanceVoucherEntryScreenState
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final isCash = _voucherType != null && isCashVoucher(_voucherType!);
     final showRateField = _transCurrency.isNotEmpty && _transCurrency != _baseCurrency;
@@ -1412,7 +1412,7 @@ class _FinanceVoucherEntryScreenState
 
   Widget _buildAgainstBillSection(bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final transCurr = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
     final partyCurr = _partyCurrency.isEmpty ? transCurr : _partyCurrency;
@@ -1589,7 +1589,7 @@ class _FinanceVoucherEntryScreenState
 
   Widget _buildAccountLineCard(int i, _AccountLine line, bool locked) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
     final tc = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;

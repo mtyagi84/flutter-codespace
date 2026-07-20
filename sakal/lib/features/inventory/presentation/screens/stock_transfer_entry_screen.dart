@@ -904,7 +904,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final modeLocked = locked || _lines.isNotEmpty;
 
@@ -1035,7 +1035,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
 
   Widget _buildLineCard(_TransferLineRow row, bool locked, bool showLooseQty, bool showBarcode) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
 
@@ -1169,7 +1169,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
 
   Widget _buildChargesCard(bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
     return Card(

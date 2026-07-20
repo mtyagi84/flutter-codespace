@@ -1391,7 +1391,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     // Receipt Mode, Supplier and Currency all lock together the instant a
     // supplier is chosen for an Against-PO GRN — picking a supplier there
@@ -1532,7 +1532,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
 
   Widget _buildAdditionalDetails(bool locked) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     Widget multilineField(String label, TextEditingController ctrl) => SakalFieldCard(
       label: label, editable: !locked, height: 72,
@@ -1615,7 +1615,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
 
   Widget _buildLineCard(_GrnLineRow row, int idx, bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final showLooseQty = (ref.read(sessionProvider)?.qtyEntryMode ?? 'PACK_AND_LOOSE') != 'PACK_ONLY';
     final showBarcode = !row.isFromPo && (ref.read(sessionProvider)?.enableBarcode ?? false);
@@ -1843,7 +1843,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
 
   Widget _buildBatchRow(_GrnLineRow line, _GrnBatchRow b, bool withExpiry, bool locked) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final batchNoField = SakalFieldCard(
       label: 'Batch No', editable: !locked,
@@ -1912,7 +1912,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
 
   Widget _buildSerialRow(_GrnLineRow line, _GrnSerialRow s, bool locked) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     return Padding(
       padding: const EdgeInsets.only(top: 8),

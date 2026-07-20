@@ -444,7 +444,7 @@ class _StockCountReviewEntryScreenState extends ConsumerState<StockCountReviewEn
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final locationLocked = locked || _selectedCountKeys.isNotEmpty;
 

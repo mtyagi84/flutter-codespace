@@ -676,7 +676,7 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final filtersLocked = locked || _hasStarted; // scope is fixed once the worksheet is built
 
@@ -756,7 +756,7 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
 
   Widget _buildLinesCard(bool locked, bool showLooseQty, bool showScan) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final rows = _filteredLines;
     final countedN = _lines.where((l) => l.isCounted).length;
@@ -813,7 +813,7 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
 
   Widget _buildWorksheetRow(_WorksheetRow row, bool locked, bool showLooseQty) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final isTracked = row.isBatchTracked || row.isSerialTracked;
 
@@ -908,7 +908,7 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
 
   Widget _buildNewBatchRow(_WorksheetRow row, _NewBatchEntry b, bool showLooseQty, bool locked) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final batchNoField = SakalFieldCard(
       label: 'Batch No', editable: !locked,
@@ -982,7 +982,7 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
 
   Widget _buildNewSerialRow(_WorksheetRow row, _NewSerialEntry s, bool locked) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final serialField = SakalFieldCard(
       label: 'Serial No', editable: !locked,

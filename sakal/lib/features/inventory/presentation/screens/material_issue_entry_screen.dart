@@ -641,7 +641,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
     final issueNoField = SakalFieldCard.readOnly(label: 'Issue No', value: _issueNo ?? '(auto on save)');
@@ -725,7 +725,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
 
   Widget _buildLineCard(_IssueLineRow row, bool locked, bool showLooseQty, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
     final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');

@@ -1294,7 +1294,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final showRate = _orderCurrencyCode != null && _orderCurrencyCode != _baseCurrency;
     final customerLocked = locked || _isAgainstQuotation;
@@ -1504,7 +1504,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
 
   Widget _buildDirectLineRow(_OrderLineRow row, int idx, bool locked, bool showLooseQty, bool showBarcode) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final rateEditable = !locked && (row.overrideEnabled || !row.priceResolved);
 
@@ -1592,10 +1592,10 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     final amountField = SakalFieldCard.readOnly(label: 'Amount', value: row.finalAmount.toStringAsFixed(2), numeric: true);
     final landedField = SakalFieldCard.readOnly(label: 'Landed', value: row.landedAmount.toStringAsFixed(2), numeric: true);
     final stockField = row.costLoading
-        ? SakalFieldCard(label: 'Stock', child: const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)))
+        ? const SakalFieldCard(label: 'Stock', child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)))
         : SakalFieldCard.readOnly(label: 'Stock', value: row.availableStock.toStringAsFixed(2), numeric: true);
     final costField = row.costLoading
-        ? SakalFieldCard(label: 'Cost', child: const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)))
+        ? const SakalFieldCard(label: 'Cost', child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)))
         : SakalFieldCard.readOnly(label: 'Cost', value: row.costPrice.toStringAsFixed(2), numeric: true);
 
     final overrideReasonBody = row.priceSource == 'MANUAL_OVERRIDE'

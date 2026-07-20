@@ -694,7 +694,7 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
 
   Widget _buildHeaderCard(bool locked, bool isMobile, bool showScan) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
     final openingNoField = SakalFieldCard.readOnly(label: 'Opening No', value: _openingNo ?? '(auto on save)');
@@ -793,7 +793,7 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
 
   Widget _buildLineCard(_OpeningLineRow row, int idx, bool locked, bool showLooseQty, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
-    final bare  = SakalFieldCard.bareDecoration;
+    const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
     final productField = SakalFieldCard(
