@@ -6,10 +6,12 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
 import '../providers/price_master_providers.dart';
 
 class PriceMasterListScreen extends ConsumerStatefulWidget {
@@ -158,80 +160,107 @@ class _PriceMasterListScreenState extends ConsumerState<PriceMasterListScreen>
         const Divider(height: 20),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-          child: Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            DropdownButton<String?>(
-              value: _filterPriceType,
-              hint: const Text('All Types', style: TextStyle(fontSize: 13)),
-              isDense: true,
-              underline: const SizedBox.shrink(),
-              items: const [
-                DropdownMenuItem(value: null, child: Text('All Types', style: TextStyle(fontSize: 13))),
-                DropdownMenuItem(value: 'GENERIC', child: Text('Generic', style: TextStyle(fontSize: 13))),
-                DropdownMenuItem(value: 'CUSTOMER', child: Text('Customer-Specific', style: TextStyle(fontSize: 13))),
-              ],
-              onChanged: (v) { setState(() => _filterPriceType = v); _load(); },
-            ),
-            DropdownButton<String?>(
-              value: _filterStatus,
-              hint: const Text('All Status', style: TextStyle(fontSize: 13)),
-              isDense: true,
-              underline: const SizedBox.shrink(),
-              items: const [
-                DropdownMenuItem(value: null, child: Text('All Status', style: TextStyle(fontSize: 13))),
-                DropdownMenuItem(value: 'DRAFT', child: Text('Draft', style: TextStyle(fontSize: 13))),
-                DropdownMenuItem(value: 'APPROVED', child: Text('Approved', style: TextStyle(fontSize: 13))),
-              ],
-              onChanged: (v) { setState(() => _filterStatus = v); _load(); },
-            ),
-            DropdownButton<String?>(
-              value: _filterLocationId,
-              hint: const Text('All Locations', style: TextStyle(fontSize: 13)),
-              isDense: true,
-              underline: const SizedBox.shrink(),
-              items: [
-                const DropdownMenuItem(value: null, child: Text('All Locations', style: TextStyle(fontSize: 13))),
-                ..._locations.map((l) => DropdownMenuItem(
-                    value: l['id'] as String,
-                    child: Text(l['location_name'] as String, style: const TextStyle(fontSize: 13)))),
-              ],
-              onChanged: (v) { setState(() => _filterLocationId = v); _load(); },
-            ),
-            InkWell(
-              onTap: () => _pickEffFilterDate(_effFrom, (d) => setState(() => _effFrom = d)),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                decoration: BoxDecoration(border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(6)),
-                child: Text(_effFrom != null ? 'Eff. From ${_displayDate(_fmtDate(_effFrom!))}' : 'Eff. From',
-                    style: const TextStyle(fontSize: 12)),
+          child: Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            SizedBox(
+              width: 150,
+              child: SakalFieldCard(
+                label: 'Type', editable: true,
+                child: DropdownButtonFormField<String?>(
+                  initialValue: _filterPriceType,
+                  isExpanded: true, isDense: true, itemHeight: null,
+                  decoration: SakalFieldCard.bareDecoration,
+                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+                  items: const [
+                    DropdownMenuItem(value: null, child: Text('All Types')),
+                    DropdownMenuItem(value: 'GENERIC', child: Text('Generic')),
+                    DropdownMenuItem(value: 'CUSTOMER', child: Text('Customer-Specific')),
+                  ],
+                  onChanged: (v) { setState(() => _filterPriceType = v); _load(); },
+                ),
               ),
             ),
-            InkWell(
-              onTap: () => _pickEffFilterDate(_effTo, (d) => setState(() => _effTo = d)),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                decoration: BoxDecoration(border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(6)),
-                child: Text(_effTo != null ? 'Eff. To ${_displayDate(_fmtDate(_effTo!))}' : 'Eff. To',
-                    style: const TextStyle(fontSize: 12)),
+            SizedBox(
+              width: 140,
+              child: SakalFieldCard(
+                label: 'Status', editable: true,
+                child: DropdownButtonFormField<String?>(
+                  initialValue: _filterStatus,
+                  isExpanded: true, isDense: true, itemHeight: null,
+                  decoration: SakalFieldCard.bareDecoration,
+                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+                  items: const [
+                    DropdownMenuItem(value: null, child: Text('All Status')),
+                    DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
+                    DropdownMenuItem(value: 'APPROVED', child: Text('Approved')),
+                  ],
+                  onChanged: (v) { setState(() => _filterStatus = v); _load(); },
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 180,
+              child: SakalFieldCard(
+                label: 'Location', editable: true,
+                child: DropdownButtonFormField<String?>(
+                  initialValue: _filterLocationId,
+                  isExpanded: true, isDense: true, itemHeight: null,
+                  decoration: SakalFieldCard.bareDecoration,
+                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('All Locations')),
+                    ..._locations.map((l) => DropdownMenuItem(
+                        value: l['id'] as String,
+                        child: Text(l['location_name'] as String))),
+                  ],
+                  onChanged: (v) { setState(() => _filterLocationId = v); _load(); },
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 140,
+              child: SakalFieldCard(
+                label: 'Eff. From', editable: true,
+                child: InkWell(
+                  onTap: () => _pickEffFilterDate(_effFrom, (d) => setState(() => _effFrom = d)),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(_effFrom != null ? _displayDate(_fmtDate(_effFrom!)) : 'Any',
+                        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider))),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 140,
+              child: SakalFieldCard(
+                label: 'Eff. To', editable: true,
+                child: InkWell(
+                  onTap: () => _pickEffFilterDate(_effTo, (d) => setState(() => _effTo = d)),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(_effTo != null ? _displayDate(_fmtDate(_effTo!)) : 'Any',
+                        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider))),
+                  ),
+                ),
               ),
             ),
             if (_effFrom != null || _effTo != null)
               IconButton(icon: const Icon(Icons.clear, size: 16), tooltip: 'Clear date filter',
                   onPressed: () => setState(() { _effFrom = null; _effTo = null; })),
             SizedBox(
-              width: 260, height: 36,
-              child: TextField(
-                controller: _searchCtrl,
-                style: const TextStyle(fontSize: 13),
-                decoration: InputDecoration(
-                  hintText: 'Search entry no / customer…',
-                  hintStyle: const TextStyle(fontSize: 12),
-                  prefixIcon: const Icon(Icons.search, size: 16),
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
-                  suffixIcon: _searchText.isNotEmpty
-                      ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear)
-                      : null,
+              width: 260,
+              child: SakalFieldCard(
+                label: 'Search', editable: true,
+                child: TextField(
+                  controller: _searchCtrl,
+                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+                  decoration: SakalFieldCard.bareDecoration.copyWith(
+                    hintText: 'Entry no / customer…',
+                    hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+                    suffixIcon: _searchText.isNotEmpty
+                        ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear, padding: EdgeInsets.zero, constraints: const BoxConstraints())
+                        : null,
+                  ),
                 ),
               ),
             ),

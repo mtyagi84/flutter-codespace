@@ -6,10 +6,12 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
 import '../providers/finance_voucher_providers.dart';
 
 MenuFeature? _findFeature(List<MenuModule> modules, String screenPath) {
@@ -184,78 +186,98 @@ class _FinanceVoucherListScreenState
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
           child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: 12,
+            runSpacing: 12,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
 
               // Date range
-              InkWell(
-                onTap: () => _pickDate(_fromDate, (d) => setState(() => _fromDate = d)),
-                borderRadius: BorderRadius.circular(20),
-                child: _chip('From: ${_displayDate(_fmtDate(_fromDate))}'),
+              SizedBox(
+                width: 140,
+                child: SakalFieldCard(
+                  label: 'From', editable: true,
+                  child: InkWell(
+                    onTap: () => _pickDate(_fromDate, (d) => setState(() => _fromDate = d)),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(_displayDate(_fmtDate(_fromDate)),
+                          style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider))),
+                    ),
+                  ),
+                ),
               ),
-              InkWell(
-                onTap: () => _pickDate(_toDate, (d) => setState(() => _toDate = d)),
-                borderRadius: BorderRadius.circular(20),
-                child: _chip('To: ${_displayDate(_fmtDate(_toDate))}'),
+              SizedBox(
+                width: 140,
+                child: SakalFieldCard(
+                  label: 'To', editable: true,
+                  child: InkWell(
+                    onTap: () => _pickDate(_toDate, (d) => setState(() => _toDate = d)),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(_displayDate(_fmtDate(_toDate)),
+                          style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider))),
+                    ),
+                  ),
+                ),
               ),
 
               // Type filter
-              DropdownButton<String?>(
-                value: _filterType,
-                hint: const Text('All Types', style: TextStyle(fontSize: 13)),
-                isDense: true,
-                underline: const SizedBox.shrink(),
-                items: [
-                  const DropdownMenuItem(value: null,
-                      child: Text('All Types', style: TextStyle(fontSize: 13))),
-                  ..._types.map((t) => DropdownMenuItem(
-                    value: t,
-                    child: Text('$t — ${_typeLabels[t]}',
-                        style: const TextStyle(fontSize: 13)),
-                  )),
-                ],
-                onChanged: (v) { setState(() => _filterType = v); _load(); },
+              SizedBox(
+                width: 180,
+                child: SakalFieldCard(
+                  label: 'Type', editable: true,
+                  child: DropdownButtonFormField<String?>(
+                    initialValue: _filterType,
+                    isExpanded: true, isDense: true, itemHeight: null,
+                    decoration: SakalFieldCard.bareDecoration,
+                    style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('All Types')),
+                      ..._types.map((t) => DropdownMenuItem(
+                        value: t,
+                        child: Text('$t — ${_typeLabels[t]}'),
+                      )),
+                    ],
+                    onChanged: (v) { setState(() => _filterType = v); _load(); },
+                  ),
+                ),
               ),
 
               // Status filter
-              DropdownButton<bool?>(
-                value: _filterPosted,
-                hint: const Text('All Status', style: TextStyle(fontSize: 13)),
-                isDense: true,
-                underline: const SizedBox.shrink(),
-                items: const [
-                  DropdownMenuItem(value: null,
-                      child: Text('All Status', style: TextStyle(fontSize: 13))),
-                  DropdownMenuItem(value: false,
-                      child: Text('Drafts',     style: TextStyle(fontSize: 13))),
-                  DropdownMenuItem(value: true,
-                      child: Text('Posted',     style: TextStyle(fontSize: 13))),
-                ],
-                onChanged: (v) { setState(() => _filterPosted = v); _load(); },
+              SizedBox(
+                width: 150,
+                child: SakalFieldCard(
+                  label: 'Status', editable: true,
+                  child: DropdownButtonFormField<bool?>(
+                    initialValue: _filterPosted,
+                    isExpanded: true, isDense: true, itemHeight: null,
+                    decoration: SakalFieldCard.bareDecoration,
+                    style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+                    items: const [
+                      DropdownMenuItem(value: null, child: Text('All Status')),
+                      DropdownMenuItem(value: false, child: Text('Drafts')),
+                      DropdownMenuItem(value: true, child: Text('Posted')),
+                    ],
+                    onChanged: (v) { setState(() => _filterPosted = v); _load(); },
+                  ),
+                ),
               ),
 
               // Search
               SizedBox(
                 width: 220,
-                height: 36,
-                child: TextField(
-                  controller: _searchCtrl,
-                  style: const TextStyle(fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'Search trans no / remarks…',
-                    hintStyle: const TextStyle(fontSize: 12),
-                    prefixIcon: const Icon(Icons.search, size: 16),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20)),
-                    suffixIcon: _searchText.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, size: 14),
-                            onPressed: _searchCtrl.clear)
-                        : null,
+                child: SakalFieldCard(
+                  label: 'Search', editable: true,
+                  child: TextField(
+                    controller: _searchCtrl,
+                    style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+                    decoration: SakalFieldCard.bareDecoration.copyWith(
+                      hintText: 'Trans no / remarks…',
+                      hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+                      suffixIcon: _searchText.isNotEmpty
+                          ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear, padding: EdgeInsets.zero, constraints: const BoxConstraints())
+                          : null,
+                    ),
                   ),
                 ),
               ),
@@ -307,21 +329,6 @@ class _FinanceVoucherListScreenState
       ],
     );
   }
-
-  Widget _chip(String label) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-    decoration: BoxDecoration(
-      border: Border.all(color: AppColors.border),
-      borderRadius: BorderRadius.circular(20),
-      color: AppColors.surfaceVariant,
-    ),
-    child: Row(mainAxisSize: MainAxisSize.min, children: [
-      const Icon(Icons.calendar_today_outlined, size: 13,
-          color: AppColors.primary),
-      const SizedBox(width: 4),
-      Text(label, style: const TextStyle(fontSize: 12)),
-    ]),
-  );
 
   Widget _buildRow(Map<String, dynamic> v, int index) {
     final isPosted  = v['is_posted']      as bool?   ?? false;
