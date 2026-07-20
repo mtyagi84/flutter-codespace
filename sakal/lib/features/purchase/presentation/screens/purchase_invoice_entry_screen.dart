@@ -3,16 +3,22 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/sakal_autocomplete.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/purchase_invoice_repository.dart';
 import '../providers/purchase_invoice_providers.dart';
 
@@ -420,16 +426,6 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
     if (d != null) onPicked(d);
   }
 
-  static Widget _req(String text) => RichText(
-    text: TextSpan(
-      text: text,
-      style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w400),
-      children: const [
-        TextSpan(text: ' *', style: TextStyle(color: AppColors.negative, fontWeight: FontWeight.w600)),
-      ],
-    ),
-  );
-
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -485,7 +481,7 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
                           const SizedBox(height: 16),
                           _buildGrnPickerCard(locked),
                           const SizedBox(height: 16),
-                          _buildTotalsCard(locked),
+                          _buildTotalsCard(locked, isMobile),
                           if (_status == 'APPROVED' && _postedVoucherNo != null) ...[
                             const SizedBox(height: 16),
                             _buildPostedVoucherSection(),
@@ -506,15 +502,23 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
     ),
   );
 
-  Widget _buildTitleBlock() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Text(_invoiceNo != null ? 'Purchase Bill · $_invoiceNo' : 'New Purchase Bill',
-        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-    const SizedBox(height: 2),
-    _status == 'APPROVED'
-        ? _statusChip(_status)
-        : Text(_invoiceNo != null ? 'Draft' : 'Unsaved draft',
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-  ]);
+  Widget _buildTitleBlock() => Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (context.canPop())
+        IconButton(icon: const Icon(Icons.arrow_back), tooltip: 'Back', onPressed: () => context.pop()),
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(_invoiceNo != null ? 'Purchase Bill · $_invoiceNo' : 'New Purchase Bill',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+        const SizedBox(height: 2),
+        _status == 'APPROVED'
+            ? _statusChip(_status)
+            : Text(_invoiceNo != null ? 'Draft' : 'Unsaved draft',
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      ]),
+    ],
+  );
 
   Widget _statusChip(String status) {
     final color = status == 'APPROVED' ? AppColors.positive : AppColors.secondary;
@@ -560,137 +564,105 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
   // ── Header card ───────────────────────────────────────────────────────────
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
-    const fh = 56.0;
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
-    Widget field(Widget child) => SizedBox(height: fh, child: child);
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
     final supplierLocked = locked || _selectedGrnKeys.isNotEmpty;
+
+    final supplierField = SakalFieldCard(
+      label: 'Supplier', required: true, editable: !supplierLocked,
+      child: SakalAutocomplete<Map<String, dynamic>>(
+        key: ValueKey(_supplierDisplay ?? ''),
+        initialValue: TextEditingValue(text: _supplierDisplay ?? ''),
+        displayStringForOption: (s) => '[${s['account_code']}] ${s['account_name']}',
+        optionsBuilder: (v) {
+          if (supplierLocked) return const [];
+          final q = v.text.toLowerCase().trim();
+          return q.isEmpty ? _suppliers : _suppliers.where((s) =>
+              (s['account_code'] as String? ?? '').toLowerCase().contains(q) ||
+              (s['account_name'] as String? ?? '').toLowerCase().contains(q));
+        },
+        onSelected: (s) => _onSupplierSelected(s),
+        enabled: !supplierLocked,
+        decoration: bare,
+        style: style,
+      ),
+    );
+    final billNoField = SakalFieldCard.readOnly(label: 'Bill No', value: _invoiceNo ?? '(auto on save)');
+    final billDateField = SakalFieldCard(
+      label: 'Bill Date', required: true, editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(_invoiceDate, (d) => setState(() => _invoiceDate = d)),
+        child: Row(children: [
+          Expanded(child: Text(_displayDate(_invoiceDate), style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
+      ),
+    );
+
+    final supplierInvoiceNoField = SakalFieldCard(
+      label: 'Supplier Invoice No', required: true, editable: !locked,
+      child: TextFormField(controller: _supplierInvoiceNoCtrl, enabled: !locked, decoration: bare, style: style,
+          onChanged: (_) => setState(() {})),
+    );
+    final supplierInvoiceDateField = SakalFieldCard(
+      label: 'Supplier Invoice Date', required: true, editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(_supplierInvoiceDate, (d) => setState(() => _supplierInvoiceDate = d)),
+        child: Row(children: [
+          Expanded(child: Text(_displayDate(_supplierInvoiceDate), style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
+      ),
+    );
+
+    final currAsync = ref.watch(currenciesProvider);
+    final currencyRow = currAsync.when(
+      data: (currencies) {
+        final selectedCurrency = currencies.where((c) => c['id'] == _invoiceCurrencyId).firstOrNull;
+        final currencyField = SakalFieldCard.readOnly(
+          label: 'Currency (inherited from GRN)',
+          value: selectedCurrency != null ? '${selectedCurrency['currency_id']} — ${selectedCurrency['currency_name']}' : '—',
+        );
+        final rateBaseField = SakalFieldCard(
+          label: 'Rate → Base', editable: !locked,
+          child: TextFormField(
+            controller: _rateToBaseCtrl, enabled: !locked,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: bare, style: style,
+            onChanged: (_) => setState(() {}),
+          ),
+        );
+        final rateLocalField = SakalFieldCard(
+          label: 'Rate → Local', editable: !locked,
+          child: TextFormField(
+            controller: _rateToLocalCtrl, enabled: !locked,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: bare, style: style,
+            onChanged: (_) => setState(() {}),
+          ),
+        );
+        return SakalFieldRow(isMobile: isMobile, children: [currencyField, rateBaseField, rateLocalField]);
+      },
+      loading: () => const SizedBox(height: 56, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+      error: (e, _) => Text('Could not load currencies: $e'),
+    );
 
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(children: [
-          // Row 1: Supplier | Bill No | Bill Date
-          Builder(builder: (_) {
-            final f1 = SizedBox(
-              height: fh,
-              child: SakalAutocomplete<Map<String, dynamic>>(
-                key: ValueKey(_supplierDisplay ?? ''),
-                initialValue: TextEditingValue(text: _supplierDisplay ?? ''),
-                displayStringForOption: (s) => '[${s['account_code']}] ${s['account_name']}',
-                optionsBuilder: (v) {
-                  if (supplierLocked) return const [];
-                  final q = v.text.toLowerCase().trim();
-                  return q.isEmpty ? _suppliers : _suppliers.where((s) =>
-                      (s['account_code'] as String? ?? '').toLowerCase().contains(q) ||
-                      (s['account_name'] as String? ?? '').toLowerCase().contains(q));
-                },
-                onSelected: (s) => _onSupplierSelected(s),
-                enabled: !supplierLocked,
-                decoration: dec.copyWith(labelText: 'Supplier *',
-                    helperText: supplierLocked && !locked ? 'Locked once a GRN is picked' : null,
-                    helperStyle: const TextStyle(fontSize: 10)),
-                style: const TextStyle(fontSize: 13),
-              ),
-            );
-            final f2 = field(InputDecorator(
-              decoration: dec.copyWith(labelText: 'Bill No'),
-              child: Text(_invoiceNo ?? '(auto on save)',
-                  style: TextStyle(fontSize: 13, color: _invoiceNo != null ? AppColors.textPrimary : AppColors.textDisabled)),
-            ));
-            final f3 = field(InkWell(
-              onTap: locked ? null : () => _pickDate(_invoiceDate, (d) => setState(() => _invoiceDate = d)),
-              child: InputDecorator(
-                decoration: dec.copyWith(labelText: 'Bill Date *',
-                    suffixIcon: Icon(Icons.calendar_today_outlined, size: 15,
-                        color: locked ? AppColors.textDisabled : AppColors.primary)),
-                child: Text(_displayDate(_invoiceDate), style: const TextStyle(fontSize: 13)),
-              ),
-            ));
-            return isMobile
-                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    SizedBox(width: double.infinity, child: f1), const SizedBox(height: 8),
-                    Row(children: [Expanded(child: f2), const SizedBox(width: 12), Expanded(child: f3)]),
-                  ])
-                : Row(children: [
-                    Expanded(flex: 3, child: f1), const SizedBox(width: 12),
-                    Expanded(flex: 2, child: f2), const SizedBox(width: 12),
-                    Expanded(flex: 2, child: f3),
-                  ]);
-          }),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SakalFieldRow(isMobile: isMobile, spans: const [7, 5], children: [supplierField, billNoField]),
+          if (supplierLocked && !locked) const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Text('Supplier locked once a GRN is picked', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          ),
           const SizedBox(height: 12),
-
-          // Row 2: Supplier Invoice No | Supplier Invoice Date
-          Builder(builder: (_) {
-            final f1 = field(TextFormField(
-              controller: _supplierInvoiceNoCtrl, enabled: !locked,
-              decoration: dec.copyWith(label: _req('Supplier Invoice No')),
-              style: const TextStyle(fontSize: 13),
-              onChanged: (_) => setState(() {}),
-            ));
-            final f2 = field(InkWell(
-              onTap: locked ? null : () => _pickDate(_supplierInvoiceDate, (d) => setState(() => _supplierInvoiceDate = d)),
-              child: InputDecorator(
-                decoration: dec.copyWith(label: _req('Supplier Invoice Date'),
-                    suffixIcon: Icon(Icons.calendar_today_outlined, size: 15,
-                        color: locked ? AppColors.textDisabled : AppColors.primary)),
-                child: Text(_displayDate(_supplierInvoiceDate),
-                    style: TextStyle(fontSize: 13, color: _supplierInvoiceDate == null ? AppColors.textDisabled : null)),
-              ),
-            ));
-            return isMobile
-                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    SizedBox(width: double.infinity, child: f1), const SizedBox(height: 8),
-                    SizedBox(width: double.infinity, child: f2),
-                  ])
-                : Row(children: [Expanded(child: f1), const SizedBox(width: 12), Expanded(child: f2)]);
-          }),
+          SakalFieldRow(isMobile: isMobile, children: [billDateField, supplierInvoiceNoField, supplierInvoiceDateField]),
           const SizedBox(height: 12),
-
-          // Row 3: Currency (locked, inherited from GRNs) | Rate -> Base | Rate -> Local
-          Builder(builder: (_) {
-            final currAsync = ref.watch(currenciesProvider);
-            return currAsync.when(
-              data: (currencies) {
-                final selectedCurrency = currencies.where((c) => c['id'] == _invoiceCurrencyId).firstOrNull;
-                final f1 = field(InputDecorator(
-                  decoration: dec.copyWith(labelText: 'Currency',
-                      helperText: 'Inherited from the selected GRN(s)', helperStyle: const TextStyle(fontSize: 10)),
-                  child: Text(
-                    selectedCurrency != null ? '${selectedCurrency['currency_id']} — ${selectedCurrency['currency_name']}' : '—',
-                    style: const TextStyle(fontSize: 13)),
-                ));
-                final f2 = field(TextFormField(
-                  controller: _rateToBaseCtrl, enabled: !locked,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: dec.copyWith(labelText: 'Rate → Base'),
-                  style: const TextStyle(fontSize: 13),
-                  onChanged: (_) => setState(() {}),
-                ));
-                final f3 = field(TextFormField(
-                  controller: _rateToLocalCtrl, enabled: !locked,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: dec.copyWith(labelText: 'Rate → Local'),
-                  style: const TextStyle(fontSize: 13),
-                  onChanged: (_) => setState(() {}),
-                ));
-                return isMobile
-                    ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        SizedBox(width: double.infinity, child: f1), const SizedBox(height: 8),
-                        Row(children: [Expanded(child: f2), const SizedBox(width: 12), Expanded(child: f3)]),
-                      ])
-                    : Row(children: [
-                        Expanded(flex: 2, child: f1), const SizedBox(width: 12),
-                        Expanded(flex: 2, child: f2), const SizedBox(width: 12),
-                        Expanded(flex: 2, child: f3),
-                      ]);
-              },
-              loading: () => const SizedBox(height: fh, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
-              error: (e, _) => Text('Could not load currencies: $e'),
-            );
-          }),
+          currencyRow,
         ]),
       ),
     );
@@ -737,11 +709,38 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
 
   // ── Totals card ───────────────────────────────────────────────────────────
 
-  Widget _buildTotalsCard(bool locked) {
-    const fh = 56.0;
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
-    Widget field(Widget child) => SizedBox(height: fh, child: child);
+  Widget _buildTotalsCard(bool locked, bool isMobile) {
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
+    final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
+
+    final taxableField = SakalFieldCard(
+      label: 'Taxable Amount', editable: !locked,
+      child: TextFormField(
+        controller: _taxableAmountCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: bare, style: style,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+    final taxField = SakalFieldCard(
+      label: 'VAT / Tax Amount', editable: !locked,
+      child: TextFormField(
+        controller: _taxAmountCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: bare, style: style,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+    final totalField = SakalFieldCard.readOnly(
+      label: 'Invoice Total',
+      value: '${_invoiceCurrencyCode ?? ''} ${AppNumberFormat.amount(_taxableAmount + _taxAmount, numberFormat)}',
+    );
+    final remarksField = SakalFieldCard(
+      label: 'Remarks', editable: !locked, height: 72,
+      child: TextFormField(controller: _remarksCtrl, enabled: !locked, maxLines: 2, decoration: bare, style: style),
+    );
 
     return Card(
       elevation: 0,
@@ -758,30 +757,9 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
           const Text('Auto-filled from the selected GRN(s) — validate against the supplier\'s paper invoice and edit only if it differs.',
               style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
           const SizedBox(height: 12),
-          Wrap(spacing: 12, runSpacing: 12, children: [
-            SizedBox(width: 220, child: field(TextFormField(
-              controller: _taxableAmountCtrl, enabled: !locked,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: dec.copyWith(labelText: 'Taxable Amount'),
-              style: const TextStyle(fontSize: 13),
-              onChanged: (_) => setState(() {}),
-            ))),
-            SizedBox(width: 220, child: field(TextFormField(
-              controller: _taxAmountCtrl, enabled: !locked,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: dec.copyWith(labelText: 'VAT / Tax Amount'),
-              style: const TextStyle(fontSize: 13),
-              onChanged: (_) => setState(() {}),
-            ))),
-            SizedBox(width: 220, child: field(InputDecorator(
-              decoration: dec.copyWith(labelText: 'Invoice Total'),
-              child: Text('${_invoiceCurrencyCode ?? ''} ${(_taxableAmount + _taxAmount).toStringAsFixed(2)}',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-            ))),
-          ]),
+          SakalFieldRow(isMobile: isMobile, children: [taxableField, taxField, totalField]),
           const SizedBox(height: 12),
-          TextFormField(controller: _remarksCtrl, enabled: !locked, maxLines: 2,
-              decoration: dec.copyWith(labelText: 'Remarks'), style: const TextStyle(fontSize: 13)),
+          remarksField,
         ]),
       ),
     );
@@ -790,11 +768,7 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
   // ── Posted Journal Entries — same pattern as GRN entry screen ────────────
 
   Widget _buildPostedVoucherSection() {
-    Widget colHeader(String label, {TextAlign align = TextAlign.left}) => Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Text(label, textAlign: align,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12)),
-    );
+    final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
     Widget cell(String text, {TextAlign align = TextAlign.left, bool bold = false}) => Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Text(text, textAlign: align,
@@ -831,16 +805,13 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
             clipBehavior: Clip.antiAlias,
             child: Column(children: [
-              Container(
-                color: AppColors.primary,
-                child: Row(children: [
-                  Expanded(flex: 3, child: colHeader('Voucher No')),
-                  Expanded(flex: 2, child: colHeader('Serial No')),
-                  Expanded(flex: 4, child: colHeader('Ledger Name')),
-                  Expanded(flex: 2, child: colHeader('Debit', align: TextAlign.right)),
-                  Expanded(flex: 2, child: colHeader('Credit', align: TextAlign.right)),
-                ]),
-              ),
+              SakalTableHeaderBar(cells: [
+                Expanded(flex: 3, child: SakalTableHeaderBar.label('Voucher No')),
+                Expanded(flex: 2, child: SakalTableHeaderBar.label('Serial No')),
+                Expanded(flex: 4, child: SakalTableHeaderBar.label('Ledger Name')),
+                Expanded(flex: 2, child: SakalTableHeaderBar.label('Debit', textAlign: TextAlign.right)),
+                Expanded(flex: 2, child: SakalTableHeaderBar.label('Credit', textAlign: TextAlign.right)),
+              ]),
               for (var i = 0; i < _voucherLines.length; i++) Builder(builder: (_) {
                 final l = _voucherLines[i];
                 final account = l['account'] as Map<String, dynamic>?;
@@ -853,8 +824,8 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
                     Expanded(flex: 3, child: cell(l['trans_no'] as String? ?? '')),
                     Expanded(flex: 2, child: cell('${l['serial_no']}')),
                     Expanded(flex: 4, child: cell(ledgerName)),
-                    Expanded(flex: 2, child: cell(isDr ? amount.toStringAsFixed(2) : '—', align: TextAlign.right)),
-                    Expanded(flex: 2, child: cell(!isDr ? amount.toStringAsFixed(2) : '—', align: TextAlign.right)),
+                    Expanded(flex: 2, child: cell(isDr ? AppNumberFormat.amount(amount, numberFormat) : '—', align: TextAlign.right)),
+                    Expanded(flex: 2, child: cell(!isDr ? AppNumberFormat.amount(amount, numberFormat) : '—', align: TextAlign.right)),
                   ]),
                 );
               }),
@@ -868,8 +839,8 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
                     padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     child: Text('Total', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                   )),
-                  Expanded(flex: 2, child: cell(totalDebit.toStringAsFixed(2), align: TextAlign.right, bold: true)),
-                  Expanded(flex: 2, child: cell(totalCredit.toStringAsFixed(2), align: TextAlign.right, bold: true)),
+                  Expanded(flex: 2, child: cell(AppNumberFormat.amount(totalDebit, numberFormat), align: TextAlign.right, bold: true)),
+                  Expanded(flex: 2, child: cell(AppNumberFormat.amount(totalCredit, numberFormat), align: TextAlign.right, bold: true)),
                 ]),
               ),
             ]),

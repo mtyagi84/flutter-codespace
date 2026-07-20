@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/config/master_type_keys.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
@@ -9,6 +10,8 @@ import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/sync/sync_engine.dart';
@@ -16,6 +19,10 @@ import '../../../../core/utils/local_id.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_autocomplete.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_financial_summary_card.dart';
+import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../domain/repositories/purchase_order_repository.dart';
 import '../providers/purchase_order_providers.dart';
 
@@ -955,7 +962,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
                       if (_actionError != null) ...[_errorBanner(_actionError!), const SizedBox(height: 16)],
                       _buildHeaderCard(locked, isMobile),
                       const SizedBox(height: 16),
-                      _buildAdditionalDetails(locked),
+                      _buildAdditionalDetails(locked, isMobile),
                       const SizedBox(height: 20),
                       _buildLinesSection(locked, isMobile),
                       const SizedBox(height: 20),
@@ -972,22 +979,32 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     );
   }
 
-  Widget _buildTitleBlock(bool locked) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Text(_orderNo != null ? 'Purchase Order · $_orderNo' : 'New Purchase Order',
-        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-    const SizedBox(height: 2),
-    if (locked)
-      _statusChip(_status)
-    else
-      Row(children: [
-        Text(_orderNo != null ? 'Draft' : 'Unsaved draft',
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-        if (_orderNo != null) ...[
-          const SizedBox(width: 8),
-          PendingSyncBadge(documentType: 'PURCHASE_ORDER', documentId: _orderNo!),
-        ],
+  // In-content back button, additive to TopBar's own corner arrow — see
+  // design_system_guide.md §5.2.
+  Widget _buildTitleBlock(bool locked) => Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (context.canPop())
+        IconButton(icon: const Icon(Icons.arrow_back), tooltip: 'Back', onPressed: () => context.pop()),
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(_orderNo != null ? 'Purchase Order · $_orderNo' : 'New Purchase Order',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+        const SizedBox(height: 2),
+        if (locked)
+          _statusChip(_status)
+        else
+          Row(children: [
+            Text(_orderNo != null ? 'Draft' : 'Unsaved draft',
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            if (_orderNo != null) ...[
+              const SizedBox(width: 8),
+              PendingSyncBadge(documentType: 'PURCHASE_ORDER', documentId: _orderNo!),
+            ],
+          ]),
       ]),
-  ]);
+    ],
+  );
 
   Widget _statusChip(String status) {
     final color = status == 'APPROVED' ? AppColors.positive
@@ -1017,159 +1034,119 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
   // ── Header card ───────────────────────────────────────────────────────────
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
-    const fh = 56.0;
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
-    Widget field(Widget child) => SizedBox(height: fh, child: child);
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
+
+    final poTypeField = SakalFieldCard(
+      label: 'PO Type', required: true, editable: !locked,
+      child: DropdownButtonFormField<String>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: _poType,
+        items: const [
+          DropdownMenuItem(value: 'LOCAL',  child: Text('Local')),
+          DropdownMenuItem(value: 'IMPORT', child: Text('Import')),
+        ],
+        onChanged: locked ? null : (v) => setState(() => _poType = v!),
+      ),
+    );
+    final orderNoField = SakalFieldCard.readOnly(label: 'Order No', value: _orderNo ?? '(auto on save)');
+    final orderDateField = SakalFieldCard(
+      label: 'Order Date', required: true, editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(_orderDate, (d) => setState(() => _orderDate = d)),
+        child: Row(children: [
+          Expanded(child: Text(_displayDate(_orderDate), style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
+      ),
+    );
+
+    final supplierField = SakalFieldCard(
+      label: 'Supplier', required: true, editable: !locked,
+      child: _searchField<Map<String, dynamic>>(
+        options: _suppliers,
+        initialText: _supplierDisplay ?? '',
+        locked: locked,
+        displayString: (a) => '[${a['account_code']}] ${a['account_name']}',
+        matches: (a, q) => (a['account_code'] as String? ?? '').toLowerCase().contains(q) ||
+            (a['account_name'] as String? ?? '').toLowerCase().contains(q),
+        onSelected: (a) => _onSupplierSelected(a),
+        onCleared: () => setState(() { _supplierId = null; _supplierDisplay = ''; }),
+      ),
+    );
+    final locationField = SakalFieldCard(
+      label: 'Location', required: true, editable: !locked,
+      child: DropdownButtonFormField<String>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: _locationId,
+        items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
+            child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: style))).toList(),
+        onChanged: locked ? null : (v) => setState(() => _locationId = v),
+      ),
+    );
+
+    final currAsync = ref.watch(currenciesProvider);
+    final currencyRow = currAsync.when(
+      data: (currencies) {
+        final currencyField = SakalFieldCard(
+          label: 'Currency', required: true, editable: !locked,
+          child: DropdownButtonFormField<String>(
+            decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+            initialValue: _poCurrencyId,
+            items: currencies.map((c) => DropdownMenuItem(value: c['id'] as String,
+                child: Text('${c['currency_id']} — ${c['currency_name']}', overflow: TextOverflow.ellipsis, style: style))).toList(),
+            onChanged: locked ? null : (v) {
+              final c = currencies.where((x) => x['id'] == v).firstOrNull;
+              if (c != null) _onCurrencySelected(c);
+            },
+          ),
+        );
+        final rateBaseField = SakalFieldCard(
+          label: 'Rate → Base ($_baseCurrency)', editable: !locked,
+          child: TextFormField(
+            controller: _rateToBaseCtrl, enabled: !locked,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: bare, style: style,
+            onChanged: (_) => setState(() {}),
+          ),
+        );
+        final rateLocalField = SakalFieldCard(
+          label: 'Rate → Local ($_localCurrency)', editable: !locked,
+          child: TextFormField(
+            controller: _rateToLocalCtrl, enabled: !locked,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: bare, style: style,
+            onChanged: (_) => setState(() {}),
+          ),
+        );
+        final buyerField = SakalFieldCard(
+          label: 'Buyer', editable: !locked,
+          child: DropdownButtonFormField<String>(
+            decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+            initialValue: _buyerId,
+            items: _users.map((u) => DropdownMenuItem(value: u['id'] as String,
+                child: Text(u['full_name'] as String, overflow: TextOverflow.ellipsis, style: style))).toList(),
+            onChanged: locked ? null : (v) => setState(() => _buyerId = v),
+          ),
+        );
+        return SakalFieldRow(isMobile: isMobile, children: [currencyField, rateBaseField, rateLocalField, buyerField]);
+      },
+      loading: () => const SizedBox(height: 56, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+      error: (e, _) => Text('Could not load currencies: $e'),
+    );
 
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(children: [
-          // Row 1: PO Type | Order No | Order Date
-          Builder(builder: (_) {
-            final f1 = field(DropdownButtonFormField<String>(
-              decoration: dec.copyWith(labelText: 'PO Type *'),
-              initialValue: _poType,
-              isDense: true,
-              itemHeight: null,
-              items: const [
-                DropdownMenuItem(value: 'LOCAL',  child: Text('Local',  style: TextStyle(fontSize: 13))),
-                DropdownMenuItem(value: 'IMPORT', child: Text('Import', style: TextStyle(fontSize: 13))),
-              ],
-              onChanged: locked ? null : (v) => setState(() => _poType = v!),
-            ));
-            final f2 = field(InputDecorator(
-              decoration: dec.copyWith(labelText: 'Order No'),
-              child: Text(_orderNo ?? '(auto on save)',
-                  style: TextStyle(fontSize: 13, color: _orderNo != null ? AppColors.textPrimary : AppColors.textDisabled)),
-            ));
-            final f3 = field(InkWell(
-              onTap: locked ? null : () => _pickDate(_orderDate, (d) => setState(() => _orderDate = d)),
-              child: InputDecorator(
-                decoration: dec.copyWith(labelText: 'Order Date *',
-                    suffixIcon: Icon(Icons.calendar_today_outlined, size: 15,
-                        color: locked ? AppColors.textDisabled : AppColors.primary)),
-                child: Text(_displayDate(_orderDate), style: const TextStyle(fontSize: 13)),
-              ),
-            ));
-            return isMobile
-                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    SizedBox(width: double.infinity, child: f1), const SizedBox(height: 8),
-                    Row(children: [Expanded(child: f2), const SizedBox(width: 12), Expanded(child: f3)]),
-                  ])
-                : Row(children: [
-                    Expanded(flex: 2, child: f1), const SizedBox(width: 12),
-                    Expanded(flex: 3, child: f2), const SizedBox(width: 12),
-                    Expanded(flex: 3, child: f3),
-                  ]);
-          }),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SakalFieldRow(isMobile: isMobile, spans: const [3, 3, 3], children: [poTypeField, orderNoField, orderDateField]),
           const SizedBox(height: 12),
-
-          // Row 2: Supplier | Location
-          Builder(builder: (_) {
-            final f1 = _searchField<Map<String, dynamic>>(
-              height: fh,
-              options: _suppliers,
-              initialText: _supplierDisplay ?? '',
-              locked: locked,
-              decoration: dec.copyWith(labelText: 'Supplier *'),
-              displayString: (a) => '[${a['account_code']}] ${a['account_name']}',
-              matches: (a, q) => (a['account_code'] as String? ?? '').toLowerCase().contains(q) ||
-                  (a['account_name'] as String? ?? '').toLowerCase().contains(q),
-              onSelected: (a) => _onSupplierSelected(a),
-              onCleared: () => setState(() { _supplierId = null; _supplierDisplay = ''; }),
-            );
-            final f2 = field(DropdownButtonFormField<String>(
-              decoration: dec.copyWith(labelText: 'Location *'),
-              initialValue: _locationId,
-              isExpanded: true,
-              isDense: true,
-              itemHeight: null,
-              items: _locations.map((l) => DropdownMenuItem(
-                  value: l['id'] as String,
-                  child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
-              onChanged: locked ? null : (v) => setState(() => _locationId = v),
-            ));
-            return isMobile
-                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    SizedBox(width: double.infinity, child: f1), const SizedBox(height: 8),
-                    SizedBox(width: double.infinity, child: f2),
-                  ])
-                : Row(children: [Expanded(flex: 3, child: f1), const SizedBox(width: 12), Expanded(flex: 2, child: f2)]);
-          }),
+          SakalFieldRow(isMobile: isMobile, spans: const [7, 5], children: [supplierField, locationField]),
           const SizedBox(height: 12),
-
-          // Row 3: Currency | Rate to Base | Rate to Local
-          Builder(builder: (_) {
-            final currAsync = ref.watch(currenciesProvider);
-            return currAsync.when(
-              data: (currencies) {
-                final f1 = field(DropdownButtonFormField<String>(
-                  decoration: dec.copyWith(labelText: 'Currency *'),
-                  initialValue: _poCurrencyId,
-                  isExpanded: true,
-                  isDense: true,
-                  itemHeight: null,
-                  items: currencies.map((c) => DropdownMenuItem(
-                      value: c['id'] as String,
-                      child: Text('${c['currency_id']} — ${c['currency_name']}',
-                          overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
-                  onChanged: locked ? null : (v) {
-                    final c = currencies.where((x) => x['id'] == v).firstOrNull;
-                    if (c != null) _onCurrencySelected(c);
-                  },
-                ));
-                final f2 = field(TextFormField(
-                  controller: _rateToBaseCtrl, enabled: !locked,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: dec.copyWith(labelText: 'Rate → Base ($_baseCurrency)'),
-                  style: const TextStyle(fontSize: 13),
-                  onChanged: (_) => setState(() {}),
-                ));
-                final f3 = field(TextFormField(
-                  controller: _rateToLocalCtrl, enabled: !locked,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: dec.copyWith(labelText: 'Rate → Local ($_localCurrency)'),
-                  style: const TextStyle(fontSize: 13),
-                  onChanged: (_) => setState(() {}),
-                ));
-                return isMobile
-                    ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        SizedBox(width: double.infinity, child: f1), const SizedBox(height: 8),
-                        Row(children: [Expanded(child: f2), const SizedBox(width: 12), Expanded(child: f3)]),
-                      ])
-                    : Row(children: [
-                        Expanded(flex: 2, child: f1), const SizedBox(width: 12),
-                        Expanded(flex: 2, child: f2), const SizedBox(width: 12),
-                        Expanded(flex: 2, child: f3),
-                      ]);
-              },
-              loading: () => const SizedBox(height: fh, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
-              error: (e, _) => Text('Could not load currencies: $e'),
-            );
-          }),
-          const SizedBox(height: 12),
-
-          // Row 4: Buyer — Payment Terms now has its own multi-select section below.
-          Builder(builder: (_) {
-            final f2 = field(DropdownButtonFormField<String>(
-              decoration: dec.copyWith(labelText: 'Buyer'),
-              initialValue: _buyerId,
-              isExpanded: true,
-              isDense: true,
-              itemHeight: null,
-              items: _users.map((u) => DropdownMenuItem(
-                  value: u['id'] as String,
-                  child: Text(u['full_name'] as String, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
-              onChanged: locked ? null : (v) => setState(() => _buyerId = v),
-            ));
-            return isMobile
-                ? SizedBox(width: double.infinity, child: f2)
-                : Row(children: [Expanded(flex: 2, child: f2), const Spacer(flex: 3)]);
-          }),
+          currencyRow,
         ]),
       ),
     );
@@ -1177,9 +1154,31 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
 
   // ── Additional details (Indent/RFQ/Quotation + Bill To/Ship To) ────────────
 
-  Widget _buildAdditionalDetails(bool locked) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
+  Widget _buildAdditionalDetails(bool locked, bool isMobile) {
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
+
+    Widget textField(String label, TextEditingController ctrl) => SakalFieldCard(
+      label: label, editable: !locked,
+      child: TextFormField(controller: ctrl, enabled: !locked, decoration: bare, style: style),
+    );
+    Widget dateField(String label, DateTime? value, ValueChanged<DateTime> onPicked) => SakalFieldCard(
+      label: label, editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(value, onPicked),
+        child: Row(children: [
+          Expanded(child: Text(_displayDate(value), style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
+      ),
+    );
+    Widget multilineField(String label, TextEditingController ctrl) => SakalFieldCard(
+      label: label, editable: !locked, height: 72,
+      child: TextFormField(controller: ctrl, enabled: !locked, maxLines: 2,
+          decoration: bare, style: style),
+    );
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -1190,49 +1189,34 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(children: [
-              Row(children: [
-                Expanded(child: TextFormField(controller: _indentNoCtrl, enabled: !locked,
-                    decoration: dec.copyWith(labelText: 'Indent No'))),
-                const SizedBox(width: 12),
-                Expanded(child: _dateField('Indent Date', _indentDate, locked,
-                    (d) => setState(() => _indentDate = d))),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SakalFieldRow(isMobile: isMobile, children: [
+                textField('Indent No', _indentNoCtrl),
+                dateField('Indent Date', _indentDate, (d) => setState(() => _indentDate = d)),
               ]),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(child: TextFormField(controller: _rfqNoCtrl, enabled: !locked,
-                    decoration: dec.copyWith(labelText: 'RFQ No'))),
-                const SizedBox(width: 12),
-                Expanded(child: _dateField('RFQ Date', _rfqDate, locked, (d) => setState(() => _rfqDate = d))),
+              const SizedBox(height: 12),
+              SakalFieldRow(isMobile: isMobile, children: [
+                textField('RFQ No', _rfqNoCtrl),
+                dateField('RFQ Date', _rfqDate, (d) => setState(() => _rfqDate = d)),
               ]),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(child: TextFormField(controller: _quotationNoCtrl, enabled: !locked,
-                    decoration: dec.copyWith(labelText: 'Quotation No'))),
-                const SizedBox(width: 12),
-                Expanded(child: _dateField('Quotation Date', _quotationDate, locked,
-                    (d) => setState(() => _quotationDate = d))),
+              const SizedBox(height: 12),
+              SakalFieldRow(isMobile: isMobile, children: [
+                textField('Quotation No', _quotationNoCtrl),
+                dateField('Quotation Date', _quotationDate, (d) => setState(() => _quotationDate = d)),
               ]),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(child: TextFormField(controller: _supplierRefNoCtrl, enabled: !locked,
-                    decoration: dec.copyWith(labelText: 'Supplier Ref No'))),
-                const SizedBox(width: 12),
-                Expanded(child: _dateField('Supplier Ref Date', _supplierRefDate, locked,
-                    (d) => setState(() => _supplierRefDate = d))),
+              const SizedBox(height: 12),
+              SakalFieldRow(isMobile: isMobile, children: [
+                textField('Supplier Ref No', _supplierRefNoCtrl),
+                dateField('Supplier Ref Date', _supplierRefDate, (d) => setState(() => _supplierRefDate = d)),
               ]),
-              const SizedBox(height: 10),
-              TextFormField(controller: _orderSubjectCtrl, enabled: !locked,
-                  decoration: dec.copyWith(labelText: 'Order Subject')),
-              const SizedBox(height: 10),
-              TextFormField(controller: _billToCtrl, enabled: !locked, maxLines: 2,
-                  decoration: dec.copyWith(labelText: 'Bill To')),
-              const SizedBox(height: 10),
-              TextFormField(controller: _shipToCtrl, enabled: !locked, maxLines: 2,
-                  decoration: dec.copyWith(labelText: 'Ship To')),
-              const SizedBox(height: 10),
-              TextFormField(controller: _remarksCtrl, enabled: !locked, maxLines: 2,
-                  decoration: dec.copyWith(labelText: 'Remarks')),
+              const SizedBox(height: 12),
+              textField('Order Subject', _orderSubjectCtrl),
+              const SizedBox(height: 12),
+              multilineField('Bill To', _billToCtrl),
+              const SizedBox(height: 12),
+              multilineField('Ship To', _shipToCtrl),
+              const SizedBox(height: 12),
+              multilineField('Remarks', _remarksCtrl),
             ]),
           ),
         ],
@@ -1240,32 +1224,13 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     );
   }
 
-  Widget _dateField(String label, DateTime? value, bool locked, ValueChanged<DateTime> onPicked) => InkWell(
-    onTap: locked ? null : () => _pickDate(value, onPicked),
-    child: InputDecorator(
-      decoration: InputDecoration(border: const OutlineInputBorder(), isDense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10), labelText: label,
-          suffixIcon: Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary)),
-      child: Text(_displayDate(value),
-          style: TextStyle(fontSize: 13, color: value != null ? AppColors.textPrimary : AppColors.textDisabled)),
-    ),
-  );
-
   // ── Payment Terms section ────────────────────────────────────────────────
   // Multi-select, common-master-driven: a PO can carry several terms, each
   // with its own free-text description (e.g. "50% Advance" -> "Due before
   // dispatch", "Balance NET 30" -> "From GRN date"). Saved to
   // rid_po_payment_terms — see backend/migrations/040_po_payment_terms_and_line_validation.sql.
 
-  static const _termColWidth = 220.0;
-
   Widget _buildPaymentTermsSection(bool locked, bool isMobile) {
-    const btnW = 32.0;
-    Widget colHeader(String label) => Padding(
-      padding: const EdgeInsets.only(bottom: 4, left: 2),
-      child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-    );
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1278,95 +1243,49 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         const SizedBox(height: 8),
         if (_paymentTerms.isEmpty)
           const Padding(padding: EdgeInsets.all(16), child: Text('No payment terms added.'))
-        else if (isMobile)
-          ..._paymentTerms.map((row) => _buildPaymentTermCardMobile(row, locked))
-        else ...[
-          // Column headers shown once above the data rows — same pattern as
-          // Finance Voucher Entry's On Account section, instead of repeating
-          // a floating labelText on every row. Term stays a fixed width (its
-          // options are short labels); Description expands to claim whatever
-          // space is left, however wide the screen.
-          Row(children: [
-            SizedBox(width: _termColWidth, child: colHeader('Term')),
-            const SizedBox(width: 12),
-            Expanded(child: colHeader('Description')),
-            if (!locked) const SizedBox(width: btnW + 8),
-          ]),
-          ..._paymentTerms.map((row) => _buildPaymentTermCard(row, locked)),
-        ],
+        else
+          ..._paymentTerms.map((row) => _buildPaymentTermCard(row, locked, isMobile)),
       ],
     );
   }
 
-  Widget _buildPaymentTermCard(_PaymentTermRow row, bool locked) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
+  Widget _buildPaymentTermCard(_PaymentTermRow row, bool locked, bool isMobile) {
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-        SizedBox(width: _termColWidth, height: 44, child: DropdownButtonFormField<String>(
-          decoration: dec,
-          isExpanded: true,
-          isDense: true,
-          itemHeight: null,
-          initialValue: row.termId,
-          items: _paymentTermMasters.map((t) => DropdownMenuItem(value: t['id'] as String,
-              child: Text(t['description'] as String, style: const TextStyle(fontSize: 13)))).toList(),
-          onChanged: locked ? null : (v) {
-            final t = _paymentTermMasters.where((x) => x['id'] == v).firstOrNull;
-            if (t == null) return;
-            setState(() { row.termId = t['id'] as String; row.termName = t['description'] as String; });
-          },
-        )),
-        const SizedBox(width: 12),
-        Expanded(child: SizedBox(height: 44, child: TextFormField(
-          controller: row.descCtrl, enabled: !locked,
-          decoration: dec.copyWith(hintText: 'e.g. 50% advance, balance NET 30'),
-          style: const TextStyle(fontSize: 13),
-        ))),
-        if (!locked) IconButton(
-          icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
-          onPressed: () => _removePaymentTerm(row),
-        ),
-      ]),
-    );
-  }
-
-  Widget _buildPaymentTermCardMobile(_PaymentTermRow row, bool locked) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Expanded(child: DropdownButtonFormField<String>(
-              decoration: dec.copyWith(labelText: 'Term'),
-              isExpanded: true,
-              isDense: true,
-              itemHeight: null,
-              initialValue: row.termId,
-              items: _paymentTermMasters.map((t) => DropdownMenuItem(value: t['id'] as String,
-                  child: Text(t['description'] as String, style: const TextStyle(fontSize: 13)))).toList(),
-              onChanged: locked ? null : (v) {
-                final t = _paymentTermMasters.where((x) => x['id'] == v).firstOrNull;
-                if (t == null) return;
-                setState(() { row.termId = t['id'] as String; row.termName = t['description'] as String; });
-              },
-            )),
-            if (!locked) IconButton(
-              icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
-              onPressed: () => _removePaymentTerm(row),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(
+          child: SakalFieldRow(isMobile: isMobile, spans: const [4, 8], children: [
+            SakalFieldCard(
+              label: 'Term', editable: !locked,
+              child: DropdownButtonFormField<String>(
+                decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+                initialValue: row.termId,
+                items: _paymentTermMasters.map((t) => DropdownMenuItem(value: t['id'] as String,
+                    child: Text(t['description'] as String, overflow: TextOverflow.ellipsis))).toList(),
+                onChanged: locked ? null : (v) {
+                  final t = _paymentTermMasters.where((x) => x['id'] == v).firstOrNull;
+                  if (t == null) return;
+                  setState(() { row.termId = t['id'] as String; row.termName = t['description'] as String; });
+                },
+              ),
+            ),
+            SakalFieldCard(
+              label: 'Description', editable: !locked,
+              child: TextFormField(controller: row.descCtrl, enabled: !locked, decoration: bare, style: style),
             ),
           ]),
-          const SizedBox(height: 8),
-          TextFormField(controller: row.descCtrl, enabled: !locked,
-              decoration: dec.copyWith(labelText: 'Description'), style: const TextStyle(fontSize: 13)),
-        ]),
-      ),
+        ),
+        if (!locked) Padding(
+          padding: const EdgeInsets.only(left: 8, top: 4),
+          child: IconButton(
+            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
+            onPressed: () => _removePaymentTerm(row),
+          ),
+        ),
+      ]),
     );
   }
 
@@ -1383,13 +1302,15 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
       const SizedBox(height: 8),
       if (_lines.isEmpty)
         const Padding(padding: EdgeInsets.all(16), child: Text('No line items yet.')),
-      ..._lines.map((row) => _buildLineCard(row, locked, isMobile)),
+      ..._lines.asMap().entries.map((e) => _buildLineCard(e.value, e.key, locked, isMobile)),
     ],
   );
 
-  Widget _buildLineCard(_POLineRow row, bool locked, bool isMobile) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
+  Widget _buildLineCard(_POLineRow row, int idx, bool locked, bool isMobile) {
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
+    final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
     // Field stays hidden but not force-cleared — an existing line loaded with a
     // loose qty (entered before the company switched to Pack Only) must keep
     // contributing to baseQty, not silently lose data.
@@ -1400,171 +1321,182 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     // company that never enabled barcode coding has no rim_product_uom.barcode
     // data for the lookup to match against anyway.
     final showBarcode = ref.read(sessionProvider)?.enableBarcode ?? false;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            if (showBarcode) ...[
-              SizedBox(width: 140, height: 48, child: TextFormField(
-                controller: row.barcodeCtrl, enabled: !locked,
-                decoration: dec.copyWith(labelText: 'Scan/Enter Barcode'),
-                style: const TextStyle(fontSize: 12),
-                onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
-              )),
-              const SizedBox(width: 8),
-            ],
-            Expanded(
-              child: _searchField<Map<String, dynamic>>(
-                height: 48,
-                options: _products,
-                initialText: row.productDisplay,
-                locked: locked,
-                decoration: dec.copyWith(labelText: 'Product *'),
-                displayString: (p) => '[${p['product_code']}] ${p['product_name']}',
-                matches: (p, q) => (p['product_code'] as String? ?? '').toLowerCase().contains(q) ||
-                    (p['product_name'] as String? ?? '').toLowerCase().contains(q),
-                onSelected: (p) => _onProductSelected(row, p),
-                onCleared: () => setState(() { row.productId = null; row.productDisplay = ''; row.convFactorLocked = false; }),
-              ),
-            ),
-            if (!locked) IconButton(
-              icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
-              onPressed: () => _removeLine(row),
-            ),
-          ]),
-          const SizedBox(height: 6),
-          InkWell(
-            onTap: () => setState(() => row.descExpanded = !row.descExpanded),
-            child: Row(children: [
-              Icon(row.descExpanded ? Icons.arrow_drop_down : Icons.arrow_right, size: 18, color: AppColors.textSecondary),
-              Expanded(child: Text(
-                row.descExpanded
-                    ? 'Item Description'
-                    : (row.descCtrl.text.isEmpty ? 'Item Description' : row.descCtrl.text),
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-              )),
-            ]),
-          ),
-          if (row.descExpanded) ...[
-            const SizedBox(height: 4),
-            TextFormField(controller: row.descCtrl, enabled: !locked,
-                decoration: dec.copyWith(labelText: 'Item Description'), style: const TextStyle(fontSize: 13)),
-          ],
-          const SizedBox(height: 8),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            SizedBox(width: 140, child: DropdownButtonFormField<String>(
-              decoration: dec.copyWith(labelText: 'UOM'),
-              isExpanded: true,
-              isDense: true,
-              itemHeight: null,
-              initialValue: row.uomId,
-              items: _uoms.map((u) => DropdownMenuItem(value: u['id'] as String,
-                  child: Text(u['description'] as String, style: const TextStyle(fontSize: 12)))).toList(),
-              onChanged: (locked || row.convFactorLocked) ? null : (v) => setState(() => row.uomId = v),
-            )),
-            SizedBox(width: 90, child: TextFormField(controller: row.convFactorCtrl,
-                enabled: !locked && !row.convFactorLocked,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: dec.copyWith(labelText: 'Conv. Factor',
-                    suffixIcon: row.convFactorLocked
-                        ? const Icon(Icons.lock_outline, size: 14, color: AppColors.textSecondary)
-                        : null),
-                style: const TextStyle(fontSize: 12),
-                onChanged: (_) => setState(() {}))),
-            SizedBox(width: 90, child: TextFormField(controller: row.qtyPackCtrl, enabled: !locked,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: dec.copyWith(labelText: showLooseQty ? 'Qty Pack' : 'Quantity'), style: const TextStyle(fontSize: 12),
-                onChanged: (_) => setState(() {}))),
-            if (showLooseQty)
-              SizedBox(width: 90, child: TextFormField(controller: row.qtyLooseCtrl, enabled: !locked,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: dec.copyWith(labelText: 'Qty Loose'), style: const TextStyle(fontSize: 12),
-                  onChanged: (_) => setState(() {}))),
-            SizedBox(width: 100, child: TextFormField(controller: row.rateCtrl, enabled: !locked,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: dec.copyWith(labelText: 'Rate'), style: const TextStyle(fontSize: 12),
-                onChanged: (_) => setState(() {}))),
-            SizedBox(width: 90, child: TextFormField(controller: row.discountPctCtrl, enabled: !locked,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: dec.copyWith(labelText: 'Discount %'), style: const TextStyle(fontSize: 12),
-                onChanged: (_) => setState(() {}))),
-            SizedBox(width: 170, child: DropdownButtonFormField<String?>(
-              decoration: dec.copyWith(labelText: 'Tax Group'),
-              isExpanded: true,
-              isDense: true,
-              itemHeight: null,
-              initialValue: row.taxGroupId,
-              items: [
-                const DropdownMenuItem(value: null, child: Text('No Tax', style: TextStyle(fontSize: 12))),
-                ..._taxGroups.map((g) => DropdownMenuItem(value: g['id'] as String,
-                    child: Text(g['group_name'] as String, style: const TextStyle(fontSize: 12)))),
-              ],
-              onChanged: locked ? null : (v) => setState(() => row.taxGroupId = v),
-            )),
-            SizedBox(width: 170, child: DropdownButtonFormField<String?>(
-              decoration: dec.copyWith(labelText: 'Department'),
-              isExpanded: true,
-              isDense: true,
-              itemHeight: null,
-              initialValue: row.departmentId,
-              items: [
-                const DropdownMenuItem(value: null, child: Text('—', style: TextStyle(fontSize: 12))),
-                ..._departments.map((d) => DropdownMenuItem(value: d['id'] as String,
-                    child: Text(d['description'] as String, style: const TextStyle(fontSize: 12)))),
-              ],
-              onChanged: locked ? null : (v) => setState(() => row.departmentId = v),
-            )),
-            SizedBox(width: 170, child: DropdownButtonFormField<String?>(
-              decoration: dec.copyWith(labelText: 'Consumption Area'),
-              isExpanded: true,
-              isDense: true,
-              itemHeight: null,
-              initialValue: row.consumptionAreaId,
-              items: [
-                const DropdownMenuItem(value: null, child: Text('—', style: TextStyle(fontSize: 12))),
-                ..._consumptionAreas.map((d) => DropdownMenuItem(value: d['id'] as String,
-                    child: Text(d['description'] as String, style: const TextStyle(fontSize: 12)))),
-              ],
-              onChanged: locked ? null : (v) => setState(() => row.consumptionAreaId = v),
-            )),
-          ]),
-          const SizedBox(height: 8),
-          Wrap(spacing: 16, runSpacing: 4, children: [
-            _amountTag('Gross', row.grossAmount),
-            _amountTag('Discount', row.discountAmount),
-            _amountTag('Tax', row.taxAmount),
-            _amountTag('Final', row.finalAmount, bold: true),
-            _amountTag('+ Charges', row.chargeAmount),
-            _amountTag('Landed', row.landedAmount, bold: true, color: AppColors.secondary),
-            if (row.qtyReceived > 0) _amountTag('Received', row.qtyReceived),
-            if (row.qtyOnHandAtOrder > 0) Text('Stock at order: ${row.qtyOnHandAtOrder.toStringAsFixed(0)} (reorder ${row.reorderLevelAtOrder.toStringAsFixed(0)})',
-                style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
-          ]),
-        ]),
+
+    final barcodeField = SakalFieldCard(
+      label: 'Scan/Enter Barcode', editable: !locked,
+      child: TextFormField(
+        controller: row.barcodeCtrl, enabled: !locked, decoration: bare, style: style,
+        onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
       ),
     );
-  }
+    final productField = SakalFieldCard(
+      label: 'Product', required: true, editable: !locked,
+      child: _searchField<Map<String, dynamic>>(
+        options: _products,
+        initialText: row.productDisplay,
+        locked: locked,
+        displayString: (p) => '[${p['product_code']}] ${p['product_name']}',
+        matches: (p, q) => (p['product_code'] as String? ?? '').toLowerCase().contains(q) ||
+            (p['product_name'] as String? ?? '').toLowerCase().contains(q),
+        onSelected: (p) => _onProductSelected(row, p),
+        onCleared: () => setState(() { row.productId = null; row.productDisplay = ''; row.convFactorLocked = false; }),
+      ),
+    );
+    final uomField = SakalFieldCard(
+      label: 'UOM', editable: !locked && !row.convFactorLocked,
+      child: DropdownButtonFormField<String>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: row.uomId,
+        items: _uoms.map((u) => DropdownMenuItem(value: u['id'] as String,
+            child: Text(u['description'] as String, overflow: TextOverflow.ellipsis, style: style))).toList(),
+        onChanged: (locked || row.convFactorLocked) ? null : (v) => setState(() => row.uomId = v),
+      ),
+    );
+    final convFactorField = SakalFieldCard(
+      label: 'Conv. Factor', editable: !locked && !row.convFactorLocked,
+      child: TextFormField(
+        controller: row.convFactorCtrl, enabled: !locked && !row.convFactorLocked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: bare.copyWith(
+            suffixIcon: row.convFactorLocked ? const Icon(Icons.lock_outline, size: 14, color: AppColors.textSecondary) : null),
+        style: style,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+    final qtyPackField = SakalFieldCard(
+      label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked,
+      child: TextFormField(
+        controller: row.qtyPackCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: bare, style: style,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+    final qtyLooseField = SakalFieldCard(
+      label: 'Qty Loose', editable: !locked,
+      child: TextFormField(
+        controller: row.qtyLooseCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: bare, style: style,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+    final rateField = SakalFieldCard(
+      label: 'Rate', editable: !locked,
+      child: TextFormField(
+        controller: row.rateCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: bare, style: style,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+    final discField = SakalFieldCard(
+      label: 'Discount %', editable: !locked,
+      child: TextFormField(
+        controller: row.discountPctCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: bare, style: style,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+    final taxGroupField = SakalFieldCard(
+      label: 'Tax Group', editable: !locked,
+      child: DropdownButtonFormField<String?>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: row.taxGroupId,
+        items: [
+          const DropdownMenuItem(value: null, child: Text('No Tax')),
+          ..._taxGroups.map((g) => DropdownMenuItem(value: g['id'] as String,
+              child: Text(g['group_name'] as String, overflow: TextOverflow.ellipsis))),
+        ],
+        onChanged: locked ? null : (v) => setState(() => row.taxGroupId = v),
+      ),
+    );
+    final departmentField = SakalFieldCard(
+      label: 'Department', editable: !locked,
+      child: DropdownButtonFormField<String?>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: row.departmentId,
+        items: [
+          const DropdownMenuItem(value: null, child: Text('—')),
+          ..._departments.map((d) => DropdownMenuItem(value: d['id'] as String,
+              child: Text(d['description'] as String, overflow: TextOverflow.ellipsis))),
+        ],
+        onChanged: locked ? null : (v) => setState(() => row.departmentId = v),
+      ),
+    );
+    final consumptionAreaField = SakalFieldCard(
+      label: 'Consumption Area', editable: !locked,
+      child: DropdownButtonFormField<String?>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: row.consumptionAreaId,
+        items: [
+          const DropdownMenuItem(value: null, child: Text('—')),
+          ..._consumptionAreas.map((d) => DropdownMenuItem(value: d['id'] as String,
+              child: Text(d['description'] as String, overflow: TextOverflow.ellipsis))),
+        ],
+        onChanged: locked ? null : (v) => setState(() => row.consumptionAreaId = v),
+      ),
+    );
+    final finalAmountField = SakalFieldCard.readOnly(label: 'Final', value: AppNumberFormat.amount(row.finalAmount, numberFormat), numeric: true);
+    final landedField = SakalFieldCard.readOnly(label: 'Landed', value: AppNumberFormat.amount(row.landedAmount, numberFormat), numeric: true);
 
-  Widget _amountTag(String label, double value, {bool bold = false, Color? color}) => Text(
-    '$label: ${value.toStringAsFixed(2)}',
-    style: TextStyle(fontSize: 11, fontWeight: bold ? FontWeight.w700 : FontWeight.w400, color: color ?? AppColors.textSecondary),
-  );
+    final descBody = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      InkWell(
+        onTap: () => setState(() => row.descExpanded = !row.descExpanded),
+        child: Row(children: [
+          Icon(row.descExpanded ? Icons.arrow_drop_down : Icons.arrow_right, size: 18, color: AppColors.textSecondary),
+          Expanded(child: Text(
+            row.descExpanded
+                ? 'Item Description'
+                : (row.descCtrl.text.isEmpty ? 'Item Description' : row.descCtrl.text),
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          )),
+        ]),
+      ),
+      if (row.descExpanded) ...[
+        const SizedBox(height: 4),
+        TextFormField(controller: row.descCtrl, enabled: !locked,
+            decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true, labelText: 'Item Description'),
+            style: const TextStyle(fontSize: 13)),
+      ],
+      const SizedBox(height: 6),
+      Wrap(spacing: 16, runSpacing: 4, children: [
+        if (row.qtyReceived > 0) Text('Received: ${row.qtyReceived.toStringAsFixed(2)}',
+            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+        if (row.qtyOnHandAtOrder > 0) Text('Stock at order: ${row.qtyOnHandAtOrder.toStringAsFixed(0)} (reorder ${row.reorderLevelAtOrder.toStringAsFixed(0)})',
+            style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+      ]),
+    ]);
+
+    return SakalLineItemCard(
+      title: '${idx + 1}. ${row.productDisplay.isEmpty ? 'New Line' : row.productDisplay}',
+      onDelete: locked ? null : () => _removeLine(row),
+      fields: [
+        if (showBarcode) SizedBox(width: 160, child: barcodeField),
+        SizedBox(width: isMobile ? double.infinity : 260, child: productField),
+        SizedBox(width: 140, child: uomField),
+        SizedBox(width: 100, child: convFactorField),
+        SizedBox(width: 100, child: qtyPackField),
+        if (showLooseQty) SizedBox(width: 100, child: qtyLooseField),
+        SizedBox(width: 100, child: rateField),
+        SizedBox(width: 100, child: discField),
+        SizedBox(width: 170, height: 56, child: taxGroupField),
+        SizedBox(width: 170, height: 56, child: departmentField),
+        SizedBox(width: 170, height: 56, child: consumptionAreaField),
+        SizedBox(width: 110, height: 56, child: finalAmountField),
+        SizedBox(width: 110, height: 56, child: landedField),
+      ],
+      body: descBody,
+    );
+  }
 
   // ── Charges section ──────────────────────────────────────────────────────
 
   Widget _buildChargesSection(bool locked, bool isMobile) {
-    const btnW = 32.0;
-    Widget colHeader(String label, {TextAlign align = TextAlign.left}) => Padding(
-      padding: const EdgeInsets.only(bottom: 4, left: 2),
-      child: Text(label, textAlign: align,
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-    );
-
+    final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
+    final fieldTextStyle = SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1577,177 +1509,74 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         const SizedBox(height: 8),
         if (_charges.isEmpty)
           const Padding(padding: EdgeInsets.all(16), child: Text('No additional charges (freight, loading, handling…).'))
-        else if (isMobile)
-          ..._charges.map((row) => _buildChargeCardMobile(row, locked))
-        else ...[
-          // Same fixed-column pattern as Payment Terms — every row lines up
-          // under the same headers instead of a Wrap that reflows narrower
-          // or wider per row depending on which optional widgets (e.g. the
-          // Tax figure) happen to render for that charge.
-          Row(children: [
-            Expanded(flex: 3, child: colHeader('Charge Type')),
-            const SizedBox(width: 12),
-            Expanded(flex: 2, child: colHeader('Amount / %', align: TextAlign.right)),
-            const SizedBox(width: 12),
-            const SizedBox(width: 72),
-            const SizedBox(width: 12),
-            Expanded(flex: 2, child: colHeader('Amount', align: TextAlign.right)),
-            const SizedBox(width: 12),
-            Expanded(flex: 2, child: colHeader('Tax', align: TextAlign.right)),
-            if (!locked) const SizedBox(width: btnW + 8),
-          ]),
-          ..._charges.map((row) => _buildChargeCard(row, locked)),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildChargeCard(_ChargeRow row, bool locked) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
-    Widget rightText(String text, {Color? color, bool bold = false}) => Text(text,
-        textAlign: TextAlign.right,
-        style: TextStyle(fontSize: 13, color: color ?? AppColors.textPrimary,
-            fontWeight: bold ? FontWeight.w700 : FontWeight.w400));
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-        Expanded(flex: 3, child: SizedBox(height: 44, child: DropdownButtonFormField<String>(
-          decoration: dec,
-          isExpanded: true,
-          isDense: true,
-          itemHeight: null,
-          initialValue: row.chargeId,
-          items: _additionalCharges.map((c) => DropdownMenuItem(value: c['id'] as String,
-              child: Text(c['charge_name'] as String, style: const TextStyle(fontSize: 13)))).toList(),
-          onChanged: locked ? null : (v) {
-            final c = _additionalCharges.where((x) => x['id'] == v).firstOrNull;
-            if (c == null) return;
-            setState(() {
-              row.chargeId        = c['id'] as String;
-              row.chargeName      = c['charge_name'] as String;
-              row.isTaxable       = c['is_taxable'] as bool? ?? false;
-              row.taxId           = c['tax_id'] as String?;
-              row.nature          = c['nature'] as String? ?? 'ADD';
-              row.glAccountId     = c['default_gl_account_id'] as String?;
-              row.amountOrPercent = c['amount_or_percent'] as String? ?? 'AMOUNT';
-            });
-          },
-        ))),
-        const SizedBox(width: 12),
-        Expanded(flex: 2, child: SizedBox(height: 44, child: TextFormField(
-          controller: row.valueCtrl, enabled: !locked, textAlign: TextAlign.right,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: dec.copyWith(hintText: row.amountOrPercent == 'PERCENT' ? '%' : 'Amount'),
-          style: const TextStyle(fontSize: 13), onChanged: (_) => setState(() {}),
-        ))),
-        const SizedBox(width: 12),
-        SizedBox(width: 72, child: Center(child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          decoration: BoxDecoration(
-            color: (row.nature == 'DEDUCT' ? AppColors.negative : AppColors.positive).withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Text(row.nature == 'DEDUCT' ? 'Deduct' : 'Add',
-              style: TextStyle(fontSize: 11, color: row.nature == 'DEDUCT' ? AppColors.negative : AppColors.positive)),
-        ))),
-        const SizedBox(width: 12),
-        Expanded(flex: 2, child: rightText(row.amount.toStringAsFixed(2))),
-        const SizedBox(width: 12),
-        Expanded(flex: 2, child: rightText(row.isTaxable ? row.taxAmount.toStringAsFixed(2) : '—',
-            color: row.isTaxable ? null : AppColors.textDisabled)),
-        if (!locked) IconButton(
-          icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
-          onPressed: () => _removeCharge(row),
-        ),
-      ]),
-    );
-  }
-
-  Widget _buildChargeCardMobile(_ChargeRow row, bool locked) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(spacing: 10, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          SizedBox(width: 200, child: DropdownButtonFormField<String>(
-            decoration: dec.copyWith(labelText: 'Charge Type'),
-            isExpanded: true,
-            isDense: true,
-            itemHeight: null,
-            initialValue: row.chargeId,
-            items: _additionalCharges.map((c) => DropdownMenuItem(value: c['id'] as String,
-                child: Text(c['charge_name'] as String, style: const TextStyle(fontSize: 12)))).toList(),
-            onChanged: locked ? null : (v) {
-              final c = _additionalCharges.where((x) => x['id'] == v).firstOrNull;
-              if (c == null) return;
-              setState(() {
-                row.chargeId        = c['id'] as String;
-                row.chargeName      = c['charge_name'] as String;
-                row.isTaxable       = c['is_taxable'] as bool? ?? false;
-                row.taxId           = c['tax_id'] as String?;
-                row.nature          = c['nature'] as String? ?? 'ADD';
-                row.glAccountId     = c['default_gl_account_id'] as String?;
-                row.amountOrPercent = c['amount_or_percent'] as String? ?? 'AMOUNT';
-              });
-            },
+        else
+          ..._charges.map((row) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                child: SakalFieldRow(isMobile: isMobile, spans: const [4, 3, 3, 2], children: [
+                  SakalFieldCard(
+                    label: 'Charge Type', editable: !locked,
+                    child: DropdownButtonFormField<String>(
+                      decoration: SakalFieldCard.bareDecoration,
+                      isExpanded: true, isDense: true, itemHeight: null,
+                      style: fieldTextStyle,
+                      initialValue: row.chargeId,
+                      items: _additionalCharges.map((c) => DropdownMenuItem(value: c['id'] as String,
+                          child: Text(c['charge_name'] as String, overflow: TextOverflow.ellipsis))).toList(),
+                      onChanged: locked ? null : (v) {
+                        final c = _additionalCharges.where((x) => x['id'] == v).firstOrNull;
+                        if (c == null) return;
+                        setState(() {
+                          row.chargeId        = c['id'] as String;
+                          row.chargeName      = c['charge_name'] as String;
+                          row.isTaxable       = c['is_taxable'] as bool? ?? false;
+                          row.taxId           = c['tax_id'] as String?;
+                          row.nature          = c['nature'] as String? ?? 'ADD';
+                          row.glAccountId     = c['default_gl_account_id'] as String?;
+                          row.amountOrPercent = c['amount_or_percent'] as String? ?? 'AMOUNT';
+                        });
+                      },
+                    ),
+                  ),
+                  SakalFieldCard(
+                    label: row.amountOrPercent == 'PERCENT' ? 'Percent' : 'Amount', editable: !locked,
+                    child: TextFormField(
+                      controller: row.valueCtrl, enabled: !locked,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: SakalFieldCard.bareDecoration,
+                      style: fieldTextStyle,
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ),
+                  SakalFieldCard.readOnly(label: row.nature, value: AppNumberFormat.amount(row.amount, numberFormat), numeric: true),
+                  if (row.isTaxable) SakalFieldCard.readOnly(label: 'Tax', value: AppNumberFormat.amount(row.taxAmount, numberFormat), numeric: true),
+                ]),
+              ),
+              if (!locked) Padding(
+                padding: const EdgeInsets.only(left: 8, top: 4),
+                child: IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
+                  onPressed: () => _removeCharge(row),
+                ),
+              ),
+            ]),
           )),
-          SizedBox(width: 130, child: TextFormField(controller: row.valueCtrl, enabled: !locked,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: dec.copyWith(labelText: row.amountOrPercent == 'PERCENT' ? 'Percent %' : 'Amount'),
-              style: const TextStyle(fontSize: 12), onChanged: (_) => setState(() {}))),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: (row.nature == 'DEDUCT' ? AppColors.negative : AppColors.positive).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(row.nature == 'DEDUCT' ? 'Deduct' : 'Add',
-                style: TextStyle(fontSize: 11, color: row.nature == 'DEDUCT' ? AppColors.negative : AppColors.positive)),
-          ),
-          _amountTag('Amount', row.amount),
-          if (row.isTaxable) _amountTag('Tax', row.taxAmount),
-          const Spacer(),
-          if (!locked) IconButton(
-            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
-            onPressed: () => _removeCharge(row),
-          ),
-        ]),
-      ),
+      ],
     );
   }
 
   // ── Totals bar ────────────────────────────────────────────────────────────
 
-  Widget _buildTotalsBar() => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: AppColors.primary.withValues(alpha: 0.04),
-      borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
-    ),
-    child: Wrap(spacing: 20, runSpacing: 8, children: [
-      _totalTag('Gross', _grossTotal),
-      _totalTag('Discount', _discountTotal),
-      _totalTag('Item Tax', _itemTaxTotal),
-      _totalTag('Charges', _chargesTotal),
-      _totalTag('Charge Tax', _chargeTaxTotal),
-      _totalTag('Grand Total', _grandTotal, bold: true, color: AppColors.primary),
-    ]),
-  );
-
-  Widget _totalTag(String label, double value, {bool bold = false, Color? color}) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-      Text('${_poCurrencyCode ?? ''} ${value.toStringAsFixed(2)}',
-          style: TextStyle(fontSize: bold ? 16 : 13, fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-              color: color ?? AppColors.textPrimary)),
+  Widget _buildTotalsBar() => SakalFinancialSummaryCard(
+    currencyCode: _poCurrencyCode ?? '',
+    total: _grandTotal,
+    rows: [
+      SakalSummaryRow(label: 'Gross', value: _grossTotal),
+      SakalSummaryRow(label: 'Discount', value: -_discountTotal, isNegative: true),
+      SakalSummaryRow(label: 'Item Tax', value: _itemTaxTotal),
+      SakalSummaryRow(label: 'Charges', value: _chargesTotal),
+      SakalSummaryRow(label: 'Charge Tax', value: _chargeTaxTotal),
     ],
   );
 
@@ -1793,33 +1622,29 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
   // ── Generic search field (Autocomplete wrapper) ──────────────────────────
 
   Widget _searchField<T extends Object>({
-    required double height,
     required List<T> options,
     required String initialText,
     required bool locked,
-    required InputDecoration decoration,
     required String Function(T) displayString,
     required bool Function(T, String) matches,
     required void Function(T) onSelected,
     required VoidCallback onCleared,
   }) {
-    return SizedBox(
-      height: height,
-      child: SakalAutocomplete<T>(
-        key: ValueKey(initialText),
-        initialValue: TextEditingValue(text: initialText),
-        optionsBuilder: (v) {
-          final q = v.text.toLowerCase().trim();
-          final filtered = q.isEmpty ? options : options.where((o) => matches(o, q));
-          return filtered.take(50);
-        },
-        displayStringForOption: displayString,
-        enabled: !locked,
-        onChanged: (v) { if (v.isEmpty) onCleared(); },
-        decoration: decoration,
-        style: const TextStyle(fontSize: 13),
-        onSelected: (o) { if (!locked) onSelected(o); },
-      ),
+    final isCompact = ref.watch(isCompactDensityProvider);
+    return SakalAutocomplete<T>(
+      key: ValueKey(initialText),
+      initialValue: TextEditingValue(text: initialText),
+      optionsBuilder: (v) {
+        final q = v.text.toLowerCase().trim();
+        final filtered = q.isEmpty ? options : options.where((o) => matches(o, q));
+        return filtered.take(50);
+      },
+      displayStringForOption: displayString,
+      enabled: !locked,
+      onChanged: (v) { if (v.isEmpty) onCleared(); },
+      decoration: SakalFieldCard.bareDecoration,
+      style: SakalFieldCard.valueTextStyle(isCompact),
+      onSelected: (o) { if (!locked) onSelected(o); },
     );
   }
 }

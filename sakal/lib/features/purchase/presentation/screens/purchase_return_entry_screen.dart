@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -10,12 +11,18 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_autocomplete.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/purchase_return_repository.dart';
 import '../providers/purchase_return_providers.dart';
 
@@ -918,16 +925,6 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
     if (d != null) onPicked(d);
   }
 
-  static Widget _req(String text) => RichText(
-    text: TextSpan(
-      text: text,
-      style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w400),
-      children: const [
-        TextSpan(text: ' *', style: TextStyle(color: AppColors.negative, fontWeight: FontWeight.w600)),
-      ],
-    ),
-  );
-
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -983,11 +980,11 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
                       const SizedBox(height: 16),
                       _buildGrnPickerCard(locked),
                       const SizedBox(height: 16),
-                      _buildLinesCard(locked, showLooseQty),
+                      _buildLinesCard(locked, showLooseQty, isMobile),
                       const SizedBox(height: 16),
-                      _buildChargesCard(locked),
+                      _buildChargesCard(locked, isMobile),
                       const SizedBox(height: 16),
-                      _buildTotalsCard(locked),
+                      _buildTotalsCard(locked, isMobile),
                       if (_status == 'APPROVED' && _postedVouchers.isNotEmpty) ...[
                         const SizedBox(height: 16),
                         _buildPostedVouchersSection(),
@@ -1020,21 +1017,29 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
     ]),
   );
 
-  Widget _buildTitleBlock() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Text(_returnNo != null ? 'Purchase Return · $_returnNo' : 'New Purchase Return',
-        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-    const SizedBox(height: 2),
-    Row(children: [
-      _status == 'APPROVED'
-          ? _statusChip(_status)
-          : Text(_returnNo != null ? 'Draft' : 'Unsaved draft',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-      if (_returnNo != null) ...[
-        const SizedBox(width: 8),
-        PendingSyncBadge(documentType: 'PURCHASE_RETURN', documentId: _returnNo!),
-      ],
-    ]),
-  ]);
+  Widget _buildTitleBlock() => Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (context.canPop())
+        IconButton(icon: const Icon(Icons.arrow_back), tooltip: 'Back', onPressed: () => context.pop()),
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(_returnNo != null ? 'Purchase Return · $_returnNo' : 'New Purchase Return',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+        const SizedBox(height: 2),
+        Row(children: [
+          _status == 'APPROVED'
+              ? _statusChip(_status)
+              : Text(_returnNo != null ? 'Draft' : 'Unsaved draft',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          if (_returnNo != null) ...[
+            const SizedBox(width: 8),
+            PendingSyncBadge(documentType: 'PURCHASE_RETURN', documentId: _returnNo!),
+          ],
+        ]),
+      ]),
+    ],
+  );
 
   Widget _statusChip(String status) {
     final color = status == 'APPROVED' ? AppColors.positive : AppColors.secondary;
@@ -1080,104 +1085,83 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
   // ── Header card ───────────────────────────────────────────────────────────
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
-    const fh = 56.0;
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
-    Widget field(Widget child) => SizedBox(height: fh, child: child);
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
     final supplierLocked = locked || _selectedGrnKeys.isNotEmpty;
+
+    final supplierField = SakalFieldCard(
+      label: 'Supplier', required: true, editable: !supplierLocked,
+      child: SakalAutocomplete<Map<String, dynamic>>(
+        key: ValueKey(_supplierDisplay ?? ''),
+        initialValue: TextEditingValue(text: _supplierDisplay ?? ''),
+        displayStringForOption: (s) => '[${s['account_code']}] ${s['account_name']}',
+        optionsBuilder: (v) {
+          if (supplierLocked) return const [];
+          final q = v.text.toLowerCase().trim();
+          return q.isEmpty ? _suppliers : _suppliers.where((s) =>
+              (s['account_code'] as String? ?? '').toLowerCase().contains(q) ||
+              (s['account_name'] as String? ?? '').toLowerCase().contains(q));
+        },
+        onSelected: (s) => _onSupplierSelected(s),
+        enabled: !supplierLocked,
+        decoration: bare,
+        style: style,
+      ),
+    );
+    final returnNoField = SakalFieldCard.readOnly(label: 'Return No', value: _returnNo ?? '(auto on save)');
+    final returnDateField = SakalFieldCard(
+      label: 'Return Date', required: true, editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(_returnDate, (d) => setState(() => _returnDate = d)),
+        child: Row(children: [
+          Expanded(child: Text(_displayDate(_returnDate), style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
+      ),
+    );
+
+    final currAsync = ref.watch(currenciesProvider);
+    final currencyRow = currAsync.when(
+      data: (currencies) {
+        final selectedCurrency = currencies.where((c) => c['id'] == _returnCurrencyId).firstOrNull;
+        final currencyField = SakalFieldCard.readOnly(
+          label: 'Currency (inherited from GRN)',
+          value: selectedCurrency != null ? '${selectedCurrency['currency_id']} — ${selectedCurrency['currency_name']}' : '—',
+        );
+        final reasonOptions = <String>{
+          ..._reasons,
+          if (_reason != null && _reason!.isNotEmpty) _reason!,
+        }.toList();
+        final reasonField = SakalFieldCard(
+          label: 'Reason', editable: !locked,
+          child: DropdownButtonFormField<String>(
+            decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+            initialValue: (_reason != null && _reason!.isNotEmpty) ? _reason : null,
+            items: reasonOptions.map((r) => DropdownMenuItem(value: r,
+                child: Text(r, overflow: TextOverflow.ellipsis, style: style))).toList(),
+            onChanged: locked ? null : (v) => setState(() => _reason = v),
+          ),
+        );
+        return SakalFieldRow(isMobile: isMobile, children: [currencyField, reasonField]);
+      },
+      loading: () => const SizedBox(height: 56, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+      error: (e, _) => Text('Could not load currencies: $e'),
+    );
 
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(children: [
-          Builder(builder: (_) {
-            final f1 = SizedBox(
-              height: fh,
-              child: SakalAutocomplete<Map<String, dynamic>>(
-                key: ValueKey(_supplierDisplay ?? ''),
-                initialValue: TextEditingValue(text: _supplierDisplay ?? ''),
-                displayStringForOption: (s) => '[${s['account_code']}] ${s['account_name']}',
-                optionsBuilder: (v) {
-                  if (supplierLocked) return const [];
-                  final q = v.text.toLowerCase().trim();
-                  return q.isEmpty ? _suppliers : _suppliers.where((s) =>
-                      (s['account_code'] as String? ?? '').toLowerCase().contains(q) ||
-                      (s['account_name'] as String? ?? '').toLowerCase().contains(q));
-                },
-                onSelected: (s) => _onSupplierSelected(s),
-                enabled: !supplierLocked,
-                decoration: dec.copyWith(label: _req('Supplier'),
-                    helperText: supplierLocked && !locked ? 'Locked once a GRN is picked' : null,
-                    helperStyle: const TextStyle(fontSize: 10)),
-                style: const TextStyle(fontSize: 13),
-              ),
-            );
-            final f2 = field(InputDecorator(
-              decoration: dec.copyWith(labelText: 'Return No'),
-              child: Text(_returnNo ?? '(auto on save)',
-                  style: TextStyle(fontSize: 13, color: _returnNo != null ? AppColors.textPrimary : AppColors.textDisabled)),
-            ));
-            final f3 = field(InkWell(
-              onTap: locked ? null : () => _pickDate(_returnDate, (d) => setState(() => _returnDate = d)),
-              child: InputDecorator(
-                decoration: dec.copyWith(label: _req('Return Date'),
-                    suffixIcon: Icon(Icons.calendar_today_outlined, size: 15,
-                        color: locked ? AppColors.textDisabled : AppColors.primary)),
-                child: Text(_displayDate(_returnDate), style: const TextStyle(fontSize: 13)),
-              ),
-            ));
-            return isMobile
-                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    SizedBox(width: double.infinity, child: f1), const SizedBox(height: 8),
-                    Row(children: [Expanded(child: f2), const SizedBox(width: 12), Expanded(child: f3)]),
-                  ])
-                : Row(children: [
-                    Expanded(flex: 3, child: f1), const SizedBox(width: 12),
-                    Expanded(flex: 2, child: f2), const SizedBox(width: 12),
-                    Expanded(flex: 2, child: f3),
-                  ]);
-          }),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SakalFieldRow(isMobile: isMobile, spans: const [5, 3, 4], children: [supplierField, returnNoField, returnDateField]),
+          if (supplierLocked && !locked) const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Text('Supplier locked once a GRN is picked', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          ),
           const SizedBox(height: 12),
-
-          Builder(builder: (_) {
-            final currAsync = ref.watch(currenciesProvider);
-            return currAsync.when(
-              data: (currencies) {
-                final selectedCurrency = currencies.where((c) => c['id'] == _returnCurrencyId).firstOrNull;
-                final f1 = field(InputDecorator(
-                  decoration: dec.copyWith(labelText: 'Currency',
-                      helperText: 'Inherited from the selected GRN(s)', helperStyle: const TextStyle(fontSize: 10)),
-                  child: Text(
-                    selectedCurrency != null ? '${selectedCurrency['currency_id']} — ${selectedCurrency['currency_name']}' : '—',
-                    style: const TextStyle(fontSize: 13)),
-                ));
-                final reasonOptions = <String>{
-                  ..._reasons,
-                  if (_reason != null && _reason!.isNotEmpty) _reason!,
-                }.toList();
-                final f2 = field(DropdownButtonFormField<String>(
-                  decoration: dec.copyWith(labelText: 'Reason'),
-                  isExpanded: true,
-                  isDense: true,
-                  itemHeight: null,
-                  initialValue: (_reason != null && _reason!.isNotEmpty) ? _reason : null,
-                  items: reasonOptions.map((r) => DropdownMenuItem(
-                      value: r, child: Text(r, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
-                  onChanged: locked ? null : (v) => setState(() => _reason = v),
-                ));
-                return isMobile
-                    ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        SizedBox(width: double.infinity, child: f1), const SizedBox(height: 8),
-                        SizedBox(width: double.infinity, child: f2),
-                      ])
-                    : Row(children: [Expanded(child: f1), const SizedBox(width: 12), Expanded(flex: 2, child: f2)]);
-              },
-              loading: () => const SizedBox(height: fh, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
-              error: (e, _) => Text('Could not load currencies: $e'),
-            );
-          }),
+          currencyRow,
         ]),
       ),
     );
@@ -1257,9 +1241,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
 
   // ── Lines card ────────────────────────────────────────────────────────────
 
-  Widget _buildLinesCard(bool locked, bool showLooseQty) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
+  Widget _buildLinesCard(bool locked, bool showLooseQty, bool isMobile) {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -1275,71 +1257,64 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
             const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No lines yet — pick a GRN above.',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
           else
-            ..._lines.map((row) => Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              elevation: 0,
-              color: AppColors.background,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-                    Expanded(
-                      flex: 3,
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(row.productDisplay, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
-                        Text('GRN ${row.sourceGrnNo} · Received ${row.grnQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}',
-                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                        Text(
-                          row.suggestedTaxAmount > 0
-                              ? 'Taxable ${row.grossAmount.toStringAsFixed(2)} · VAT ${row.suggestedTaxAmount.toStringAsFixed(2)} '
-                                  '· Total ${(row.grossAmount + row.suggestedTaxAmount).toStringAsFixed(2)}'
-                              : (row.isBilled ? 'No VAT on this line' : 'Not yet billed — VAT deferred'),
-                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                        ),
-                      ]),
-                    ),
-                    const SizedBox(width: 8),
-                    SizedBox(width: 70, child: InputDecorator(
-                      decoration: dec.copyWith(labelText: 'Unit'),
-                      child: Text(row.uomLabel ?? '—', style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
-                    )),
-                    const SizedBox(width: 8),
-                    SizedBox(width: 100, child: TextFormField(
-                      controller: row.qtyPackCtrl, enabled: !locked,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: showLooseQty ? 'Return Qty Pack' : 'Return Qty'),
-                      style: const TextStyle(fontSize: 12),
-                      onChanged: (_) => _recomputeTotals(),
-                    )),
-                    if (showLooseQty) ...[
-                      const SizedBox(width: 8),
-                      SizedBox(width: 100, child: TextFormField(
-                        controller: row.qtyLooseCtrl, enabled: !locked,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: dec.copyWith(labelText: 'Return Qty Loose'),
-                        style: const TextStyle(fontSize: 12),
-                        onChanged: (_) => _recomputeTotals(),
-                      )),
-                    ],
-                    const SizedBox(width: 8),
-                    SizedBox(width: 90, child: Text('Rate: ${row.rate.toStringAsFixed(2)}',
-                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
-                    const SizedBox(width: 8),
-                    SizedBox(width: 90, child: Text('= ${(row.grossAmount + row.suggestedTaxAmount).toStringAsFixed(2)}',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
-                    if (!locked) IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
-                      onPressed: () => _removeLine(row),
-                    ),
-                  ]),
-                  if (row.isBatchTracked || row.isSerialTracked) _buildBatchSerialEditor(row, locked),
-                ]),
-              ),
-            )),
+            ..._lines.map((row) => _buildLineCard(row, locked, showLooseQty, isMobile)),
         ]),
       ),
+    );
+  }
+
+  Widget _buildLineCard(_ReturnLineRow row, bool locked, bool showLooseQty, bool isMobile) {
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
+    final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
+
+    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
+    final qtyPackField = SakalFieldCard(
+      label: showLooseQty ? 'Return Qty Pack' : 'Return Qty', editable: !locked,
+      child: TextFormField(
+        controller: row.qtyPackCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: bare, style: style,
+        onChanged: (_) => _recomputeTotals(),
+      ),
+    );
+    final qtyLooseField = SakalFieldCard(
+      label: 'Return Qty Loose', editable: !locked,
+      child: TextFormField(
+        controller: row.qtyLooseCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: bare, style: style,
+        onChanged: (_) => _recomputeTotals(),
+      ),
+    );
+    final rateField = SakalFieldCard.readOnly(label: 'Rate', value: AppNumberFormat.amount(row.rate, numberFormat), numeric: true);
+    final amountField = SakalFieldCard.readOnly(
+      label: 'Amount', value: AppNumberFormat.amount(row.grossAmount + row.suggestedTaxAmount, numberFormat), numeric: true);
+
+    final taxInfoText = Text(
+      row.suggestedTaxAmount > 0
+          ? 'Taxable ${AppNumberFormat.amount(row.grossAmount, numberFormat)} · VAT ${AppNumberFormat.amount(row.suggestedTaxAmount, numberFormat)} '
+              '· Total ${AppNumberFormat.amount(row.grossAmount + row.suggestedTaxAmount, numberFormat)}'
+          : (row.isBilled ? 'No VAT on this line' : 'Not yet billed — VAT deferred'),
+      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+    );
+
+    return SakalLineItemCard(
+      title: row.productDisplay.isEmpty ? 'Line' : row.productDisplay,
+      subtitle: 'GRN ${row.sourceGrnNo} · Received ${row.grnQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}',
+      onDelete: locked ? null : () => _removeLine(row),
+      fields: [
+        SizedBox(width: 70, height: 56, child: unitField),
+        SizedBox(width: 110, child: qtyPackField),
+        if (showLooseQty) SizedBox(width: 110, child: qtyLooseField),
+        SizedBox(width: 100, height: 56, child: rateField),
+        SizedBox(width: 110, height: 56, child: amountField),
+      ],
+      body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        taxInfoText,
+        if (row.isBatchTracked || row.isSerialTracked) _buildBatchSerialEditor(row, locked, isMobile),
+      ]),
     );
   }
 
@@ -1349,16 +1324,29 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
   // already received — the user allocates the return qty across known
   // lots/units, never invents a new batch/serial number here.
 
-  Widget _buildBatchSerialEditor(_ReturnLineRow row, bool locked) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
+  Widget _buildBatchSerialEditor(_ReturnLineRow row, bool locked, bool isMobile) {
     final isBatch = row.isBatchTracked;
+    final fieldTextStyle = SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider));
 
     if (!row.candidatesLoaded) {
-      return const Padding(
-        padding: EdgeInsets.only(top: 10),
-        child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-      );
+      return const Padding(padding: EdgeInsets.only(top: 10), child: LinearProgressIndicator());
+    }
+
+    Widget batchFields() {
+      final fields = row.batchCandidates.map((b) => SakalFieldCard(
+            label: '${b.batchNo} (avail ${b.availableBalance})${b.expiryDate != null ? ' · exp ${b.expiryDate}' : ''}',
+            editable: !locked,
+            child: TextFormField(
+              controller: b.qtyCtrl, enabled: !locked, keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: SakalFieldCard.bareDecoration,
+              style: fieldTextStyle,
+              onChanged: (_) => setState(() {}),
+            ),
+          )).toList();
+      if (isMobile || fields.length <= 4) {
+        return SakalFieldRow(isMobile: isMobile, children: fields);
+      }
+      return Wrap(spacing: 10, runSpacing: 10, children: fields.map((f) => SizedBox(width: 220, child: f)).toList());
     }
 
     return Container(
@@ -1388,46 +1376,24 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
         else if (!isBatch && row.serialCandidates.isEmpty)
           const Text('No serial numbers found on the source GRN line.', style: TextStyle(fontSize: 11, color: AppColors.negative))
         else if (isBatch)
-          ...row.batchCandidates.map((b) => Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Wrap(spacing: 10, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              SizedBox(width: 130, child: Text(b.batchNo, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
-              SizedBox(width: 130, child: Text(
-                  'Available: ${b.availableBalance.toStringAsFixed(2)}${b.expiryDate != null ? ' · Exp ${b.expiryDate}' : ''}',
-                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
-              SizedBox(width: 100, child: TextFormField(
-                controller: b.qtyCtrl, enabled: !locked,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: dec.copyWith(labelText: 'Return Qty'),
-                style: const TextStyle(fontSize: 12),
-                onChanged: (_) => setState(() {}),
-              )),
-            ]),
-          ))
+          batchFields()
         else
-          ...row.serialCandidates.map((s) => Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: CheckboxListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              value: s.selected,
-              onChanged: (locked || s.status != 'IN_STOCK') ? null : (v) => setState(() => s.selected = v ?? false),
-              title: Text(s.serialNo, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-              subtitle: s.status != 'IN_STOCK'
-                  ? const Text('Not currently in stock — already sold, transferred, or returned', style: TextStyle(fontSize: 10, color: AppColors.negative))
-                  : null,
-            ),
-          )),
+          Wrap(spacing: 8, runSpacing: 8, children: row.serialCandidates.map((s) => FilterChip(
+                label: Text(s.serialNo, style: const TextStyle(fontSize: 12)),
+                selected: s.selected,
+                onSelected: (locked || s.status != 'IN_STOCK') ? null : (v) => setState(() => s.selected = v),
+                tooltip: s.status != 'IN_STOCK' ? 'Not currently in stock — already sold, transferred, or returned' : null,
+              )).toList()),
       ]),
     );
   }
 
   // ── Charges card ──────────────────────────────────────────────────────────
 
-  Widget _buildChargesCard(bool locked) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
+  Widget _buildChargesCard(bool locked, bool isMobile) {
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
     if (_charges.isEmpty) return const SizedBox.shrink();
     return Card(
       elevation: 0,
@@ -1442,14 +1408,16 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
           const SizedBox(height: 12),
           ..._charges.map((row) => Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Row(children: [
-              Expanded(flex: 3, child: Text('${row.chargeName} (${row.sourceGrnNo})', style: const TextStyle(fontSize: 13))),
-              SizedBox(width: 120, child: TextFormField(
-                controller: row.amountCtrl, enabled: !locked,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: dec.copyWith(labelText: 'Amount'),
-                style: const TextStyle(fontSize: 12),
-              )),
+            child: SakalFieldRow(isMobile: isMobile, spans: const [8, 4], children: [
+              SakalFieldCard.readOnly(label: 'Charge (${row.sourceGrnNo})', value: row.chargeName),
+              SakalFieldCard(
+                label: 'Amount', editable: !locked,
+                child: TextFormField(
+                  controller: row.amountCtrl, enabled: !locked,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: bare, style: style,
+                ),
+              ),
             ]),
           )),
         ]),
@@ -1459,11 +1427,38 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
 
   // ── Totals card ───────────────────────────────────────────────────────────
 
-  Widget _buildTotalsCard(bool locked) {
-    const fh = 56.0;
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
-    Widget field(Widget child) => SizedBox(height: fh, child: child);
+  Widget _buildTotalsCard(bool locked, bool isMobile) {
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
+    final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
+
+    final taxableField = SakalFieldCard(
+      label: 'Taxable Amount', editable: !locked,
+      child: TextFormField(
+        controller: _taxableAmountCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: bare, style: style,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+    final taxField = SakalFieldCard(
+      label: 'VAT / Tax Amount (billed portion only)', editable: !locked,
+      child: TextFormField(
+        controller: _taxAmountCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: bare, style: style,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+    final totalField = SakalFieldCard.readOnly(
+      label: 'Return Total',
+      value: '${_returnCurrencyCode ?? ''} ${AppNumberFormat.amount(_taxableAmount + _taxAmount, numberFormat)}',
+    );
+    final remarksField = SakalFieldCard(
+      label: 'Remarks', editable: !locked, height: 72,
+      child: TextFormField(controller: _remarksCtrl, enabled: !locked, maxLines: 2, decoration: bare, style: style),
+    );
 
     return Card(
       elevation: 0,
@@ -1476,30 +1471,9 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
           const Text('Auto-filled from the return lines — validate against the supplier\'s debit note and edit only if it differs.',
               style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
           const SizedBox(height: 12),
-          Wrap(spacing: 12, runSpacing: 12, children: [
-            SizedBox(width: 220, child: field(TextFormField(
-              controller: _taxableAmountCtrl, enabled: !locked,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: dec.copyWith(labelText: 'Taxable Amount'),
-              style: const TextStyle(fontSize: 13),
-              onChanged: (_) => setState(() {}),
-            ))),
-            SizedBox(width: 220, child: field(TextFormField(
-              controller: _taxAmountCtrl, enabled: !locked,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: dec.copyWith(labelText: 'VAT / Tax Amount (billed portion only)'),
-              style: const TextStyle(fontSize: 13),
-              onChanged: (_) => setState(() {}),
-            ))),
-            SizedBox(width: 220, child: field(InputDecorator(
-              decoration: dec.copyWith(labelText: 'Return Total'),
-              child: Text('${_returnCurrencyCode ?? ''} ${(_taxableAmount + _taxAmount).toStringAsFixed(2)}',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-            ))),
-          ]),
+          SakalFieldRow(isMobile: isMobile, children: [taxableField, taxField, totalField]),
           const SizedBox(height: 12),
-          TextFormField(controller: _remarksCtrl, enabled: !locked, maxLines: 2,
-              decoration: dec.copyWith(labelText: 'Remarks'), style: const TextStyle(fontSize: 13)),
+          remarksField,
         ]),
       ),
     );
@@ -1508,11 +1482,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
   // ── Posted Journal Entries — up to two vouchers (JV + SDN) ───────────────
 
   Widget _buildPostedVouchersSection() {
-    Widget colHeader(String label, {TextAlign align = TextAlign.left}) => Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Text(label, textAlign: align,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12)),
-    );
+    final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
     Widget cell(String text, {TextAlign align = TextAlign.left, bool bold = false}) => Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Text(text, textAlign: align,
@@ -1559,15 +1529,12 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
                   clipBehavior: Clip.antiAlias,
                   child: Column(children: [
-                    Container(
-                      color: AppColors.primary,
-                      child: Row(children: [
-                        Expanded(flex: 2, child: colHeader('Serial No')),
-                        Expanded(flex: 4, child: colHeader('Ledger Name')),
-                        Expanded(flex: 2, child: colHeader('Debit', align: TextAlign.right)),
-                        Expanded(flex: 2, child: colHeader('Credit', align: TextAlign.right)),
-                      ]),
-                    ),
+                    SakalTableHeaderBar(cells: [
+                      Expanded(flex: 2, child: SakalTableHeaderBar.label('Serial No')),
+                      Expanded(flex: 4, child: SakalTableHeaderBar.label('Ledger Name')),
+                      Expanded(flex: 2, child: SakalTableHeaderBar.label('Debit', textAlign: TextAlign.right)),
+                      Expanded(flex: 2, child: SakalTableHeaderBar.label('Credit', textAlign: TextAlign.right)),
+                    ]),
                     for (var i = 0; i < lines.length; i++) Builder(builder: (_) {
                       final l = lines[i];
                       final account = l['account'] as Map<String, dynamic>?;
@@ -1579,8 +1546,8 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
                         child: Row(children: [
                           Expanded(flex: 2, child: cell('${l['serial_no']}')),
                           Expanded(flex: 4, child: cell(ledgerName)),
-                          Expanded(flex: 2, child: cell(isDr ? amount.toStringAsFixed(2) : '—', align: TextAlign.right)),
-                          Expanded(flex: 2, child: cell(!isDr ? amount.toStringAsFixed(2) : '—', align: TextAlign.right)),
+                          Expanded(flex: 2, child: cell(isDr ? AppNumberFormat.amount(amount, numberFormat) : '—', align: TextAlign.right)),
+                          Expanded(flex: 2, child: cell(!isDr ? AppNumberFormat.amount(amount, numberFormat) : '—', align: TextAlign.right)),
                         ]),
                       );
                     }),
@@ -1594,8 +1561,8 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
                           padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           child: Text('Total', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                         )),
-                        Expanded(flex: 2, child: cell(totalDebit.toStringAsFixed(2), align: TextAlign.right, bold: true)),
-                        Expanded(flex: 2, child: cell(totalCredit.toStringAsFixed(2), align: TextAlign.right, bold: true)),
+                        Expanded(flex: 2, child: cell(AppNumberFormat.amount(totalDebit, numberFormat), align: TextAlign.right, bold: true)),
+                        Expanded(flex: 2, child: cell(AppNumberFormat.amount(totalCredit, numberFormat), align: TextAlign.right, bold: true)),
                       ]),
                     ),
                   ]),
