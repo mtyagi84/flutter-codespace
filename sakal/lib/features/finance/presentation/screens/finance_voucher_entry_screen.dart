@@ -2,11 +2,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../data/models/finance_voucher_model.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/voucher_logic.dart';
 import '../../../../core/models/menu_models.dart';
 import '../../../../core/providers/master_cache_providers.dart'
@@ -19,6 +22,9 @@ import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_autocomplete.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../providers/finance_voucher_providers.dart';
 
 MenuFeature? _findFeature(List<MenuModule> modules, String screenPath) {
@@ -942,47 +948,44 @@ class _FinanceVoucherEntryScreenState
     required InputDecoration decoration,
     required void Function(Map<String, dynamic>) onSelected,
     required VoidCallback onCleared,
-    double height = 56.0,
+    TextStyle? style,
     String? keyValue,
   }) {
-    return SizedBox(
-      height: height,
-      child: SakalAutocomplete<Map<String, dynamic>>(
-        key: ValueKey(keyValue ?? selectedId ?? 'none'),
-        initialValue: TextEditingValue(
-          text: selectedId != null
-              ? _findAccountDisplay(accounts, selectedId)
-              : '',
-        ),
-        optionsBuilder: (textEditingValue) {
-          final q = textEditingValue.text.toLowerCase().trim();
-          final filtered = q.isEmpty
-              ? accounts
-              : accounts.where((a) =>
-                  (a['account_code'] as String? ?? '').toLowerCase().contains(q) ||
-                  (a['account_name']  as String? ?? '').toLowerCase().contains(q));
-          return filtered.take(50);
-        },
-        displayStringForOption: _displayAccount,
-        enabled: !locked,
-        onChanged: (v) { if (v.isEmpty) onCleared(); },
-        decoration: decoration,
-        style: const TextStyle(fontSize: 13),
-        optionBuilder: (context, a, isHighlighted) {
-          final parentName = _extractParentName(a);
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(_displayAccount(a), style: const TextStyle(fontSize: 13)),
-              if (parentName.isNotEmpty)
-                Text(parentName,
-                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-            ],
-          );
-        },
-        onSelected: (a) { if (!locked) onSelected(a); },
+    return SakalAutocomplete<Map<String, dynamic>>(
+      key: ValueKey(keyValue ?? selectedId ?? 'none'),
+      initialValue: TextEditingValue(
+        text: selectedId != null
+            ? _findAccountDisplay(accounts, selectedId)
+            : '',
       ),
+      optionsBuilder: (textEditingValue) {
+        final q = textEditingValue.text.toLowerCase().trim();
+        final filtered = q.isEmpty
+            ? accounts
+            : accounts.where((a) =>
+                (a['account_code'] as String? ?? '').toLowerCase().contains(q) ||
+                (a['account_name']  as String? ?? '').toLowerCase().contains(q));
+        return filtered.take(50);
+      },
+      displayStringForOption: _displayAccount,
+      enabled: !locked,
+      onChanged: (v) { if (v.isEmpty) onCleared(); },
+      decoration: decoration,
+      style: style ?? const TextStyle(fontSize: 13),
+      optionBuilder: (context, a, isHighlighted) {
+        final parentName = _extractParentName(a);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_displayAccount(a), style: const TextStyle(fontSize: 13)),
+            if (parentName.isNotEmpty)
+              Text(parentName,
+                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          ],
+        );
+      },
+      onSelected: (a) { if (!locked) onSelected(a); },
     );
   }
 
@@ -1001,8 +1004,6 @@ class _FinanceVoucherEntryScreenState
     if (r >= 1)    return r.toStringAsFixed(4);
     return r.toStringAsFixed(8);
   }
-
-  String _fmtAmt(double a) => a.toStringAsFixed(2);
 
   void _showSnack(String msg, {Color? color}) {
     if (!mounted) return;
@@ -1067,15 +1068,6 @@ class _FinanceVoucherEntryScreenState
     final canApprove = !_isPosted && !isOffline && feature.approveAllowed;
     final locked     = !canSave;
 
-    String title;
-    if (_voucherNo != null) {
-      title = '${_typeLabels[_voucherType] ?? 'Voucher'}  ·  $_voucherNo';
-    } else if (_voucherType != null) {
-      title = 'New ${_typeLabels[_voucherType] ?? 'Voucher'}';
-    } else {
-      title = 'New Finance Voucher';
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1083,58 +1075,25 @@ class _FinanceVoucherEntryScreenState
 
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary)),
-                  const SizedBox(height: 2),
-                  if (_isPosted)
-                    _statusChip('POSTED — read only', AppColors.positive)
-                  else
+          child: isMobile
+              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _buildTitleBlock(),
+                  if (_voucherNo != null || canSave || canApprove) ...[
+                    const SizedBox(height: 10),
                     Row(children: [
-                      Text(
-                        _voucherNo != null ? 'Draft' : 'Unsaved draft',
-                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                      ),
-                      if (_voucherNo != null) ...[
-                        const SizedBox(width: 8),
-                        PendingSyncBadge(documentType: 'FINANCE_VOUCHER', documentId: _voucherNo!),
-                      ],
+                      if (_voucherNo != null && _isOnAccount) _buildCopyButton(),
+                      if (_voucherNo != null) _buildPrintButton(),
+                      if (canSave || canApprove)
+                        Expanded(child: _buildActionButtons(canSave: canSave, canApprove: canApprove)),
                     ]),
+                  ],
+                ])
+              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(child: _buildTitleBlock()),
+                  if (_voucherNo != null && _isOnAccount) _buildCopyButton(),
+                  if (_voucherNo != null) _buildPrintButton(),
+                  if (canSave || canApprove) _buildActionButtons(canSave: canSave, canApprove: canApprove),
                 ]),
-              ),
-              if (_voucherNo != null && _isOnAccount)
-                Tooltip(
-                  message: 'Copy to new voucher',
-                  child: IconButton(
-                    icon: const Icon(Icons.copy_outlined),
-                    color: AppColors.primary,
-                    onPressed: _applyCopy,
-                  ),
-                ),
-              if (_voucherNo != null)
-                Tooltip(
-                  message: _printing ? 'Preparing PDF…' : 'Print / Save as PDF',
-                  child: IconButton(
-                    icon: _printing
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2))
-                        : const Icon(Icons.print_outlined),
-                    color: AppColors.primary,
-                    onPressed: _printing ? null : _printVoucher,
-                  ),
-                ),
-            ],
-          ),
         ),
 
         const Divider(height: 20),
@@ -1151,20 +1110,16 @@ class _FinanceVoucherEntryScreenState
                         _errorBanner(_error!, onRetry: _init),
                         const SizedBox(height: 16),
                       ],
-                      _buildHeaderCard(locked, isMobile),
-                      const SizedBox(height: 20),
-                      if (!_isOnAccount) _buildAgainstBillSection(locked),
-                      if (_isOnAccount)  _buildOnAccountSection(locked),
-                      const SizedBox(height: 12),
-                      _buildTotalsBar(),
                       if (_actionError != null) ...[
-                        const SizedBox(height: 12),
                         _errorBanner(_actionError!),
+                        const SizedBox(height: 16),
                       ],
-                      if (canSave || canApprove) ...[
-                        const SizedBox(height: 20),
-                        _buildActionButtons(canSave: canSave, canApprove: canApprove),
-                      ],
+                      _buildHeaderCard(locked, isMobile),
+                      const SizedBox(height: 16),
+                      if (!_isOnAccount) _buildAgainstBillSection(locked, isMobile),
+                      if (_isOnAccount)  _buildOnAccountSection(locked, isMobile),
+                      const SizedBox(height: 16),
+                      _buildTotalsBar(),
                     ],
                   ),
                 ),
@@ -1173,25 +1128,196 @@ class _FinanceVoucherEntryScreenState
     );
   }
 
+  Widget _buildTitleBlock() {
+    String title;
+    if (_voucherNo != null) {
+      title = '${_typeLabels[_voucherType] ?? 'Voucher'}  ·  $_voucherNo';
+    } else if (_voucherType != null) {
+      title = 'New ${_typeLabels[_voucherType] ?? 'Voucher'}';
+    } else {
+      title = 'New Finance Voucher';
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (context.canPop())
+          IconButton(icon: const Icon(Icons.arrow_back), tooltip: 'Back', onPressed: () => context.pop()),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary)),
+          const SizedBox(height: 2),
+          if (_isPosted)
+            _statusChip('POSTED — read only', AppColors.positive)
+          else
+            Row(children: [
+              Text(
+                _voucherNo != null ? 'Draft' : 'Unsaved draft',
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+              if (_voucherNo != null) ...[
+                const SizedBox(width: 8),
+                PendingSyncBadge(documentType: 'FINANCE_VOUCHER', documentId: _voucherNo!),
+              ],
+            ]),
+        ]),
+      ],
+    );
+  }
+
+  Widget _buildCopyButton() => Tooltip(
+    message: 'Copy to new voucher',
+    child: IconButton(
+      icon: const Icon(Icons.copy_outlined),
+      color: AppColors.primary,
+      onPressed: _applyCopy,
+    ),
+  );
+
+  Widget _buildPrintButton() => Tooltip(
+    message: _printing ? 'Preparing PDF…' : 'Print / Save as PDF',
+    child: IconButton(
+      icon: _printing
+          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.print_outlined),
+      color: AppColors.primary,
+      onPressed: _printing ? null : _printVoucher,
+    ),
+  );
+
+  Widget _buildActionButtons({required bool canSave, required bool canApprove}) => Row(children: [
+    if (canSave) FilledButton(
+      onPressed: (_saving || _posting) ? null : _saveDraft,
+      child: _saving
+          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+          : const Text('Save Draft'),
+    ),
+    if (canSave && canApprove) const SizedBox(width: 12),
+    if (canApprove) FilledButton(
+      onPressed: (_saving || _posting) ? null : _postVoucher,
+      style: FilledButton.styleFrom(backgroundColor: AppColors.secondary),
+      child: _posting
+          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+          : const Text('Post Voucher'),
+    ),
+  ]);
+
   // ── Header card ───────────────────────────────────────────────────────────
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
     final isCash = _voucherType != null && isCashVoucher(_voucherType!);
     final showRateField = _transCurrency.isNotEmpty && _transCurrency != _baseCurrency;
 
-    // Every field in every row is constrained to exactly this height.
-    // This is the only reliable cross-platform way to guarantee uniformity:
-    // IntrinsicHeight equalises within a row but not between rows, because
-    // DropdownButtonFormField reports a larger intrinsic height than TextFormField.
-    const fh = 56.0;
-
-    const dec = InputDecoration(
-      border: OutlineInputBorder(),
-      isDense: true,
-      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+    final voucherTypeField = SakalFieldCard(
+      label: 'Voucher Type', required: true, editable: !locked,
+      child: DropdownButtonFormField<String>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: _voucherType,
+        items: _supportedTypes.map((t) => DropdownMenuItem(
+          value: t,
+          child: Text('$t — ${_typeLabels[t]}', overflow: TextOverflow.ellipsis, style: style),
+        )).toList(),
+        onChanged: locked ? null : (v) { if (v != null) _applyVoucherType(v); },
+      ),
+    );
+    final voucherNoField = SakalFieldCard.readOnly(label: 'Voucher No', value: _voucherNo ?? '(auto on save)');
+    final dateField = SakalFieldCard(
+      label: 'Date', required: true, editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(_transDate, (d) => setState(() => _transDate = d)),
+        child: Row(children: [
+          Expanded(child: Text(_displayDate(_transDate), style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
+      ),
     );
 
-    Widget field(Widget child) => SizedBox(height: fh, child: child);
+    final cashBankField = SakalFieldCard(
+      label: isCash ? 'Cash Account' : 'Bank Account', required: true, editable: !locked,
+      child: _buildAccountSearch(
+        accounts: _cashBankList,
+        selectedId: _cashBankId,
+        locked: locked,
+        decoration: bare,
+        style: style,
+        onSelected: _onCashBankSelected,
+        onCleared: () => setState(() {
+          _cashBankId    = null;
+          _transCurrency = '';
+          _rateCtrl.text = '1';
+        }),
+      ),
+    );
+    final currencyField = SakalFieldCard.readOnly(
+        label: 'Currency', value: _transCurrency.isEmpty ? '—' : _transCurrency);
+    final rateField = SakalFieldCard(
+      label: showRateField ? '1 $_baseCurrency = ' : 'Rate', editable: !locked && showRateField,
+      child: TextFormField(
+        controller: _rateCtrl,
+        focusNode: _rateFocusNode,
+        enabled: !locked && showRateField,
+        decoration: bare.copyWith(hintText: '1.0'),
+        style: style,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
+        onChanged: (_) => setState(() {}),
+        onEditingComplete: _onRateConfirmed,
+      ),
+    );
+
+    final paymentModeField = SakalFieldCard(
+      label: 'Payment Mode', editable: !locked && !isCash,
+      child: DropdownButtonFormField<String>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: _paymentMode,
+        items: _paymentModes.map((m) => DropdownMenuItem(
+          value: m['payment_mode_code'] as String,
+          child: Text(m['payment_mode_name'] as String, overflow: TextOverflow.ellipsis, style: style),
+        )).toList(),
+        onChanged: (locked || isCash) ? null : (v) => setState(() => _paymentMode = v),
+      ),
+    );
+    final refNoField = SakalFieldCard(
+      label: 'Ref No', editable: !locked,
+      child: TextFormField(controller: _refNoCtrl, enabled: !locked, decoration: bare, style: style),
+    );
+    final refDateField = SakalFieldCard(
+      label: 'Ref Date', editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(_refDate, (d) => setState(() => _refDate = d)),
+        child: Row(children: [
+          Expanded(child: Text(_displayDate(_refDate), style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
+      ),
+    );
+    final remarksField = SakalFieldCard(
+      label: 'Remarks', editable: !locked,
+      child: TextFormField(controller: _remarksCtrl, enabled: !locked, decoration: bare, style: style),
+    );
+
+    final chequeNoField = SakalFieldCard(
+      label: 'Cheque No', editable: !locked,
+      child: TextFormField(controller: _chequeNoCtrl, enabled: !locked, decoration: bare, style: style),
+    );
+    final chequeDateField = SakalFieldCard(
+      label: 'Cheque Date', editable: !locked,
+      child: InkWell(
+        onTap: locked
+            ? null
+            : () => _pickDate(_chequeDate ?? _transDate, (d) => setState(() => _chequeDate = d)),
+        child: Row(children: [
+          Expanded(child: Text(_displayDate(_chequeDate), style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
+      ),
+    );
 
     return Card(
       elevation: 0,
@@ -1202,763 +1328,351 @@ class _FinanceVoucherEntryScreenState
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(children: [
-
-          // Row 1: Voucher Type | Voucher No | Date
-          Builder(builder: (_) {
-            final f1 = field(DropdownButtonFormField<String>(
-              decoration: dec.copyWith(labelText: 'Voucher Type *'),
-              initialValue: _voucherType,
-              isExpanded: true,
-              items: _supportedTypes.map((t) => DropdownMenuItem(
-                value: t,
-                child: Text('$t — ${_typeLabels[t]}',
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13)),
-              )).toList(),
-              onChanged: locked ? null : (v) { if (v != null) _applyVoucherType(v); },
-            ));
-            final f2 = field(InputDecorator(
-              decoration: dec.copyWith(labelText: 'Voucher No'),
-              child: Text(
-                _voucherNo ?? '(auto on save)',
-                style: TextStyle(
-                    fontSize: 13,
-                    color: _voucherNo != null
-                        ? AppColors.textPrimary
-                        : AppColors.textDisabled),
-              ),
-            ));
-            final f3 = field(InkWell(
-              onTap: locked
-                  ? null
-                  : () => _pickDate(_transDate, (d) => setState(() => _transDate = d)),
-              child: InputDecorator(
-                decoration: dec.copyWith(
-                  labelText: 'Date *',
-                  suffixIcon: Icon(Icons.calendar_today_outlined,
-                      size: 15,
-                      color: locked ? AppColors.textDisabled : AppColors.primary),
-                ),
-                child: Text(_displayDate(_transDate),
-                    style: const TextStyle(fontSize: 13)),
-              ),
-            ));
-            if (isMobile) {
-              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                SizedBox(width: double.infinity, child: f1),
-                const SizedBox(height: 8),
-                Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-                  Expanded(child: f2),
-                  const SizedBox(width: 12),
-                  Expanded(child: f3),
-                ]),
-              ]);
-            }
-            return Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-              Expanded(flex: 4, child: f1),
-              const SizedBox(width: 12),
-              Expanded(flex: 3, child: f2),
-              const SizedBox(width: 12),
-              Expanded(flex: 3, child: f3),
-            ]);
-          }),
-
+          SakalFieldRow(isMobile: isMobile, spans: const [4, 3, 3], children: [voucherTypeField, voucherNoField, dateField]),
           const SizedBox(height: 12),
-
-          // Row 2: Cash/Bank Account | Currency | Rate (1 base = X trans)
-          Builder(builder: (_) {
-            final f1 = _buildAccountSearch(
-              accounts: _cashBankList,
-              selectedId: _cashBankId,
-              locked: locked,
-              height: fh,
-              decoration: dec.copyWith(
-                  labelText: isCash ? 'Cash Account *' : 'Bank Account *'),
-              onSelected: _onCashBankSelected,
-              onCleared: () => setState(() {
-                _cashBankId    = null;
-                _transCurrency = '';
-                _rateCtrl.text = '1';
-              }),
-            );
-            final currChip = SizedBox(
-              width: 80,
-              height: fh,
-              child: InputDecorator(
-                decoration: dec.copyWith(labelText: 'Currency'),
-                child: Text(
-                  _transCurrency.isEmpty ? '—' : _transCurrency,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                ),
-              ),
-            );
-            final rateField = field(TextFormField(
-              controller: _rateCtrl,
-              focusNode: _rateFocusNode,
-              enabled: !locked && showRateField,
-              decoration: dec.copyWith(
-                labelText: showRateField ? '1 $_baseCurrency = ' : 'Rate',
-                hintText: '1.0',
-              ),
-              style: const TextStyle(fontSize: 13),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
-              onChanged: (_) => setState(() {}),
-              onEditingComplete: _onRateConfirmed,
-            ));
-            if (isMobile) {
-              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                SizedBox(width: double.infinity, child: f1),
-                const SizedBox(height: 8),
-                Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-                  currChip,
-                  const SizedBox(width: 12),
-                  Expanded(child: rateField),
-                ]),
-              ]);
-            }
-            return Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-              Expanded(flex: 5, child: f1),
-              const SizedBox(width: 12),
-              currChip,
-              const SizedBox(width: 12),
-              Expanded(flex: 2, child: rateField),
-            ]);
-          }),
-
+          SakalFieldRow(isMobile: isMobile, spans: const [6, 2, 4], children: [cashBankField, currencyField, rateField]),
           const SizedBox(height: 12),
-
-          // Row 3: Payment Mode | Ref No | Ref Date | Remarks
-          Builder(builder: (_) {
-            final f1 = field(DropdownButtonFormField<String>(
-              decoration: dec.copyWith(labelText: 'Payment Mode'),
-              initialValue: _paymentMode,
-              isExpanded: true,
-              items: _paymentModes.map((m) => DropdownMenuItem(
-                value: m['payment_mode_code'] as String,
-                child: Text(m['payment_mode_name'] as String,
-                    style: const TextStyle(fontSize: 13)),
-              )).toList(),
-              onChanged: (locked || isCash)
-                  ? null
-                  : (v) => setState(() => _paymentMode = v),
-            ));
-            final f2 = field(TextFormField(
-              controller: _refNoCtrl,
-              enabled: !locked,
-              decoration: dec.copyWith(labelText: 'Ref No'),
-              style: const TextStyle(fontSize: 13),
-            ));
-            final f3 = field(InkWell(
-              onTap: locked
-                  ? null
-                  : () => _pickDate(_refDate, (d) => setState(() => _refDate = d)),
-              child: InputDecorator(
-                decoration: dec.copyWith(
-                  labelText: 'Ref Date',
-                  suffixIcon: Icon(Icons.calendar_today_outlined,
-                      size: 15,
-                      color: locked ? AppColors.textDisabled : AppColors.primary),
-                ),
-                child: Text(
-                  _displayDate(_refDate),
-                  style: TextStyle(
-                      fontSize: 13,
-                      color: _refDate != null
-                          ? AppColors.textPrimary
-                          : AppColors.textDisabled),
-                ),
-              ),
-            ));
-            final f4 = field(TextFormField(
-              controller: _remarksCtrl,
-              enabled: !locked,
-              decoration: dec.copyWith(labelText: 'Remarks'),
-              style: const TextStyle(fontSize: 13),
-            ));
-            if (isMobile) {
-              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                SizedBox(width: double.infinity, child: f1),
-                const SizedBox(height: 8),
-                Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-                  Expanded(child: f2),
-                  const SizedBox(width: 12),
-                  Expanded(child: f3),
-                ]),
-                const SizedBox(height: 8),
-                SizedBox(width: double.infinity, child: f4),
-              ]);
-            }
-            return Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-              Expanded(flex: 2, child: f1),
-              const SizedBox(width: 12),
-              Expanded(flex: 2, child: f2),
-              const SizedBox(width: 12),
-              Expanded(flex: 2, child: f3),
-              const SizedBox(width: 12),
-              Expanded(flex: 3, child: f4),
-            ]);
-          }),
+          SakalFieldRow(isMobile: isMobile, children: [paymentModeField, refNoField, refDateField, remarksField]),
 
           // Cheque row — only for CHEQUE payment mode
           if (_paymentMode == 'CHEQUE') ...[
             const SizedBox(height: 12),
-            Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-              Expanded(
-                child: field(TextFormField(
-                  controller: _chequeNoCtrl,
-                  enabled: !locked,
-                  decoration: dec.copyWith(labelText: 'Cheque No'),
-                  style: const TextStyle(fontSize: 13),
-                )),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: field(InkWell(
-                  onTap: locked
-                      ? null
-                      : () => _pickDate(
-                          _chequeDate ?? _transDate,
-                          (d) => setState(() => _chequeDate = d)),
-                  child: InputDecorator(
-                    decoration: dec.copyWith(
-                      labelText: 'Cheque Date',
-                      suffixIcon: Icon(Icons.calendar_today_outlined,
-                          size: 15,
-                          color: locked
-                              ? AppColors.textDisabled
-                              : AppColors.primary),
-                    ),
-                    child: Text(
-                      _displayDate(_chequeDate),
-                      style: TextStyle(
-                          fontSize: 13,
-                          color: _chequeDate != null
-                              ? AppColors.textPrimary
-                              : AppColors.textDisabled),
-                    ),
-                  ),
-                )),
-              ),
-            ]),
+            SakalFieldRow(isMobile: isMobile, children: [chequeNoField, chequeDateField]),
           ],
 
           const SizedBox(height: 12),
-
-          // Row 4: Against Bill | On Account toggle
-          // Against Bill is only valid for Receipt+Customer or Payment+Supplier.
-          Builder(builder: (_) {
-            final billAllowed = _canAgainstBill;
-            final whyDisabled = _partyNature.isNotEmpty && !billAllowed
-                ? ((_voucherType == 'CRV' || _voucherType == 'BRV')
-                    ? 'Receipts from suppliers cannot be settled against a bill'
-                    : 'Payments to customers cannot be settled against a bill')
-                : null;
-            // "On Account" is locked once bills are loaded to prevent orphaning
-            // settlement data. User must clear the party to switch modes.
-            final billsLoaded = !_isOnAccount && _bills.isNotEmpty;
-            return RadioGroup<bool>(
-              groupValue: _isOnAccount,
-              onChanged: (v) {
-                if (v == null) return;
-                if (v == false && (locked || !billAllowed)) return;
-                if (v == true && (locked || billsLoaded)) return;
-                setState(() => _isOnAccount = v);
-              },
-              child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-                const Radio<bool>(
-                  value: false,
-                ),
-                Text(
-                  'Against Bill',
-                  style: TextStyle(
-                      fontSize: 13,
-                      color: (locked || !billAllowed)
-                          ? AppColors.textDisabled
-                          : AppColors.textPrimary),
-                ),
-                if (whyDisabled != null) ...[
-                  const SizedBox(width: 4),
-                  Tooltip(
-                    message: whyDisabled,
-                    child: const Icon(Icons.info_outline,
-                        size: 14, color: AppColors.textSecondary),
-                  ),
-                ],
-                const SizedBox(width: 20),
-                const Radio<bool>(
-                  value: true,
-                ),
-                Text('On Account',
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: (locked || billsLoaded)
-                            ? AppColors.textDisabled
-                            : AppColors.textPrimary)),
-                if (billsLoaded) ...[
-                  const SizedBox(width: 4),
-                  const Tooltip(
-                    message: 'Bills are loaded — clear the party to switch to On Account',
-                    child: Icon(Icons.lock_outline,
-                        size: 14, color: AppColors.textSecondary),
-                  ),
-                ],
-              ]),
-            );
-          }),
+          _buildModeToggle(locked),
         ]),
       ),
+    );
+  }
+
+  // Against Bill | On Account toggle — Against Bill is only valid for
+  // Receipt+Customer or Payment+Supplier; "On Account" locks once bills are
+  // loaded to prevent orphaning settlement data.
+  Widget _buildModeToggle(bool locked) {
+    final billAllowed = _canAgainstBill;
+    final whyDisabled = _partyNature.isNotEmpty && !billAllowed
+        ? ((_voucherType == 'CRV' || _voucherType == 'BRV')
+            ? 'Receipts from suppliers cannot be settled against a bill'
+            : 'Payments to customers cannot be settled against a bill')
+        : null;
+    final billsLoaded = !_isOnAccount && _bills.isNotEmpty;
+    return RadioGroup<bool>(
+      groupValue: _isOnAccount,
+      onChanged: (v) {
+        if (v == null) return;
+        if (v == false && (locked || !billAllowed)) return;
+        if (v == true && (locked || billsLoaded)) return;
+        setState(() => _isOnAccount = v);
+      },
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        const Radio<bool>(
+          value: false,
+        ),
+        Text(
+          'Against Bill',
+          style: TextStyle(
+              fontSize: 13,
+              color: (locked || !billAllowed)
+                  ? AppColors.textDisabled
+                  : AppColors.textPrimary),
+        ),
+        if (whyDisabled != null) ...[
+          const SizedBox(width: 4),
+          Tooltip(
+            message: whyDisabled,
+            child: const Icon(Icons.info_outline,
+                size: 14, color: AppColors.textSecondary),
+          ),
+        ],
+        const SizedBox(width: 20),
+        const Radio<bool>(
+          value: true,
+        ),
+        Text('On Account',
+            style: TextStyle(
+                fontSize: 13,
+                color: (locked || billsLoaded)
+                    ? AppColors.textDisabled
+                    : AppColors.textPrimary)),
+        if (billsLoaded) ...[
+          const SizedBox(width: 4),
+          const Tooltip(
+            message: 'Bills are loaded — clear the party to switch to On Account',
+            child: Icon(Icons.lock_outline,
+                size: 14, color: AppColors.textSecondary),
+          ),
+        ],
+      ]),
     );
   }
 
   // ── Against Bill section ──────────────────────────────────────────────────
 
-  Widget _buildAgainstBillSection(bool locked) {
+  Widget _buildAgainstBillSection(bool locked, bool isMobile) {
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
     final transCurr = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
     final partyCurr = _partyCurrency.isEmpty ? transCurr : _partyCurrency;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildAccountSearch(
-          accounts: _eligiblePartyAccounts,
-          selectedId: _partyId,
-          locked: locked,
-          decoration: InputDecoration(
-              labelText: _voucherType == null
-                  ? 'Customer / Supplier *'
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SakalFieldCard(
+              label: _voucherType == null
+                  ? 'Customer / Supplier'
                   : isReceiptVoucher(_voucherType!)
-                      ? 'Customer *'
-                      : 'Supplier *',
-              border: const OutlineInputBorder(),
-              isDense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
-          onSelected: _onPartySelected,
-          onCleared: () {
-            for (final b in _bills) { b.dispose(); }
-            setState(() {
-              _partyId       = null;
-              _partyName     = null;
-              _partyCurrency = '';
-              _partyRate     = 1.0;
-              _bills         = [];
-            });
-          },
-        ),
-
-        if (_partyCurrency.isNotEmpty && _partyCurrency != transCurr) ...[
-          const SizedBox(height: 6),
-          Text(
-            'Party currency: $_partyCurrency  ·  '
-            '1 $transCurr = ${_fmtRate(_partyRate)} $_partyCurrency',
-            style: const TextStyle(
-                fontSize: 11, color: AppColors.textSecondary),
-          ),
-        ],
-
-        const SizedBox(height: 16),
-
-        if (_partyId == null)
-          const Text(
-            'Select a customer or supplier to see pending bills.',
-            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-          )
-        else if (_loadingBills)
-          const Center(
-              child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: CircularProgressIndicator()))
-        else if (_bills.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.border),
+                      ? 'Customer'
+                      : 'Supplier',
+              required: true, editable: !locked,
+              child: _buildAccountSearch(
+                accounts: _eligiblePartyAccounts,
+                selectedId: _partyId,
+                locked: locked,
+                decoration: bare,
+                style: style,
+                onSelected: _onPartySelected,
+                onCleared: () {
+                  for (final b in _bills) { b.dispose(); }
+                  setState(() {
+                    _partyId       = null;
+                    _partyName     = null;
+                    _partyCurrency = '';
+                    _partyRate     = 1.0;
+                    _bills         = [];
+                  });
+                },
+              ),
             ),
-            child: const Text('No pending bills found for this party.',
-                style: TextStyle(
-                    fontSize: 13, color: AppColors.textSecondary)),
-          )
-        else ...[
-          const Text('Pending Bills',
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primary)),
-          const SizedBox(height: 8),
-          _buildBillsTable(locked, transCurr, partyCurr),
-        ],
-      ],
+
+            if (_partyCurrency.isNotEmpty && _partyCurrency != transCurr) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Party currency: $_partyCurrency  ·  '
+                '1 $transCurr = ${_fmtRate(_partyRate)} $_partyCurrency',
+                style: const TextStyle(
+                    fontSize: 11, color: AppColors.textSecondary),
+              ),
+            ],
+
+            const SizedBox(height: 16),
+
+            if (_partyId == null)
+              const Text(
+                'Select a customer or supplier to see pending bills.',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              )
+            else if (_loadingBills)
+              const Center(
+                  child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: CircularProgressIndicator()))
+            else if (_bills.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: const Text('No pending bills found for this party.',
+                    style: TextStyle(
+                        fontSize: 13, color: AppColors.textSecondary)),
+              )
+            else ...[
+              const Text('Pending Bills',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary)),
+              const SizedBox(height: 8),
+              ..._bills.map((b) => _buildBillCard(b, locked, transCurr, partyCurr)),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildBillsTable(bool locked, String transCurr, String partyCurr) {
-    const w1 = 130.0; // Bill No
-    const w2 = 95.0;  // Bill Date
-    const w3 = 110.0; // Bill Amt (party)
-    const w4 = 100.0; // Paid (party)
-    const w5 = 100.0; // Balance (party)
-    const w6 = 105.0; // Balance (trans)
-    const w7 = 125.0; // Pay (trans) — editable
-    const w8 = 110.0; // Pay (party) — calculated
+  Widget _buildBillCard(_BillRow bill, bool locked, String transCurr, String partyCurr) {
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final style = SakalFieldCard.valueTextStyle(isCompact);
+    final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
+    final balTrans = _balanceTrans(bill.balanceAmount);
+    final payParty = _payParty(bill.payTrans);
+    final dateStr  = bill.transDate.length >= 10
+        ? bill.transDate.substring(0, 10)
+        : bill.transDate;
 
-    Widget hdr(String label, double w) => SizedBox(
-      width: w,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-        child: Text(label,
+    return SakalLineItemCard(
+      title: bill.invBillNo,
+      subtitle: 'Bill Date: $dateStr',
+      fields: [
+        SizedBox(width: 130, height: 56, child: SakalFieldCard.readOnly(
+            label: 'Bill Amt ($partyCurr)', value: AppNumberFormat.amount(bill.billAmount, numberFormat), numeric: true)),
+        SizedBox(width: 130, height: 56, child: SakalFieldCard.readOnly(
+            label: 'Paid ($partyCurr)', value: AppNumberFormat.amount(bill.settledAmount, numberFormat), numeric: true)),
+        SizedBox(width: 130, height: 56, child: SakalFieldCard.readOnly(
+            label: 'Balance ($partyCurr)', value: AppNumberFormat.amount(bill.balanceAmount, numberFormat), numeric: true)),
+        SizedBox(width: 130, height: 56, child: SakalFieldCard.readOnly(
+            label: 'Balance ($transCurr)', value: AppNumberFormat.amount(balTrans, numberFormat), numeric: true)),
+        SizedBox(width: 140, child: SakalFieldCard(
+          label: 'Pay ($transCurr)', editable: !locked, numeric: true,
+          child: TextFormField(
+            controller: bill.payTransCtrl,
+            enabled: !locked,
             textAlign: TextAlign.right,
-            style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Colors.white)),
-      ),
-    );
-
-    Widget hdrLeft(String label, double w) => SizedBox(
-      width: w,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-        child: Text(label,
-            style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Colors.white)),
-      ),
-    );
-
-    Widget cell(String value, double w, {Color? color}) => SizedBox(
-      width: w,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-        child: Text(value,
-            textAlign: TextAlign.right,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-                fontSize: 12,
-                color: color ?? AppColors.textPrimary)),
-      ),
-    );
-
-    Widget cellLeft(String value, double w) => SizedBox(
-      width: w,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-        child: Text(value,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12)),
-      ),
-    );
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header row
-          Container(
-            decoration: const BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(6)),
-            ),
-            child: Row(children: [
-              hdrLeft('Bill No', w1),
-              hdrLeft('Bill Date', w2),
-              hdr('Bill Amt\n($partyCurr)', w3),
-              hdr('Paid\n($partyCurr)', w4),
-              hdr('Balance\n($partyCurr)', w5),
-              hdr('Balance\n($transCurr)', w6),
-              hdr('Pay\n($transCurr)', w7),
-              hdr('Pay\n($partyCurr)', w8),
-            ]),
+            decoration: SakalFieldCard.bareDecoration,
+            style: style,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
+            onChanged: (_) => setState(() {}),
           ),
-
-          // Data rows
-          Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: AppColors.border),
-              borderRadius:
-                  const BorderRadius.vertical(bottom: Radius.circular(6)),
-            ),
-            child: Column(
-              children: _bills.asMap().entries.map((e) {
-                final i    = e.key;
-                final bill = e.value;
-                final balTrans = _balanceTrans(bill.balanceAmount);
-                final payParty = _payParty(bill.payTrans);
-                final dateStr  = bill.transDate.length >= 10
-                    ? bill.transDate.substring(0, 10)
-                    : bill.transDate;
-
-                return Container(
-                  color: i.isOdd ? Colors.grey.shade50 : Colors.white,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      cellLeft(bill.invBillNo, w1),
-                      cellLeft(dateStr, w2),
-                      cell(_fmtAmt(bill.billAmount), w3),
-                      cell(_fmtAmt(bill.settledAmount), w4),
-                      cell(_fmtAmt(bill.balanceAmount), w5,
-                          color: AppColors.negative),
-                      cell(_fmtAmt(balTrans), w6),
-                      // Pay (trans) — editable
-                      SizedBox(
-                        width: w7,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 4, vertical: 4),
-                          child: TextFormField(
-                            controller: bill.payTransCtrl,
-                            enabled: !locked,
-                            textAlign: TextAlign.right,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                              isDense: true,
-                              contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 6),
-                            ),
-                            style: const TextStyle(fontSize: 12),
-                            keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true),
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(
-                                  RegExp(r'[\d.]'))
-                            ],
-                            onChanged: (_) => setState(() {}),
-                          ),
-                        ),
-                      ),
-                      cell(_fmtAmt(payParty), w8,
-                          color: AppColors.positive),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
+        )),
+        SizedBox(width: 130, height: 56, child: SakalFieldCard.readOnly(
+            label: 'Pay ($partyCurr)', value: AppNumberFormat.amount(payParty, numberFormat), numeric: true)),
+      ],
     );
   }
 
   // ── On Account section ────────────────────────────────────────────────────
 
-  Widget _buildOnAccountSection(bool locked) {
+  Widget _buildOnAccountSection(bool locked, bool isMobile) {
     final n2   = _voucherType != null
         ? counterNature(line1Nature(_voucherType!))
         : '—';
     final verb = n2 == 'DR' ? 'Debit' : 'Credit';
-    final tc   = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
-    const btnW = 32.0;
 
-    Widget colHeader(String label, {TextAlign align = TextAlign.left}) =>
-        Padding(
-          padding: const EdgeInsets.only(bottom: 4, left: 2),
-          child: Text(label,
-              textAlign: align,
-              style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary)),
-        );
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Text('$verb Accounts',
+                  style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary)),
+              const Spacer(),
+              if (!locked)
+                TextButton.icon(
+                  onPressed: () =>
+                      setState(() => _accountLines.add(_AccountLine())),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add Line', style: TextStyle(fontSize: 13)),
+                ),
+            ]),
+            const SizedBox(height: 8),
+            if (_accountLines.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text('No lines yet.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              )
+            else
+              ..._accountLines.asMap().entries.map((e) => _buildAccountLineCard(e.key, e.value, locked)),
+          ],
+        ),
+      ),
+    );
+  }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Title row + Add Line button
-        Row(children: [
-          Text('$verb Accounts',
-              style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primary)),
-          const Spacer(),
-          if (!locked)
-            TextButton.icon(
-              onPressed: () =>
-                  setState(() => _accountLines.add(_AccountLine())),
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Add Line',
-                  style: TextStyle(fontSize: 13)),
-            ),
-        ]),
-        const SizedBox(height: 4),
+  Widget _buildAccountLineCard(int i, _AccountLine line, bool locked) {
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
+    final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
+    final tc = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
+    final lineCurr    = line.accountCurrency.isEmpty ? _baseCurrency : line.accountCurrency;
+    final isCrossCurr = line.accountId != null && lineCurr != tc;
+    final partyAmt    = line.amount * line.partyRate;
 
-        // Column headers (shown once above the data rows)
-        Row(children: [
-          Expanded(flex: 4, child: colHeader('Account')),
-          const SizedBox(width: 12),
-          Expanded(flex: 2, child: colHeader('Amount ($tc)', align: TextAlign.right)),
-          const SizedBox(width: 12),
-          Expanded(flex: 2, child: colHeader('Party Amt', align: TextAlign.right)),
-          const SizedBox(width: 12),
-          Expanded(flex: 3, child: colHeader('Remarks')),
-          // ignore: prefer_const_constructors — btnW is runtime, cannot be const
-          if (!locked) SizedBox(width: btnW + 8),
-        ]),
-
-        // Data rows — no floating labels, compact inputs
-        ..._accountLines.asMap().entries.map((e) {
-          final i    = e.key;
-          final line = e.value;
-          final lineCurr     = line.accountCurrency.isEmpty ? _baseCurrency : line.accountCurrency;
-          final isCrossCurr  = line.accountId != null && lineCurr != tc;
-          final partyAmt     = line.amount * line.partyRate;
-
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                  Expanded(
-                    flex: 4,
-                    child: _buildAccountSearch(
-                      accounts: _otherAccounts
-                          .where((a) => !_accountLines
-                              .where((l) => l != line)
-                              .any((l) => l.accountId == a['id'] as String))
-                          .toList(),
-                      selectedId: line.accountId,
-                      locked: locked,
-                      height: 44,
-                      keyValue: '${i}_${line.accountId ?? 'none'}',
-                      decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                          contentPadding:
-                              EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                          hintText: 'Search account'),
-                      onSelected: (a) {
-                        final acCurr = _extractCurrency(a);
-                        final trans  = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
-                        setState(() {
-                          line.accountId       = a['id'] as String;
-                          line.accountName     = a['account_name'] as String?;
-                          line.accountCurrency = acCurr;
-                          line.partyRate       = acCurr == trans ? 1.0 : 1.0;
-                        });
-                        if (acCurr.isNotEmpty && acCurr != trans) {
-                          unawaited(_fetchCrossRate(trans, acCurr).then((r) {
-                            if (mounted && r != null) setState(() => line.partyRate = r);
-                          }));
-                        }
-                      },
-                      onCleared: () => setState(() {
-                        line.accountId       = null;
-                        line.accountName     = null;
-                        line.accountCurrency = '';
-                      }),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Amount — always in transaction currency, no suffix badge
-                  Expanded(
-                    flex: 2,
-                    child: SizedBox(
-                      height: 44,
-                      child: TextFormField(
-                        controller: line.amountCtrl,
-                        enabled: !locked,
-                        textAlign: TextAlign.right,
-                        decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 10)),
-                        style: const TextStyle(fontSize: 13),
-                        keyboardType:
-                            const TextInputType.numberWithOptions(decimal: true),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))
-                        ],
-                        onChanged: (_) => setState(() {}),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Party Amount — read-only, shows converted amount in account's currency
-                  Expanded(
-                    flex: 2,
-                    child: SizedBox(
-                      height: 44,
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: isCrossCurr
-                            ? RichText(
-                                textAlign: TextAlign.right,
-                                text: TextSpan(children: [
-                                  TextSpan(
-                                    text: partyAmt > 0
-                                        ? partyAmt.toStringAsFixed(2)
-                                        : '—',
-                                    style: const TextStyle(
-                                        fontSize: 13,
-                                        color: AppColors.textPrimary),
-                                  ),
-                                  if (partyAmt > 0) ...[
-                                    const TextSpan(text: ' '),
-                                    TextSpan(
-                                      text: lineCurr,
-                                      style: const TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.secondary),
-                                    ),
-                                  ],
-                                ]),
-                              )
-                            : const Text('—',
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: AppColors.textDisabled)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 3,
-                    child: SizedBox(
-                      height: 44,
-                      child: TextFormField(
-                        controller: line.remarksCtrl,
-                        enabled: !locked,
-                        decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                            contentPadding:
-                                EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                            hintText: 'Remarks'),
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                    ),
-                  ),
-                  if (!locked) ...[
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      width: btnW,
-                      child: _accountLines.length > 1
-                          ? IconButton(
-                              onPressed: () {
-                                final removed = _accountLines.removeAt(i);
-                                removed.dispose();
-                                setState(() {});
-                              },
-                              icon: const Icon(Icons.remove_circle_outline,
-                                  size: 18, color: AppColors.negative),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                            )
-                          : const SizedBox.shrink(),
-                    ),
-                  ],
-                ],
-              ),
-          );
+    final accountField = SakalFieldCard(
+      label: 'Account', required: true, editable: !locked,
+      child: _buildAccountSearch(
+        accounts: _otherAccounts
+            .where((a) => !_accountLines
+                .where((l) => l != line)
+                .any((l) => l.accountId == a['id'] as String))
+            .toList(),
+        selectedId: line.accountId,
+        locked: locked,
+        keyValue: '${i}_${line.accountId ?? 'none'}',
+        decoration: bare,
+        style: style,
+        onSelected: (a) {
+          final acCurr = _extractCurrency(a);
+          final trans  = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
+          setState(() {
+            line.accountId       = a['id'] as String;
+            line.accountName     = a['account_name'] as String?;
+            line.accountCurrency = acCurr;
+            line.partyRate       = acCurr == trans ? 1.0 : 1.0;
+          });
+          if (acCurr.isNotEmpty && acCurr != trans) {
+            unawaited(_fetchCrossRate(trans, acCurr).then((r) {
+              if (mounted && r != null) setState(() => line.partyRate = r);
+            }));
+          }
+        },
+        onCleared: () => setState(() {
+          line.accountId       = null;
+          line.accountName     = null;
+          line.accountCurrency = '';
         }),
+      ),
+    );
+    // Amount — always in transaction currency, no suffix badge
+    final amountField = SakalFieldCard(
+      label: 'Amount ($tc)', editable: !locked, numeric: true,
+      child: TextFormField(
+        controller: line.amountCtrl,
+        enabled: !locked,
+        textAlign: TextAlign.right,
+        decoration: bare,
+        style: style,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+    // Party Amount — read-only, shows converted amount in account's currency
+    final partyAmountField = SakalFieldCard.readOnly(
+      label: 'Party Amt',
+      value: isCrossCurr && partyAmt > 0
+          ? '${AppNumberFormat.amount(partyAmt, numberFormat)} $lineCurr'
+          : '—',
+      numeric: true,
+    );
+    final remarksField = SakalFieldCard(
+      label: 'Remarks', editable: !locked,
+      child: TextFormField(controller: line.remarksCtrl, enabled: !locked, decoration: bare, style: style),
+    );
+
+    return SakalLineItemCard(
+      title: line.accountName ?? 'Line ${i + 1}',
+      onDelete: (!locked && _accountLines.length > 1)
+          ? () {
+              final removed = _accountLines.removeAt(i);
+              removed.dispose();
+              setState(() {});
+            }
+          : null,
+      fields: [
+        SizedBox(width: 240, child: accountField),
+        SizedBox(width: 140, child: amountField),
+        SizedBox(width: 140, height: 56, child: partyAmountField),
+        SizedBox(width: 200, child: remarksField),
       ],
     );
   }
@@ -1970,6 +1684,7 @@ class _FinanceVoucherEntryScreenState
     final curr      = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
     final partyCurr = _partyCurrency.isEmpty ? curr : _partyCurrency;
     final hasAmount = total > 0;
+    final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1987,7 +1702,7 @@ class _FinanceVoucherEntryScreenState
       child: Row(children: [
         const Text('Total: ',
             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-        Text('${_fmtAmt(total)} $curr',
+        Text('${AppNumberFormat.amount(total, numberFormat)} $curr',
             style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
@@ -1998,7 +1713,7 @@ class _FinanceVoucherEntryScreenState
             partyCurr != curr &&
             total > 0) ...[
           const SizedBox(width: 8),
-          Text('= ${_fmtAmt(_payParty(total))} $partyCurr',
+          Text('= ${AppNumberFormat.amount(_payParty(total), numberFormat)} $partyCurr',
               style: const TextStyle(
                   fontSize: 13, color: AppColors.textSecondary)),
         ],
@@ -2020,75 +1735,24 @@ class _FinanceVoucherEntryScreenState
     );
   }
 
-  // ── Action buttons ────────────────────────────────────────────────────────
-
-  Widget _buildActionButtons({
-    required bool canSave,
-    required bool canApprove,
-  }) {
-    return Row(children: [
-      if (canSave)
-        OutlinedButton.icon(
-          onPressed: (_saving || _posting) ? null : _saveDraft,
-          icon: _saving
-              ? const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2))
-              : const Icon(Icons.save_outlined, size: 16),
-          label: Text(_saving ? 'Saving…' : 'Save Draft'),
-          style: OutlinedButton.styleFrom(minimumSize: const Size(140, 48)),
-        ),
-      if (canSave && canApprove) const SizedBox(width: 12),
-      if (canApprove)
-        FilledButton.icon(
-          onPressed: (_saving || _posting) ? null : _postVoucher,
-          icon: _posting
-              ? const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white))
-              : const Icon(Icons.check_circle_outline, size: 16),
-          label: Text(_posting ? 'Posting…' : 'Post Voucher'),
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.secondary,
-            minimumSize: const Size(140, 48),
-          ),
-        ),
-    ]);
-  }
-
   // ── Utility widgets ───────────────────────────────────────────────────────
 
   Widget _errorBanner(String msg, {VoidCallback? onRetry}) => Container(
     width: double.infinity,
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     decoration: BoxDecoration(
       color: AppColors.negative.withValues(alpha: 0.08),
       border: Border.all(color: AppColors.negative.withValues(alpha: 0.3)),
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(8),
     ),
     child: Row(children: [
-      const Icon(Icons.error_outline, color: AppColors.negative, size: 16),
-      const SizedBox(width: 8),
+      const Icon(Icons.error_outline, color: AppColors.negative, size: 18),
+      const SizedBox(width: 10),
       Expanded(
           child: Text(msg,
               style: const TextStyle(color: AppColors.negative, fontSize: 13))),
-      if (onRetry != null) ...[
-        const SizedBox(width: 8),
-        TextButton(
-          onPressed: onRetry,
-          style: TextButton.styleFrom(
-            foregroundColor: AppColors.negative,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            minimumSize: Size.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          child: const Text('Retry',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-        ),
-      ],
+      if (onRetry != null)
+        TextButton(onPressed: onRetry, child: const Text('Retry')),
     ]),
   );
 
