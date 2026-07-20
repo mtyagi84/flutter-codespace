@@ -6,6 +6,7 @@ import 'package:excel/excel.dart' as xls;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -13,12 +14,16 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_autocomplete.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../domain/repositories/opening_stock_repository.dart';
 import '../providers/opening_stock_providers.dart';
 
@@ -635,19 +640,27 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
     );
   }
 
-  Widget _buildTitleBlock() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Text(_openingNo != null ? 'Opening Stock · $_openingNo' : 'New Opening Stock',
-        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-    const SizedBox(height: 2),
-    Row(children: [
-      _status == 'APPROVED' ? _statusChip(_status) : Text(_openingNo != null ? 'Draft' : 'Unsaved draft',
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-      if (_openingNo != null) ...[
-        const SizedBox(width: 8),
-        PendingSyncBadge(documentType: 'OPENING_STOCK', documentId: _openingNo!),
-      ],
-    ]),
-  ]);
+  Widget _buildTitleBlock() => Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (context.canPop())
+        IconButton(icon: const Icon(Icons.arrow_back), tooltip: 'Back', onPressed: () => context.pop()),
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(_openingNo != null ? 'Opening Stock · $_openingNo' : 'New Opening Stock',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+        const SizedBox(height: 2),
+        Row(children: [
+          _status == 'APPROVED' ? _statusChip(_status) : Text(_openingNo != null ? 'Draft' : 'Unsaved draft',
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          if (_openingNo != null) ...[
+            const SizedBox(width: 8),
+            PendingSyncBadge(documentType: 'OPENING_STOCK', documentId: _openingNo!),
+          ],
+        ]),
+      ]),
+    ],
+  );
 
   Widget _statusChip(String status) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -680,66 +693,59 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
   );
 
   Widget _buildHeaderCard(bool locked, bool isMobile, bool showScan) {
-    const fh = 56.0;
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
-    Widget field(Widget child) => SizedBox(height: fh, child: child);
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
 
-    final locationField = field(DropdownButtonFormField<String>(
-      decoration: dec.copyWith(labelText: 'Store / Location *'),
-      isExpanded: true, isDense: true, itemHeight: null,
-      initialValue: _locationId,
-      items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
-          child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
-      onChanged: locked ? null : (v) => setState(() => _locationId = v),
-    ));
-    final dateField = field(InkWell(
-      onTap: locked ? null : () => _pickDate(_openingDate, (d) => setState(() => _openingDate = d)),
-      child: InputDecorator(
-        decoration: dec.copyWith(labelText: 'Opening Date *',
-            suffixIcon: Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary)),
-        child: Text(_displayDate(_openingDate), style: const TextStyle(fontSize: 13)),
+    final openingNoField = SakalFieldCard.readOnly(label: 'Opening No', value: _openingNo ?? '(auto on save)');
+    final locationField = SakalFieldCard(
+      label: 'Store / Location', required: true, editable: !locked,
+      child: DropdownButtonFormField<String>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: _locationId,
+        items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
+            child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: style))).toList(),
+        onChanged: locked ? null : (v) => setState(() => _locationId = v),
       ),
-    ));
-    final remarksField = field(TextFormField(controller: _remarksCtrl, enabled: !locked, decoration: dec.copyWith(labelText: 'Remarks')));
-    final scanField = field(TextFormField(
-      controller: _scanCtrl, enabled: !locked,
-      decoration: dec.copyWith(labelText: 'Scan Barcode/Part Number', prefixIcon: const Icon(Icons.qr_code_scanner, size: 18)),
-      style: const TextStyle(fontSize: 13),
-      onFieldSubmitted: (v) => _onScanSubmitted(v),
-    ));
+    );
+    final dateField = SakalFieldCard(
+      label: 'Opening Date', required: true, editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(_openingDate, (d) => setState(() => _openingDate = d)),
+        child: Row(children: [
+          Expanded(child: Text(_displayDate(_openingDate), style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
+      ),
+    );
+    final remarksField = SakalFieldCard(
+      label: 'Remarks', editable: !locked,
+      child: TextFormField(controller: _remarksCtrl, enabled: !locked, decoration: bare, style: style),
+    );
+    final scanField = SakalFieldCard(
+      label: 'Scan Barcode/Part Number', editable: !locked,
+      child: TextFormField(
+        controller: _scanCtrl, enabled: !locked,
+        decoration: bare.copyWith(prefixIcon: const Icon(Icons.qr_code_scanner, size: 18)),
+        style: style,
+        onFieldSubmitted: (v) => _onScanSubmitted(v),
+      ),
+    );
 
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: isMobile
-            ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                field(InputDecorator(decoration: dec.copyWith(labelText: 'Opening No'),
-                    child: Text(_openingNo ?? '(auto on save)', style: TextStyle(fontSize: 13, color: _openingNo != null ? AppColors.textPrimary : AppColors.textDisabled)))),
-                const SizedBox(height: 8),
-                locationField, const SizedBox(height: 8),
-                dateField, const SizedBox(height: 8),
-                remarksField,
-                if (showScan) ...[const SizedBox(height: 8), scanField],
-                if (!locked) ...[const SizedBox(height: 8), _buildExcelButtons()],
-              ])
-            : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Expanded(flex: 2, child: field(InputDecorator(decoration: dec.copyWith(labelText: 'Opening No'),
-                      child: Text(_openingNo ?? '(auto on save)', style: TextStyle(fontSize: 13, color: _openingNo != null ? AppColors.textPrimary : AppColors.textDisabled))))),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 2, child: locationField),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 2, child: dateField),
-                ]),
-                const SizedBox(height: 12),
-                Row(children: [
-                  Expanded(flex: 3, child: remarksField),
-                  if (showScan) ...[const SizedBox(width: 12), Expanded(flex: 2, child: scanField)],
-                  if (!locked) ...[const SizedBox(width: 12), _buildExcelButtons()],
-                ]),
-              ]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SakalFieldRow(isMobile: isMobile, spans: const [2, 2, 2], children: [openingNoField, locationField, dateField]),
+          const SizedBox(height: 12),
+          SakalFieldRow(isMobile: isMobile, spans: const [3, 2], children: [
+            remarksField,
+            if (showScan) scanField,
+          ]),
+          if (!locked) ...[const SizedBox(height: 12), _buildExcelButtons()],
+        ]),
       ),
     );
   }
@@ -764,7 +770,6 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
   }
 
   Widget _buildLinesCard(bool locked, bool showLooseQty, bool isMobile) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -780,93 +785,119 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
             const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No lines yet — add a product, scan a barcode, or upload an Excel file.',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
           else
-            ..._lines.map((row) => Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              elevation: 0,
-              color: AppColors.background,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                    SizedBox(
-                      width: 240,
-                      child: SakalAutocomplete<Map<String, dynamic>>(
-                        key: ValueKey('${row.hashCode}-${row.productDisplay}'),
-                        initialValue: TextEditingValue(text: row.productDisplay),
-                        displayStringForOption: (p) => '[${p['product_code']}] ${p['product_name']}',
-                        optionsBuilder: (v) async {
-                          if (locked) return const [];
-                          final session = ref.read(sessionProvider)!;
-                          return _ds.getProductsForPicker(clientId: session.clientId, companyId: session.companyId, search: v.text);
-                        },
-                        onSelected: (p) => _onProductSelected(row, p),
-                        enabled: !locked,
-                        decoration: dec.copyWith(labelText: 'Product'),
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                    ),
-                    if (row.isBatchTracked) SizedBox(width: 130, height: 48, child: TextFormField(
-                      controller: row.batchNoCtrl, enabled: !locked,
-                      decoration: dec.copyWith(labelText: 'Batch No'), style: const TextStyle(fontSize: 12),
-                    )),
-                    if (row.isBatchTracked) SizedBox(width: 140, height: 48, child: InkWell(
-                      onTap: locked ? null : () => _pickDate(row.expiryDate, (d) => setState(() => row.expiryDate = d)),
-                      child: InputDecorator(decoration: dec.copyWith(labelText: 'Expiry Date'),
-                          child: Text(row.expiryDate != null ? _displayDate(row.expiryDate) : '—', style: const TextStyle(fontSize: 12))),
-                    )),
-                    if (row.isBatchTracked) SizedBox(width: 140, height: 48, child: InkWell(
-                      onTap: locked ? null : () => _pickDate(row.manufacturingDate, (d) => setState(() => row.manufacturingDate = d)),
-                      child: InputDecorator(decoration: dec.copyWith(labelText: 'Manufacturing Date'),
-                          child: Text(row.manufacturingDate != null ? _displayDate(row.manufacturingDate) : '—', style: const TextStyle(fontSize: 12))),
-                    )),
-                    if (row.isSerialTracked) SizedBox(width: 150, height: 48, child: TextFormField(
-                      controller: row.serialNoCtrl, enabled: !locked,
-                      decoration: dec.copyWith(labelText: 'Serial No'), style: const TextStyle(fontSize: 12),
-                    )),
-                    SizedBox(width: 70, child: InputDecorator(
-                      decoration: dec.copyWith(labelText: 'Unit'),
-                      child: Text(row.uomLabel ?? '—', style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
-                    )),
-                    SizedBox(width: 100, child: TextFormField(
-                      controller: row.qtyPackCtrl, enabled: !locked,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: showLooseQty ? 'Qty Pack' : 'Quantity'),
-                      style: const TextStyle(fontSize: 12),
-                      onChanged: (_) => setState(() {}),
-                    )),
-                    if (showLooseQty) SizedBox(width: 100, child: TextFormField(
-                      controller: row.qtyLooseCtrl, enabled: !locked,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: 'Qty Loose'),
-                      style: const TextStyle(fontSize: 12),
-                      onChanged: (_) => setState(() {}),
-                    )),
-                    SizedBox(width: 100, child: TextFormField(
-                      controller: row.unitCostCtrl, enabled: !locked,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: dec.copyWith(labelText: 'Unit Cost *'),
-                      style: const TextStyle(fontSize: 12),
-                      onChanged: (_) => setState(() {}),
-                    )),
-                    SizedBox(width: 160, height: 48, child: TextFormField(
-                      controller: row.remarksCtrl, enabled: !locked,
-                      decoration: dec.copyWith(labelText: 'Remarks'), style: const TextStyle(fontSize: 12),
-                    )),
-                    if (!locked) IconButton(icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative), onPressed: () => _removeLine(row)),
-                  ]),
-                  if (row.alreadyEstablished) Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      'This product already has stock (${row.currentStock}) / cost (${row.currentCost}) at this location — Approve will be blocked.',
-                      style: const TextStyle(fontSize: 11, color: AppColors.negative, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ]),
-              ),
-            )),
+            ..._lines.asMap().entries.map((e) => _buildLineCard(e.value, e.key, locked, showLooseQty, isMobile)),
         ]),
       ),
+    );
+  }
+
+  Widget _buildLineCard(_OpeningLineRow row, int idx, bool locked, bool showLooseQty, bool isMobile) {
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
+
+    final productField = SakalFieldCard(
+      label: 'Product', required: true, editable: !locked,
+      child: SakalAutocomplete<Map<String, dynamic>>(
+        key: ValueKey('${row.hashCode}-${row.productDisplay}'),
+        initialValue: TextEditingValue(text: row.productDisplay),
+        displayStringForOption: (p) => '[${p['product_code']}] ${p['product_name']}',
+        optionsBuilder: (v) async {
+          if (locked) return const [];
+          final session = ref.read(sessionProvider)!;
+          return _ds.getProductsForPicker(clientId: session.clientId, companyId: session.companyId, search: v.text);
+        },
+        onSelected: (p) => _onProductSelected(row, p),
+        enabled: !locked,
+        decoration: bare,
+        style: style,
+      ),
+    );
+    final batchNoField = SakalFieldCard(
+      label: 'Batch No', editable: !locked,
+      child: TextFormField(controller: row.batchNoCtrl, enabled: !locked, decoration: bare, style: style),
+    );
+    final expiryField = SakalFieldCard(
+      label: 'Expiry Date', editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(row.expiryDate, (d) => setState(() => row.expiryDate = d)),
+        child: Row(children: [
+          Expanded(child: Text(row.expiryDate != null ? _displayDate(row.expiryDate) : '—', style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
+      ),
+    );
+    final mfgField = SakalFieldCard(
+      label: 'Manufacturing Date', editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(row.manufacturingDate, (d) => setState(() => row.manufacturingDate = d)),
+        child: Row(children: [
+          Expanded(child: Text(row.manufacturingDate != null ? _displayDate(row.manufacturingDate) : '—', style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
+      ),
+    );
+    final serialNoField = SakalFieldCard(
+      label: 'Serial No', editable: !locked,
+      child: TextFormField(controller: row.serialNoCtrl, enabled: !locked, decoration: bare, style: style),
+    );
+    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
+    final qtyPackField = SakalFieldCard(
+      label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked, numeric: true,
+      child: TextFormField(
+        controller: row.qtyPackCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        textAlign: TextAlign.right,
+        decoration: bare, style: style,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+    final qtyLooseField = SakalFieldCard(
+      label: 'Qty Loose', editable: !locked, numeric: true,
+      child: TextFormField(
+        controller: row.qtyLooseCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        textAlign: TextAlign.right,
+        decoration: bare, style: style,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+    final unitCostField = SakalFieldCard(
+      label: 'Unit Cost', required: true, editable: !locked, numeric: true,
+      child: TextFormField(
+        controller: row.unitCostCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        textAlign: TextAlign.right,
+        decoration: bare, style: style,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+    final remarksField = SakalFieldCard(
+      label: 'Remarks', editable: !locked,
+      child: TextFormField(controller: row.remarksCtrl, enabled: !locked, decoration: bare, style: style),
+    );
+
+    return SakalLineItemCard(
+      title: '${idx + 1}. ${row.productDisplay.isEmpty ? 'New Line' : row.productDisplay}',
+      onDelete: locked ? null : () => _removeLine(row),
+      fields: [
+        SizedBox(width: isMobile ? double.infinity : 240, child: productField),
+        if (row.isBatchTracked) SizedBox(width: 150, child: batchNoField),
+        if (row.isBatchTracked) SizedBox(width: 150, child: expiryField),
+        if (row.isBatchTracked) SizedBox(width: 160, child: mfgField),
+        if (row.isSerialTracked) SizedBox(width: 150, child: serialNoField),
+        SizedBox(width: 80, child: unitField),
+        SizedBox(width: 110, child: qtyPackField),
+        if (showLooseQty) SizedBox(width: 110, child: qtyLooseField),
+        SizedBox(width: 110, child: unitCostField),
+        SizedBox(width: 170, child: remarksField),
+      ],
+      body: row.alreadyEstablished
+          ? Text(
+              'This product already has stock (${row.currentStock}) / cost (${row.currentCost}) at this location — Approve will be blocked.',
+              style: const TextStyle(fontSize: 11, color: AppColors.negative, fontWeight: FontWeight.w600),
+            )
+          : null,
     );
   }
 }

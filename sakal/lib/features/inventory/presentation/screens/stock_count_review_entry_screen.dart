@@ -3,15 +3,20 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/stock_count_review_repository.dart';
 import '../providers/stock_count_review_providers.dart';
 
@@ -391,13 +396,21 @@ class _StockCountReviewEntryScreenState extends ConsumerState<StockCountReviewEn
     );
   }
 
-  Widget _buildTitleBlock() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Text(_reviewNo != null ? 'Stock Count Review · $_reviewNo' : 'New Stock Count Review',
-        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-    const SizedBox(height: 2),
-    _status == 'APPROVED' ? _statusChip() : Text(_reviewNo != null ? 'Draft' : 'Unsaved draft',
-        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-  ]);
+  Widget _buildTitleBlock() => Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (context.canPop())
+        IconButton(icon: const Icon(Icons.arrow_back), tooltip: 'Back', onPressed: () => context.pop()),
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(_reviewNo != null ? 'Stock Count Review · $_reviewNo' : 'New Stock Count Review',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+        const SizedBox(height: 2),
+        _status == 'APPROVED' ? _statusChip() : Text(_reviewNo != null ? 'Draft' : 'Unsaved draft',
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      ]),
+    ],
+  );
 
   Widget _statusChip() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -430,80 +443,69 @@ class _StockCountReviewEntryScreenState extends ConsumerState<StockCountReviewEn
   );
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
-    const fh = 56.0;
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
-    Widget field(Widget child) => SizedBox(height: fh, child: child);
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
     final locationLocked = locked || _selectedCountKeys.isNotEmpty;
 
-    final locationField = field(DropdownButtonFormField<String>(
-      decoration: dec.copyWith(labelText: 'Store / Location *'),
-      isExpanded: true, isDense: true, itemHeight: null,
-      initialValue: _locationId,
-      items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
-          child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
-      onChanged: locationLocked ? null : (v) { setState(() => _locationId = v); _loadAvailableCounts(); },
-    ));
-    final reviewDateField = field(InkWell(
-      onTap: locked ? null : () => _pickDate(_reviewDate, (d) => setState(() => _reviewDate = d)),
-      child: InputDecorator(
-        decoration: dec.copyWith(labelText: 'Review Date *',
-            suffixIcon: Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary)),
-        child: Text(_displayDate(_reviewDate), style: const TextStyle(fontSize: 13)),
+    final reviewNoField = SakalFieldCard.readOnly(label: 'Review No', value: _reviewNo ?? '(auto on save)');
+    final locationField = SakalFieldCard(
+      label: 'Store / Location', required: true, editable: !locationLocked,
+      child: DropdownButtonFormField<String>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: _locationId,
+        items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
+            child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: style))).toList(),
+        onChanged: locationLocked ? null : (v) { setState(() => _locationId = v); _loadAvailableCounts(); },
       ),
-    ));
-    final asOfDateField = field(InkWell(
-      onTap: locked ? null : () => _pickDate(_asOfDate, _onAsOfDateChanged),
-      child: InputDecorator(
-        decoration: dec.copyWith(labelText: 'As Of Date *',
-            helperText: 'System stock is compared as of this date',
-            suffixIcon: Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary)),
-        child: Text(_displayDate(_asOfDate), style: const TextStyle(fontSize: 13)),
+    );
+    final reviewDateField = SakalFieldCard(
+      label: 'Review Date', required: true, editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(_reviewDate, (d) => setState(() => _reviewDate = d)),
+        child: Row(children: [
+          Expanded(child: Text(_displayDate(_reviewDate), style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
       ),
-    ));
-    final reasonField = field(DropdownButtonFormField<String>(
-      decoration: dec.copyWith(labelText: 'Reason *'),
-      isExpanded: true, isDense: true, itemHeight: null,
-      initialValue: _reasonId,
-      items: _reasons.map((r) => DropdownMenuItem(value: r['id'] as String,
-          child: Text(r['description'] as String, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
-      onChanged: locked ? null : (v) => setState(() => _reasonId = v),
-    ));
-    final remarksField = field(TextFormField(controller: _remarksCtrl, enabled: !locked, decoration: dec.copyWith(labelText: 'Remarks')));
+    );
+    final asOfDateField = SakalFieldCard(
+      label: 'As Of Date', required: true, editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(_asOfDate, _onAsOfDateChanged),
+        child: Row(children: [
+          Expanded(child: Text(_displayDate(_asOfDate), style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
+      ),
+    );
+    final reasonField = SakalFieldCard(
+      label: 'Reason', required: true, editable: !locked,
+      child: DropdownButtonFormField<String>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: _reasonId,
+        items: _reasons.map((r) => DropdownMenuItem(value: r['id'] as String,
+            child: Text(r['description'] as String, overflow: TextOverflow.ellipsis, style: style))).toList(),
+        onChanged: locked ? null : (v) => setState(() => _reasonId = v),
+      ),
+    );
+    final remarksField = SakalFieldCard(
+      label: 'Remarks', editable: !locked,
+      child: TextFormField(controller: _remarksCtrl, enabled: !locked, decoration: bare, style: style),
+    );
 
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: isMobile
-            ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                field(InputDecorator(decoration: dec.copyWith(labelText: 'Review No'),
-                    child: Text(_reviewNo ?? '(auto on save)', style: TextStyle(fontSize: 13, color: _reviewNo != null ? AppColors.textPrimary : AppColors.textDisabled)))),
-                const SizedBox(height: 8),
-                locationField, const SizedBox(height: 8),
-                reviewDateField, const SizedBox(height: 8),
-                asOfDateField, const SizedBox(height: 8),
-                reasonField, const SizedBox(height: 8),
-                remarksField,
-              ])
-            : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Expanded(flex: 2, child: field(InputDecorator(decoration: dec.copyWith(labelText: 'Review No'),
-                      child: Text(_reviewNo ?? '(auto on save)', style: TextStyle(fontSize: 13, color: _reviewNo != null ? AppColors.textPrimary : AppColors.textDisabled))))),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 2, child: locationField),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 2, child: reviewDateField),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 2, child: asOfDateField),
-                ]),
-                const SizedBox(height: 12),
-                Row(children: [
-                  Expanded(flex: 2, child: reasonField),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 3, child: remarksField),
-                ]),
-              ]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SakalFieldRow(isMobile: isMobile, spans: const [2, 2, 2, 2], children: [reviewNoField, locationField, reviewDateField, asOfDateField]),
+          const SizedBox(height: 12),
+          SakalFieldRow(isMobile: isMobile, spans: const [2, 3], children: [reasonField, remarksField]),
+          const SizedBox(height: 4),
+          const Text('System stock is compared as of the As Of Date above.', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+        ]),
       ),
     );
   }
@@ -551,14 +553,20 @@ class _StockCountReviewEntryScreenState extends ConsumerState<StockCountReviewEn
             const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('Select at least one submitted Stock Count to see variance.',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
           else ...[
-            Container(
-              decoration: const BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.vertical(top: Radius.circular(6))),
-              child: Row(children: [
-                _th('Product', flex: 3), _th('Lot', flex: 2), _th('Counted', flex: 2, align: TextAlign.right),
-                _th('System', flex: 2, align: TextAlign.right), _th('Variance', flex: 2, align: TextAlign.right), _th('', flex: 1),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Column(children: [
+                SakalTableHeaderBar(cells: [
+                  Expanded(flex: 3, child: SakalTableHeaderBar.label('Product')),
+                  Expanded(flex: 2, child: SakalTableHeaderBar.label('Lot')),
+                  Expanded(flex: 2, child: SakalTableHeaderBar.label('Counted', textAlign: TextAlign.right)),
+                  Expanded(flex: 2, child: SakalTableHeaderBar.label('System', textAlign: TextAlign.right)),
+                  Expanded(flex: 2, child: SakalTableHeaderBar.label('Variance', textAlign: TextAlign.right)),
+                  const Expanded(flex: 1, child: SizedBox.shrink()),
+                ]),
+                ..._postableRows.asMap().entries.map((e) => _buildVarianceRow(e.value, e.key.isEven)),
               ]),
             ),
-            ..._postableRows.asMap().entries.map((e) => _buildVarianceRow(e.value, e.key.isEven)),
             if (_matchedRows.isNotEmpty) Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text('${_matchedRows.length} product(s) matched exactly (no variance) and will not be posted.',
@@ -569,12 +577,6 @@ class _StockCountReviewEntryScreenState extends ConsumerState<StockCountReviewEn
       ),
     );
   }
-
-  Widget _th(String label, {int flex = 1, TextAlign align = TextAlign.left}) => Expanded(
-    flex: flex,
-    child: Padding(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Text(label, textAlign: align, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 11))),
-  );
 
   Widget _buildVarianceRow(Map<String, dynamic> r, bool isEven) {
     final lot = (r['batch_no'] as String?) ?? (r['serial_no'] as String?) ?? '—';

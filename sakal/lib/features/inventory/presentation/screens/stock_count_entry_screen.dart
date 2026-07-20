@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -10,12 +11,16 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_autocomplete.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../../master/data/models/item_category_model.dart';
 import '../../../master/data/models/product_model.dart';
 import '../../../master/presentation/providers/item_categories_providers.dart';
@@ -614,19 +619,27 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
     );
   }
 
-  Widget _buildTitleBlock() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Text(_countNo != null ? 'Stock Count · $_countNo' : 'New Stock Count',
-        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-    const SizedBox(height: 2),
-    Row(children: [
-      _status != 'DRAFT' ? _statusChip(_status) : Text(_countNo != null ? 'Draft' : 'Unsaved draft',
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-      if (_countNo != null) ...[
-        const SizedBox(width: 8),
-        PendingSyncBadge(documentType: 'STOCK_COUNT', documentId: _countNo!),
-      ],
-    ]),
-  ]);
+  Widget _buildTitleBlock() => Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (context.canPop())
+        IconButton(icon: const Icon(Icons.arrow_back), tooltip: 'Back', onPressed: () => context.pop()),
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(_countNo != null ? 'Stock Count · $_countNo' : 'New Stock Count',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+        const SizedBox(height: 2),
+        Row(children: [
+          _status != 'DRAFT' ? _statusChip(_status) : Text(_countNo != null ? 'Draft' : 'Unsaved draft',
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          if (_countNo != null) ...[
+            const SizedBox(width: 8),
+            PendingSyncBadge(documentType: 'STOCK_COUNT', documentId: _countNo!),
+          ],
+        ]),
+      ]),
+    ],
+  );
 
   Widget _statusChip(String status) {
     final color = status == 'SUBMITTED' ? AppColors.secondary : AppColors.positive;
@@ -662,101 +675,112 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
   );
 
   Widget _buildHeaderCard(bool locked, bool isMobile) {
-    const fh = 56.0;
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10));
-    Widget field(Widget child) => SizedBox(height: fh, child: child);
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
     final filtersLocked = locked || _hasStarted; // scope is fixed once the worksheet is built
 
-    final locationField = field(DropdownButtonFormField<String>(
-      decoration: dec.copyWith(labelText: 'Store / Location *'),
-      isExpanded: true, isDense: true, itemHeight: null,
-      initialValue: _locationId,
-      items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
-          child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))).toList(),
-      onChanged: filtersLocked ? null : (v) => setState(() => _locationId = v),
-    ));
-    final dateField = field(InkWell(
-      onTap: locked ? null : () => _pickDate(_countDate, (d) => setState(() => _countDate = d)),
-      child: InputDecorator(
-        decoration: dec.copyWith(labelText: 'Count Date *',
-            suffixIcon: Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary)),
-        child: Text(_displayDate(_countDate), style: const TextStyle(fontSize: 13)),
+    final countNoField = SakalFieldCard.readOnly(label: 'Count No', value: _countNo ?? '(auto on save)');
+    final locationField = SakalFieldCard(
+      label: 'Store / Location', required: true, editable: !filtersLocked,
+      child: DropdownButtonFormField<String>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: _locationId,
+        items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
+            child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: style))).toList(),
+        onChanged: filtersLocked ? null : (v) => setState(() => _locationId = v),
       ),
-    ));
-    final categoryField = field(SakalAutocomplete<ItemCategoryModel>(
-      key: ValueKey('$_categoryId-$_categoryDisplay'),
-      initialValue: TextEditingValue(text: _categoryDisplay),
-      displayStringForOption: (c) => _categoryPaths[c.id] ?? c.categoryName,
-      optionsBuilder: (v) {
-        if (filtersLocked) return const [];
-        if (v.text.isEmpty) return _categories;
-        final s = v.text.toLowerCase();
-        return _categories.where((c) => (_categoryPaths[c.id] ?? c.categoryName).toLowerCase().contains(s));
-      },
-      onSelected: (c) => setState(() { _categoryId = c.id; _categoryDisplay = _categoryPaths[c.id] ?? c.categoryName; }),
-      enabled: !filtersLocked,
-      decoration: dec.copyWith(
-        labelText: 'Category (All if blank)',
-        suffixIcon: (_categoryId != null && !filtersLocked)
-            ? IconButton(icon: const Icon(Icons.clear, size: 16), onPressed: () => setState(() { _categoryId = null; _categoryDisplay = ''; }))
-            : null,
+    );
+    final dateField = SakalFieldCard(
+      label: 'Count Date', required: true, editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(_countDate, (d) => setState(() => _countDate = d)),
+        child: Row(children: [
+          Expanded(child: Text(_displayDate(_countDate), style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
       ),
-      style: const TextStyle(fontSize: 13),
-    ));
-    final natureField = field(DropdownButtonFormField<String?>(
-      decoration: dec.copyWith(labelText: 'Item Type (All if blank)'),
-      isExpanded: true, isDense: true, itemHeight: null,
-      initialValue: _natureFilter,
-      items: [
-        const DropdownMenuItem(value: null, child: Text('All Types', style: TextStyle(fontSize: 13))),
-        ...ProductModel.natureLabels.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 13)))),
-      ],
-      onChanged: filtersLocked ? null : (v) => setState(() => _natureFilter = v),
-    ));
-    final remarksField = field(TextFormField(controller: _remarksCtrl, enabled: !locked, decoration: dec.copyWith(labelText: 'Remarks')));
+    );
+    final categoryField = SakalFieldCard(
+      label: 'Category (All if blank)', editable: !filtersLocked,
+      child: SakalAutocomplete<ItemCategoryModel>(
+        key: ValueKey('$_categoryId-$_categoryDisplay'),
+        initialValue: TextEditingValue(text: _categoryDisplay),
+        displayStringForOption: (c) => _categoryPaths[c.id] ?? c.categoryName,
+        optionsBuilder: (v) {
+          if (filtersLocked) return const [];
+          if (v.text.isEmpty) return _categories;
+          final s = v.text.toLowerCase();
+          return _categories.where((c) => (_categoryPaths[c.id] ?? c.categoryName).toLowerCase().contains(s));
+        },
+        onSelected: (c) => setState(() { _categoryId = c.id; _categoryDisplay = _categoryPaths[c.id] ?? c.categoryName; }),
+        enabled: !filtersLocked,
+        decoration: bare.copyWith(
+          suffixIcon: (_categoryId != null && !filtersLocked)
+              ? IconButton(icon: const Icon(Icons.clear, size: 16), onPressed: () => setState(() { _categoryId = null; _categoryDisplay = ''; }))
+              : null,
+        ),
+        style: style,
+      ),
+    );
+    final natureField = SakalFieldCard(
+      label: 'Item Type (All if blank)', editable: !filtersLocked,
+      child: DropdownButtonFormField<String?>(
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: _natureFilter,
+        items: [
+          DropdownMenuItem(value: null, child: Text('All Types', style: style)),
+          ...ProductModel.natureLabels.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: style))),
+        ],
+        onChanged: filtersLocked ? null : (v) => setState(() => _natureFilter = v),
+      ),
+    );
+    final remarksField = SakalFieldCard(
+      label: 'Remarks', editable: !locked,
+      child: TextFormField(controller: _remarksCtrl, enabled: !locked, decoration: bare, style: style),
+    );
 
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: isMobile
-            ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                field(InputDecorator(decoration: dec.copyWith(labelText: 'Count No'),
-                    child: Text(_countNo ?? '(auto on save)', style: TextStyle(fontSize: 13, color: _countNo != null ? AppColors.textPrimary : AppColors.textDisabled)))),
-                const SizedBox(height: 8),
-                locationField, const SizedBox(height: 8),
-                dateField, const SizedBox(height: 8),
-                categoryField, const SizedBox(height: 8),
-                natureField, const SizedBox(height: 8),
-                remarksField,
-              ])
-            : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Expanded(flex: 2, child: field(InputDecorator(decoration: dec.copyWith(labelText: 'Count No'),
-                      child: Text(_countNo ?? '(auto on save)', style: TextStyle(fontSize: 13, color: _countNo != null ? AppColors.textPrimary : AppColors.textDisabled))))),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 2, child: locationField),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 2, child: dateField),
-                ]),
-                const SizedBox(height: 12),
-                Row(children: [
-                  Expanded(flex: 3, child: categoryField),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 2, child: natureField),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 3, child: remarksField),
-                ]),
-              ]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SakalFieldRow(isMobile: isMobile, spans: const [2, 2, 2], children: [countNoField, locationField, dateField]),
+          const SizedBox(height: 12),
+          SakalFieldRow(isMobile: isMobile, spans: const [3, 2, 3], children: [categoryField, natureField, remarksField]),
+        ]),
       ),
     );
   }
 
   Widget _buildLinesCard(bool locked, bool showLooseQty, bool showScan) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
     final rows = _filteredLines;
     final countedN = _lines.where((l) => l.isCounted).length;
+
+    final scanField = SakalFieldCard(
+      label: 'Scan Barcode/Part Number', editable: !locked,
+      child: TextFormField(
+        controller: _scanCtrl, enabled: !locked,
+        decoration: bare.copyWith(prefixIcon: const Icon(Icons.qr_code_scanner, size: 16)),
+        style: style,
+        onFieldSubmitted: _onScanSubmitted,
+      ),
+    );
+    final searchField = SakalFieldCard(
+      label: 'Search Product', editable: true,
+      child: TextField(
+        controller: _searchCtrl,
+        decoration: bare.copyWith(
+          prefixIcon: const Icon(Icons.search, size: 16),
+          suffixIcon: _search.isNotEmpty ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear) : null,
+        ),
+        style: style,
+      ),
+    );
 
     return Card(
       elevation: 0,
@@ -769,19 +793,9 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
           ]),
           const SizedBox(height: 8),
-          Wrap(spacing: 10, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            if (showScan) SizedBox(width: 220, height: 44, child: TextFormField(
-              controller: _scanCtrl, enabled: !locked,
-              decoration: dec.copyWith(labelText: 'Scan Barcode/Part Number', prefixIcon: const Icon(Icons.qr_code_scanner, size: 16)),
-              style: const TextStyle(fontSize: 12),
-              onFieldSubmitted: _onScanSubmitted,
-            )),
-            SizedBox(width: 220, height: 44, child: TextField(
-              controller: _searchCtrl,
-              decoration: dec.copyWith(labelText: 'Search product', prefixIcon: const Icon(Icons.search, size: 16),
-                  suffixIcon: _search.isNotEmpty ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear) : null),
-              style: const TextStyle(fontSize: 12),
-            )),
+          Wrap(spacing: 10, runSpacing: 8, children: [
+            if (showScan) SizedBox(width: 240, child: scanField),
+            SizedBox(width: 240, child: searchField),
           ]),
           const SizedBox(height: 10),
           ConstrainedBox(
@@ -798,56 +812,86 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
   }
 
   Widget _buildWorksheetRow(_WorksheetRow row, bool locked, bool showLooseQty) {
-    const dec = InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8));
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
+    final isTracked = row.isBatchTracked || row.isSerialTracked;
+
+    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
+    final qtyPackField = SakalFieldCard(
+      label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked, numeric: true,
+      child: TextFormField(
+        controller: row.qtyPackCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        textAlign: TextAlign.right,
+        decoration: bare, style: style,
+        onChanged: (v) => setState(() => row.isCounted = true),
+      ),
+    );
+    final qtyLooseField = SakalFieldCard(
+      label: 'Qty Loose', editable: !locked, numeric: true,
+      child: TextFormField(
+        controller: row.qtyLooseCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        textAlign: TextAlign.right,
+        decoration: bare, style: style,
+        onChanged: (v) => setState(() => row.isCounted = true),
+      ),
+    );
+
+    final card = SakalLineItemCard(
+      title: '[${row.productCode}] ${row.productName}',
+      subtitle: isTracked
+          ? (row.isBatchTracked
+              ? '${row.batches.length} batch(es) — total ${row.baseQty.toStringAsFixed(2)}'
+              : '${row.serials.length} serial(s)')
+          : null,
+      trailingHeaderAction: Icon(
+        row.isCounted ? Icons.check_circle : Icons.radio_button_unchecked,
+        size: 18,
+        color: row.isCounted ? Colors.white : Colors.white54,
+      ),
+      fields: isTracked
+          ? const []
+          : [
+              SizedBox(width: 90, child: unitField),
+              SizedBox(width: 120, child: qtyPackField),
+              if (showLooseQty) SizedBox(width: 120, child: qtyLooseField),
+            ],
+      body: isTracked ? _buildBatchSerialEditor(row, locked, showLooseQty) : null,
+    );
+
     return Container(
       key: row.rowKey,
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: row.highlighted ? AppColors.secondary.withValues(alpha: 0.15) : AppColors.background,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: row.highlighted ? AppColors.secondary : AppColors.border, width: row.highlighted ? 2 : 1),
-      ),
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: row.highlighted ? const EdgeInsets.all(2) : EdgeInsets.zero,
+      decoration: row.highlighted
+          ? BoxDecoration(border: Border.all(color: AppColors.secondary, width: 2), borderRadius: BorderRadius.circular(12))
+          : null,
+      child: card,
+    );
+  }
+
+  Widget _buildBatchSerialEditor(_WorksheetRow row, bool locked, bool showLooseQty) {
+    return Container(
       padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.border),
+      ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Wrap(spacing: 10, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          SizedBox(
-            width: 230,
-            child: Text('[${row.productCode}] ${row.productName}',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
-          ),
-          if (row.isCounted)
-            const Icon(Icons.check_circle, size: 16, color: AppColors.positive)
-          else
-            const Icon(Icons.radio_button_unchecked, size: 16, color: AppColors.textDisabled),
-          if (!row.isBatchTracked && !row.isSerialTracked) ...[
-            SizedBox(width: 70, child: InputDecorator(
-              decoration: dec.copyWith(labelText: 'Unit'),
-              child: Text(row.uomLabel ?? '—', style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
-            )),
-            SizedBox(width: 100, child: TextFormField(
-              controller: row.qtyPackCtrl, enabled: !locked,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: dec.copyWith(labelText: showLooseQty ? 'Qty Pack' : 'Quantity'),
-              style: const TextStyle(fontSize: 12),
-              onChanged: (v) => setState(() => row.isCounted = true),
-            )),
-            if (showLooseQty) SizedBox(width: 100, child: TextFormField(
-              controller: row.qtyLooseCtrl, enabled: !locked,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: dec.copyWith(labelText: 'Qty Loose'),
-              style: const TextStyle(fontSize: 12),
-              onChanged: (v) => setState(() => row.isCounted = true),
-            )),
-          ] else
-            Text(row.isBatchTracked ? '${row.batches.length} batch(es) — total ${row.baseQty.toStringAsFixed(2)}' : '${row.serials.length} serial(s)',
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          if (!locked && (row.isBatchTracked || row.isSerialTracked))
+        Row(children: [
+          Text(row.isBatchTracked ? 'Batches' : 'Serial Numbers',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+          const Spacer(),
+          if (!locked)
             TextButton.icon(
               onPressed: () => row.isBatchTracked ? _addNewBatch(row) : _addNewSerial(row),
               icon: const Icon(Icons.add, size: 14),
               label: Text(row.isBatchTracked ? 'Add Batch' : 'Add Serial', style: const TextStyle(fontSize: 12)),
             ),
-          if (!locked && (row.isBatchTracked || row.isSerialTracked) && !row.isCounted)
+          if (!locked && !row.isCounted)
             TextButton.icon(
               onPressed: () => _markCountedNoneFound(row),
               icon: const Icon(Icons.block, size: 14, color: AppColors.negative),
@@ -855,44 +899,100 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
             ),
         ]),
         if (row.isBatchTracked)
-          ...row.batches.map((b) => Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              SizedBox(width: 140, child: TextFormField(controller: b.batchNoCtrl, enabled: !locked,
-                  decoration: dec.copyWith(labelText: 'Batch No'), style: const TextStyle(fontSize: 12))),
-              SizedBox(width: 150, child: InkWell(
-                onTap: locked ? null : () => _pickDate(b.expiryDate, (d) => setState(() => b.expiryDate = d)),
-                child: InputDecorator(decoration: dec.copyWith(labelText: 'Expiry Date'),
-                    child: Text(b.expiryDate != null ? _displayDate(b.expiryDate) : '—', style: const TextStyle(fontSize: 12))),
-              )),
-              SizedBox(width: 150, child: InkWell(
-                onTap: locked ? null : () => _pickDate(b.manufacturingDate, (d) => setState(() => b.manufacturingDate = d)),
-                child: InputDecorator(decoration: dec.copyWith(labelText: 'Manufacturing Date'),
-                    child: Text(b.manufacturingDate != null ? _displayDate(b.manufacturingDate) : '—', style: const TextStyle(fontSize: 12))),
-              )),
-              SizedBox(width: 70, child: InputDecorator(decoration: dec.copyWith(labelText: 'Unit'),
-                  child: Text(row.uomLabel ?? '—', style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis))),
-              SizedBox(width: 100, child: TextFormField(controller: b.qtyPackCtrl, enabled: !locked,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: dec.copyWith(labelText: showLooseQty ? 'Qty Pack' : 'Qty'), style: const TextStyle(fontSize: 12),
-                  onChanged: (_) => setState(() {}))),
-              if (showLooseQty) SizedBox(width: 100, child: TextFormField(controller: b.qtyLooseCtrl, enabled: !locked,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: dec.copyWith(labelText: 'Qty Loose'), style: const TextStyle(fontSize: 12),
-                  onChanged: (_) => setState(() {}))),
-              if (!locked) IconButton(icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.negative), onPressed: () => _removeNewBatch(row, b)),
-            ]),
-          ))
-        else if (row.isSerialTracked)
-          ...row.serials.map((s) => Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Row(children: [
-              SizedBox(width: 200, child: TextFormField(controller: s.serialCtrl, enabled: !locked,
-                  decoration: dec.copyWith(labelText: 'Serial No'), style: const TextStyle(fontSize: 12),
-                  onChanged: (_) => setState(() {}))),
-              if (!locked) IconButton(icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.negative), onPressed: () => _removeNewSerial(row, s)),
-            ]),
-          )),
+          ...row.batches.map((b) => _buildNewBatchRow(row, b, showLooseQty, locked))
+        else
+          ...row.serials.map((s) => _buildNewSerialRow(row, s, locked)),
+      ]),
+    );
+  }
+
+  Widget _buildNewBatchRow(_WorksheetRow row, _NewBatchEntry b, bool showLooseQty, bool locked) {
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
+    final batchNoField = SakalFieldCard(
+      label: 'Batch No', editable: !locked,
+      child: TextFormField(controller: b.batchNoCtrl, enabled: !locked, decoration: bare, style: style),
+    );
+    final expiryField = SakalFieldCard(
+      label: 'Expiry Date', editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(b.expiryDate, (d) => setState(() => b.expiryDate = d)),
+        child: Row(children: [
+          Expanded(child: Text(b.expiryDate != null ? _displayDate(b.expiryDate) : '—', style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
+      ),
+    );
+    final mfgField = SakalFieldCard(
+      label: 'Manufacturing Date', editable: !locked,
+      child: InkWell(
+        onTap: locked ? null : () => _pickDate(b.manufacturingDate, (d) => setState(() => b.manufacturingDate = d)),
+        child: Row(children: [
+          Expanded(child: Text(b.manufacturingDate != null ? _displayDate(b.manufacturingDate) : '—', style: style)),
+          Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
+        ]),
+      ),
+    );
+    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
+    final qtyPackField = SakalFieldCard(
+      label: showLooseQty ? 'Qty Pack' : 'Qty', editable: !locked, numeric: true,
+      child: TextFormField(
+        controller: b.qtyPackCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        textAlign: TextAlign.right,
+        decoration: bare, style: style,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+    final qtyLooseField = SakalFieldCard(
+      label: 'Qty Loose', editable: !locked, numeric: true,
+      child: TextFormField(
+        controller: b.qtyLooseCtrl, enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        textAlign: TextAlign.right,
+        decoration: bare, style: style,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(
+          child: Wrap(spacing: 8, runSpacing: 8, children: [
+            SizedBox(width: 140, child: batchNoField),
+            SizedBox(width: 150, child: expiryField),
+            SizedBox(width: 160, child: mfgField),
+            SizedBox(width: 80, child: unitField),
+            SizedBox(width: 100, child: qtyPackField),
+            if (showLooseQty) SizedBox(width: 100, child: qtyLooseField),
+          ]),
+        ),
+        if (!locked)
+          Padding(
+            padding: const EdgeInsets.only(left: 8, top: 4),
+            child: IconButton(
+              icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.negative),
+              onPressed: () => _removeNewBatch(row, b),
+            ),
+          ),
+      ]),
+    );
+  }
+
+  Widget _buildNewSerialRow(_WorksheetRow row, _NewSerialEntry s, bool locked) {
+    final isCompact = ref.watch(isCompactDensityProvider);
+    final bare  = SakalFieldCard.bareDecoration;
+    final style = SakalFieldCard.valueTextStyle(isCompact);
+    final serialField = SakalFieldCard(
+      label: 'Serial No', editable: !locked,
+      child: TextFormField(controller: s.serialCtrl, enabled: !locked, decoration: bare, style: style, onChanged: (_) => setState(() {})),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(children: [
+        SizedBox(width: 200, child: serialField),
+        if (!locked) IconButton(icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.negative), onPressed: () => _removeNewSerial(row, s)),
       ]),
     );
   }
