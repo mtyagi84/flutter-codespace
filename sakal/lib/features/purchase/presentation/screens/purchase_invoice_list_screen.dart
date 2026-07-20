@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
+import '../../../../core/widgets/sakal_field_card.dart';
 import '../../data/models/purchase_invoice_model.dart';
 import '../providers/purchase_invoice_providers.dart';
 
@@ -123,46 +125,43 @@ class _PurchaseInvoiceListScreenState extends ConsumerState<PurchaseInvoiceListS
 
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              DropdownButton<String?>(
-                value: _filterStatus,
-                hint: const Text('All Status', style: TextStyle(fontSize: 13)),
-                isDense: true,
-                underline: const SizedBox.shrink(),
-                items: [
-                  const DropdownMenuItem(value: null, child: Text('All Status', style: TextStyle(fontSize: 13))),
-                  ..._statusColors.keys.map((s) => DropdownMenuItem(
-                      value: s, child: Text(_statusLabel(s), style: const TextStyle(fontSize: 13)))),
-                ],
-                onChanged: (v) { setState(() => _filterStatus = v); _load(); },
+          child: Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            SizedBox(
+              width: 160,
+              child: SakalFieldCard(
+                label: 'Status', editable: true,
+                child: DropdownButtonFormField<String?>(
+                  initialValue: _filterStatus,
+                  isExpanded: true, isDense: true, itemHeight: null,
+                  decoration: SakalFieldCard.bareDecoration,
+                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('All Status')),
+                    ..._statusColors.keys.map((s) => DropdownMenuItem(value: s, child: Text(_statusLabel(s)))),
+                  ],
+                  onChanged: (v) { setState(() => _filterStatus = v); _load(); },
+                ),
               ),
-              SizedBox(
-                width: 260,
-                height: 36,
+            ),
+            SizedBox(
+              width: 280,
+              child: SakalFieldCard(
+                label: 'Search', editable: true,
                 child: TextField(
                   controller: _searchCtrl,
-                  style: const TextStyle(fontSize: 13),
-                  decoration: InputDecoration(
+                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+                  decoration: SakalFieldCard.bareDecoration.copyWith(
                     hintText: 'Search bill no / supplier invoice no…',
-                    hintStyle: const TextStyle(fontSize: 12),
-                    prefixIcon: const Icon(Icons.search, size: 16),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
+                    hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
                     suffixIcon: _searchText.isNotEmpty
-                        ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear)
+                        ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear, padding: EdgeInsets.zero, constraints: const BoxConstraints())
                         : null,
                   ),
                 ),
               ),
-              IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _load,
-                  tooltip: 'Refresh', color: AppColors.primary),
-            ],
-          ),
+            ),
+            IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _load, tooltip: 'Refresh', color: AppColors.primary),
+          ]),
         ),
 
         Expanded(
