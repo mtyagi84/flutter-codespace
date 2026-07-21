@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -851,8 +850,6 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
     crossAxisAlignment: CrossAxisAlignment.center,
     mainAxisSize: MainAxisSize.min,
     children: [
-      if (context.canPop())
-        IconButton(icon: const Icon(Icons.arrow_back), tooltip: 'Back', onPressed: () => context.pop()),
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(_transferNo != null ? 'Stock Transfer · $_transferNo' : 'New Stock Transfer',
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),

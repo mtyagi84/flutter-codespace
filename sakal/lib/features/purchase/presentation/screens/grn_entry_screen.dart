@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../../core/config/master_type_keys.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
@@ -1342,8 +1341,6 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     crossAxisAlignment: CrossAxisAlignment.center,
     mainAxisSize: MainAxisSize.min,
     children: [
-      if (context.canPop())
-        IconButton(icon: const Icon(Icons.arrow_back), tooltip: 'Back', onPressed: () => context.pop()),
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(_grnNo != null ? 'Goods Receipt · $_grnNo' : 'New Goods Receipt',
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),

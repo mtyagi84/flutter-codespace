@@ -6,7 +6,6 @@ import 'package:excel/excel.dart' as xls;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -644,8 +643,6 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
     crossAxisAlignment: CrossAxisAlignment.center,
     mainAxisSize: MainAxisSize.min,
     children: [
-      if (context.canPop())
-        IconButton(icon: const Icon(Icons.arrow_back), tooltip: 'Back', onPressed: () => context.pop()),
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(_openingNo != null ? 'Opening Stock · $_openingNo' : 'New Opening Stock',
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),

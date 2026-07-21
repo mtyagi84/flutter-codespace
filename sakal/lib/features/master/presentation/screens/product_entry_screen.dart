@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/providers/session_provider.dart';
@@ -605,22 +604,10 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
     );
   }
 
-  // Back button duplicated here (in addition to TopBar's own, app-wide one)
-  // per the same reasoning as Sales Order/Sales Invoice Entry — the user's
-  // focus is on this header row (right next to Save), not the far
-  // top-left corner of the chrome. TopBar's arrow stays too, this is
-  // additive (only shown when reached via context.push, e.g. from
-  // Product List).
   Widget _buildTitleBlock() => Row(
     crossAxisAlignment: CrossAxisAlignment.center,
     mainAxisSize: MainAxisSize.min,
     children: [
-      if (context.canPop())
-        IconButton(
-          icon: const Icon(Icons.arrow_back),
-          tooltip: 'Back',
-          onPressed: () => context.pop(),
-        ),
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -1201,23 +1200,10 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     );
   }
 
-  // Back button duplicated here (in addition to TopBar's own, app-wide one)
-  // per explicit user feedback: on an entry screen the user's focus and
-  // mouse/eye are on the document header itself (right next to the Print
-  // button), not the far top-left corner of the chrome -- same reasoning
-  // as why Print/Save/Approve already live here rather than at the bottom.
-  // TopBar's back arrow stays too (it's the only affordance on screens with
-  // no in-content title block, e.g. list screens), this is additive.
   Widget _buildTitleBlock() => Row(
     crossAxisAlignment: CrossAxisAlignment.center,
     mainAxisSize: MainAxisSize.min,
     children: [
-      if (context.canPop())
-        IconButton(
-          icon: const Icon(Icons.arrow_back),
-          tooltip: 'Back',
-          onPressed: () => context.pop(),
-        ),
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(_orderNo != null ? 'Sales Order · $_orderNo' : 'New Sales Order',
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
