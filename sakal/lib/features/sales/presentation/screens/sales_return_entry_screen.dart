@@ -776,7 +776,6 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
     if (confirmed != true) return;
     if (!mounted) return;
 
-    final session = ref.read(sessionProvider)!;
     setState(() { _approving = true; _actionError = null; });
     try {
       await _ds.approve(
