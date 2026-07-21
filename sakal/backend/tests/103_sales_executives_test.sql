@@ -69,13 +69,13 @@ BEGIN
   -- Sales Quotation referencing that no-login exec as sales_person_id —
   -- must succeed (proves the FK now accepts a non-rim_users id).
   INSERT INTO rih_sales_quotations (
-    client_id, company_id, location_id, quotation_no, quotation_date,
-    customer_type, customer_id, sales_person_id, quotation_currency_id,
+    client_id, company_id, location_id, quotation_no, quotation_date, valid_until_date,
+    customer_type, customer_id, party_name, sales_person_id, quotation_currency_id,
     rate_to_base, rate_to_local, gross_amount, tax_amount, grand_total,
     status, created_by, updated_by
   ) VALUES (
-    v_client_id, v_company_id, v_loc_id, 'QUO-TEST103-A', CURRENT_DATE,
-    'CUSTOMER', v_customer, v_exec_id, v_usd_ccy_id,
+    v_client_id, v_company_id, v_loc_id, 'QUO-TEST103-A', CURRENT_DATE, CURRENT_DATE + 30,
+    'CUSTOMER', v_customer, 'Test103 Customer', v_exec_id, v_usd_ccy_id,
     1, 1, 100, 0, 100,
     'DRAFT', v_user_id, v_user_id
   ) ON CONFLICT DO NOTHING;
@@ -87,13 +87,13 @@ BEGIN
   -- rejection here is the real proof the retrofit took effect).
   BEGIN
     INSERT INTO rih_sales_quotations (
-      client_id, company_id, location_id, quotation_no, quotation_date,
-      customer_type, customer_id, sales_person_id, quotation_currency_id,
+      client_id, company_id, location_id, quotation_no, quotation_date, valid_until_date,
+      customer_type, customer_id, party_name, sales_person_id, quotation_currency_id,
       rate_to_base, rate_to_local, gross_amount, tax_amount, grand_total,
       status, created_by, updated_by
     ) VALUES (
-      v_client_id, v_company_id, v_loc_id, 'QUO-TEST103-B', CURRENT_DATE,
-      'CUSTOMER', v_customer, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid, v_usd_ccy_id,
+      v_client_id, v_company_id, v_loc_id, 'QUO-TEST103-B', CURRENT_DATE, CURRENT_DATE + 30,
+      'CUSTOMER', v_customer, 'Test103 Customer', 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid, v_usd_ccy_id,
       1, 1, 100, 0, 100,
       'DRAFT', v_user_id, v_user_id
     );
