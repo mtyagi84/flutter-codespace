@@ -36,6 +36,11 @@ abstract class SalesQuotationRepository {
     required String companyId,
   });
 
+  Future<List<Map<String, dynamic>>> getSalesExecutivesForPicker({
+    required String clientId,
+    required String companyId,
+  });
+
   Future<List<Map<String, dynamic>>> getProductsForPicker({
     required String clientId,
     required String companyId,

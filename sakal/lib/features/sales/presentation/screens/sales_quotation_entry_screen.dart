@@ -133,6 +133,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
 
   List<Map<String, dynamic>> _locations = [];
   List<Map<String, dynamic>> _users = [];
+  List<Map<String, dynamic>> _salesExecutives = [];
   List<Map<String, dynamic>> _products = [];
   List<Map<String, dynamic>> _taxGroups = [];
   List<Map<String, dynamic>> _additionalCharges = [];
@@ -191,6 +192,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
         ref.read(currenciesProvider.future),
         ref.read(baseCurrencyProvider.future),
         ref.read(localCurrencyProvider.future),
+        _ds.getSalesExecutivesForPicker(clientId: session.clientId, companyId: session.companyId),
       ]);
 
       _products          = results[0] as List<Map<String, dynamic>>;
@@ -201,6 +203,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
       _currencies        = results[5] as List<Map<String, dynamic>>;
       _baseCurrency      = results[6] as String;
       _localCurrency     = results[7] as String;
+      _salesExecutives   = results[8] as List<Map<String, dynamic>>;
 
       await _loadTaxRates();
 
@@ -1087,8 +1090,8 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
         optionsBuilder: (v) {
           if (locked) return const [];
           final q = v.text.toLowerCase().trim();
-          if (q.isEmpty) return _users;
-          return _users.where((u) => (u['full_name'] as String).toLowerCase().contains(q));
+          if (q.isEmpty) return _salesExecutives;
+          return _salesExecutives.where((u) => (u['full_name'] as String).toLowerCase().contains(q));
         },
         onSelected: (u) => setState(() { _salesPersonId = u['id'] as String; _salesPersonDisplay = u['full_name'] as String; }),
         enabled: !locked,

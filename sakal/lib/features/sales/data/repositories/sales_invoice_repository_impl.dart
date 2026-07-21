@@ -309,6 +309,19 @@ class SalesInvoiceRepositoryImpl implements SalesInvoiceRepository {
     return rows;
   }
 
+  @override
+  Future<List<Map<String, dynamic>>> getSalesExecutivesForPicker({
+    required String clientId,
+    required String companyId,
+  }) async {
+    if (_isOffline && _local != null) {
+      return _local.getSalesExecutivesForPicker(clientId: clientId, companyId: companyId);
+    }
+    final rows = await _remote.getSalesExecutivesForPicker(clientId: clientId, companyId: companyId);
+    if (_local != null) unawaited(_local.cacheSalesExecutivesForPicker(clientId: clientId, companyId: companyId, rows: rows));
+    return rows;
+  }
+
   // getProductsForPicker/getProductByCode: offline reads fall back to the
   // shared ProductsCache/ProductUomCache (populated by the bulk Master-Data
   // Sync facility). No defensive write-through here — the remote picker's

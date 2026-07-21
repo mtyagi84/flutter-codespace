@@ -130,6 +130,13 @@ class SalesInvoiceLocalDs {
     return GenericLookupLocalDs(_db).getLookups(cacheKey: 'USERS', clientId: clientId, companyId: companyId);
   }
 
+  Future<List<Map<String, dynamic>>> getSalesExecutivesForPicker({
+    required String clientId,
+    required String companyId,
+  }) {
+    return GenericLookupLocalDs(_db).getLookups(cacheKey: 'SALES_EXECUTIVES', clientId: clientId, companyId: companyId);
+  }
+
   // ── Master-data write-through (defense-in-depth, see repository) ──────────
 
   Future<void> cacheAdditionalCharges({
@@ -151,6 +158,18 @@ class SalesInvoiceLocalDs {
   }) {
     return GenericLookupLocalDs(_db).upsertLookups(
       cacheKey: 'USERS', rows: rows, idOf: (r) => r['id'] as String,
+      labelOf: (r) => r['full_name'] as String? ?? '',
+      clientId: clientId, companyId: companyId,
+    );
+  }
+
+  Future<void> cacheSalesExecutivesForPicker({
+    required String clientId,
+    required String companyId,
+    required List<Map<String, dynamic>> rows,
+  }) {
+    return GenericLookupLocalDs(_db).upsertLookups(
+      cacheKey: 'SALES_EXECUTIVES', rows: rows, idOf: (r) => r['id'] as String,
       labelOf: (r) => r['full_name'] as String? ?? '',
       clientId: clientId, companyId: companyId,
     );

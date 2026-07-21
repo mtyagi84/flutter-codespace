@@ -182,6 +182,12 @@ class SalesOrderRepositoryImpl implements SalesOrderRepository {
   }) => _remote.getUsersForAutocomplete(clientId: clientId, companyId: companyId);
 
   @override
+  Future<List<Map<String, dynamic>>> getSalesExecutivesForPicker({
+    required String clientId,
+    required String companyId,
+  }) => _remote.getSalesExecutivesForPicker(clientId: clientId, companyId: companyId);
+
+  @override
   Future<List<Map<String, dynamic>>> getProductsForPicker({
     required String clientId,
     required String companyId,

@@ -58,6 +58,7 @@ import '../../features/inventory/presentation/screens/stock_count_review_entry_s
 import '../../features/sales/presentation/screens/sales_quotation_list_screen.dart';
 import '../../features/sales/presentation/screens/sales_quotation_entry_screen.dart';
 import '../../features/sales/presentation/screens/price_master_list_screen.dart';
+import '../../features/master/presentation/screens/sales_executive_master_screen.dart';
 import '../../features/sales/presentation/screens/price_master_entry_screen.dart';
 import '../../features/sales/presentation/screens/sales_order_list_screen.dart';
 import '../../features/sales/presentation/screens/sales_order_entry_screen.dart';
@@ -239,6 +240,7 @@ final appRouter = GoRouter(
           },
         ),
         GoRoute(path: RouteNames.salesPriceMaster, builder: (c, s) => const PriceMasterListScreen()),
+        GoRoute(path: RouteNames.salesExecutives, builder: (c, s) => const SalesExecutiveMasterScreen()),
         GoRoute(
           path: RouteNames.salesPriceMasterEntry,
           builder: (c, s) {

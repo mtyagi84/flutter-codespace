@@ -243,6 +243,25 @@ Future<int> _syncOperationalReferenceData(AppDatabase db, UserSession session) a
   );
   count += users.length;
 
+  // Sales Executives (migration 103) — decoupled from rim_users, feeds the
+  // "Sales Person" picker on Quotation/Order/Invoice. USERS above stays
+  // reserved for signature (prepared_by/authorised_by) resolution only.
+  final salesExecsRes = await _dio.get('/rim_sales_executives', queryParameters: {
+    'client_id': 'eq.${session.clientId}',
+    'company_id': 'eq.${session.companyId}',
+    'is_active': 'eq.true',
+    'is_deleted': 'eq.false',
+    'select': 'id,employee_code,full_name',
+    'order': 'full_name.asc',
+  });
+  final salesExecs = List<Map<String, dynamic>>.from(salesExecsRes.data as List);
+  await lookupDs.upsertLookups(
+    cacheKey: 'SALES_EXECUTIVES', rows: salesExecs, idOf: (r) => r['id'] as String,
+    labelOf: (r) => r['full_name'] as String? ?? '',
+    clientId: session.clientId, companyId: session.companyId,
+  );
+  count += salesExecs.length;
+
   final modesRes = await _dio.get('/rim_payment_modes', queryParameters: {
     'is_active': 'eq.true', 'is_deleted': 'eq.false',
     'select': 'payment_mode_code,payment_mode_name',
@@ -270,7 +289,7 @@ Future<int> _syncSalesInvoiceSetup(AppDatabase db, UserSession session) async {
     'select': '*,'
         'location:ric_locations!location_id(location_name),'
         'cash_customer:rim_accounts!cash_customer_id(account_code,account_name),'
-        'default_sales_person:rim_users!default_sales_person_id(full_name)',
+        'default_sales_person:rim_sales_executives!default_sales_person_id(full_name)',
     'limit': '1',
   });
   final setupList = List<Map<String, dynamic>>.from(setupRes.data as List);

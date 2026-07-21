@@ -74,6 +74,7 @@ begin
          approve_allowed, copy_allowed, excel_upload_allowed)
     values
         (p_client_id, p_company_id, v_sl, 'SL-PRC', 'Price Master',    '/sales/price-master', 0, 'SL-MST', 'Pricing & Setup', 0, true,  false, false),
+        (p_client_id, p_company_id, v_sl, 'SL-EXE', 'Sales Executives', '/sales/sales-executives', 1, 'SL-MST', 'Pricing & Setup', 0, false, false, false),
         (p_client_id, p_company_id, v_sl, 'SL-QUO', 'Sales Quotation', '/sales/quotations', 0, 'SL-TXN', 'Transactions', 1, true,  true,  false),
         (p_client_id, p_company_id, v_sl, 'SL-SO',  'Sales Order',     '/sales/orders',     1, 'SL-TXN', 'Transactions', 1, true,  true,  false),
         (p_client_id, p_company_id, v_sl, 'SL-INV', 'Sales Invoice',   '/sales/invoices',   2, 'SL-TXN', 'Transactions', 1, true,  true,  false),

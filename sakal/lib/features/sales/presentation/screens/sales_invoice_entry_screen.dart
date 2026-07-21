@@ -250,6 +250,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
 
   List<Map<String, dynamic>> _taxGroups = [];
   List<Map<String, dynamic>> _users = [];
+  List<Map<String, dynamic>> _salesExecutives = [];
   Map<String, double> _taxRatePct = {};
   Map<String, double> _taxGroupRatePct = {};
 
@@ -349,11 +350,13 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
         ds.getUsersForAutocomplete(clientId: session.clientId, companyId: session.companyId),
         ds.getAdditionalCharges(clientId: session.clientId, companyId: session.companyId),
         ref.read(currenciesProvider.future),
+        ds.getSalesExecutivesForPicker(clientId: session.clientId, companyId: session.companyId),
       ]);
       final controls = results[0] as Map<String, dynamic>?;
       _taxGroups = results[1] as List<Map<String, dynamic>>;
       _users = results[2] as List<Map<String, dynamic>>;
       _additionalCharges = results[3] as List<Map<String, dynamic>>;
+      _salesExecutives = results[5] as List<Map<String, dynamic>>;
       _currencyDecimalPlaces = {
         for (final c in results[4] as List<Map<String, dynamic>>)
           c['currency_id'] as String: (c['rate_decimal_places'] as num?)?.toInt() ?? 2,
@@ -1994,11 +1997,11 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                 initialValue: _salesPersonId,
                 items: [
                   const DropdownMenuItem(value: null, child: Text('— None —')),
-                  ..._users.map((u) => DropdownMenuItem(value: u['id'] as String, child: Text(u['full_name'] as String, overflow: TextOverflow.ellipsis))),
+                  ..._salesExecutives.map((e) => DropdownMenuItem(value: e['id'] as String, child: Text(e['full_name'] as String, overflow: TextOverflow.ellipsis))),
                 ],
                 onChanged: locked ? null : (v) => setState(() {
                   _salesPersonId = v;
-                  _salesPersonDisplay = _users.firstWhere((u) => u['id'] == v, orElse: () => const {})['full_name'] as String? ?? '';
+                  _salesPersonDisplay = _salesExecutives.firstWhere((e) => e['id'] == v, orElse: () => const {})['full_name'] as String? ?? '';
                 }),
               ),
             ),

@@ -31,6 +31,7 @@ class _QuickInvoiceSetupScreenState extends ConsumerState<QuickInvoiceSetupScree
   String get screenName => '/setup/quick-invoice-setup';
 
   List<Map<String, dynamic>> _users = [];
+  List<Map<String, dynamic>> _salesExecutives = [];
   bool _loadingUsers = true;
   String? _error;
 
@@ -59,16 +60,26 @@ class _QuickInvoiceSetupScreenState extends ConsumerState<QuickInvoiceSetupScree
   Future<void> _loadUsers() async {
     final session = ref.read(sessionProvider)!;
     try {
-      final res = await DioClient.instance.get('/rim_users', queryParameters: {
-        'client_id':  'eq.${session.clientId}',
-        'company_id': 'eq.${session.companyId}',
-        'is_deleted': 'eq.false',
-        'select':     'id,full_name,is_active',
-        'order':      'full_name.asc',
-      });
+      final results = await Future.wait([
+        DioClient.instance.get('/rim_users', queryParameters: {
+          'client_id':  'eq.${session.clientId}',
+          'company_id': 'eq.${session.companyId}',
+          'is_deleted': 'eq.false',
+          'select':     'id,full_name,is_active',
+          'order':      'full_name.asc',
+        }),
+        DioClient.instance.get('/rim_sales_executives', queryParameters: {
+          'client_id':  'eq.${session.clientId}',
+          'company_id': 'eq.${session.companyId}',
+          'is_active':  'eq.true', 'is_deleted': 'eq.false',
+          'select':     'id,employee_code,full_name',
+          'order':      'full_name.asc',
+        }),
+      ]);
       if (mounted) {
         setState(() {
-          _users = List<Map<String, dynamic>>.from(res.data as List);
+          _users           = List<Map<String, dynamic>>.from(results[0].data as List);
+          _salesExecutives = List<Map<String, dynamic>>.from(results[1].data as List);
           _loadingUsers = false;
         });
       }
@@ -303,7 +314,7 @@ class _QuickInvoiceSetupScreenState extends ConsumerState<QuickInvoiceSetupScree
                       initialValue: _defaultSalesPersonId,
                       items: [
                         const DropdownMenuItem(value: null, child: Text('— None —')),
-                        ..._users.map((u) => DropdownMenuItem(value: u['id'] as String, child: Text(u['full_name'] as String, overflow: TextOverflow.ellipsis))),
+                        ..._salesExecutives.map((e) => DropdownMenuItem(value: e['id'] as String, child: Text(e['full_name'] as String, overflow: TextOverflow.ellipsis))),
                       ],
                       onChanged: _locked ? null : (v) => setState(() => _defaultSalesPersonId = v),
                     ),

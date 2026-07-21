@@ -35,7 +35,7 @@ class SalesQuotationRemoteDs {
   static const _headerSelect = '*,'
       'location:ric_locations!location_id(location_name),'
       'customer:rim_accounts!customer_id(account_code,account_name),'
-      'sales_person:rim_users!sales_person_id(full_name),'
+      'sales_person:rim_sales_executives!sales_person_id(employee_code,full_name),'
       'currency:rim_currencies!quotation_currency_id(currency_id)';
 
   Future<List<Map<String, dynamic>>> listQuotations({
@@ -153,6 +153,25 @@ class SalesQuotationRemoteDs {
       'is_active':  'eq.true',
       'is_deleted': 'eq.false',
       'select':     'id,full_name',
+      'order':      'full_name.asc',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
+  /// Sales Executives (migration 103) — decoupled from rim_users, so a
+  /// salesperson never needs to be a system login. Feeds the "Sales Person"
+  /// picker; getUsersForAutocomplete above stays reserved for signature
+  /// resolution only.
+  Future<List<Map<String, dynamic>>> getSalesExecutivesForPicker({
+    required String clientId,
+    required String companyId,
+  }) async {
+    final res = await _dio.get('/rim_sales_executives', queryParameters: {
+      'client_id':  'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'is_active':  'eq.true',
+      'is_deleted': 'eq.false',
+      'select':     'id,employee_code,full_name',
       'order':      'full_name.asc',
     });
     return List<Map<String, dynamic>>.from(res.data as List);

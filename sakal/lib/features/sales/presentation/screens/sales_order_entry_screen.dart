@@ -167,6 +167,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
 
   List<Map<String, dynamic>> _locations = [];
   List<Map<String, dynamic>> _users = [];
+  List<Map<String, dynamic>> _salesExecutives = [];
   List<Map<String, dynamic>> _products = [];
   List<Map<String, dynamic>> _taxGroups = [];
   List<Map<String, dynamic>> _additionalCharges = [];
@@ -237,6 +238,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
         _ds.getUserSalesControls(clientId: session.clientId, companyId: session.companyId, userId: session.userId),
         _ds.getPaymentTerms(clientId: session.clientId, companyId: session.companyId),
         _ds.getIncoterms(clientId: session.clientId, companyId: session.companyId),
+        _ds.getSalesExecutivesForPicker(clientId: session.clientId, companyId: session.companyId),
       ]);
 
       _products          = results[0] as List<Map<String, dynamic>>;
@@ -250,6 +252,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
       final controls = results[8] as Map<String, dynamic>?;
       _paymentTerms      = results[9] as List<Map<String, dynamic>>;
       _incoterms         = results[10] as List<Map<String, dynamic>>;
+      _salesExecutives   = results[11] as List<Map<String, dynamic>>;
       _canOverridePrice   = controls?['can_override_price'] as bool? ?? false;
       _canGiveDiscount    = controls?['can_give_discount'] as bool? ?? false;
       _maxDiscountPercent = (controls?['max_discount_percent'] as num?)?.toDouble();
@@ -1304,8 +1307,8 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
         optionsBuilder: (v) {
           if (locked) return const [];
           final q = v.text.toLowerCase().trim();
-          if (q.isEmpty) return _users;
-          return _users.where((u) => (u['full_name'] as String).toLowerCase().contains(q));
+          if (q.isEmpty) return _salesExecutives;
+          return _salesExecutives.where((u) => (u['full_name'] as String).toLowerCase().contains(q));
         },
         onSelected: (u) => setState(() { _salesPersonId = u['id'] as String; _salesPersonDisplay = u['full_name'] as String; }),
         enabled: !locked,
