@@ -39,8 +39,16 @@ class RouteNames {
   static const String salesOrderEntry = '/sales/order-entry';
   static const String salesInvoices = '/sales/invoices';
   static const String salesInvoiceEntry = '/sales/invoice-entry';
-  static const String salesInvoiceManagerReview = '/sales/invoice-manager-review';
+  // Repurposed from the old Sales-Invoice-only Manager Review screen —
+  // now a unified screen showing DRAFT Invoices/Returns/Deliveries
+  // together. Route/screen_name kept as '/sales/pending-approvals'
+  // matching the SL-INR menu feature's own updated screen_name
+  // (migration 102) so existing user permission grants carry over.
+  static const String salesPendingApprovals = '/sales/pending-approvals';
   static const String salesReturns  = '/sales/returns';
+  static const String salesReturnEntry = '/sales/return-entry';
+  static const String salesDeliveries = '/sales/deliveries';
+  static const String salesDeliveryEntry = '/sales/delivery-entry';
   static const String salesReceipts = '/sales/receipts';
 
   // Purchase

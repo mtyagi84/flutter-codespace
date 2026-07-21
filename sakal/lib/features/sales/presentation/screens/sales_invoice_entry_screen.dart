@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -25,6 +24,7 @@ import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/sales_invoice_repository.dart';
 import '../providers/sales_invoice_providers.dart';
+import '../providers/sales_delivery_providers.dart';
 
 class _BatchCandidate {
   final String batchNo;
@@ -262,6 +262,10 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
   // Snapshotted once at load time — never re-read mid-edit, matching the
   // backend's own "snapshot at save, never reinterpreted later" rule.
   bool _dispatchStock = true;
+  // Pending/Partially Delivered/Delivered — only ever populated for an
+  // APPROVED, DEFERRED-dispatch invoice (fetched in _loadExisting). Sourced
+  // from v_sales_invoice_delivery_status, no new invoice column.
+  String? _deliveryStatus;
   bool _collectCash = true;
 
   bool _loading = true;
@@ -521,6 +525,8 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     _localReceiptVoucherDate = header['local_receipt_voucher_date'] as String?;
     _baseReceiptVoucherNo = header['base_receipt_voucher_no'] as String?;
     _baseReceiptVoucherDate = header['base_receipt_voucher_date'] as String?;
+
+    if (_status == 'APPROVED' && !_dispatchStock) unawaited(_loadDeliveryStatus(session));
 
     final lines = await ds.getLines(clientId: session.clientId, companyId: session.companyId, invoiceNo: _invoiceNo!, invoiceDate: _fmtDate(_invoiceDate));
     _pendingRowDisposal.addAll(_lines);
@@ -1502,7 +1508,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
         await ds.cacheInvoiceLocally(effectiveInvoiceNo: localId, header: header, lines: lines);
         if (mounted) {
           setState(() { _invoiceNo = localId; _status = 'DRAFT'; _saving = false; });
-          _showSnack('Saved offline as $localId — will sync when online, then wait for Manager Review to post.', color: AppColors.secondary);
+          _showSnack('Saved offline as $localId — will sync when online, then wait for Pending Approvals to post.', color: AppColors.secondary);
         }
         return true;
       }
@@ -1688,23 +1694,45 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
         ]),
       );
 
-  // Back button duplicated here (in addition to TopBar's own, app-wide one)
-  // per explicit user feedback: on an entry screen the user's focus and
-  // mouse/eye are on the document header itself (right next to the Print
-  // button), not the far top-left corner of the chrome -- same reasoning
-  // as why Print/Save/Approve already live here rather than at the bottom.
-  // TopBar's back arrow stays too (it's the only affordance on screens with
-  // no in-content title block, e.g. list screens), this is additive.
+  Future<void> _loadDeliveryStatus(UserSession session) async {
+    if (_invoiceNo == null) return;
+    try {
+      final row = await ref.read(salesDeliveryRepositoryProvider).getDeliveryStatusForInvoice(
+        clientId: session.clientId, companyId: session.companyId,
+        invoiceNo: _invoiceNo!, invoiceDate: _fmtDate(_invoiceDate),
+      );
+      if (mounted) setState(() => _deliveryStatus = row?['delivery_status'] as String?);
+    } catch (_) { /* best-effort */ }
+  }
+
+  Widget? _deliveryStatusBadge() {
+    final status = _deliveryStatus;
+    if (status == null) return null;
+    final color = switch (status) {
+      'DELIVERED' => AppColors.positive,
+      'PARTIALLY_DELIVERED' => AppColors.primary,
+      _ => AppColors.secondary, // PENDING
+    };
+    final label = switch (status) {
+      'DELIVERED' => 'Delivered',
+      'PARTIALLY_DELIVERED' => 'Partially Delivered',
+      _ => 'Pending Delivery',
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color)),
+    );
+  }
+
   Widget _buildTitleBlock() => Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (context.canPop())
-            IconButton(
-              icon: const Icon(Icons.arrow_back),
-              tooltip: 'Back',
-              onPressed: () => context.pop(),
-            ),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(_invoiceNo != null ? 'Quick Invoice · $_invoiceNo' : 'New Quick Invoice',
                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
@@ -1716,6 +1744,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
               if (_sourceQuotationNo != null) ...[const SizedBox(width: 8), Text('From $_sourceQuotationNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))],
               if (_sourceOrderNo != null) ...[const SizedBox(width: 8), Text('From $_sourceOrderNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))],
               if (_invoiceNo != null) ...[const SizedBox(width: 8), PendingSyncBadge(documentType: 'SALES_INVOICE', documentId: _invoiceNo!)],
+              if (_deliveryStatus != null) ...[const SizedBox(width: 8), _deliveryStatusBadge()!],
             ]),
           ]),
         ],

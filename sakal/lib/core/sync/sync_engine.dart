@@ -292,6 +292,24 @@ class SyncEngine {
               ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.invoiceNo.equals(oldId)))
             .write(SalesInvoiceLinesCacheCompanion(invoiceNo: Value(newId)));
         break;
+
+      case 'SALES_RETURN':
+        await (db.update(db.salesReturnHeadersCache)
+              ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.returnNo.equals(oldId)))
+            .write(SalesReturnHeadersCacheCompanion(returnNo: Value(newId)));
+        await (db.update(db.salesReturnLinesCache)
+              ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.returnNo.equals(oldId)))
+            .write(SalesReturnLinesCacheCompanion(returnNo: Value(newId)));
+        break;
+
+      case 'SALES_DELIVERY':
+        await (db.update(db.salesDeliveriesCache)
+              ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.deliveryNo.equals(oldId)))
+            .write(SalesDeliveriesCacheCompanion(deliveryNo: Value(newId)));
+        await (db.update(db.salesDeliveryLinesCache)
+              ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.deliveryNo.equals(oldId)))
+            .write(SalesDeliveryLinesCacheCompanion(deliveryNo: Value(newId)));
+        break;
     }
   }
 

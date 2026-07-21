@@ -140,6 +140,46 @@ class PrintFieldRegistry {
     PrintFieldDef('totals.return_total', 'Return Total', PrintDataFormat.currency),
   ];
 
+  static const _salesReturnScalarFields = [
+    PrintFieldDef('header.return_no', 'Return Number'),
+    PrintFieldDef('header.return_date', 'Return Date'),
+    PrintFieldDef('header.status', 'Status'),
+    PrintFieldDef('header.invoice_no', 'Against Invoice No'),
+    PrintFieldDef('header.customer_name', 'Customer Name'),
+    PrintFieldDef('header.currency_code', 'Currency'),
+    PrintFieldDef('header.reason', 'Reason'),
+    PrintFieldDef('header.remarks', 'Remarks'),
+    PrintFieldDef('totals.taxable_amount', 'Taxable Amount', PrintDataFormat.currency),
+    PrintFieldDef('totals.tax_amount', 'Tax Amount', PrintDataFormat.currency),
+    PrintFieldDef('totals.return_total', 'Return Total', PrintDataFormat.currency),
+  ];
+
+  // Non-financial by design — no rate/tax/amount field exists anywhere on
+  // this document. header.received_by_name is a free-text field the
+  // dispatching staff types, distinct from signatures.authorised_by (the
+  // internal approver).
+  static const _salesDeliveryScalarFields = [
+    PrintFieldDef('header.delivery_no', 'Delivery Number'),
+    PrintFieldDef('header.delivery_date', 'Delivery Date'),
+    PrintFieldDef('header.status', 'Status'),
+    PrintFieldDef('header.invoice_no', 'Against Invoice No'),
+    PrintFieldDef('header.invoice_date', 'Invoice Date'),
+    PrintFieldDef('header.customer_name', 'Customer Name'),
+    PrintFieldDef('header.location_name', 'Dispatch Location'),
+    PrintFieldDef('header.ship_to_location_name', 'Ship-To Location'),
+    PrintFieldDef('header.ship_to_address_line1', 'Ship-To Address Line 1'),
+    PrintFieldDef('header.ship_to_address_line2', 'Ship-To Address Line 2'),
+    PrintFieldDef('header.ship_to_contact_person', 'Ship-To Contact Person'),
+    PrintFieldDef('header.ship_to_contact_phone', 'Ship-To Contact Phone'),
+    PrintFieldDef('header.received_by_name', 'Received By'),
+    PrintFieldDef('header.vehicle_no', 'Vehicle No'),
+    PrintFieldDef('header.transporter_name', 'Transporter'),
+    PrintFieldDef('header.driver_name', 'Driver Name'),
+    PrintFieldDef('header.driver_phone', 'Driver Phone'),
+    PrintFieldDef('header.reason', 'Reason'),
+    PrintFieldDef('header.remarks', 'Remarks'),
+  ];
+
   static const _voucherScalarFields = [
     PrintFieldDef('header.voucher_type_label', 'Voucher Type'),
     PrintFieldDef('header.voucher_no', 'Voucher No'),
@@ -371,6 +411,28 @@ class PrintFieldRegistry {
     ],
   };
 
+  static const _salesReturnTableRowFields = {
+    'lines': [
+      PrintFieldDef('product_name', 'Item Name'),
+      PrintFieldDef('return_qty', 'Return Quantity', PrintDataFormat.number),
+      PrintFieldDef('rate', 'Rate', PrintDataFormat.currency),
+      PrintFieldDef('final_amount', 'Amount', PrintDataFormat.currency),
+    ],
+  };
+
+  // No financial field exists to accidentally expose — structurally
+  // non-financial, not just gated.
+  static const _salesDeliveryTableRowFields = {
+    'lines': [
+      PrintFieldDef('product_name', 'Item Name'),
+      PrintFieldDef('barcode', 'Barcode'),
+      PrintFieldDef('uom_name', 'UOM'),
+      PrintFieldDef('qty_pack', 'Qty Pack', PrintDataFormat.number),
+      PrintFieldDef('qty_loose', 'Qty Loose', PrintDataFormat.number),
+      PrintFieldDef('base_qty', 'Delivery Quantity', PrintDataFormat.number),
+    ],
+  };
+
   static const _materialRequisitionTableRowFields = {
     'lines': [
       PrintFieldDef('product_name', 'Item Name'),
@@ -494,6 +556,8 @@ class PrintFieldRegistry {
       'STOCK_COUNT_REVIEW'      => _stockCountReviewScalarFields,
       'PRICE_MASTER'            => _priceMasterScalarFields,
       'SALES_INVOICE'           => _salesInvoiceScalarFields,
+      'SALES_RETURN'            => _salesReturnScalarFields,
+      'SALES_DELIVERY'          => _salesDeliveryScalarFields,
       _ => const <PrintFieldDef>[],
     },
     ..._companyFields,
@@ -520,6 +584,8 @@ class PrintFieldRegistry {
     'STOCK_COUNT_REVIEW'      => const ['lines'],
     'PRICE_MASTER'            => const ['lines'],
     'SALES_INVOICE'           => const ['lines', 'charges'],
+    'SALES_RETURN'            => const ['lines'],
+    'SALES_DELIVERY'          => const ['lines'],
     _ => const [],
   };
 
@@ -543,6 +609,8 @@ class PrintFieldRegistry {
     'STOCK_COUNT_REVIEW'      => _stockCountReviewTableRowFields[tableName] ?? const [],
     'PRICE_MASTER'            => _priceMasterTableRowFields[tableName] ?? const [],
     'SALES_INVOICE'           => _salesInvoiceTableRowFields[tableName] ?? const [],
+    'SALES_RETURN'            => _salesReturnTableRowFields[tableName] ?? const [],
+    'SALES_DELIVERY'          => _salesDeliveryTableRowFields[tableName] ?? const [],
     _ => const [],
   };
 
@@ -555,7 +623,7 @@ class PrintFieldRegistry {
     'PURCHASE_ORDER', 'GRN', 'PURCHASE_INVOICE', 'PURCHASE_RETURN', 'VOUCHER',
     'MATERIAL_REQUISITION', 'MATERIAL_ISSUE', 'STOCK_TRANSFER_REQUEST', 'STOCK_TRANSFER', 'STOCK_RECEIPT',
     'STOCK_ADJUSTMENT', 'OPENING_STOCK', 'STOCK_COUNT', 'STOCK_COUNT_REVIEW', 'PRICE_MASTER',
-    'SALES_INVOICE',
+    'SALES_INVOICE', 'SALES_RETURN', 'SALES_DELIVERY',
   ];
 
   static String documentTypeLabel(String documentType) => switch (documentType) {
@@ -577,6 +645,8 @@ class PrintFieldRegistry {
     'STOCK_COUNT_REVIEW'      => 'Stock Count Review',
     'PRICE_MASTER'            => 'Sales Price Master',
     'SALES_INVOICE'           => 'Sales Invoice',
+    'SALES_RETURN'            => 'Sales Return',
+    'SALES_DELIVERY'          => 'Sales Delivery',
     _ => documentType,
   };
 }

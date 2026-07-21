@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -69,6 +71,17 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
   bool    _creditBlocked = false;
   bool    _isActive      = true;
   bool    _partyExpanded = true;
+
+  // Delivery Locations (migration 100, rim_customer_delivery_locations) —
+  // consumed by Sales Delivery's Ship-To picker. Only meaningful for an
+  // already-saved customer (needs a real customer_id), so this section
+  // stays hidden in Add mode. City is intentionally NOT captured here —
+  // this table's city_id would need the same cascading country/division/
+  // city picker the customer's own address field uses, which is tightly
+  // coupled to that single field's state; address_line1/2 can carry city
+  // info textually for now, a reasonable v1 simplification.
+  List<Map<String, dynamic>> _deliveryLocations = [];
+  bool _locationsExpanded = false;
 
   static const int _pageSize = 25;
   int  _totalCount = 0;
@@ -292,6 +305,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
     setState(() {
       _isAdd = true; _selected = null; _saveError = null;
       _partyExpanded = true;
+      _deliveryLocations = []; _locationsExpanded = false;
       _clearForm(); _daysCtrl.text = '30';
     });
   }
@@ -338,11 +352,192 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
       });
     }
     _checkHasTransactions(row['id'] as String);
+    _deliveryLocations = [];
+    _locationsExpanded = false;
+    unawaited(_loadDeliveryLocations(row['id'] as String));
   }
 
   Future<void> _checkHasTransactions(String accountId) async {
     final result = await accountHasTransactions(accountId);
     if (mounted) setState(() => _hasTransactions = result);
+  }
+
+  Future<void> _loadDeliveryLocations(String customerId) async {
+    final session = ref.read(sessionProvider)!;
+    try {
+      final res = await DioClient.instance.get('/rim_customer_delivery_locations', queryParameters: {
+        'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
+        'customer_id': 'eq.$customerId', 'is_deleted': 'eq.false',
+        'select': 'id,location_name,address_line1,address_line2,contact_person,contact_phone,is_default,is_active',
+        'order': 'is_default.desc,location_name.asc',
+      });
+      if (mounted) setState(() => _deliveryLocations = List<Map<String, dynamic>>.from(res.data as List));
+    } catch (_) { /* best-effort */ }
+  }
+
+  Future<void> _saveDeliveryLocation({
+    String? id,
+    required String locationName,
+    required String address1,
+    required String address2,
+    required String contactPerson,
+    required String contactPhone,
+    required bool isDefault,
+  }) async {
+    final session = ref.read(sessionProvider)!;
+    final customerId = _selected!['id'] as String;
+    // Partial unique index allows only ONE is_default=true per customer —
+    // unset any existing default first so setting a new one never conflicts.
+    if (isDefault) {
+      final currentDefault = _deliveryLocations.firstWhere((l) => l['is_default'] == true && l['id'] != id, orElse: () => const {});
+      if (currentDefault['id'] != null) {
+        await DioClient.instance.patch('/rim_customer_delivery_locations',
+            queryParameters: {'id': 'eq.${currentDefault['id']}'},
+            data: {'is_default': false, 'updated_by': session.userId});
+      }
+    }
+    final payload = {
+      'client_id': session.clientId, 'company_id': session.companyId,
+      'customer_id': customerId,
+      'location_name': locationName,
+      'address_line1': address1.trim().isEmpty ? null : address1.trim(),
+      'address_line2': address2.trim().isEmpty ? null : address2.trim(),
+      'contact_person': contactPerson.trim().isEmpty ? null : contactPerson.trim(),
+      'contact_phone': contactPhone.trim().isEmpty ? null : contactPhone.trim(),
+      'is_default': isDefault,
+      'updated_by': session.userId,
+    };
+    if (id == null) {
+      await DioClient.instance.post('/rim_customer_delivery_locations', data: {...payload, 'created_by': session.userId});
+    } else {
+      await DioClient.instance.patch('/rim_customer_delivery_locations', queryParameters: {'id': 'eq.$id'}, data: payload);
+    }
+    await _loadDeliveryLocations(customerId);
+  }
+
+  Future<void> _deleteDeliveryLocation(String id) async {
+    final session = ref.read(sessionProvider)!;
+    await DioClient.instance.patch('/rim_customer_delivery_locations',
+        queryParameters: {'id': 'eq.$id'},
+        data: {'is_deleted': true, 'updated_by': session.userId});
+    await _loadDeliveryLocations(_selected!['id'] as String);
+  }
+
+  Future<void> _showLocationDialog({Map<String, dynamic>? existing}) async {
+    final nameCtrl    = TextEditingController(text: existing?['location_name'] as String? ?? '');
+    final addr1Ctrl   = TextEditingController(text: existing?['address_line1'] as String? ?? '');
+    final addr2Ctrl   = TextEditingController(text: existing?['address_line2'] as String? ?? '');
+    final contactCtrl = TextEditingController(text: existing?['contact_person'] as String? ?? '');
+    final phoneCtrl   = TextEditingController(text: existing?['contact_phone'] as String? ?? '');
+    var isDefault = existing?['is_default'] as bool? ?? _deliveryLocations.isEmpty;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text(existing == null ? 'New Delivery Location' : 'Edit Delivery Location'),
+          content: SizedBox(
+            width: 420,
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Location Name *')),
+              const SizedBox(height: 10),
+              TextField(controller: addr1Ctrl, decoration: const InputDecoration(labelText: 'Address Line 1')),
+              const SizedBox(height: 10),
+              TextField(controller: addr2Ctrl, decoration: const InputDecoration(labelText: 'Address Line 2')),
+              const SizedBox(height: 10),
+              TextField(controller: contactCtrl, decoration: const InputDecoration(labelText: 'Contact Person')),
+              const SizedBox(height: 10),
+              TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'Contact Phone')),
+              const SizedBox(height: 10),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text('Default delivery location', style: TextStyle(fontSize: 13)),
+                value: isDefault,
+                onChanged: (v) => setDialogState(() => isDefault = v ?? false),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(true), child: const Text('Save')),
+          ],
+        ),
+      ),
+    );
+
+    if (saved == true && nameCtrl.text.trim().isNotEmpty) {
+      await _saveDeliveryLocation(
+        id: existing?['id'] as String?,
+        locationName: nameCtrl.text.trim(),
+        address1: addr1Ctrl.text,
+        address2: addr2Ctrl.text,
+        contactPerson: contactCtrl.text,
+        contactPhone: phoneCtrl.text,
+        isDefault: isDefault,
+      );
+    }
+    nameCtrl.dispose();
+    addr1Ctrl.dispose();
+    addr2Ctrl.dispose();
+    contactCtrl.dispose();
+    phoneCtrl.dispose();
+  }
+
+  Widget _buildDeliveryLocationsSection() {
+    return ExpansionTile(
+      initiallyExpanded: _locationsExpanded,
+      onExpansionChanged: (v) => setState(() => _locationsExpanded = v),
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: EdgeInsets.zero,
+      title: const Text('Delivery Locations',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+      subtitle: const Text('Ship-to addresses offered on Sales Delivery — optional.',
+          style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+      children: [
+        const SizedBox(height: 8),
+        const Divider(height: 1, color: AppColors.border),
+        const SizedBox(height: 8),
+        ..._deliveryLocations.map((loc) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Text(loc['location_name'] as String? ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                  if (loc['is_default'] == true) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(color: AppColors.positive.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+                      child: const Text('Default', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.positive)),
+                    ),
+                  ],
+                ]),
+                if ((loc['address_line1'] as String? ?? '').isNotEmpty)
+                  Text(loc['address_line1'] as String, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              ]),
+            ),
+            IconButton(icon: const Icon(Icons.edit_outlined, size: 16), onPressed: () => _showLocationDialog(existing: loc), tooltip: 'Edit'),
+            IconButton(icon: const Icon(Icons.delete_outline, size: 16), color: AppColors.negative,
+                onPressed: () => _deleteDeliveryLocation(loc['id'] as String), tooltip: 'Delete'),
+          ]),
+        )),
+        if (_deliveryLocations.isEmpty)
+          const Padding(padding: EdgeInsets.symmetric(vertical: 4),
+              child: Text('No delivery locations saved yet.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary))),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => _showLocationDialog(),
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add Location', style: TextStyle(fontSize: 12)),
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
   }
 
   void _clearForm() {
@@ -766,6 +961,11 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
                 ..._partyFields(),
               ],
             ),
+
+            if (!_isAdd) ...[
+              const SizedBox(height: 12),
+              _buildDeliveryLocationsSection(),
+            ],
 
             if (_saveError != null) ...[
               const SizedBox(height: 16),

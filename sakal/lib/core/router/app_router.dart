@@ -63,7 +63,11 @@ import '../../features/sales/presentation/screens/sales_order_list_screen.dart';
 import '../../features/sales/presentation/screens/sales_order_entry_screen.dart';
 import '../../features/sales/presentation/screens/sales_invoice_list_screen.dart';
 import '../../features/sales/presentation/screens/sales_invoice_entry_screen.dart';
-import '../../features/sales/presentation/screens/sales_invoice_manager_review_screen.dart';
+import '../../features/sales/presentation/screens/sales_pending_approvals_screen.dart';
+import '../../features/sales/presentation/screens/sales_return_list_screen.dart';
+import '../../features/sales/presentation/screens/sales_return_entry_screen.dart';
+import '../../features/sales/presentation/screens/sales_delivery_list_screen.dart';
+import '../../features/sales/presentation/screens/sales_delivery_entry_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_list_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_entry_screen.dart';
 import '../../features/purchase/presentation/screens/grn_list_screen.dart';
@@ -275,8 +279,29 @@ final appRouter = GoRouter(
             );
           },
         ),
-        GoRoute(path: RouteNames.salesInvoiceManagerReview, builder: (c, s) => const SalesInvoiceManagerReviewScreen()),
-        GoRoute(path: RouteNames.salesReturns,  builder: (c, s) => const _Placeholder('Sales Return')),
+        GoRoute(path: RouteNames.salesPendingApprovals, builder: (c, s) => const SalesPendingApprovalsScreen()),
+        GoRoute(path: RouteNames.salesReturns, builder: (c, s) => const SalesReturnListScreen()),
+        GoRoute(
+          path: RouteNames.salesReturnEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return SalesReturnEntryScreen(
+              editReturnNo:   extra?['returnNo'] as String?,
+              editReturnDate: extra?['returnDate'] as String?,
+            );
+          },
+        ),
+        GoRoute(path: RouteNames.salesDeliveries, builder: (c, s) => const SalesDeliveryListScreen()),
+        GoRoute(
+          path: RouteNames.salesDeliveryEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return SalesDeliveryEntryScreen(
+              editDeliveryNo:   extra?['deliveryNo'] as String?,
+              editDeliveryDate: extra?['deliveryDate'] as String?,
+            );
+          },
+        ),
         GoRoute(path: RouteNames.salesReceipts, builder: (c, s) => const _Placeholder('Cash Receipt')),
 
         // Purchase

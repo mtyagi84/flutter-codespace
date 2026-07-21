@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +15,7 @@ import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../providers/sales_invoice_providers.dart';
+import '../providers/sales_delivery_providers.dart';
 
 class SalesInvoiceListScreen extends ConsumerStatefulWidget {
   const SalesInvoiceListScreen({super.key});
@@ -27,6 +30,7 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
 
   List<Map<String, dynamic>> _rows = [];
   Set<String> _pendingIds = {};
+  Map<String, String> _deliveryStatusByInvoice = {};
   bool    _loading = true;
   String? _error;
   String? _filterStatus;
@@ -71,9 +75,56 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
           _loading    = false;
         });
       }
+      unawaited(_loadDeliveryStatuses(session));
     } catch (e) {
       if (mounted) setState(() { _loading = false; _error = 'Could not load invoices: $e'; });
     }
+  }
+
+  /// Read-only Pending/Partially Delivered/Delivered badge for DEFERRED-
+  /// dispatch invoices, sourced from v_sales_invoice_delivery_status — no
+  /// new invoice column, best-effort (a failed fetch just leaves the badge
+  /// off, never blocks the list itself from rendering).
+  Future<void> _loadDeliveryStatuses(UserSession session) async {
+    final deferredInvoiceNos = _rows
+        .where((r) => r['stock_dispatch_mode'] == 'DEFERRED')
+        .map((r) => r['invoice_no'] as String)
+        .toList();
+    if (deferredInvoiceNos.isEmpty) return;
+    try {
+      final rows = await ref.read(salesDeliveryRepositoryProvider).getDeliveryStatusForInvoices(
+        clientId: session.clientId, companyId: session.companyId, invoiceNos: deferredInvoiceNos,
+      );
+      if (mounted) {
+        setState(() => _deliveryStatusByInvoice = {
+          for (final r in rows) r['invoice_no'] as String: r['delivery_status'] as String,
+        });
+      }
+    } catch (_) { /* best-effort */ }
+  }
+
+  Widget? _deliveryStatusBadge(String? invoiceNo) {
+    final status = _deliveryStatusByInvoice[invoiceNo];
+    if (status == null) return null;
+    final color = switch (status) {
+      'DELIVERED' => AppColors.positive,
+      'PARTIALLY_DELIVERED' => AppColors.primary,
+      _ => AppColors.secondary, // PENDING
+    };
+    final label = switch (status) {
+      'DELIVERED' => 'Delivered',
+      'PARTIALLY_DELIVERED' => 'Partially Delivered',
+      _ => 'Pending Delivery',
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color)),
+    );
   }
 
   List<Map<String, dynamic>> get _filtered {
@@ -288,6 +339,7 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
               child: Row(children: [
                 _statusBadge(r['status'] as String),
                 if (_pendingIds.contains(r['invoice_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+                if (_deliveryStatusByInvoice[r['invoice_no']] != null) ...[const SizedBox(width: 6), _deliveryStatusBadge(r['invoice_no'] as String?)!],
               ]))),
           Expanded(flex: 2, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad),
               child: Text('${currency?['currency_id'] ?? ''} ${AppNumberFormat.amount((r['grand_total'] as num?) ?? 0, ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL')}',
@@ -318,6 +370,7 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
             const SizedBox(width: 6),
             _statusBadge(r['status'] as String),
             if (_pendingIds.contains(r['invoice_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+            if (_deliveryStatusByInvoice[r['invoice_no']] != null) ...[const SizedBox(width: 6), _deliveryStatusBadge(r['invoice_no'] as String?)!],
           ]),
           const SizedBox(height: 6),
           Text(partyName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
