@@ -64,7 +64,8 @@ class SalesDeliveryRemoteDs {
       'is_deleted':   'eq.false',
       'select':       'serial_no,invoice_line_serial,product_id,barcode,uom_id,uom_conversion_factor,'
           'qty_pack,qty_loose,base_qty,'
-          'product:rim_products!product_id(product_code,product_name,tracking_type)',
+          'product:rim_products!product_id(product_code,product_name,tracking_type),'
+          'uom:rim_common_masters!uom_id(description)',
       'order':        'serial_no.asc',
     });
     return List<Map<String, dynamic>>.from(res.data as List);
@@ -140,7 +141,8 @@ class SalesDeliveryRemoteDs {
       'invoice_no': 'eq.$invoiceNo', 'invoice_date': 'eq.$invoiceDate',
       'is_deleted': 'eq.false',
       'select':     'serial_no,product_id,barcode,uom_id,uom_conversion_factor,base_qty,delivered_qty,'
-          'product:rim_products!product_id(product_code,product_name,tracking_type)',
+          'product:rim_products!product_id(product_code,product_name,tracking_type),'
+          'uom:rim_common_masters!uom_id(description)',
       'order':      'serial_no.asc',
     });
     return List<Map<String, dynamic>>.from(res.data as List);

@@ -258,6 +258,7 @@ class _SalesDeliveryEntryScreenState extends ConsumerState<SalesDeliveryEntryScr
         orElse: () => const {},
       );
       final product = il['product'] as Map<String, dynamic>?;
+      final uom = sl['uom'] as Map<String, dynamic>?;
       final invoicedBaseQty = (il['base_qty'] as num? ?? 0).toDouble();
       final deliveredQty    = (il['delivered_qty'] as num? ?? 0).toDouble();
       final row = _SDLineRow(
@@ -265,6 +266,7 @@ class _SalesDeliveryEntryScreenState extends ConsumerState<SalesDeliveryEntryScr
         productId: sl['product_id'] as String,
         productDisplay: product != null ? '[${product['product_code']}] ${product['product_name']}' : '',
         uomId: sl['uom_id'] as String?,
+        uomLabel: uom?['description'] as String?,
         uomConversionFactor: (sl['uom_conversion_factor'] as num? ?? 1).toDouble(),
         // This delivery's own already-saved qty still counts as "pending"
         // from the reopened-draft's own perspective, so add it back.
@@ -391,11 +393,13 @@ class _SalesDeliveryEntryScreenState extends ConsumerState<SalesDeliveryEntryScr
           final pending = invoicedBaseQty - deliveredQty;
           if (pending <= 0) continue; // fully delivered already — nothing left to offer
           final product = il['product'] as Map<String, dynamic>?;
+          final uom = il['uom'] as Map<String, dynamic>?;
           final row = _SDLineRow(
             invoiceLineSerial: il['serial_no'] as int,
             productId: il['product_id'] as String,
             productDisplay: product != null ? '[${product['product_code']}] ${product['product_name']}' : '',
             uomId: il['uom_id'] as String?,
+            uomLabel: uom?['description'] as String?,
             uomConversionFactor: (il['uom_conversion_factor'] as num? ?? 1).toDouble(),
             pendingQty: pending,
             barcode: il['barcode'] as String?,

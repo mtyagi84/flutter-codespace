@@ -186,10 +186,10 @@ class _SalesPendingApprovalsScreenState extends ConsumerState<SalesPendingApprov
                   if (postAllButton != null) ...[const SizedBox(height: 10), postAllButton],
                 ])
               : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     title,
-                    const SizedBox(height: 4),
-                    const Text('DRAFT Invoices, Returns, and Deliveries awaiting online approval.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    SizedBox(height: 4),
+                    Text('DRAFT Invoices, Returns, and Deliveries awaiting online approval.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                   ])),
                   if (postAllButton != null) postAllButton,
                 ]),

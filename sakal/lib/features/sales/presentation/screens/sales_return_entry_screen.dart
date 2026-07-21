@@ -165,15 +165,11 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
   String?  _returnNo;
   DateTime _returnDate = DateTime.now();
   String   _status     = 'DRAFT';
-  String?  _locationId;
 
   String?  _invoiceNo;
   String?  _invoiceDate;
-  String?  _customerId;
   String?  _customerDisplay;
   String?  _returnCurrencyCode;
-  double   _rateToBase  = 1;
-  double   _rateToLocal = 1;
   String   _saleType = 'CREDIT';
   String   _stockDispatchMode = 'DEFERRED';
   String   _cashCollectionMode = 'DEFERRED';
@@ -225,8 +221,6 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
-      _locationId = session.locationId;
-
       if (widget.editReturnNo != null) {
         final header = await _ds.getHeader(
           clientId: session.clientId, companyId: session.companyId,
@@ -236,14 +230,10 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
           _returnNo    = header['return_no'] as String;
           _returnDate  = DateTime.parse(header['return_date'] as String);
           _status      = header['status'] as String;
-          _locationId  = header['location_id'] as String?;
           _invoiceNo   = header['invoice_no'] as String;
           _invoiceDate = header['invoice_date'] as String;
-          _customerId  = header['customer_id'] as String?;
           final customer = header['customer'] as Map<String, dynamic>?;
           _customerDisplay = customer != null ? '[${customer['account_code']}] ${customer['account_name']}' : '';
-          _rateToBase  = (header['rate_to_base']  as num? ?? 1).toDouble();
-          _rateToLocal = (header['rate_to_local'] as num? ?? 1).toDouble();
           _reason      = header['reason'] as String?;
           _remarksCtrl.text = header['remarks'] as String? ?? '';
           _refundLocalCtrl.text = (header['refund_amount_local'] as num? ?? 0).toString();
@@ -293,11 +283,13 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
         orElse: () => const {},
       );
       final product = il['product'] as Map<String, dynamic>?;
+      final uom = sl['uom'] as Map<String, dynamic>?;
       final row = _SRLineRow(
         invoiceLineSerial: sl['invoice_line_serial'] as int,
         productId: sl['product_id'] as String,
         productDisplay: product != null ? '[${product['product_code']}] ${product['product_name']}' : '',
         uomId: sl['uom_id'] as String?,
+        uomLabel: uom?['description'] as String?,
         uomConversionFactor: (sl['uom_conversion_factor'] as num? ?? 1).toDouble(),
         invoicedQty: (il['base_qty'] as num? ?? 0).toDouble(),
         alreadyReturned: alreadyReturned[sl['invoice_line_serial'] as int] ?? 0,
@@ -409,7 +401,6 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
     setState(() {
       _invoiceNo   = invoice['invoice_no'] as String;
       _invoiceDate = invoice['invoice_date'] as String;
-      _customerId  = invoice['customer_id'] as String?;
       final customer = invoice['customer'] as Map<String, dynamic>?;
       _customerDisplay = customer != null ? '[${customer['account_code']}] ${customer['account_name']}' : '';
       _saleType            = invoice['sale_type'] as String? ?? 'CREDIT';
@@ -439,11 +430,13 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
           final remaining = (il['base_qty'] as num? ?? 0).toDouble() - (alreadyReturned[il['serial_no'] as int] ?? 0);
           if (remaining <= 0) continue; // fully returned already — nothing left to offer
           final product = il['product'] as Map<String, dynamic>?;
+          final uom = il['uom'] as Map<String, dynamic>?;
           final row = _SRLineRow(
             invoiceLineSerial: il['serial_no'] as int,
             productId: il['product_id'] as String,
             productDisplay: product != null ? '[${product['product_code']}] ${product['product_name']}' : '',
             uomId: il['uom_id'] as String?,
+            uomLabel: uom?['description'] as String?,
             uomConversionFactor: (il['uom_conversion_factor'] as num? ?? 1).toDouble(),
             invoicedQty: (il['base_qty'] as num? ?? 0).toDouble(),
             alreadyReturned: alreadyReturned[il['serial_no'] as int] ?? 0,
