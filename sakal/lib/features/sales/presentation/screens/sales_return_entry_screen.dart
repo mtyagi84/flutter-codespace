@@ -509,12 +509,19 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
           final b = c['batch_no'] as String;
           consumedByBatch[b] = (consumedByBatch[b] ?? 0) + (c['base_qty'] as num? ?? 0).toDouble();
         }
+        // If reopening THIS return's own draft, its own already-saved batch
+        // allocation should pre-fill — never double-subtracted as "consumed"
+        // above (that list is APPROVED-only; a DRAFT never appears in it),
+        // so availableBalance is already correct as-is.
         Map<String, num> savedByBatch = const {};
         if (row.existingLineSerialNo != null) {
-          // If reopening THIS return's own draft, its own already-saved
-          // batch allocation should pre-fill (not be double-subtracted as
-          // "consumed" — but a DRAFT return is never in priorReturnNos
-          // since that list is APPROVED-only, so no double-count risk).
+          final ownSaved = await _ds.getReturnLineBatches(
+            clientId: session.clientId, companyId: session.companyId,
+            returnNo: _returnNo!, returnDate: _fmtDate(_returnDate), lineSerial: row.existingLineSerialNo!,
+          );
+          savedByBatch = {
+            for (final b in ownSaved) b['batch_no'] as String: (b['base_qty'] as num? ?? 0),
+          };
         }
         final candidates = <_SRBatchCandidate>[];
         for (final b in sold) {
@@ -542,10 +549,18 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
           final matchesThisLine = priorForThisLine.any((k) => k['return_no'] == c['source_doc_no'] && k['serial_no'] == c['line_serial']);
           if (matchesThisLine) consumedSerials.add(c['serial_no'] as String);
         }
+        var savedSerials = const <String>{};
+        if (row.existingLineSerialNo != null) {
+          final ownSaved = await _ds.getReturnLineSerials(
+            clientId: session.clientId, companyId: session.companyId,
+            returnNo: _returnNo!, returnDate: _fmtDate(_returnDate), lineSerial: row.existingLineSerialNo!,
+          );
+          savedSerials = ownSaved.map((s) => s['serial_no'] as String).toSet();
+        }
         final candidates = sold
             .map((s) => s['serial_no'] as String)
             .where((s) => !consumedSerials.contains(s))
-            .map((s) => _SRSerialCandidate(serialNo: s))
+            .map((s) => _SRSerialCandidate(serialNo: s)..selected = savedSerials.contains(s))
             .toList();
         if (mounted) setState(() { row.serialCandidates = candidates; row.candidatesLoaded = true; });
       }

@@ -362,4 +362,40 @@ class SalesReturnRemoteDs {
     });
     return List<Map<String, dynamic>>.from(res.data as List);
   }
+
+  /// This return's OWN already-saved batch/serial allocation — for
+  /// reopening a DRAFT, distinct from getInvoiceLineBatches (what the
+  /// source invoice sold) and getAlreadyReturnedBatches (what OTHER
+  /// approved returns already consumed).
+  Future<List<Map<String, dynamic>>> getReturnLineBatches({
+    required String clientId,
+    required String companyId,
+    required String returnNo,
+    required String returnDate,
+    required int    lineSerial,
+  }) async {
+    final res = await _dio.get('/rid_transaction_line_batches', queryParameters: {
+      'client_id': 'eq.$clientId', 'company_id': 'eq.$companyId',
+      'source_doc_type': 'eq.SALES_RETURN', 'source_doc_no': 'eq.$returnNo',
+      'source_doc_date': 'eq.$returnDate', 'line_serial': 'eq.$lineSerial',
+      'select': 'batch_no,expiry_date,base_qty',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
+  Future<List<Map<String, dynamic>>> getReturnLineSerials({
+    required String clientId,
+    required String companyId,
+    required String returnNo,
+    required String returnDate,
+    required int    lineSerial,
+  }) async {
+    final res = await _dio.get('/rid_transaction_line_serials', queryParameters: {
+      'client_id': 'eq.$clientId', 'company_id': 'eq.$companyId',
+      'source_doc_type': 'eq.SALES_RETURN', 'source_doc_no': 'eq.$returnNo',
+      'source_doc_date': 'eq.$returnDate', 'line_serial': 'eq.$lineSerial',
+      'select': 'serial_no',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
+  }
 }

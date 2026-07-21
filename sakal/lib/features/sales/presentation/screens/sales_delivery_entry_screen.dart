@@ -442,11 +442,42 @@ class _SalesDeliveryEntryScreenState extends ConsumerState<SalesDeliveryEntryScr
           manufacturingDate: b['manufacturing_date'] as String?,
           availableBalance: b['balance'] as num? ?? 0,
         )).toList();
+        // Reopening THIS delivery's own draft — restore its already-saved
+        // batch allocation instead of leaving candidates at '0'. A DRAFT
+        // never actually deducted stock, so live availableBalance already
+        // includes whatever this draft has allocated — no adjustment needed.
+        if (row.existingLineSerialNo != null) {
+          final ownSaved = await _ds.getDeliveryLineBatches(
+            clientId: session.clientId, companyId: session.companyId,
+            deliveryNo: _deliveryNo!, deliveryDate: _fmtDate(_deliveryDate),
+          );
+          final savedByBatch = {
+            for (final b in ownSaved.where((b) => b['line_serial'] == row.existingLineSerialNo))
+              b['batch_no'] as String: (b['base_qty'] as num? ?? 0),
+          };
+          for (final c in row.batchCandidates) {
+            final saved = savedByBatch[c.batchNo];
+            if (saved != null) c.qtyCtrl.text = saved.toDouble().toStringAsFixed(2);
+          }
+        }
       } else if (row.isSerialTracked) {
         final rows = await _ds.getSerialStockStatus(
           clientId: session.clientId, companyId: session.companyId, locationId: _locationId!, productId: row.productId,
         );
         row.serialCandidates = rows.map((s) => _SDSerialCandidate(serialNo: s['serial_no'] as String)).toList();
+        if (row.existingLineSerialNo != null) {
+          final ownSaved = await _ds.getDeliveryLineSerials(
+            clientId: session.clientId, companyId: session.companyId,
+            deliveryNo: _deliveryNo!, deliveryDate: _fmtDate(_deliveryDate),
+          );
+          final savedSerials = ownSaved
+              .where((s) => s['line_serial'] == row.existingLineSerialNo)
+              .map((s) => s['serial_no'] as String)
+              .toSet();
+          for (final c in row.serialCandidates) {
+            if (savedSerials.contains(c.serialNo)) c.selected = true;
+          }
+        }
       }
       if (mounted) setState(() => row.candidatesLoaded = true);
       if (autoAllocate) _autoAllocateFefo(row);

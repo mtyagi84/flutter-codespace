@@ -91,6 +91,22 @@ abstract class SalesReturnRepository {
     required String invoiceDate,
   });
 
+  Future<List<Map<String, dynamic>>> getReturnLineBatches({
+    required String clientId,
+    required String companyId,
+    required String returnNo,
+    required String returnDate,
+    required int    lineSerial,
+  });
+
+  Future<List<Map<String, dynamic>>> getReturnLineSerials({
+    required String clientId,
+    required String companyId,
+    required String returnNo,
+    required String returnDate,
+    required int    lineSerial,
+  });
+
   Future<List<Map<String, dynamic>>> listDraftReturnsForReview({
     required String clientId,
     required String companyId,

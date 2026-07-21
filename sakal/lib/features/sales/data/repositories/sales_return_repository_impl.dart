@@ -137,6 +137,24 @@ class SalesReturnRepositoryImpl implements SalesReturnRepository {
   }) => _remote.getPriorReturnLineKeys(clientId: clientId, companyId: companyId, invoiceNo: invoiceNo, invoiceDate: invoiceDate);
 
   @override
+  Future<List<Map<String, dynamic>>> getReturnLineBatches({
+    required String clientId,
+    required String companyId,
+    required String returnNo,
+    required String returnDate,
+    required int    lineSerial,
+  }) => _remote.getReturnLineBatches(clientId: clientId, companyId: companyId, returnNo: returnNo, returnDate: returnDate, lineSerial: lineSerial);
+
+  @override
+  Future<List<Map<String, dynamic>>> getReturnLineSerials({
+    required String clientId,
+    required String companyId,
+    required String returnNo,
+    required String returnDate,
+    required int    lineSerial,
+  }) => _remote.getReturnLineSerials(clientId: clientId, companyId: companyId, returnNo: returnNo, returnDate: returnDate, lineSerial: lineSerial);
+
+  @override
   Future<List<Map<String, dynamic>>> listDraftReturnsForReview({
     required String clientId,
     required String companyId,
