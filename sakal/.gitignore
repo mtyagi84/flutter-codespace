@@ -36,6 +36,9 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Contains a real API key pasted into a scratch doc — never commit.
+docs/screens/imp.md
+
 # Symbolication related
 app.*.symbols
 
