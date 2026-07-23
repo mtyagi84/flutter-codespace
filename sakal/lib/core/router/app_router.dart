@@ -88,6 +88,8 @@ import '../../features/finance/presentation/screens/finance_voucher_entry_screen
 import '../../features/finance/presentation/screens/finance_voucher_list_screen.dart';
 import '../../features/finance/presentation/screens/journal_voucher_entry_screen.dart';
 import '../../features/finance/presentation/screens/journal_voucher_list_screen.dart';
+import '../../features/finance/presentation/screens/contra_voucher_entry_screen.dart';
+import '../../features/finance/presentation/screens/contra_voucher_list_screen.dart';
 import '../layout/app_shell.dart';
 import '../layout/group_landing_screen.dart';
 import '../providers/session_provider.dart';
@@ -487,6 +489,17 @@ final appRouter = GoRouter(
           builder: (c, s) {
             final extra = s.extra as Map<String, dynamic>?;
             return JournalVoucherEntryScreen(
+              editTransNo:   extra?['transNo'] as String?,
+              editTransDate: extra?['transDate'] as String?,
+            );
+          },
+        ),
+        GoRoute(path: RouteNames.contraVoucherList, builder: (c, s) => const ContraVoucherListScreen()),
+        GoRoute(
+          path: RouteNames.contraVoucherEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return ContraVoucherEntryScreen(
               editTransNo:   extra?['transNo'] as String?,
               editTransDate: extra?['transDate'] as String?,
             );

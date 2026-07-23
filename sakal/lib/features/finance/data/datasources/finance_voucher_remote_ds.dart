@@ -109,15 +109,17 @@ class FinanceVoucherRemoteDs {
     });
   }
 
-  // Returns the new reversal voucher's trans_no.
-  Future<String> reverseJournalVoucher({
+  // Returns the new reversal voucher's trans_no. Shared by every manually
+  // posted voucher type (Journal Voucher, Contra Voucher, ...) — the
+  // underlying fn_reverse_voucher is fully generic over voucher_type_code.
+  Future<String> reverseVoucher({
     required String clientId,
     required String companyId,
     required String transNo,
     required String transDate,
     required String userId,
   }) async {
-    final res = await DioClient.instance.post('/rpc/fn_reverse_journal_voucher', data: {
+    final res = await DioClient.instance.post('/rpc/fn_reverse_voucher', data: {
       'p_client_id':  clientId,
       'p_company_id': companyId,
       'p_trans_no':   transNo,
@@ -125,6 +127,23 @@ class FinanceVoucherRemoteDs {
       'p_user_id':    userId,
     });
     return res.data as String;
+  }
+
+  // Company-granularity account-link lookup for a link type with no
+  // natural product/category anchor (e.g. EXCHANGE_GAIN_LOSS_ACCOUNT on
+  // a Contra Voucher's transfer-charge line). Returns null if not
+  // configured — callers must not silently proceed as if a value existed.
+  Future<String?> resolveCompanyAccountLink({
+    required String clientId,
+    required String companyId,
+    required String linkKey,
+  }) async {
+    final res = await DioClient.instance.post('/rpc/fn_resolve_company_account_link', data: {
+      'p_client_id':  clientId,
+      'p_company_id': companyId,
+      'p_link_key':   linkKey,
+    });
+    return res.data as String?;
   }
 
   Future<Map<String, dynamic>> getCompanyCurrencies({

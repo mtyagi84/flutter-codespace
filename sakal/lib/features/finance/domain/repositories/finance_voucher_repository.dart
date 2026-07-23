@@ -62,11 +62,17 @@ abstract class FinanceVoucherRepository {
     required String rateDate,
   });
 
-  Future<String> reverseJournalVoucher({
+  Future<String> reverseVoucher({
     required String clientId,
     required String companyId,
     required String transNo,
     required String transDate,
     required String userId,
+  });
+
+  Future<String?> resolveCompanyAccountLink({
+    required String clientId,
+    required String companyId,
+    required String linkKey,
   });
 }

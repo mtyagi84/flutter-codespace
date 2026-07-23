@@ -114,6 +114,8 @@ class RouteNames {
   static const String voucherList    = '/finance/voucher-list';
   static const String journalEntry   = '/finance/journal';
   static const String journalVoucherEntry = '/finance/journal-entry';
+  static const String contraVoucherList  = '/finance/contra';
+  static const String contraVoucherEntry = '/finance/contra-entry';
   static const String cashBook       = '/finance/cashbook';
   static const String trialBalance   = '/finance/trial-balance';
   static const String profitLoss     = '/finance/profit-loss';

@@ -138,7 +138,8 @@ begin
          approve_allowed, copy_allowed, excel_upload_allowed)
     values
         (p_client_id, p_company_id, v_fn, 'FN-JRN', 'Journal Entry', '/finance/journal',       0, 'FN-TXN', 'Transactions', 0, true,  false, false),
-        (p_client_id, p_company_id, v_fn, 'FN-CBK', 'Cash Book',     '/finance/cashbook',      1, 'FN-TXN', 'Transactions', 0, false, false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-CTR', 'Contra Voucher','/finance/contra',        1, 'FN-TXN', 'Transactions', 0, true,  false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-CBK', 'Cash Book',     '/finance/cashbook',      2, 'FN-TXN', 'Transactions', 0, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-TRB', 'Trial Balance', '/finance/trial-balance', 0, 'FN-RPT', 'Reports',      1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-PNL', 'Profit & Loss', '/finance/profit-loss',   1, 'FN-RPT', 'Reports',      1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-BSH', 'Balance Sheet', '/finance/balance-sheet', 2, 'FN-RPT', 'Reports',      1, false, false, false)

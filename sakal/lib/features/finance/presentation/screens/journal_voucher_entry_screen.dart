@@ -638,7 +638,7 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
       _actionError = null;
     });
     try {
-      final res = await ref.read(financeVoucherRepositoryProvider).reverseJournalVoucher(
+      final res = await ref.read(financeVoucherRepositoryProvider).reverseVoucher(
             clientId: session.clientId,
             companyId: session.companyId,
             transNo: _transNo!,
