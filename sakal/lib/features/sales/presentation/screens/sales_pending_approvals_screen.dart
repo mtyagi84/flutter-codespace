@@ -12,6 +12,7 @@ import '../../../../core/widgets/sakal_field_card.dart';
 import '../providers/sales_invoice_providers.dart';
 import '../providers/sales_return_providers.dart';
 import '../providers/sales_delivery_providers.dart';
+import '../providers/cash_receipt_providers.dart';
 
 /// One DRAFT document awaiting online approval, tagged by which module it
 /// came from. Replaces the old Sales-Invoice-only Manager Review screen —
@@ -19,7 +20,7 @@ import '../providers/sales_delivery_providers.dart';
 /// plus the rare online race-condition failure), now shared across every
 /// module that queues an offline Save but never an offline Approve.
 class _ReviewItem {
-  final String documentType; // 'SALES_INVOICE' | 'SALES_RETURN' | 'SALES_DELIVERY'
+  final String documentType; // 'SALES_INVOICE' | 'SALES_RETURN' | 'SALES_DELIVERY' | 'CASH_RECEIPT'
   final Map<String, dynamic> doc;
   final String docNo;
   final String docDate;
@@ -68,21 +69,25 @@ class _SalesPendingApprovalsScreenState extends ConsumerState<SalesPendingApprov
     final invoiceDs  = ref.read(salesInvoiceRepositoryProvider);
     final returnDs   = ref.read(salesReturnRepositoryProvider);
     final deliveryDs = ref.read(salesDeliveryRepositoryProvider);
+    final receiptDs  = ref.read(cashReceiptRepositoryProvider);
     setState(() { _loading = true; _error = null; });
     try {
       final results = await Future.wait([
         invoiceDs.listDraftInvoicesForReview(clientId: session.clientId, companyId: session.companyId, locationId: _locationId!),
         returnDs.listDraftReturnsForReview(clientId: session.clientId, companyId: session.companyId, locationId: _locationId!),
         deliveryDs.listDraftDeliveriesForReview(clientId: session.clientId, companyId: session.companyId, locationId: _locationId!),
+        receiptDs.listDraftReceiptsForReview(clientId: session.clientId, companyId: session.companyId, locationId: _locationId!),
       ]);
       final invoices  = results[0];
       final returns   = results[1];
       final deliveries = results[2];
+      final receipts  = results[3];
 
       final items = <_ReviewItem>[
         ...invoices.map((d) => _ReviewItem(documentType: 'SALES_INVOICE', doc: d, docNo: d['invoice_no'] as String, docDate: d['invoice_date'] as String)),
         ...returns.map((d) => _ReviewItem(documentType: 'SALES_RETURN', doc: d, docNo: d['return_no'] as String, docDate: d['return_date'] as String)),
         ...deliveries.map((d) => _ReviewItem(documentType: 'SALES_DELIVERY', doc: d, docNo: d['delivery_no'] as String, docDate: d['delivery_date'] as String)),
+        ...receipts.map((d) => _ReviewItem(documentType: 'CASH_RECEIPT', doc: d, docNo: d['receipt_no'] as String, docDate: d['receipt_date'] as String)),
       ]..sort((a, b) => a.docDate.compareTo(b.docDate));
 
       for (final item in items) {
@@ -103,6 +108,10 @@ class _SalesPendingApprovalsScreenState extends ConsumerState<SalesPendingApprov
               final stock = await deliveryDs.getStockPreview(clientId: session.clientId, companyId: session.companyId, locationId: _locationId!, productId: l['product_id'] as String);
               _stockByKey['${item.key}|${l['product_id']}'] = (stock?['current_stock'] as num?) ?? 0;
             }
+            break;
+          case 'CASH_RECEIPT':
+            // No stock preview — this document never touches stock.
+            item.lines = await receiptDs.getLines(clientId: session.clientId, companyId: session.companyId, receiptNo: item.docNo, receiptDate: item.docDate);
             break;
         }
       }
@@ -135,6 +144,12 @@ class _SalesPendingApprovalsScreenState extends ConsumerState<SalesPendingApprov
             deliveryNo: item.docNo, deliveryDate: item.docDate, approvedBy: session.userId,
           );
           break;
+        case 'CASH_RECEIPT':
+          await ref.read(cashReceiptRepositoryProvider).approve(
+            clientId: session.clientId, companyId: session.companyId,
+            receiptNo: item.docNo, receiptDate: item.docDate, approvedBy: session.userId,
+          );
+          break;
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -160,6 +175,7 @@ class _SalesPendingApprovalsScreenState extends ConsumerState<SalesPendingApprov
     'SALES_INVOICE' => 'Sales Invoice',
     'SALES_RETURN' => 'Sales Return',
     'SALES_DELIVERY' => 'Sales Delivery',
+    'CASH_RECEIPT' => 'Cash Receipt',
     _ => t,
   };
 
@@ -182,14 +198,14 @@ class _SalesPendingApprovalsScreenState extends ConsumerState<SalesPendingApprov
               ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   title,
                   const SizedBox(height: 4),
-                  const Text('DRAFT Invoices, Returns, and Deliveries awaiting online approval.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  const Text('DRAFT Invoices, Returns, Deliveries, and Cash Receipts awaiting online approval.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                   if (postAllButton != null) ...[const SizedBox(height: 10), postAllButton],
                 ])
               : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     title,
                     SizedBox(height: 4),
-                    Text('DRAFT Invoices, Returns, and Deliveries awaiting online approval.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    Text('DRAFT Invoices, Returns, Deliveries, and Cash Receipts awaiting online approval.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                   ])),
                   if (postAllButton != null) postAllButton,
                 ]),
@@ -240,11 +256,21 @@ class _SalesPendingApprovalsScreenState extends ConsumerState<SalesPendingApprov
     final isPosting = _posting.contains(item.key);
     final rowError = _rowErrors[item.key];
     final numberFormat = ref.read(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
-    final isOutward = item.documentType != 'SALES_RETURN';
+    final isOutward = item.documentType == 'SALES_INVOICE' || item.documentType == 'SALES_DELIVERY';
 
     Widget titleText;
     Widget subtitleText;
     switch (item.documentType) {
+      case 'CASH_RECEIPT':
+        final customer = item.doc['customer'] as Map<String, dynamic>?;
+        final local = (item.doc['local_amount'] as num?) ?? 0;
+        final base = (item.doc['base_amount'] as num?) ?? 0;
+        titleText = Text('${item.docNo} — ${customer?['account_name'] ?? '—'}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14));
+        subtitleText = Text('${_typeLabel(item.documentType)} · ${item.docDate}'
+            '${local > 0 ? ' · ${AppNumberFormat.amount(local, numberFormat)} local' : ''}'
+            '${base > 0 ? ' · ${AppNumberFormat.amount(base, numberFormat)} base' : ''}',
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary));
+        break;
       case 'SALES_INVOICE':
         final customer = item.doc['customer'] as Map<String, dynamic>?;
         final currency = item.doc['currency'] as Map<String, dynamic>?;
@@ -280,6 +306,21 @@ class _SalesPendingApprovalsScreenState extends ConsumerState<SalesPendingApprov
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (item.documentType == 'CASH_RECEIPT')
+                ...item.lines.map((l) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(children: [
+                        Expanded(flex: 3, child: Text('${l['inv_bill_no']} (${l['inv_bill_date']})', style: const TextStyle(fontSize: 13))),
+                        Expanded(
+                            flex: 1,
+                            child: Text(
+                              '${AppNumberFormat.amount((l['applied_amount_local'] as num?) ?? 0, numberFormat)} local',
+                              style: const TextStyle(fontSize: 12),
+                              textAlign: TextAlign.right,
+                            )),
+                      ]),
+                    ))
+              else
               ...item.lines.map((l) {
                 final product = l['product'] as Map<String, dynamic>?;
                 final productLabel = Text(product == null ? '—' : '[${product['product_code']}] ${product['product_name']}', style: const TextStyle(fontSize: 13));

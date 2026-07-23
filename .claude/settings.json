@@ -19,7 +19,19 @@
       "Bash(python3 -c ' *)",
       "Bash(cd \"C:/Manglu/SAKAL/sakal\" && grep -n \"flutter_riverpod\" pubspec.yaml *)",
       "Read(//c//**)",
-      "Bash(grep -n 'class _$AppDatabase\\\\|_$AppDatabase\\(' lib/core/database/app_database.g.dart)"
+      "Bash(grep -n 'class _$AppDatabase\\\\|_$AppDatabase\\(' lib/core/database/app_database.g.dart)",
+      "Bash(powershell.exe -NoProfile -Command \"git status\")",
+      "Bash(powershell.exe -NoProfile -Command \"\\(Get-Content 'c:\\\\Manglu\\\\SAKAL\\\\sakal\\\\lib\\\\features\\\\sales\\\\presentation\\\\screens\\\\sales_invoice_entry_screen.dart'\\).Count; \\(Get-Content 'c:\\\\Manglu\\\\SAKAL\\\\sakal\\\\lib\\\\features\\\\sales\\\\presentation\\\\screens\\\\sales_invoice_list_screen.dart'\\).Count\")",
+      "PowerShell(git add \"CLAUDE.md\" \"sakal/docs/screens/sales_invoice.md\" \"sakal/docs/Unit Testing/Sales Invoice Test bugs.docx\" \"sakal/backend/migrations/090_sales_invoice_voucher_type_split.sql\" \"sakal/lib/core/widgets/sakal_autocomplete.dart\" \"sakal/lib/core/printing/print_field_registry.dart\" \"sakal/lib/core/printing/default_templates/\" \"sakal/lib/features/sales/presentation/screens/sales_invoice_entry_screen.dart\" \"sakal/lib/features/sales/presentation/screens/sales_invoice_list_screen.dart\" \"sakal/lib/features/sales/presentation/screens/sales_order_entry_screen.dart\")",
+      "Bash(sort -t_ -k1 -n)",
+      "Bash(awk '/insert into rim_voucher_types/{flag=1} flag{print} flag && /;/{c++; if\\(c==1\\) exit}' backend/migrations/017_voucher_types_payment_modes.sql)",
+      "Bash(mkdir -p \"/c/Users/manglu.singh/.claude/plans\" 2>&1; ls \"/c/Users/manglu.singh/.claude/plans\" 2>&1 | head)",
+      "Bash(sort -t/ -k9 -n)",
+      "Bash(mkdir -p /tmp/docx_extract)",
+      "Bash(unzip -o \"All_Masters_testing.docx\" -d /tmp/docx_extract/masters)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\manglu.singh\\.claude\\plans"
     ]
   }
 }

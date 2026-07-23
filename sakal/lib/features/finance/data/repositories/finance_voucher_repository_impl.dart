@@ -145,4 +145,19 @@ class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
         toCurrency:   toCurrency,
         rateDate:     rateDate,
       );
+
+  @override
+  Future<String> reverseJournalVoucher({
+    required String clientId,
+    required String companyId,
+    required String transNo,
+    required String transDate,
+    required String userId,
+  }) => _remote.reverseJournalVoucher(
+        clientId:  clientId,
+        companyId: companyId,
+        transNo:   transNo,
+        transDate: transDate,
+        userId:    userId,
+      );
 }

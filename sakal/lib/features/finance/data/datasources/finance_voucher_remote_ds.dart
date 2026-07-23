@@ -109,6 +109,24 @@ class FinanceVoucherRemoteDs {
     });
   }
 
+  // Returns the new reversal voucher's trans_no.
+  Future<String> reverseJournalVoucher({
+    required String clientId,
+    required String companyId,
+    required String transNo,
+    required String transDate,
+    required String userId,
+  }) async {
+    final res = await DioClient.instance.post('/rpc/fn_reverse_journal_voucher', data: {
+      'p_client_id':  clientId,
+      'p_company_id': companyId,
+      'p_trans_no':   transNo,
+      'p_trans_date': transDate,
+      'p_user_id':    userId,
+    });
+    return res.data as String;
+  }
+
   Future<Map<String, dynamic>> getCompanyCurrencies({
     required String companyId,
   }) async {

@@ -69,6 +69,8 @@ import '../../features/sales/presentation/screens/sales_return_list_screen.dart'
 import '../../features/sales/presentation/screens/sales_return_entry_screen.dart';
 import '../../features/sales/presentation/screens/sales_delivery_list_screen.dart';
 import '../../features/sales/presentation/screens/sales_delivery_entry_screen.dart';
+import '../../features/sales/presentation/screens/cash_receipt_list_screen.dart';
+import '../../features/sales/presentation/screens/cash_receipt_entry_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_list_screen.dart';
 import '../../features/purchase/presentation/screens/purchase_order_entry_screen.dart';
 import '../../features/purchase/presentation/screens/grn_list_screen.dart';
@@ -84,6 +86,8 @@ import '../../features/setup/presentation/screens/product_flag_types_screen.dart
 import '../../features/finance/presentation/screens/exchange_rate_screen.dart';
 import '../../features/finance/presentation/screens/finance_voucher_entry_screen.dart';
 import '../../features/finance/presentation/screens/finance_voucher_list_screen.dart';
+import '../../features/finance/presentation/screens/journal_voucher_entry_screen.dart';
+import '../../features/finance/presentation/screens/journal_voucher_list_screen.dart';
 import '../layout/app_shell.dart';
 import '../layout/group_landing_screen.dart';
 import '../providers/session_provider.dart';
@@ -304,7 +308,14 @@ final appRouter = GoRouter(
             );
           },
         ),
-        GoRoute(path: RouteNames.salesReceipts, builder: (c, s) => const _Placeholder('Cash Receipt')),
+        GoRoute(path: RouteNames.salesReceipts, builder: (c, s) => const CashReceiptListScreen()),
+        GoRoute(
+          path: RouteNames.cashReceiptEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return CashReceiptEntryScreen(editReceiptNo: extra?['receiptNo'] as String?);
+          },
+        ),
 
         // Purchase
         GoRoute(path: RouteNames.purchaseOrders, builder: (c, s) => const PurchaseOrderListScreen()),
@@ -470,7 +481,17 @@ final appRouter = GoRouter(
           },
         ),
         GoRoute(path: RouteNames.voucherList,   builder: (c, s) => const FinanceVoucherListScreen()),
-        GoRoute(path: RouteNames.journalEntry,  builder: (c, s) => const _Placeholder('Journal Entry')),
+        GoRoute(path: RouteNames.journalEntry,  builder: (c, s) => const JournalVoucherListScreen()),
+        GoRoute(
+          path: RouteNames.journalVoucherEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return JournalVoucherEntryScreen(
+              editTransNo:   extra?['transNo'] as String?,
+              editTransDate: extra?['transDate'] as String?,
+            );
+          },
+        ),
         GoRoute(path: RouteNames.cashBook,     builder: (c, s) => const _Placeholder('Cash Book')),
         GoRoute(path: RouteNames.trialBalance, builder: (c, s) => const _Placeholder('Trial Balance')),
         GoRoute(path: RouteNames.profitLoss,   builder: (c, s) => const _Placeholder('Profit & Loss')),

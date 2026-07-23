@@ -393,6 +393,25 @@ class PrintSampleData {
       ],
       'totals': {},
     },
+    'CASH_RECEIPT' => {
+      'company': _company(),
+      'header': {
+        'receipt_no':             'CREC/KIN/2026/00001',
+        'receipt_date':           '20 Jul 2026',
+        'status':                 'APPROVED',
+        'customer_name':          'Sample Customer',
+        'location_name':          'Kinshasa Main',
+        'local_amount':           25000.0,
+        'base_amount':            0.0,
+        'total_local_equivalent': 25000.0,
+        'remarks':                'Sample remarks for preview.',
+        'signatures': {'prepared_by': 'Sample User', 'authorised_by': 'Sample Approver'},
+      },
+      'lines': [
+        {'inv_bill_no': 'SLS/KIN/2026/00001', 'inv_bill_date': '18 Jul 2026', 'bill_currency': 'CDF', 'applied_amount_local': 25000.0},
+      ],
+      'totals': {},
+    },
     _ => {'company': _company(), 'header': {}, 'lines': [], 'totals': {}},
   };
 }

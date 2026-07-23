@@ -180,6 +180,18 @@ class PrintFieldRegistry {
     PrintFieldDef('header.remarks', 'Remarks'),
   ];
 
+  static const _cashReceiptScalarFields = [
+    PrintFieldDef('header.receipt_no', 'Receipt Number'),
+    PrintFieldDef('header.receipt_date', 'Receipt Date'),
+    PrintFieldDef('header.status', 'Status'),
+    PrintFieldDef('header.customer_name', 'Customer Name'),
+    PrintFieldDef('header.location_name', 'Location'),
+    PrintFieldDef('header.local_amount', 'Cash Received (Local)', PrintDataFormat.currency),
+    PrintFieldDef('header.base_amount', 'Cash Received (Base)', PrintDataFormat.currency),
+    PrintFieldDef('header.total_local_equivalent', 'Total (Local Equivalent)', PrintDataFormat.currency),
+    PrintFieldDef('header.remarks', 'Remarks'),
+  ];
+
   static const _voucherScalarFields = [
     PrintFieldDef('header.voucher_type_label', 'Voucher Type'),
     PrintFieldDef('header.voucher_no', 'Voucher No'),
@@ -433,6 +445,15 @@ class PrintFieldRegistry {
     ],
   };
 
+  static const _cashReceiptTableRowFields = {
+    'lines': [
+      PrintFieldDef('inv_bill_no', 'Invoice/Bill No'),
+      PrintFieldDef('inv_bill_date', 'Invoice/Bill Date'),
+      PrintFieldDef('bill_currency', 'Currency'),
+      PrintFieldDef('applied_amount_local', 'Amount Applied (Local)', PrintDataFormat.currency),
+    ],
+  };
+
   static const _materialRequisitionTableRowFields = {
     'lines': [
       PrintFieldDef('product_name', 'Item Name'),
@@ -558,6 +579,7 @@ class PrintFieldRegistry {
       'SALES_INVOICE'           => _salesInvoiceScalarFields,
       'SALES_RETURN'            => _salesReturnScalarFields,
       'SALES_DELIVERY'          => _salesDeliveryScalarFields,
+      'CASH_RECEIPT'            => _cashReceiptScalarFields,
       _ => const <PrintFieldDef>[],
     },
     ..._companyFields,
@@ -586,6 +608,7 @@ class PrintFieldRegistry {
     'SALES_INVOICE'           => const ['lines', 'charges'],
     'SALES_RETURN'            => const ['lines'],
     'SALES_DELIVERY'          => const ['lines'],
+    'CASH_RECEIPT'            => const ['lines'],
     _ => const [],
   };
 
@@ -611,6 +634,7 @@ class PrintFieldRegistry {
     'SALES_INVOICE'           => _salesInvoiceTableRowFields[tableName] ?? const [],
     'SALES_RETURN'            => _salesReturnTableRowFields[tableName] ?? const [],
     'SALES_DELIVERY'          => _salesDeliveryTableRowFields[tableName] ?? const [],
+    'CASH_RECEIPT'            => _cashReceiptTableRowFields[tableName] ?? const [],
     _ => const [],
   };
 
@@ -623,7 +647,7 @@ class PrintFieldRegistry {
     'PURCHASE_ORDER', 'GRN', 'PURCHASE_INVOICE', 'PURCHASE_RETURN', 'VOUCHER',
     'MATERIAL_REQUISITION', 'MATERIAL_ISSUE', 'STOCK_TRANSFER_REQUEST', 'STOCK_TRANSFER', 'STOCK_RECEIPT',
     'STOCK_ADJUSTMENT', 'OPENING_STOCK', 'STOCK_COUNT', 'STOCK_COUNT_REVIEW', 'PRICE_MASTER',
-    'SALES_INVOICE', 'SALES_RETURN', 'SALES_DELIVERY',
+    'SALES_INVOICE', 'SALES_RETURN', 'SALES_DELIVERY', 'CASH_RECEIPT',
   ];
 
   static String documentTypeLabel(String documentType) => switch (documentType) {
@@ -647,6 +671,7 @@ class PrintFieldRegistry {
     'SALES_INVOICE'           => 'Sales Invoice',
     'SALES_RETURN'            => 'Sales Return',
     'SALES_DELIVERY'          => 'Sales Delivery',
+    'CASH_RECEIPT'            => 'Cash Receipt',
     _ => documentType,
   };
 }

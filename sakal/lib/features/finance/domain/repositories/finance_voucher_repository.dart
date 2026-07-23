@@ -61,4 +61,12 @@ abstract class FinanceVoucherRepository {
     required String toCurrency,
     required String rateDate,
   });
+
+  Future<String> reverseJournalVoucher({
+    required String clientId,
+    required String companyId,
+    required String transNo,
+    required String transDate,
+    required String userId,
+  });
 }

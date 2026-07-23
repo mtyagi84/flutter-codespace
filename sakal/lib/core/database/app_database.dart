@@ -29,6 +29,7 @@ import 'tables/tax_rates_cache_table.dart';
 import 'tables/module_sync_status_cache_table.dart';
 import 'tables/sales_return_cache_tables.dart';
 import 'tables/sales_delivery_cache_tables.dart';
+import 'tables/cash_receipt_cache_tables.dart';
 
 part 'app_database.g.dart';
 
@@ -87,6 +88,8 @@ part 'app_database.g.dart';
   SalesReturnLinesCache,
   SalesDeliveriesCache,
   SalesDeliveryLinesCache,
+  CashReceiptHeadersCache,
+  CashReceiptLinesCache,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'sakal_local'));
@@ -98,7 +101,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 23;
+  int get schemaVersion => 24;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -253,6 +256,14 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(salesReturnLinesCache);
             await m.createTable(salesDeliveriesCache);
             await m.createTable(salesDeliveryLinesCache);
+          }
+          // v24: Cash Receipt (Cash Collection) — new module, built with
+          // offline SAVE from day one, same shape as Sales Delivery.
+          // Approve stays online-only, surfaced via the unified Pending
+          // Approvals screen. See docs/screens/cash_receipt.md.
+          if (from < 24) {
+            await m.createTable(cashReceiptHeadersCache);
+            await m.createTable(cashReceiptLinesCache);
           }
         },
       );

@@ -310,6 +310,15 @@ class SyncEngine {
               ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.deliveryNo.equals(oldId)))
             .write(SalesDeliveryLinesCacheCompanion(deliveryNo: Value(newId)));
         break;
+
+      case 'CASH_RECEIPT':
+        await (db.update(db.cashReceiptHeadersCache)
+              ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.receiptNo.equals(oldId)))
+            .write(CashReceiptHeadersCacheCompanion(receiptNo: Value(newId)));
+        await (db.update(db.cashReceiptLinesCache)
+              ..where((t) => t.clientId.equals(clientId) & t.companyId.equals(companyId) & t.receiptNo.equals(oldId)))
+            .write(CashReceiptLinesCacheCompanion(receiptNo: Value(newId)));
+        break;
     }
   }
 

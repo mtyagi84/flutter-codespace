@@ -51,6 +51,7 @@ class RouteNames {
   static const String salesDeliveries = '/sales/deliveries';
   static const String salesDeliveryEntry = '/sales/delivery-entry';
   static const String salesReceipts = '/sales/receipts';
+  static const String cashReceiptEntry = '/sales/receipt-entry';
 
   // Purchase
   static const String purchaseOrders   = '/purchase/orders';
@@ -112,6 +113,7 @@ class RouteNames {
   static const String paymentReceipt = '/finance/payment-receipt';
   static const String voucherList    = '/finance/voucher-list';
   static const String journalEntry   = '/finance/journal';
+  static const String journalVoucherEntry = '/finance/journal-entry';
   static const String cashBook       = '/finance/cashbook';
   static const String trialBalance   = '/finance/trial-balance';
   static const String profitLoss     = '/finance/profit-loss';
