@@ -659,7 +659,6 @@ class PrintFieldRegistry {
     'SALES_RETURN'            => _salesReturnTableRowFields[tableName] ?? const [],
     'SALES_DELIVERY'          => _salesDeliveryTableRowFields[tableName] ?? const [],
     'CASH_RECEIPT'            => _cashReceiptTableRowFields[tableName] ?? const [],
-    'EXPENSE_VOUCHER'         => _expenseVoucherTableRowFields[tableName] ?? const [],
     _ => const [],
   };
 
