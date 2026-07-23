@@ -115,8 +115,6 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
     return match['full_name'] as String?;
   }
 
-  bool get _isNew => _receiptNo == null;
-
   double get _localAmount => double.tryParse(_localAmountCtrl.text) ?? 0;
   double get _baseAmount => double.tryParse(_baseAmountCtrl.text) ?? 0;
   double get _headerTotalLocal => _localAmount + _baseAmount * _baseToLocalRate;

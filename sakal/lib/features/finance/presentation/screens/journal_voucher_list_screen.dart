@@ -28,8 +28,8 @@ class _JournalVoucherListScreenState extends ConsumerState<JournalVoucherListScr
   bool _loading = true;
   String? _error;
   bool? _filterPosted;
-  DateTime _fromDate = DateTime.now().subtract(const Duration(days: 90));
-  DateTime _toDate = DateTime.now();
+  final DateTime _fromDate = DateTime.now().subtract(const Duration(days: 90));
+  final DateTime _toDate = DateTime.now();
   final _searchCtrl = TextEditingController();
   String _searchText = '';
 
