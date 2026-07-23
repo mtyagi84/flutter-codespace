@@ -194,6 +194,34 @@ final accountsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async 
   return accounts;
 });
 
+// Purchase-applicable tax groups (id, group_code, group_name) — shared by
+// Chart of Accounts' own default-tax-group picker and Expense Voucher's
+// per-line Tax Group picker. Every other module that needs tax groups
+// (PO/GRN/Sales Invoice/...) fetches them via its own datasource method
+// with this identical query shape — added here as one shared provider
+// instead of a third/fourth duplicate now that two new call sites need it
+// at once.
+final taxGroupsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final session = ref.watch(sessionProvider);
+  if (session == null) return [];
+  return _cachedFetch(
+    ref: ref, cacheKey: 'TAX_GROUPS', offlineMode: session.offlineMode,
+    clientId: session.clientId, companyId: session.companyId,
+    fetchRemote: () async {
+      final res = await DioClient.instance.get('/rim_tax_groups', queryParameters: {
+        'client_id':  'eq.${session.clientId}',
+        'company_id': 'eq.${session.companyId}',
+        'is_deleted': 'eq.false',
+        'is_active':  'eq.true',
+        'or':         '(applicable_on.eq.PURCHASE,applicable_on.eq.BOTH)',
+        'select':     'id,group_code,group_name',
+        'order':      'group_name.asc',
+      });
+      return List<Map<String, dynamic>>.from(res.data as List);
+    },
+  );
+});
+
 // All company details needed for printing (logo, address, tax fields).
 // Fetched on demand (when Print is pressed) and cached for the session.
 final companyDetailsProvider = FutureProvider<Map<String, dynamic>?>((ref) async {

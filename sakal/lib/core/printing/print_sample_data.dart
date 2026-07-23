@@ -412,6 +412,24 @@ class PrintSampleData {
       ],
       'totals': {},
     },
+    'EXPENSE_VOUCHER' => {
+      'company': _company(),
+      'header': {
+        'voucher_no':    'EXV/KIN/2026/00001',
+        'trans_date':    '20 Jul 2026',
+        'status':        'APPROVED',
+        'supplier_name': '[2010] National Electricity Board',
+        'currency_code': 'USD',
+        'bill_no':       'ELEC-JAN-2026',
+        'bill_date':     '15 Jan 2026',
+        'remarks':       'Sample remarks for preview.',
+        'signatures': {'prepared_by': 'Sample User', 'authorised_by': 'Sample Approver'},
+      },
+      'lines': [
+        {'account_name': '[5500] Electricity Expense', 'amount': 100.0, 'tax_group_name': 'VAT + WHT', 'remarks': 'January electricity'},
+      ],
+      'totals': {'total_expense_display': '100.00', 'net_payable_display': '106.00'},
+    },
     _ => {'company': _company(), 'header': {}, 'lines': [], 'totals': {}},
   };
 }

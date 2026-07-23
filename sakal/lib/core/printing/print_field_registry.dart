@@ -192,6 +192,18 @@ class PrintFieldRegistry {
     PrintFieldDef('header.remarks', 'Remarks'),
   ];
 
+  static const _expenseVoucherScalarFields = [
+    PrintFieldDef('header.voucher_no', 'Voucher No'),
+    PrintFieldDef('header.trans_date', 'Voucher Date'),
+    PrintFieldDef('header.supplier_name', 'Supplier'),
+    PrintFieldDef('header.currency_code', 'Currency'),
+    PrintFieldDef('header.bill_no', 'Bill No'),
+    PrintFieldDef('header.bill_date', 'Bill Date'),
+    PrintFieldDef('header.remarks', 'Remarks'),
+    PrintFieldDef('totals.total_expense_display', 'Total Expense (pre-formatted)'),
+    PrintFieldDef('totals.net_payable_display', 'Net Payable to Supplier (pre-formatted)'),
+  ];
+
   static const _voucherScalarFields = [
     PrintFieldDef('header.voucher_type_label', 'Voucher Type'),
     PrintFieldDef('header.voucher_no', 'Voucher No'),
@@ -454,6 +466,15 @@ class PrintFieldRegistry {
     ],
   };
 
+  static const _expenseVoucherTableRowFields = {
+    'lines': [
+      PrintFieldDef('account_name', 'Expense Account'),
+      PrintFieldDef('amount', 'Amount', PrintDataFormat.currency),
+      PrintFieldDef('tax_group_name', 'Tax Group'),
+      PrintFieldDef('remarks', 'Remarks'),
+    ],
+  };
+
   static const _materialRequisitionTableRowFields = {
     'lines': [
       PrintFieldDef('product_name', 'Item Name'),
@@ -565,6 +586,7 @@ class PrintFieldRegistry {
       'GRN'                     => _grnScalarFields,
       'PURCHASE_INVOICE'        => _purchaseInvoiceScalarFields,
       'PURCHASE_RETURN'         => _purchaseReturnScalarFields,
+      'EXPENSE_VOUCHER'         => _expenseVoucherScalarFields,
       'VOUCHER'                 => _voucherScalarFields,
       'MATERIAL_REQUISITION'    => _materialRequisitionScalarFields,
       'MATERIAL_ISSUE'          => _materialIssueScalarFields,
@@ -594,6 +616,7 @@ class PrintFieldRegistry {
     'GRN'                     => const ['lines', 'charges'],
     'PURCHASE_INVOICE'        => const ['grns'],
     'PURCHASE_RETURN'         => const ['lines'],
+    'EXPENSE_VOUCHER'         => const ['lines'],
     'VOUCHER'                 => const ['lines'],
     'MATERIAL_REQUISITION'    => const ['lines'],
     'MATERIAL_ISSUE'          => const ['lines'],
@@ -620,6 +643,7 @@ class PrintFieldRegistry {
     'GRN'                     => _grnTableRowFields[tableName] ?? const [],
     'PURCHASE_INVOICE'        => _purchaseInvoiceTableRowFields[tableName] ?? const [],
     'PURCHASE_RETURN'         => _purchaseReturnTableRowFields[tableName] ?? const [],
+    'EXPENSE_VOUCHER'         => _expenseVoucherTableRowFields[tableName] ?? const [],
     'VOUCHER'                 => _voucherTableRowFields[tableName] ?? const [],
     'MATERIAL_REQUISITION'    => _materialRequisitionTableRowFields[tableName] ?? const [],
     'MATERIAL_ISSUE'          => _materialIssueTableRowFields[tableName] ?? const [],
@@ -635,6 +659,7 @@ class PrintFieldRegistry {
     'SALES_RETURN'            => _salesReturnTableRowFields[tableName] ?? const [],
     'SALES_DELIVERY'          => _salesDeliveryTableRowFields[tableName] ?? const [],
     'CASH_RECEIPT'            => _cashReceiptTableRowFields[tableName] ?? const [],
+    'EXPENSE_VOUCHER'         => _expenseVoucherTableRowFields[tableName] ?? const [],
     _ => const [],
   };
 
@@ -647,7 +672,7 @@ class PrintFieldRegistry {
     'PURCHASE_ORDER', 'GRN', 'PURCHASE_INVOICE', 'PURCHASE_RETURN', 'VOUCHER',
     'MATERIAL_REQUISITION', 'MATERIAL_ISSUE', 'STOCK_TRANSFER_REQUEST', 'STOCK_TRANSFER', 'STOCK_RECEIPT',
     'STOCK_ADJUSTMENT', 'OPENING_STOCK', 'STOCK_COUNT', 'STOCK_COUNT_REVIEW', 'PRICE_MASTER',
-    'SALES_INVOICE', 'SALES_RETURN', 'SALES_DELIVERY', 'CASH_RECEIPT',
+    'SALES_INVOICE', 'SALES_RETURN', 'SALES_DELIVERY', 'CASH_RECEIPT', 'EXPENSE_VOUCHER',
   ];
 
   static String documentTypeLabel(String documentType) => switch (documentType) {
@@ -657,6 +682,7 @@ class PrintFieldRegistry {
     'GRN'                     => 'Goods Receipt Note',
     'PURCHASE_INVOICE'        => 'Purchase Bill',
     'PURCHASE_RETURN'         => 'Purchase Return',
+    'EXPENSE_VOUCHER'         => 'Expense Voucher',
     'VOUCHER'                 => 'Finance Voucher',
     'MATERIAL_REQUISITION'    => 'Material Requisition',
     'MATERIAL_ISSUE'          => 'Material Issue',

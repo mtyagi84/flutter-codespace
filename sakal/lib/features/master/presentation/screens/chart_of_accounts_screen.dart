@@ -44,6 +44,7 @@ class _ChartOfAccountsScreenState
   // Data
   List<Map<String, dynamic>> _accounts   = [];
   List<Map<String, dynamic>> _currencies = [];
+  List<Map<String, dynamic>> _taxGroups  = [];
   List<Map<String, dynamic>> _countries  = [];
   List<Map<String, dynamic>> _divisions  = [];
   List<Map<String, dynamic>> _cities     = [];
@@ -77,6 +78,7 @@ class _ChartOfAccountsScreenState
   bool    _postingAllowed = false;
   String  _nature         = 'General';
   String? _currencyId;
+  String? _defaultTaxGroupId;
   String? _partyType;
   String? _countryId;
   String? _countryCode;   // ISO code for querying cities/divisions
@@ -129,16 +131,19 @@ class _ChartOfAccountsScreenState
       });
       final currenciesFuture = ref.read(currenciesProvider.future);
       final countriesFuture  = ref.read(countriesProvider.future);
+      final taxGroupsFuture  = ref.read(taxGroupsProvider.future);
 
       final accountsRes = await accountsFuture;
       final currencies  = await currenciesFuture;
       final countries   = await countriesFuture;
+      final taxGroups   = await taxGroupsFuture;
 
       if (mounted) {
         setState(() {
           _accounts   = List<Map<String, dynamic>>.from(accountsRes.data as List);
           _currencies = currencies;
           _countries  = countries;
+          _taxGroups  = taxGroups;
           _loading    = false;
         });
         _buildTree();
@@ -262,6 +267,7 @@ class _ChartOfAccountsScreenState
       _nature         = nat;
       _isAutoCode     = false;
       _currencyId     = node['account_currency_id'] as String?;
+      _defaultTaxGroupId = node['default_tax_group_id'] as String?;
       _partyType      = node['party_type'] as String?;
       _countryId      = cId;
       _countryCode    = country['country_code'] as String?;
@@ -302,7 +308,7 @@ class _ChartOfAccountsScreenState
     _phoneCtrl.clear(); _emailCtrl.clear(); _addr1Ctrl.clear();
     _addr2Ctrl.clear(); _taxIdCtrl.clear(); _catCtrl.clear();
     _limitCtrl.clear();
-    _currencyId = null; _partyType   = null;
+    _currencyId = null; _defaultTaxGroupId = null; _partyType = null;
     _countryId  = null; _countryCode = null;
     _divisionId = null; _cityId      = null;
     _divisions  = [];   _cities      = [];
@@ -334,6 +340,7 @@ class _ChartOfAccountsScreenState
       'posting_allowed':     _postingAllowed,
       'account_nature':      _nature,
       'account_currency_id': _currencyId,
+      'default_tax_group_id': _defaultTaxGroupId,
       'is_active':           _isActive,
       'is_system_fixed':     false,
       'updated_by':          session.userId,
@@ -801,6 +808,24 @@ class _ChartOfAccountsScreenState
                           overflow: TextOverflow.ellipsis),
                     )).toList(),
                     onChanged: (v) => setState(() => _currencyId = v),
+                  ),
+                ),
+                SakalFieldCard(
+                  label: 'Default Tax Group',
+                  editable: true,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _defaultTaxGroupId,
+                    isExpanded: true, isDense: true, itemHeight: null,
+                    style: fieldStyle,
+                    decoration: bare(hint: 'None'),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('None')),
+                      ..._taxGroups.map((g) => DropdownMenuItem(
+                            value: g['id'] as String,
+                            child: Text('${g['group_code']} — ${g['group_name']}', overflow: TextOverflow.ellipsis),
+                          )),
+                    ],
+                    onChanged: (v) => setState(() => _defaultTaxGroupId = v),
                   ),
                 ),
               ]),

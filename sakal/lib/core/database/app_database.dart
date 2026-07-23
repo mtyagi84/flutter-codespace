@@ -30,6 +30,7 @@ import 'tables/module_sync_status_cache_table.dart';
 import 'tables/sales_return_cache_tables.dart';
 import 'tables/sales_delivery_cache_tables.dart';
 import 'tables/cash_receipt_cache_tables.dart';
+import 'tables/expense_voucher_cache_tables.dart';
 
 part 'app_database.g.dart';
 
@@ -90,6 +91,8 @@ part 'app_database.g.dart';
   SalesDeliveryLinesCache,
   CashReceiptHeadersCache,
   CashReceiptLinesCache,
+  ExpenseVoucherHeadersCache,
+  ExpenseVoucherLinesCache,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'sakal_local'));
@@ -101,7 +104,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 24;
+  int get schemaVersion => 25;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -264,6 +267,13 @@ class AppDatabase extends _$AppDatabase {
           if (from < 24) {
             await m.createTable(cashReceiptHeadersCache);
             await m.createTable(cashReceiptLinesCache);
+          }
+          // v25: Expense Voucher — new module, built with offline SAVE
+          // from day one, same shape as Cash Receipt/Sales Delivery.
+          // Approve stays online-only. See docs/screens/expense_voucher.md.
+          if (from < 25) {
+            await m.createTable(expenseVoucherHeadersCache);
+            await m.createTable(expenseVoucherLinesCache);
           }
         },
       );

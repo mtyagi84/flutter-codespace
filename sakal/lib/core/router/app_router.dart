@@ -90,6 +90,8 @@ import '../../features/finance/presentation/screens/journal_voucher_entry_screen
 import '../../features/finance/presentation/screens/journal_voucher_list_screen.dart';
 import '../../features/finance/presentation/screens/contra_voucher_entry_screen.dart';
 import '../../features/finance/presentation/screens/contra_voucher_list_screen.dart';
+import '../../features/finance/presentation/screens/expense_voucher_entry_screen.dart';
+import '../../features/finance/presentation/screens/expense_voucher_list_screen.dart';
 import '../layout/app_shell.dart';
 import '../layout/group_landing_screen.dart';
 import '../providers/session_provider.dart';
@@ -502,6 +504,16 @@ final appRouter = GoRouter(
             return ContraVoucherEntryScreen(
               editTransNo:   extra?['transNo'] as String?,
               editTransDate: extra?['transDate'] as String?,
+            );
+          },
+        ),
+        GoRoute(path: RouteNames.expenseVoucherList, builder: (c, s) => const ExpenseVoucherListScreen()),
+        GoRoute(
+          path: RouteNames.expenseVoucherEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return ExpenseVoucherEntryScreen(
+              editTransNo: extra?['transNo'] as String?,
             );
           },
         ),
