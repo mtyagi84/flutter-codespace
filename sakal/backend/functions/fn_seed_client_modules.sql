@@ -141,6 +141,7 @@ begin
         (p_client_id, p_company_id, v_fn, 'FN-CTR', 'Contra Voucher','/finance/contra',        1, 'FN-TXN', 'Transactions', 0, true,  false, false),
         (p_client_id, p_company_id, v_fn, 'FN-EXP', 'Expense Voucher','/finance/expense-vouchers', 2, 'FN-TXN', 'Transactions', 0, true,  false, false),
         (p_client_id, p_company_id, v_fn, 'FN-CBK', 'Cash Book',     '/finance/cashbook',      3, 'FN-TXN', 'Transactions', 0, false, false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-PRV', 'Payment/Receipt Voucher', '/finance/voucher-list', 4, 'FN-TXN', 'Transactions', 0, true, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-TRB', 'Trial Balance', '/finance/trial-balance', 0, 'FN-RPT', 'Reports',      1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-PNL', 'Profit & Loss', '/finance/profit-loss',   1, 'FN-RPT', 'Reports',      1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-BSH', 'Balance Sheet', '/finance/balance-sheet', 2, 'FN-RPT', 'Reports',      1, false, false, false)
