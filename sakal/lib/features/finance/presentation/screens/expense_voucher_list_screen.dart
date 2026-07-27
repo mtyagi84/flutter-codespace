@@ -32,6 +32,7 @@ class _ExpenseVoucherListScreenState extends ConsumerState<ExpenseVoucherListScr
   String get screenName => RouteNames.expenseVoucherList;
 
   late final PagedListController<Map<String, dynamic>> _controller;
+  UserSession _session() => ref.read(sessionProvider)!;
   Set<String> _pendingIds = {};
   bool _loading = true;
   String? _error;
@@ -43,10 +44,9 @@ class _ExpenseVoucherListScreenState extends ConsumerState<ExpenseVoucherListScr
   @override
   void initState() {
     super.initState();
-    final session = () => ref.read(sessionProvider)!;
     _controller = PagedListController<Map<String, dynamic>>(
       fetchPage: ({required limit, required offset}) => ref.read(expenseVoucherRepositoryProvider).listVouchers(
-            clientId: session().clientId, companyId: session().companyId,
+            clientId: _session().clientId, companyId: _session().companyId,
             status: _filterStatus, search: _searchText.isEmpty ? null : _searchText,
             limit: limit, offset: offset,
           ),

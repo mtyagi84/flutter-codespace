@@ -34,6 +34,7 @@ class _JournalVoucherListScreenState extends ConsumerState<JournalVoucherListScr
   String get screenName => RouteNames.journalEntry;
 
   late final PagedListController<Map<String, dynamic>> _controller;
+  UserSession _session() => ref.read(sessionProvider)!;
   Set<String> _pendingIds = {};
   bool _loading = true;
   String? _error;
@@ -47,11 +48,10 @@ class _JournalVoucherListScreenState extends ConsumerState<JournalVoucherListScr
   @override
   void initState() {
     super.initState();
-    final session = () => ref.read(sessionProvider)!;
     _controller = PagedListController<Map<String, dynamic>>(
       fetchPage: ({required limit, required offset}) => ref.read(financeVoucherRepositoryProvider).listHeaders(
-            clientId: session().clientId, companyId: session().companyId,
-            locationId: session().locationId ?? '',
+            clientId: _session().clientId, companyId: _session().companyId,
+            locationId: _session().locationId ?? '',
             fromDate: _fmtDate(_fromDate), toDate: _fmtDate(_toDate),
             voucherTypeCode: 'JV', isPosted: _filterPosted,
             search: _searchText.isEmpty ? null : _searchText,
