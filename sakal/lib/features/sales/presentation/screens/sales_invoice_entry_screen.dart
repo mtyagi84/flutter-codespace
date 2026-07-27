@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -9,7 +9,9 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/app_number_format.dart';
+import '../../../../core/utils/deferred_row_disposal.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
@@ -120,7 +122,7 @@ class _InvoiceLineRow {
   }
 }
 
-class _InvoiceChargeRow {
+class _InvoiceChargeRow implements DisposableRow {
   String? chargeId;
   String  chargeName = '';
   bool    isTaxable = false;
@@ -136,6 +138,7 @@ class _InvoiceChargeRow {
 
   double get value => double.tryParse(valueCtrl.text) ?? 0;
 
+  @override
   void dispose() => valueCtrl.dispose();
 }
 
@@ -164,7 +167,7 @@ class SalesInvoiceEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScreen>
-    with ScreenPermissionMixin<SalesInvoiceEntryScreen> {
+    with ScreenPermissionMixin<SalesInvoiceEntryScreen>, DeferredRowDisposal<SalesInvoiceEntryScreen> {
   @override
   String get screenName => '/sales/invoices';
 
@@ -310,6 +313,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     for (final c in _charges) {
       c.dispose();
     }
+    disposeDeferredRows();
     super.dispose();
   }
 
@@ -386,8 +390,9 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
         _addLine();
         if (mounted) setState(() => _loading = false);
       }
-    } catch (e) {
-      if (mounted) setState(() { _loading = false; _error = 'Could not load data: $e'; });
+    } catch (e, st) {
+      AppLogger.error('SalesInvoiceLoad', e, st);
+      if (mounted) setState(() { _loading = false; _error = ErrorPresenter.format(e, action: 'load this data'); });
     }
   }
 
@@ -574,7 +579,8 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
           _loadingVoucherLines = false;
         });
       }
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.warn('SalesInvoiceLoadVoucherLines', e, st: st);
       if (mounted) setState(() => _loadingVoucherLines = false);
     }
   }
@@ -688,12 +694,13 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
       quotations = await ref.read(salesInvoiceRepositoryProvider).getInvoiceableQuotations(
         clientId: session.clientId, companyId: session.companyId,
       );
-    } catch (e) {
-      loadError = '$e';
+    } catch (e, st) {
+      AppLogger.error('SalesInvoicePickQuotation', e, st);
+      loadError = ErrorPresenter.format(e, action: 'load quotations');
     }
     if (!mounted) return null;
     if (loadError != null) {
-      _showSnack('Could not load quotations: $loadError', color: AppColors.negative);
+      _showSnack(loadError, color: AppColors.negative);
       return null;
     }
     if (quotations.isEmpty) {
@@ -729,12 +736,13 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
       orders = await ref.read(salesInvoiceRepositoryProvider).getInvoiceableOrders(
         clientId: session.clientId, companyId: session.companyId,
       );
-    } catch (e) {
-      loadError = '$e';
+    } catch (e, st) {
+      AppLogger.error('SalesInvoicePickOrder', e, st);
+      loadError = ErrorPresenter.format(e, action: 'load orders');
     }
     if (!mounted) return null;
     if (loadError != null) {
-      _showSnack('Could not load orders: $loadError', color: AppColors.negative);
+      _showSnack(loadError, color: AppColors.negative);
       return null;
     }
     if (orders.isEmpty) {
@@ -819,7 +827,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     setState(() => _loading = true);
     _pendingRowDisposal.addAll(_lines);
     _lines = [];
-    for (final c in _charges) { c.dispose(); }
+    for (final c in _charges) { deferRowDisposal(c); }
     _charges.clear();
     _invoiceMode = 'DIRECT';
     _sourceQuotationNo = null; _sourceQuotationDate = null;
@@ -860,7 +868,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
   /// Shared by both AGAINST_QUOTATION and AGAINST_ORDER — populates
   /// _charges from the source document's own saved rows, read-only.
   Future<void> _prefillChargesFromSource(List<Map<String, dynamic>> sourceCharges) async {
-    for (final c in _charges) { c.dispose(); }
+    for (final c in _charges) { deferRowDisposal(c); }
     _charges.clear();
     for (final sc in sourceCharges) {
       final row = _InvoiceChargeRow()
@@ -952,7 +960,14 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
   // _prefillChargesFromSource) ────────────────────────────────────────────
 
   void _addCharge() => setState(() => _charges.add(_InvoiceChargeRow()));
-  void _removeCharge(_InvoiceChargeRow row) => setState(() { _charges.remove(row); row.dispose(); });
+  // Deferred disposal — row.valueCtrl may still be attached to a widget in
+  // the current frame; disposing it synchronously here is the same crash
+  // class as _pendingRowDisposal above, just for charge rows (see
+  // DeferredRowDisposal).
+  void _removeCharge(_InvoiceChargeRow row) {
+    setState(() => _charges.remove(row));
+    deferRowDisposal(row);
+  }
 
   void _onChargeSelected(_InvoiceChargeRow row, Map<String, dynamic> charge) {
     setState(() {
@@ -1053,8 +1068,9 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
         row.serialCandidates = rows.map((s) => _SerialCandidate(serialNo: s['serial_no'] as String)).toList();
       }
       if (mounted) setState(() => row.candidatesLoaded = true);
-    } catch (e) {
-      if (mounted) _showSnack('Could not load batch/serial data for "${row.productDisplay}": $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('SalesInvoiceLoadCandidates', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'load batch/serial data for "${row.productDisplay}"'), color: AppColors.negative);
     }
   }
 
@@ -1197,10 +1213,9 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                     requestedDiscountPercent: requestedPct,
                   );
                   if (dialogContext.mounted) Navigator.of(dialogContext, rootNavigator: true).pop(res);
-                } on DioException catch (e) {
-                  setDialogState(() => dialogError = e.response?.data?['message'] ?? 'Verification failed.');
-                } catch (e) {
-                  setDialogState(() => dialogError = 'Unexpected error: $e');
+                } catch (e, st) {
+                  AppLogger.error('SalesInvoiceVerifyDiscountOverride', e, st);
+                  setDialogState(() => dialogError = ErrorPresenter.format(e, action: 'verify this override'));
                 }
               },
               child: const Text('Authorize'),
@@ -1524,11 +1539,9 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
         _showSnack('Sales Invoice $invoiceNo completed.', color: AppColors.positive);
       }
       return true;
-    } on DioException catch (e) {
-      setState(() { _saving = false; _actionError = e.response?.data?['message'] ?? 'Save failed: ${e.message}'; });
-      return false;
-    } catch (e) {
-      setState(() { _saving = false; _actionError = 'Unexpected error: $e'; });
+    } catch (e, st) {
+      AppLogger.error('SalesInvoiceSave', e, st);
+      setState(() { _saving = false; _actionError = ErrorPresenter.format(e, action: 'save this invoice'); });
       return false;
     }
   }
@@ -1575,10 +1588,9 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
         _showSnack('Sales Invoice $_invoiceNo cancelled.', color: AppColors.positive);
         await _loadExisting(_invoiceNo!, _fmtDate(_invoiceDate));
       }
-    } on DioException catch (e) {
-      if (mounted) setState(() => _actionError = e.response?.data?['message'] ?? 'Cancel failed.');
-    } catch (e) {
-      if (mounted) setState(() => _actionError = 'Unexpected error: $e');
+    } catch (e, st) {
+      AppLogger.error('SalesInvoiceCancel', e, st);
+      if (mounted) setState(() => _actionError = ErrorPresenter.format(e, action: 'cancel this invoice'));
     } finally {
       // Reset in `finally`, not just the catch branches — a post-success
       // _loadExisting() failure would otherwise leave _cancelling stuck
@@ -1645,8 +1657,9 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
       final template = await ref.read(printTemplateProvider('SALES_INVOICE').future);
       final document = _buildPrintDocument(company);
       await PrintEngine.printDocument(template: template, document: document, filename: '$_invoiceNo.pdf');
-    } catch (e) {
-      _showSnack('Print failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('SalesInvoicePrint', e, st);
+      _showSnack(ErrorPresenter.format(e, action: 'print this invoice'), color: AppColors.negative);
     } finally {
       if (mounted) setState(() => _printing = false);
     }
@@ -1705,7 +1718,9 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
         invoiceNo: _invoiceNo!, invoiceDate: _fmtDate(_invoiceDate),
       );
       if (mounted) setState(() => _deliveryStatus = row?['delivery_status'] as String?);
-    } catch (_) { /* best-effort */ }
+    } catch (e, st) {
+      AppLogger.warn('SalesInvoiceLoadDeliveryStatus', e, st: st); // best-effort
+    }
   }
 
   Widget? _deliveryStatusBadge() {
@@ -1972,13 +1987,14 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                             for (final l in _lines.where((l) => l.productId != null)) {
                               await _resolvePrice(l, ds, session);
                             }
-                          } catch (e) {
+                          } catch (e, st) {
                             // Unlike the Cash-sale path (covered by _init()'s
                             // own try/catch), this callback has no enclosing
                             // handler — an uncaught error here previously
                             // surfaced as an unhandled exception with no user
                             // feedback at all.
-                            if (mounted) _showSnack('Could not resolve currency/price for this customer: $e', color: AppColors.negative);
+                            AppLogger.error('SalesInvoiceResolveCustomerCurrency', e, st);
+                            if (mounted) _showSnack(ErrorPresenter.format(e, action: 'resolve currency/price for this customer'), color: AppColors.negative);
                           }
                           if (mounted) setState(() {});
                         },

@@ -1,16 +1,26 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/app_logger.dart';
+import '../../../../core/utils/paged_list_controller.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../providers/finance_voucher_providers.dart';
 
+/// Reference implementation for scroll-triggered pagination — see
+/// CLAUDE.md's "Pagination" mandatory pattern (paired with
+/// expense_voucher_list_screen.dart). Search is server-side (debounced
+/// 350ms) against trans_no/remarks rather than a client-side filter over
+/// loaded rows, since a client-side filter would silently miss anything
+/// not yet paged in.
 class JournalVoucherListScreen extends ConsumerStatefulWidget {
   const JournalVoucherListScreen({super.key});
 
@@ -23,7 +33,7 @@ class _JournalVoucherListScreenState extends ConsumerState<JournalVoucherListScr
   @override
   String get screenName => RouteNames.journalEntry;
 
-  List<Map<String, dynamic>> _vouchers = [];
+  late final PagedListController<Map<String, dynamic>> _controller;
   Set<String> _pendingIds = {};
   bool _loading = true;
   String? _error;
@@ -32,58 +42,81 @@ class _JournalVoucherListScreenState extends ConsumerState<JournalVoucherListScr
   final DateTime _toDate = DateTime.now();
   final _searchCtrl = TextEditingController();
   String _searchText = '';
+  Timer? _searchDebounce;
 
   @override
   void initState() {
     super.initState();
-    _searchCtrl.addListener(() => setState(() => _searchText = _searchCtrl.text.trim().toLowerCase()));
+    final session = () => ref.read(sessionProvider)!;
+    _controller = PagedListController<Map<String, dynamic>>(
+      fetchPage: ({required limit, required offset}) => ref.read(financeVoucherRepositoryProvider).listHeaders(
+            clientId: session().clientId, companyId: session().companyId,
+            locationId: session().locationId ?? '',
+            fromDate: _fmtDate(_fromDate), toDate: _fmtDate(_toDate),
+            voucherTypeCode: 'JV', isPosted: _filterPosted,
+            search: _searchText.isEmpty ? null : _searchText,
+            limit: limit, offset: offset,
+          ),
+    );
+    _searchCtrl.addListener(() {
+      _searchDebounce?.cancel();
+      _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+        if (!mounted) return;
+        setState(() => _searchText = _searchCtrl.text.trim());
+        _load();
+      });
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
-    final session = ref.read(sessionProvider)!;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final results = await Future.wait([
-        ref.read(financeVoucherRepositoryProvider).listHeaders(
-              clientId: session.clientId, companyId: session.companyId,
-              locationId: session.locationId ?? '',
-              fromDate: _fmtDate(_fromDate), toDate: _fmtDate(_toDate),
-              voucherTypeCode: 'JV', isPosted: _filterPosted,
-            ),
-        ref.read(syncEngineProvider).pendingDocumentIds('FINANCE_VOUCHER'),
-      ]);
+      // Started before awaiting loadFirstPage() so both run concurrently,
+      // without mixing a Future<void> into a single Future.wait list (an
+      // awkward type-inference corner in Dart).
+      final pendingIdsFuture = ref.read(syncEngineProvider).pendingDocumentIds('FINANCE_VOUCHER');
+      await _controller.loadFirstPage();
+      final pendingIds = await pendingIdsFuture;
       if (mounted) {
         setState(() {
-          _vouchers = results[0] as List<Map<String, dynamic>>;
-          _pendingIds = results[1] as Set<String>;
+          _pendingIds = pendingIds;
           _loading = false;
         });
       }
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.error('JournalVoucherListLoad', e, st);
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Could not load journal vouchers: $e';
+          _error = ErrorPresenter.format(e, action: 'load journal vouchers');
         });
       }
     }
   }
 
-  List<Map<String, dynamic>> get _filtered {
-    if (_searchText.isEmpty) return _vouchers;
-    return _vouchers.where((v) =>
-        (v['trans_no'] as String? ?? '').toLowerCase().contains(_searchText) ||
-        (v['remarks'] as String? ?? '').toLowerCase().contains(_searchText)).toList();
+  Future<void> _loadMore() async {
+    try {
+      await _controller.loadMore();
+      if (mounted) setState(() {});
+    } catch (e, st) {
+      AppLogger.error('JournalVoucherListLoadMore', e, st);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ErrorPresenter.format(e, action: 'load more vouchers')), backgroundColor: AppColors.negative),
+        );
+      }
+    }
   }
 
   Future<void> _openNew() async {
@@ -117,7 +150,7 @@ class _JournalVoucherListScreenState extends ConsumerState<JournalVoucherListScr
 
   @override
   Widget build(BuildContext context) {
-    final rows = _filtered;
+    final rows = _controller.items;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -181,10 +214,13 @@ class _JournalVoucherListScreenState extends ConsumerState<JournalVoucherListScr
             rowBuilder: _buildRow,
             cardBuilder: _buildCard,
             emptyState: _emptyState(),
+            onLoadMore: _loadMore,
+            hasMore: _controller.hasMore,
+            loadingMore: _controller.isLoadingMore,
           ),
         ),
         if (!_loading)
-          Padding(padding: const EdgeInsets.fromLTRB(24, 6, 24, 12), child: Text('${rows.length} voucher(s)', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
+          Padding(padding: const EdgeInsets.fromLTRB(24, 6, 24, 12), child: Text('${rows.length}${_controller.hasMore ? '+' : ''} voucher(s)', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
       ],
     );
   }

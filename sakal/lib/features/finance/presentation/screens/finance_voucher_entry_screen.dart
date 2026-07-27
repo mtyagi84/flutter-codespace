@@ -2,8 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/sync/sync_engine.dart';
+import '../../../../core/utils/app_logger.dart';
+import '../../../../core/utils/deferred_row_disposal.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../data/models/finance_voucher_model.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -39,7 +42,7 @@ MenuFeature? _findFeature(List<MenuModule> modules, String screenPath) {
 
 // ── Data models ───────────────────────────────────────────────────────────────
 
-class _BillRow {
+class _BillRow implements DisposableRow {
   final String  transNo;
   final String  transDate;
   final String  invBillNo;
@@ -64,10 +67,11 @@ class _BillRow {
            text: initialPay > 0 ? initialPay.toStringAsFixed(2) : '');
 
   double get payTrans => double.tryParse(payTransCtrl.text) ?? 0;
+  @override
   void dispose() => payTransCtrl.dispose();
 }
 
-class _AccountLine {
+class _AccountLine implements DisposableRow {
   String? accountId;
   String? accountName;
   String  accountCurrency; // ledger currency of this account
@@ -86,6 +90,7 @@ class _AccountLine {
         remarksCtrl = TextEditingController(text: remarks);
 
   double get amount => double.tryParse(amountCtrl.text) ?? 0;
+  @override
   void dispose() { amountCtrl.dispose(); remarksCtrl.dispose(); }
 }
 
@@ -109,7 +114,8 @@ class FinanceVoucherEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _FinanceVoucherEntryScreenState
-    extends ConsumerState<FinanceVoucherEntryScreen> {
+    extends ConsumerState<FinanceVoucherEntryScreen>
+    with DeferredRowDisposal<FinanceVoucherEntryScreen> {
 
   // ── Header ────────────────────────────────────────────────────────────────
   String?   _voucherType;
@@ -196,6 +202,7 @@ class _FinanceVoucherEntryScreenState
     _chequeNoCtrl.dispose();
     for (final b in _bills) { b.dispose(); }
     for (final l in _accountLines) { l.dispose(); }
+    disposeDeferredRows();
     super.dispose();
   }
 
@@ -255,11 +262,12 @@ class _FinanceVoucherEntryScreenState
         }
         setState(() => _loading = false);
       }
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.error('FinanceVoucherLoad', e, st);
       if (mounted) {
         setState(() {
           _loading = false;
-          _error   = 'Could not load data: $e';
+          _error   = ErrorPresenter.format(e, action: 'load this data');
         });
       }
     }
@@ -268,8 +276,11 @@ class _FinanceVoucherEntryScreenState
   // ── Apply voucher type ─────────────────────────────────────────────────────
 
   void _applyVoucherType(String type) {
-    for (final b in _bills) { b.dispose(); }
-    for (final l in _accountLines) { l.dispose(); }
+    // Deferred disposal — a row's FocusNode/controller may still be attached
+    // to a widget in the current frame; never dispose it synchronously right
+    // before the setState below replaces _bills/_accountLines wholesale.
+    for (final b in _bills) { deferRowDisposal(b); }
+    for (final l in _accountLines) { deferRowDisposal(l); }
     setState(() {
       _voucherType   = type;
       _cashBankId             = null;
@@ -388,7 +399,7 @@ class _FinanceVoucherEntryScreenState
         }
       } else {
         // On Account — restore account lines
-        for (final l in _accountLines) { l.dispose(); }
+        for (final l in _accountLines) { deferRowDisposal(l); }
         final loaded = restObjs.map((row) {
           final accId = row.accountId.isEmpty ? null : row.accountId;
           final acc   = _otherAccounts.where((a) => a['id'] == accId).firstOrNull;
@@ -407,11 +418,12 @@ class _FinanceVoucherEntryScreenState
           _accountLines = loaded.isNotEmpty ? loaded : [_AccountLine()];
         });
       }
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.error('FinanceVoucherLoadExisting', e, st);
       if (mounted) {
         setState(() {
           _loading = false;
-          _error   = 'Could not load voucher: $e';
+          _error   = ErrorPresenter.format(e, action: 'load this voucher');
         });
       }
     }
@@ -519,8 +531,9 @@ class _FinanceVoucherEntryScreenState
       final document = _buildPrintDocument(company);
       await PrintEngine.printDocument(
           template: template, document: document, filename: '$_voucherType-$_voucherNo.pdf');
-    } catch (e) {
-      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('FinanceVoucherPrint', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this voucher'), color: AppColors.negative);
     } finally {
       if (mounted) setState(() => _printing = false);
     }
@@ -576,7 +589,8 @@ class _FinanceVoucherEntryScreenState
     final currency = _extractCurrency(account);
     final nature   = account['account_nature'] as String? ?? '';
     final billOk   = _voucherType == null || canSettleAgainstBill(_voucherType!, nature);
-    for (final b in _bills) { b.dispose(); }
+    // Deferred disposal — see _applyVoucherType's comment above.
+    for (final b in _bills) { deferRowDisposal(b); }
     setState(() {
       _partyId       = account['id']           as String;
       _partyName     = account['account_name'] as String;
@@ -609,7 +623,10 @@ class _FinanceVoucherEntryScreenState
         toCurrency:   to,
         rateDate:     _fmtDate(_transDate),
       );
-    } catch (_) { return null; }
+    } catch (e, st) {
+      AppLogger.warn('FinanceVoucherFetchRate', e, st: st);
+      return null;
+    }
   }
 
   // Fetches the display rate ("1 base = X trans") and the local rate
@@ -644,7 +661,8 @@ class _FinanceVoucherEntryScreenState
         locationId: session.locationId!,
         accountId:  _partyId!,
       );
-      for (final b in _bills) { b.dispose(); }
+      // Deferred disposal — see _applyVoucherType's comment above.
+      for (final b in _bills) { deferRowDisposal(b); }
       setState(() {
         _bills = rows.map((r) {
           final bn = r['inv_bill_no'] as String? ?? '';
@@ -662,7 +680,8 @@ class _FinanceVoucherEntryScreenState
         }).toList();
         _loadingBills = false;
       });
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.error('FinanceVoucherLoadPendingBills', e, st);
       setState(() => _loadingBills = false);
     }
   }
@@ -849,11 +868,12 @@ class _FinanceVoucherEntryScreenState
           return true;
         }
       }
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.error('FinanceVoucherSave', e, st);
       if (mounted) {
         setState(() {
           _saving      = false;
-          _actionError = 'Save failed: $e';
+          _actionError = ErrorPresenter.format(e, action: 'save the voucher');
         });
       }
     }
@@ -908,11 +928,12 @@ class _FinanceVoucherEntryScreenState
         });
         _showSnack('$_voucherNo posted successfully.', color: AppColors.positive);
       }
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.error('FinanceVoucherPost', e, st);
       if (mounted) {
         setState(() {
           _posting     = false;
-          _actionError = 'Post failed: $e';
+          _actionError = ErrorPresenter.format(e, action: 'post the voucher');
         });
       }
     }
@@ -1437,7 +1458,8 @@ class _FinanceVoucherEntryScreenState
                 style: style,
                 onSelected: _onPartySelected,
                 onCleared: () {
-                  for (final b in _bills) { b.dispose(); }
+                  // Deferred disposal — see _applyVoucherType's comment above.
+                  for (final b in _bills) { deferRowDisposal(b); }
                   setState(() {
                     _partyId       = null;
                     _partyName     = null;
@@ -1660,8 +1682,9 @@ class _FinanceVoucherEntryScreenState
       title: line.accountName ?? 'Line ${i + 1}',
       onDelete: (!locked && _accountLines.length > 1)
           ? () {
+              // Deferred disposal — see _applyVoucherType's comment above.
               final removed = _accountLines.removeAt(i);
-              removed.dispose();
+              deferRowDisposal(removed);
               setState(() {});
             }
           : null,

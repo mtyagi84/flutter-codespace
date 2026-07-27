@@ -9,6 +9,9 @@ abstract class FinanceVoucherRepository {
     required String toDate,
     String? voucherTypeCode,
     bool? isPosted,
+    String? search,
+    int limit = 50,
+    int offset = 0,
   });
 
   Future<FinanceVoucherHeader?> getHeader({

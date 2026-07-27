@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/master_type_keys.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -10,6 +10,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
@@ -486,11 +487,9 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     Map<String, dynamic>? match;
     try {
       match = await _ds.getProductByBarcode(clientId: session.clientId, companyId: session.companyId, barcode: barcode);
-    } on DioException catch (e) {
-      if (mounted) _showSnack('Barcode lookup failed: ${_serverError(e)}', color: AppColors.negative);
-      return;
-    } catch (e) {
-      if (mounted) _showSnack('Barcode lookup failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('GrnBarcodeLookup', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'look up this barcode'), color: AppColors.negative);
       return;
     }
     if (!mounted) return;
@@ -1095,10 +1094,9 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
           return true;
         }
       }
-    } on DioException catch (e) {
-      if (mounted) setState(() { _saving = false; _actionError = 'Save failed: ${_serverError(e)}'; });
-    } catch (e) {
-      if (mounted) setState(() { _saving = false; _actionError = 'Unexpected error: $e'; });
+    } catch (e, st) {
+      AppLogger.error('GrnSave', e, st);
+      if (mounted) setState(() { _saving = false; _actionError = ErrorPresenter.format(e, action: 'save this GRN'); });
     }
     return false;
   }
@@ -1223,22 +1221,10 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
       if (_postedVoucherNo != null && _postedVoucherDate != null) {
         unawaited(_loadPostedVoucherLines());
       }
-    } on DioException catch (e) {
-      if (mounted) setState(() { _approving = false; _actionError = 'Approve failed: ${_serverError(e)}'; });
-    } catch (e) {
-      if (mounted) setState(() { _approving = false; _actionError = 'Unexpected error: $e'; });
+    } catch (e, st) {
+      AppLogger.error('GrnApprove', e, st);
+      if (mounted) setState(() { _approving = false; _actionError = ErrorPresenter.format(e, action: 'approve this GRN'); });
     }
-  }
-
-  String _serverError(DioException e) {
-    final data = e.response?.data;
-    if (data is Map) {
-      final details = data['details'] as String?;
-      final message = data['message'] as String?;
-      if (details != null && details.isNotEmpty) return details;
-      if (message != null && message.isNotEmpty) return message;
-    }
-    return e.message ?? e.toString();
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

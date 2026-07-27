@@ -111,6 +111,8 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
                 context.go(RouteNames.changePassword);
               } else if (val == 'offline_settings') {
                 context.go(RouteNames.offlineSettings);
+              } else if (val == 'app_logs') {
+                context.go(RouteNames.appLogs);
               } else if (val == 'switch_company') {
                 await _showSwitchCompanyDialog(context, ref, session!);
               } else if (val == 'logout') {
@@ -215,6 +217,17 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
                     ],
                   ),
                 ),
+              const PopupMenuItem(
+                value: 'app_logs',
+                child: Row(
+                  children: [
+                    Icon(Icons.article_outlined,
+                        size: 16, color: AppColors.textSecondary),
+                    SizedBox(width: 10),
+                    Text('View Logs'),
+                  ],
+                ),
+              ),
               const PopupMenuDivider(),
               const PopupMenuItem(
                 value: 'logout',

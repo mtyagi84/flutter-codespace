@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
@@ -59,6 +61,9 @@ class _ContraVoucherListScreenState extends ConsumerState<ContraVoucherListScree
               locationId: session.locationId ?? '',
               fromDate: _fmtDate(_fromDate), toDate: _fmtDate(_toDate),
               voucherTypeCode: 'CTR', isPosted: _filterPosted,
+              // See finance_voucher_list_screen.dart's identical comment —
+              // preserves pre-pagination behavior for this not-yet-converted screen.
+              limit: 500,
             ),
         ref.read(syncEngineProvider).pendingDocumentIds('FINANCE_VOUCHER'),
       ]);
@@ -69,11 +74,12 @@ class _ContraVoucherListScreenState extends ConsumerState<ContraVoucherListScree
           _loading = false;
         });
       }
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.error('ContraVoucherListLoad', e, st);
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Could not load contra vouchers: $e';
+          _error = ErrorPresenter.format(e, action: 'load contra vouchers');
         });
       }
     }

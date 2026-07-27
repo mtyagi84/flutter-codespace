@@ -1,0 +1,117 @@
+Flutter ERP Application Quality Assurance & Code Review Standard Checklist
+
+Purpose
+
+Use this checklist to review every screen, widget, service, repository
+and feature in the application. Fix all High priority items before
+release.
+
+Architecture
+
+-   Replace Map<String,dynamic> with strongly typed models.
+-   Eliminate magic strings; use enums/constants.
+-   Separate UI, business logic, mapping and formatting.
+-   Keep widgets focused on presentation.
+-   Prefer immutable models.
+
+State Management
+
+-   Avoid mixing local state and provider state unnecessarily.
+-   Use AsyncNotifier/Notifier (or equivalent) for async screen state.
+-   Prevent duplicate sources of truth.
+-   Dispose controllers/listeners.
+
+Performance
+
+-   Add debounce to search.
+-   Avoid repeated provider lookups inside row builders.
+-   Cache expensive computations.
+-   Paginate or lazy-load large datasets.
+-   Prevent duplicate concurrent API calls.
+-   Parallelize independent requests but isolate failures.
+
+UI / UX
+
+-   Support loading, empty, error and success states.
+-   Use skeleton loaders where appropriate.
+-   Provide pull-to-refresh on mobile.
+-   Add sorting and filtering.
+-   Search across meaningful fields.
+-   Display totals/counts where useful.
+-   Use consistent spacing, typography and colors.
+-   Avoid duplicate actions.
+
+Error Handling
+
+-   Never expose raw exceptions to users.
+-   Show friendly messages.
+-   Log technical details separately.
+-   Handle partial failures gracefully.
+-   Retry where appropriate.
+
+Data & Validation
+
+-   Validate all user input.
+-   Handle nulls safely.
+-   Validate API responses.
+-   Support offline and sync conflict scenarios.
+-   Use typed DTOs.
+
+Security
+
+-   Never hardcode secrets.
+-   Validate permissions.
+-   Sanitize user input.
+-   Secure local storage.
+-   Enforce route authorization.
+
+Accessibility
+
+-   Add Semantics labels.
+-   Ensure keyboard navigation.
+-   Verify screen-reader compatibility.
+-   Maintain adequate contrast.
+-   Support dynamic text scaling.
+
+Internationalization
+
+-   Externalize all user-facing strings.
+-   Support RTL if required.
+-   Localize dates, numbers and currencies.
+
+Maintainability
+
+-   Remove duplicated logic.
+-   Extract reusable widgets.
+-   Use consistent naming.
+-   Keep methods short.
+-   Document complex logic.
+
+Testing
+
+-   Unit tests for business logic.
+-   Widget tests for screens.
+-   Integration tests for key workflows.
+-   Test offline/online sync.
+-   Test large datasets.
+-   Test slow network.
+-   Test permission restrictions.
+-   Test invalid input.
+-   Test navigation.
+-   Test error recovery.
+
+Release Gate
+
+Critical: - No crashes. - No memory leaks. - No blocking performance
+issues. - No exposed exceptions. - No security issues.
+
+Major: - Strong typing. - Consistent state management. - Responsive
+UI. - Pagination where required. - Search, sort and filters verified.
+
+Minor: - Accessibility improvements. - UX polish. - Localization
+completeness.
+
+Expected Outcome
+
+The application should be scalable, maintainable, performant, secure,
+testable and consistent across all modules.

@@ -1,13 +1,15 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/app_number_format.dart';
+import '../../../../core/utils/deferred_row_disposal.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
@@ -25,7 +27,7 @@ import '../widgets/finance_account_picker.dart';
 /// Group. See docs/screens/expense_voucher.md for the full design
 /// discussion (Odoo's automatic-tax model, this schema's own dormant
 /// rim_tax_types.is_withholding brought to life here for the first time).
-class _ExpenseLineRow {
+class _ExpenseLineRow implements DisposableRow {
   String? accountId;
   String accountDisplay = '';
   String? taxGroupId;
@@ -39,6 +41,7 @@ class _ExpenseLineRow {
 
   double get amount => double.tryParse(amountCtrl.text) ?? 0;
 
+  @override
   void dispose() {
     amountCtrl.dispose();
     remarksCtrl.dispose();
@@ -59,7 +62,7 @@ class ExpenseVoucherEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _ExpenseVoucherEntryScreenState extends ConsumerState<ExpenseVoucherEntryScreen>
-    with ScreenPermissionMixin<ExpenseVoucherEntryScreen> {
+    with ScreenPermissionMixin<ExpenseVoucherEntryScreen>, DeferredRowDisposal<ExpenseVoucherEntryScreen> {
   @override
   String get screenName => RouteNames.expenseVoucherList;
 
@@ -103,7 +106,6 @@ class _ExpenseVoucherEntryScreenState extends ConsumerState<ExpenseVoucherEntryS
   final _supplierFocusNode = FocusNode();
 
   final List<_ExpenseLineRow> _lines = [];
-  final List<_ExpenseLineRow> _pendingLineDisposal = [];
 
   // Client-side tax PREVIEW only (tax_group_id -> summed rate%, split by
   // is_withholding) — the backend (fn_approve_expense_voucher) is always
@@ -164,9 +166,7 @@ class _ExpenseVoucherEntryScreenState extends ConsumerState<ExpenseVoucherEntryS
     for (final l in _lines) {
       l.dispose();
     }
-    for (final l in _pendingLineDisposal) {
-      l.dispose();
-    }
+    disposeDeferredRows();
     super.dispose();
   }
 
@@ -237,11 +237,12 @@ class _ExpenseVoucherEntryScreenState extends ConsumerState<ExpenseVoucherEntryS
       }
 
       if (mounted) setState(() => _loading = false);
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.error('ExpenseVoucherLoad', e, st);
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Could not load: $e';
+          _error = ErrorPresenter.format(e, action: 'load this voucher');
         });
       }
     }
@@ -305,9 +306,8 @@ class _ExpenseVoucherEntryScreenState extends ConsumerState<ExpenseVoucherEntryS
       if (_lines.isEmpty) _addLine();
     });
     // Deferred disposal — never dispose a just-removed row's controllers/
-    // FocusNodes inside the same setState that removes it from the tree
-    // (real bug class already fixed once on Cash Receipt/Journal Voucher).
-    _pendingLineDisposal.add(row);
+    // FocusNodes inside the same setState that removes it from the tree.
+    deferRowDisposal(row);
   }
 
   Future<void> _onLineAccountSelected(_ExpenseLineRow row, Map<String, dynamic> account) async {
@@ -456,16 +456,11 @@ class _ExpenseVoucherEntryScreenState extends ConsumerState<ExpenseVoucherEntryS
         _showSnack('Expense Voucher $savedTransNo saved.', color: AppColors.positive);
       }
       return true;
-    } on DioException catch (e) {
+    } catch (e, st) {
+      AppLogger.error('ExpenseVoucherSave', e, st);
       setState(() {
         _saving = false;
-        _actionError = _serverError(e);
-      });
-      return false;
-    } catch (e) {
-      setState(() {
-        _saving = false;
-        _actionError = 'Unexpected error: $e';
+        _actionError = ErrorPresenter.format(e, action: 'save the voucher');
       });
       return false;
     }
@@ -511,10 +506,9 @@ class _ExpenseVoucherEntryScreenState extends ConsumerState<ExpenseVoucherEntryS
         _showSnack('Expense Voucher $_transNo approved.', color: AppColors.positive);
         await _init();
       }
-    } on DioException catch (e) {
-      setState(() => _actionError = _serverError(e));
-    } catch (e) {
-      setState(() => _actionError = 'Unexpected error: $e');
+    } catch (e, st) {
+      AppLogger.error('ExpenseVoucherApprove', e, st);
+      setState(() => _actionError = ErrorPresenter.format(e, action: 'approve the voucher'));
     } finally {
       if (mounted) setState(() => _approving = false);
     }
@@ -565,19 +559,12 @@ class _ExpenseVoucherEntryScreenState extends ConsumerState<ExpenseVoucherEntryS
             userId: session.userId,
           );
       if (mounted) _showSnack('Reversal voucher $res posted.', color: AppColors.positive);
-    } on DioException catch (e) {
-      setState(() => _actionError = _serverError(e));
-    } catch (e) {
-      setState(() => _actionError = 'Unexpected error: $e');
+    } catch (e, st) {
+      AppLogger.error('ExpenseVoucherReverse', e, st);
+      setState(() => _actionError = ErrorPresenter.format(e, action: 'reverse the voucher'));
     } finally {
       if (mounted) setState(() => _reversing = false);
     }
-  }
-
-  String _serverError(DioException e) {
-    final data = e.response?.data;
-    if (data is Map && data['message'] is String) return data['message'] as String;
-    return e.message ?? e.toString();
   }
 
   // ── Print ─────────────────────────────────────────────────────────────
@@ -619,8 +606,9 @@ class _ExpenseVoucherEntryScreenState extends ConsumerState<ExpenseVoucherEntryS
       final template = await ref.read(printTemplateProvider('EXPENSE_VOUCHER').future);
       final document = _buildPrintDocument(company);
       await PrintEngine.printDocument(template: template, document: document, filename: '$_transNo.pdf');
-    } catch (e) {
-      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('ExpenseVoucherPrint', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this voucher'), color: AppColors.negative);
     } finally {
       if (mounted) setState(() => _printing = false);
     }

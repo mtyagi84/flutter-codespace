@@ -40,6 +40,14 @@ class SakalAdaptiveList<T> extends ConsumerWidget {
   final Widget Function(T row) cardBuilder;
   final Widget emptyState;
 
+  // Optional scroll-triggered pagination — see PagedListController
+  // (lib/core/utils/paged_list_controller.dart) and CLAUDE.md's
+  // "Pagination" mandatory pattern. All three default to off/false so
+  // every existing call site is unaffected.
+  final VoidCallback? onLoadMore;
+  final bool hasMore;
+  final bool loadingMore;
+
   const SakalAdaptiveList({
     super.key,
     required this.loading,
@@ -49,6 +57,9 @@ class SakalAdaptiveList<T> extends ConsumerWidget {
     required this.rowBuilder,
     required this.cardBuilder,
     required this.emptyState,
+    this.onLoadMore,
+    this.hasMore = false,
+    this.loadingMore = false,
   });
 
   @override
@@ -67,11 +78,13 @@ class SakalAdaptiveList<T> extends ConsumerWidget {
     // is the ONE place that decision is made — every screen built on
     // SakalAdaptiveList gets the fix for free, no per-screen width logic.
     if (!Responsive.isDesktop(context)) {
-      return ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        itemCount: rows.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
-        itemBuilder: (_, i) => cardBuilder(rows[i]),
+      return _paginated(
+        ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          itemCount: rows.length + (loadingMore ? 1 : 0),
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          itemBuilder: (_, i) => i >= rows.length ? _loadingMoreRow() : cardBuilder(rows[i]),
+        ),
       );
     }
 
@@ -85,15 +98,40 @@ class SakalAdaptiveList<T> extends ConsumerWidget {
           child: Row(children: columns.map((c) => _th(c.label, flex: c.flex, textAlign: c.textAlign)).toList()),
         ),
         Expanded(
-          child: ListView.separated(
-            itemCount: rows.length,
-            separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.border),
-            itemBuilder: (_, i) => rowBuilder(rows[i], i),
+          child: _paginated(
+            ListView.separated(
+              itemCount: rows.length + (loadingMore ? 1 : 0),
+              separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.border),
+              itemBuilder: (_, i) => i >= rows.length ? _loadingMoreRow() : rowBuilder(rows[i], i),
+            ),
           ),
         ),
       ]),
     );
   }
+
+  // Fires onLoadMore once per threshold-crossing, when scroll position is
+  // within ~300px of the bottom — never if there's nothing more to load or
+  // a load is already in flight. A plain NotificationListener rather than
+  // an owned ScrollController, since this widget is stateless/rebuilt
+  // per-row-list and has no lifecycle of its own to own a controller in.
+  Widget _paginated(Widget list) {
+    if (onLoadMore == null) return list;
+    return NotificationListener<ScrollNotification>(
+      onNotification: (n) {
+        if (hasMore && !loadingMore && n.metrics.maxScrollExtent - n.metrics.pixels < 300) {
+          onLoadMore!();
+        }
+        return false;
+      },
+      child: list,
+    );
+  }
+
+  Widget _loadingMoreRow() => const Padding(
+    padding: EdgeInsets.symmetric(vertical: 16),
+    child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+  );
 
   static Widget _th(String label, {int flex = 1, TextAlign textAlign = TextAlign.left}) => Expanded(
     flex: flex,

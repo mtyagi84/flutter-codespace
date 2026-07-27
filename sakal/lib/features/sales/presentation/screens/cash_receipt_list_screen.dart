@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
@@ -72,11 +74,12 @@ class _CashReceiptListScreenState extends ConsumerState<CashReceiptListScreen>
           _loading = false;
         });
       }
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.error('CashReceiptListLoad', e, st);
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Could not load cash receipts: $e';
+          _error = ErrorPresenter.format(e, action: 'load cash receipts');
         });
       }
     }

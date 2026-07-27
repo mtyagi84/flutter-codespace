@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -11,6 +11,8 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_logger.dart';
+import '../../../../core/utils/deferred_row_disposal.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
@@ -23,7 +25,7 @@ import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../domain/repositories/price_master_repository.dart';
 import '../providers/price_master_providers.dart';
 
-class _PriceLineRow {
+class _PriceLineRow implements DisposableRow {
   String? productId;
   String  productDisplay = '';
   // Product's own rim_products.cost_currency_id — needed for the Cost
@@ -54,6 +56,7 @@ class _PriceLineRow {
   double get sellingPrice => double.tryParse(sellingPriceCtrl.text) ?? 0;
   bool get isBelowCost => costPrice > 0 && sellingPrice < costPrice;
 
+  @override
   void dispose() {
     sellingPriceCtrl.dispose();
     marginPercentCtrl.dispose();
@@ -72,7 +75,7 @@ class PriceMasterEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
-    with ScreenPermissionMixin<PriceMasterEntryScreen> {
+    with ScreenPermissionMixin<PriceMasterEntryScreen>, DeferredRowDisposal<PriceMasterEntryScreen> {
   @override String get screenName => RouteNames.salesPriceMaster;
 
   PriceMasterRepository get _ds => ref.read(priceMasterRepositoryProvider);
@@ -122,6 +125,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
     _scanCtrl.dispose();
     _remarksCtrl.dispose();
     for (final l in _lines) { l.dispose(); }
+    disposeDeferredRows();
     super.dispose();
   }
 
@@ -161,8 +165,9 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
         // locks both.
         if (mounted) setState(() => _loading = false);
       }
-    } catch (e) {
-      if (mounted) setState(() { _loading = false; _error = 'Could not load data: $e'; });
+    } catch (e, st) {
+      AppLogger.error('PriceMasterLoad', e, st);
+      if (mounted) setState(() { _loading = false; _error = ErrorPresenter.format(e, action: 'load this data'); });
     }
   }
 
@@ -194,7 +199,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
       clientId: session.clientId, companyId: session.companyId,
       entryNo: _entryNo!, entryDate: _fmtDate(_entryDate),
     );
-    for (final l in _lines) { l.dispose(); }
+    for (final l in _lines) { deferRowDisposal(l); }
     _lines.clear();
     for (final sl in savedLines) {
       final product = sl['product'] as Map<String, dynamic>?;
@@ -229,7 +234,13 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
     setState(() => _lines.add(_PriceLineRow()));
   }
 
-  void _removeLine(_PriceLineRow row) => setState(() { _lines.remove(row); row.dispose(); });
+  // Deferred disposal — row.marginFocusNode may still be focused/attached
+  // to a widget in the current frame; disposing it synchronously here was
+  // a real crash risk (see DeferredRowDisposal).
+  void _removeLine(_PriceLineRow row) {
+    setState(() => _lines.remove(row));
+    deferRowDisposal(row);
+  }
 
   bool _isDuplicatePair(String productId, String uomId, {_PriceLineRow? excluding}) =>
       _lines.any((l) => l != excluding && l.productId == productId && l.uomId == uomId);
@@ -255,10 +266,11 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
           }
         }
       });
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.error('PriceMasterLoadUoms', e, st);
       if (mounted) {
         setState(() => row.uomLoading = false);
-        _showSnack('Could not load pack sizes for "${row.productDisplay}": $e', color: AppColors.negative);
+        _showSnack(ErrorPresenter.format(e, action: 'load pack sizes for "${row.productDisplay}"'), color: AppColors.negative);
       }
     }
   }
@@ -399,10 +411,11 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
         row.costLoading = false;
       });
       _onSellingPriceChanged(row); // recompute margin against the new cost
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.error('PriceMasterRefreshCost', e, st);
       if (mounted) {
         setState(() => row.costLoading = false);
-        _showSnack('Could not load cost for "${row.productDisplay}": $e', color: AppColors.negative);
+        _showSnack(ErrorPresenter.format(e, action: 'load cost for "${row.productDisplay}"'), color: AppColors.negative);
       }
     }
   }
@@ -444,8 +457,9 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
         clientId: session.clientId, companyId: session.companyId,
         code: code, tryPartNumber: session.enablePartNumber,
       );
-    } catch (e) {
-      if (mounted) _showSnack('Lookup failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('PriceMasterScanLookup', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'look up this code'), color: AppColors.negative);
       return;
     }
     if (!mounted) return;
@@ -579,11 +593,9 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
         }
       }
       return true;
-    } on DioException catch (e) {
-      setState(() { _saving = false; _actionError = e.response?.data?['message'] ?? _serverError(e); });
-      return false;
-    } catch (e) {
-      setState(() { _saving = false; _actionError = 'Unexpected error: $e'; });
+    } catch (e, st) {
+      AppLogger.error('PriceMasterSave', e, st);
+      setState(() { _saving = false; _actionError = ErrorPresenter.format(e, action: 'save this batch'); });
       return false;
     }
   }
@@ -624,19 +636,12 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
         _showSnack('Price Master batch $_entryNo approved.', color: AppColors.positive);
         await _loadExisting(_entryNo!, _fmtDate(_entryDate));
       }
-    } on DioException catch (e) {
-      setState(() { _actionError = e.response?.data?['message'] ?? _serverError(e); });
-    } catch (e) {
-      setState(() { _actionError = 'Unexpected error: $e'; });
+    } catch (e, st) {
+      AppLogger.error('PriceMasterApprove', e, st);
+      setState(() { _actionError = ErrorPresenter.format(e, action: 'approve this batch'); });
     } finally {
       if (mounted) setState(() => _approving = false);
     }
-  }
-
-  String _serverError(DioException e) {
-    final data = e.response?.data;
-    if (data is Map && data['message'] is String) return data['message'] as String;
-    return e.message ?? e.toString();
   }
 
   // ── Print ─────────────────────────────────────────────────────────────
@@ -677,8 +682,9 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
       final template = await ref.read(printTemplateProvider('PRICE_MASTER').future);
       final document = _buildPrintDocument(company);
       await PrintEngine.printDocument(template: template, document: document, filename: '$_entryNo.pdf');
-    } catch (e) {
-      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('PriceMasterPrint', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this batch'), color: AppColors.negative);
     } finally {
       if (mounted) setState(() => _printing = false);
     }

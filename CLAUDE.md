@@ -166,7 +166,7 @@ Every transaction stores exchange rate → all 3 currencies derived automaticall
 | Sales (quotations, orders, invoices, receipts, returns) | Sales Quotation (with Prospect support), Sales Order (Direct + Against-Quotation, price/discount governance, Payment Terms master), and Sales Invoice / Quick Invoice (Direct + Against-Quotation/Order, first screen with real GL/stock impact, offline + Manager Review) done. Dedicated Receipts/Returns screens still pending |
 | Purchase (PO, GRN, invoices, payments) | Pending |
 | Inventory (stock, transfers, adjustments) | Material Requisition/Issue, Stock Transfer (Request/Transfer/Receipt), and Stock Adjustment all done. Barcode traceability + company-config field gating (Pack/Loose Qty, Barcode) audited complete app-wide |
-| Finance (double-entry, trial balance, P&L, balance sheet) | Pending |
+| Finance (double-entry, trial balance, P&L, balance sheet) | Payment/Receipt Voucher, Journal Voucher, Contra Voucher, and Expense Voucher (manual transaction entry, full double-entry) done. Trial Balance / P&L / Balance Sheet reports still pending |
 | Dashboard | Placeholder only |
 | Reports | Pending |
 
@@ -320,6 +320,53 @@ Template: `lib/features/inventory/presentation/screens/stock_transfer_entry_scre
 2. **Entry screen**: `_buildPrintDocument()` must supply a `'signatures': {'prepared_by': ..., 'authorised_by': ...}` map, resolved from the loaded header's `created_by`/`approved_by` UUIDs against the screen's own already-loaded `_users` list (`getUsersForAutocomplete`, id→full_name — every entry screen already loads this for other pickers, so this is reuse, not new plumbing). `approved_by` naturally resolves to `null`/blank on a still-DRAFT document — that's correct, not a bug to fix (an unsigned document has no signature yet).
 Sales Invoice (2026-07-18) is a deliberate exception: its own default template is a POS receipt with no signature block at all (never had one, not a gap) — but `_buildPrintDocument()` still supplies the `signatures` map regardless, so a company's own custom template can bind to it via the print designer if they want one.
 **As of 2026-07-18**: registry + all 16 non-voucher default templates fixed app-wide. Data-supply (`_buildPrintDocument()`) wired for Sales Invoice and Sales Order only so far (the two modules with concrete evidence of the bug); the remaining ~10 modules' entry screens (PO, GRN, Purchase Invoice, Purchase Return, Material Requisition, Material Issue, Stock Transfer Request/Transfer/Receipt, Stock Adjustment, Opening Stock, Stock Count, Stock Count Review, Price Master) still need the same small `_buildPrintDocument()` addition — mechanical, low-risk, one screen at a time. Voucher already worked correctly before this fix (confirmed) and needed no change.
+
+### Error handling — never interpolate a raw exception into user-facing text
+Every save/action catch block uses `ErrorPresenter.format(e, action: '...')` (`lib/core/errors/error_presenter.dart`) + `AppLogger.error('<Tag>', e, st)` (`lib/core/utils/app_logger.dart`) — never `'Unexpected error: $e'` or a bespoke per-screen `_serverError(DioException e)` helper again:
+```dart
+} catch (e, st) {
+  AppLogger.error('MyScreenSave', e, st);
+  setState(() { _saving = false; _actionError = ErrorPresenter.format(e, action: 'save this document'); });
+}
+```
+`ErrorPresenter.format` already knows how to read a `DioException`'s response body (PostgREST's `message`, itself already promoted from `details` by `DioClient`'s own interceptor — see "DioClient JWT rules" below) — a single catch clause replaces the old two-branch `on DioException catch (e) { ... } catch (e) { ... }` shape, so this is a net simplification, not an addition.
+**History**: found live 2026-07-27 during a QA-checklist pass — 37 files interpolated a raw Dart exception into a snackbar/error banner in the catch-all branch, in 3 slightly different shapes (some with a bespoke `_serverError()` helper, some inlining `e.response?.data?['message']`). Fixed across every Finance/Sales/Purchase entry+list screen the same session; the remaining files with the old pattern are opportunistic follow-up — never write the old pattern in a new screen.
+
+### Crash visibility — `AppLogger`
+No crash-reporting SDK is configured in this app — `AppLogger` (`lib/core/utils/app_logger.dart`) is the only record of what went wrong on a device, so every catch block should call it (see above), not just the ones that also show the user a message. Wired at the framework level in `main.dart` (`runZonedGuarded` + `FlutterError.onError` + `PlatformDispatcher.instance.onError`) so uncaught errors are captured too, with zero per-screen wiring needed. Persists a rotating local file via the already-present `path_provider` package (skipped on web) plus an in-memory ring buffer for the in-app viewer at `/dev/logs` (`log_viewer_screen.dart`, linked from the TopBar's account menu — "View Logs"). Nothing new required per screen beyond the existing "Error handling" rule above.
+
+### Row disposal — `DeferredRowDisposal` mixin, never dispose a removed row immediately
+A per-row `FocusNode`/`TextEditingController` (a line, a charge, a bill-apply row) must never be disposed synchronously inside the same `setState` that removes it from a live list — it may still be attached to a widget in the current frame, and disposing it throws "used after being disposed". Use `lib/core/utils/deferred_row_disposal.dart`:
+```dart
+class _MyRow implements DisposableRow {
+  final FocusNode node = FocusNode();
+  @override void dispose() => node.dispose();
+}
+class _MyScreenState extends ConsumerState<MyScreen> with DeferredRowDisposal<MyScreen> {
+  void _removeLine(_MyRow row) {
+    setState(() => _lines.remove(row));
+    deferRowDisposal(row); // NOT row.dispose() here
+  }
+  @override
+  void dispose() {
+    for (final l in _lines) { l.dispose(); }
+    disposeDeferredRows(); // flushes everything deferred above
+    super.dispose();
+  }
+}
+```
+**History**: the underlying crash was found and fixed independently, screen by screen (Sales Invoice, Cash Receipt, Journal Voucher, Expense Voucher), each hand-rolling its own `_pendingXDisposal` list before this mixin existed. Extracted into a shared mixin 2026-07-27 after a QA pass found two still-unfixed live instances (`price_master_entry_screen.dart`'s `_removeLine` — the one with an actual `FocusNode` in play, and `sales_invoice_entry_screen.dart`'s charge rows) plus several in `finance_voucher_entry_screen.dart`. Any screen with row deletion uses this mixin from the start — don't hand-roll the pending-list bookkeeping again.
+
+### Pagination — `PagedListController` for any list expected to grow
+Flat `limit: 200-500` single-shot fetches with no real paging are a real gap on ~20 list screens (only `product_list_screen.dart`/`common_masters_screen.dart` had hand-rolled paging before this). Any new list screen expected to grow past ~50-100 rows uses `lib/core/utils/paged_list_controller.dart`'s `PagedListController<T>` + `SakalAdaptiveList`'s `onLoadMore`/`hasMore`/`loadingMore` params (scroll-triggered, not a manual button) from the start:
+```dart
+final _controller = PagedListController<Map<String, dynamic>>(
+  fetchPage: ({required limit, required offset}) => repo.listThings(..., limit: limit, offset: offset),
+);
+// initState: await _controller.loadFirstPage(); build(): rows: _controller.items,
+// onLoadMore: _loadMore, hasMore: _controller.hasMore, loadingMore: _controller.isLoadingMore
+```
+Search should be server-side (pass `search:` into `fetchPage`, debounced ~350ms with a `Timer`) rather than a client-side filter over already-loaded rows — a client-side filter silently misses anything not yet paged in. Template: `expense_voucher_list_screen.dart` and `journal_voucher_list_screen.dart` (the latter's shared `listHeaders()` repository method gained `limit`/`offset`/`search` params for this — `finance_voucher_list_screen.dart`/`contra_voucher_list_screen.dart` explicitly pass `limit: 500` to preserve their pre-pagination behavior since they haven't been converted yet). The other ~15+ list screens are opportunistic follow-up, same rollout shape as `SakalAdaptiveList`/`SakalAutocomplete`.
 
 ### Company-configurable line fields (Pack/Loose Qty, Barcode) — every screen with a product/item line
 Two company-level settings must be respected by every screen that has a product/item code line, computed once in `build()` and threaded down to the line-rendering method(s) as plain bool params — never re-read per-row:
@@ -597,6 +644,33 @@ POS-style fast entry (Cash/Credit, Direct/Against-Quotation/Against-Order) — d
 - **Currency/rate locking**: Cash sales now force the invoice currency to the location's own local currency regardless of the cash customer account's own ledger currency (`_resolveCurrencyForCustomer`'s new `forceLocalCurrency` param) — a cash drawer only ever holds local-currency notes. Rate-to-Base/Local fields are now locked (not just gated on `_canOverridePrice`) whenever `_isAgainstSource` or `_saleType == 'CASH'`, since neither case leaves a real exchange-rate decision for a human to make. Header Discount % moved onto the same `Wrap` row as Currency/Rate (was previously its own separate row).
 - **Product/Customer pickers migrated to `SakalAutocomplete`** (see the new shared-pattern entry above) — Up/Down arrow + Enter now work on both fields, the #1 specific complaint in the bug report.
 
+### Journal Voucher (Finance) — migration 105, first manual free-form Dr/Cr entry screen
+Reuses `fn_save_finance_voucher`/`fn_post_finance_voucher` completely unchanged (both already fully generic — no special-casing of a cash/bank first line) — zero new posting logic needed, unlike Expense Voucher below. New shared widgets: `SakalReciprocalRateField` (`lib/core/widgets/sakal_reciprocal_rate_field.dart`) — the always-multiply rate is shown and used directly (no hidden inversion, unlike Payment/Receipt Voucher's own rate field, which displays the *inverted* "1 base = X trans" value and silently re-inverts before use — a known divergence, not yet reconciled); a small `@` icon (shown only when the rate is `< 1`) opens a popup to type the easier reciprocal number, converting back automatically. `FinanceAccountPicker` (`lib/features/finance/presentation/widgets/finance_account_picker.dart`) — a Finance-only 3-column (Code/Name/Parent Group) searchable account picker, since two Finance accounts can legitimately share a name under different parent groups; built on `SakalAutocomplete`'s existing `optionBuilder` hook, no core widget change. JV's own picker excludes Cash/Bank (`account_nature NOT IN ('Cash','Bank')`) — that's exclusively Payment/Receipt Voucher's job.
+- **Bill-linkage is opt-in and automatic, never a field the user fills in**: a line that debits a Customer or credits a Supplier auto-tags `inv_bill_no`/`inv_bill_date` (from Reference No/Date if both set, else the voucher's own no/date) so it rides the existing `v_pending_bills` mechanism. At most one auto-tagged line per customer/supplier per voucher (validated at Save). The reverse directions (credit a Customer / debit a Supplier) get an **optional** "Settle against an existing bill" checkbox — never forced.
+- **`fn_check_backdate_allowed` gained a `p_reference_date` parameter** (5th arg, defaults `CURRENT_DATE`, fully backward-compatible with every existing 4-arg call site) — fixes a real bug: the backdate check compared `trans_date` against LIVE `CURRENT_DATE` at Approve time rather than the document's own creation date, so a same-day-created draft approved a day later could falsely trip as backdated. `fn_post_finance_voucher` now passes `v_header.created_at::date` — fixes this for every voucher type sharing this engine (CRV/BRV/CPV/BPV/JV/CTR/EXV) at once. Not yet retrofitted to every OTHER module's own `fn_approve_*` (~15 functions still compare against live `CURRENT_DATE`) — a known, deferred gap.
+- **`fn_reverse_voucher`** (originally `fn_reverse_journal_voucher`, renamed once Contra Voucher confirmed it was already 100% generic over `voucher_type_code`) — one-click reversal of a posted voucher: flips every line's Dr/Cr, drops `inv_bill_no`/`inv_bill_date` (a reversal is a pure GL correction, never a new bill), re-posts under the ORIGINAL voucher's own `voucher_type_code`. First real consumer of the dormant `rih_finance_headers.reversal_of_trans_no` column. Now shared by JV, Contra Voucher, and Expense Voucher — three consumers, zero duplication.
+
+### Contra Voucher (Finance) — migration 106, Cash↔Cash / Bank↔Bank / deposit / withdrawal
+Modeled on Tally's Contra Voucher (F4). A two-block From/To transfer, NOT a JV-style line grid — direction is always implicit (FROM=CR, TO=DR), never a field the user picks. From-amount and To-amount are two INDEPENDENTLY editable fields (idea taken from Odoo's own Internal Transfer — lets the user type the actual amount credited rather than trusting a locked one-way rate multiply); when they don't reconcile at the current rate, the gap is a real accounting event (a bank fee, or a real rate difference) — idea taken from Zoho Books' Transfer Charge — auto-computed live and offered as an optional third line (defaulting to `EXCHANGE_GAIN_LOSS_ACCOUNT`, freely re-pickable). `trans_currency` = the FROM account's own currency (one voucher, one currency, same rule as everywhere else). Reuses `fn_save_finance_voucher`/`fn_post_finance_voucher`/`fn_reverse_voucher` completely unchanged.
+- **A `voucher_nature` CHECK constraint is not static — it drifts across migrations.** `rim_voucher_types.voucher_nature`'s CHECK had already been widened twice since its original 017 definition (031 added `PURCHASE`, 081 added `SALES`) by the time this migration touched it. A real bug caught live: an early draft re-derived the constraint from the ORIGINAL 017 list instead of grepping every migration for the CURRENT one — would have silently narrowed it back and broken every already-shipped PURCHASE/SALES-natured system voucher type. **Before extending ANY CHECK constraint, grep every migration that touches it for the current definition — never trust the table's own original CREATE statement.**
+
+### Expense Voucher (Finance) — migration 107, service-bill accrual with Odoo-style automatic tax
+Creates a Supplier bill for a service (electricity, water, internet, ...) in the period it belongs to even when entered/paid later — accrual accounting. Each line is Account + Amount (always an implicit debit — no manual Dr/Cr; the user explicitly dropped that requirement after seeing Odoo's model explained) + an optional Tax Group. A normal (VAT-type) tax ADDS to the payable (posts to `gl_input_account_id`); a WITHHOLDING-type tax SUBTRACTS from it (posts to `gl_expense_account_id`) — first real consumer of `rim_tax_types.is_withholding` anywhere in this schema (seeded since migration 025, dormant until now). Supplier is always `serial_no=1` (mirroring Payment/Receipt Voucher's "line 1 is the fixed/anchor line" convention) even though it's visually entered/computed last — achieved by prepending it to the line array before `fn_post_voucher` assigns serial numbers in array order. Bill-linkage is MANDATORY (not opt-in like JV's) — `inv_bill_no`/`inv_bill_date` always = the header's own Bill No/Bill Date.
+- **Structurally closer to Purchase Bill than JV/Contra**: needs its own real source-document tables (`rih_expense_voucher_headers`/`rid_expense_voucher_lines`) and a bespoke `fn_approve_expense_voucher` that composes `fn_post_voucher`, because tax computation must be authoritative server-side (same principle as GRN/Sales Invoice never trusting a client-sent tax amount) — the generic `fn_save_finance_voucher`/`fn_post_finance_voucher` pair alone (JV/Contra's whole trick) isn't enough once server-side tax expansion is involved.
+- **Two voucher_type_codes, not one — `EXV` (document numbering, `fn_save_expense_voucher`'s own `fn_next_trans_no` call) vs `EXP` (GL posting, `fn_approve_expense_voucher`'s `fn_post_voucher` call).** A real bug caught before ever running: an early draft used `EXV` for both, which would have made Approve silently consume/skip numbers from the document's own sequence, since `ril_trans_no_seq` keys its counter on `(company, location, voucher_type_code)` alone. Same split rationale as Purchase Bill's PINV/PUR and Material Issue's MREQ+MISS/MIC — now the third occurrence. **Any new module with its own document-numbering identity that ALSO auto-posts a GL voucher needs two separate voucher_type_codes, never one reused for both.**
+- **A child table with a date-based FK needs the OLD date captured before an edit changes the header's date.** `rid_expense_voucher_lines` has a real FK on `(client_id, company_id, trans_no, trans_date)`. A first draft of `fn_save_expense_voucher` updated the header's `trans_date` to the new value, THEN deleted old lines filtering on that SAME new value — matching nothing, and the header UPDATE itself would have failed outright with a foreign-key violation the moment a user edited the date on an existing draft with lines already saved. Fixed by capturing the old date first (`v_old_trans_date`) and deleting under it BEFORE the header changes — the exact same fix GRN's own `fn_save_grn` already uses (`v_old_grn_date`), confirmed by reading GRN's code directly, not by assuming. **Any module with its own header+lines pair keyed by a mutable date needs this same old-value-first ordering.**
+- **`rim_accounts.default_tax_group_id`** (new column) — Chart of Accounts can configure a default Tax Group per account; auto-suggested (never forced) when that account is picked on an Expense Voucher line. New shared `taxGroupsProvider` (`master_cache_providers.dart`) — the same query shape every module already used ad hoc (Purchase Order's own `getTaxGroupMemberTaxIds`/`getTaxRatesByIds`), now centralized since two new call sites needed it at once.
+- **Client-side tax preview is explicitly a preview, never authoritative** — the entry screen shows a live "Net Payable" using the same rate-lookup pattern Purchase Order's own screen already established, labeled "(preview — confirmed at Approve)" in the UI. The backend is always the real computation.
+
+### Server-side approve/reverse permission check (migration 108) — `fn_check_approve_permission`
+A real security gap found in a 2026-07-27 QA-checklist pass: the Flutter UI gated Approve via `ScreenPermissionMixin`'s `canApprove` (from the cached menu-permissions list), but no backend function ever re-checked it — `fn_post_finance_voucher` (Journal/Contra Voucher's shared approve path), `fn_approve_expense_voucher`, and `fn_reverse_voucher` only ever checked document status + period/backdate.
+- **New shared helper `fn_check_approve_permission(p_client_id, p_company_id, p_feature_code)`** — call it as the very FIRST check inside any `fn_approve_*`/`fn_post_*`/`fn_reverse_*` that posts/reverses a real GL entry, before period/backdate checks. Looks up `ric_user_menus.approve_allowed` for `(client_id, company_id, user_id, feature_code)`; a missing row or `false` raises `APPROVE_NOT_PERMITTED` with a human `feature_name` resolved from `ric_master_menus` — same "missing row = deny, never permissive" convention as Sales Order's `ric_user_sales_controls`.
+- **The user being checked is resolved from the JWT's own signed `user_id` claim** (`current_setting('request.jwt.claims', true)::json->>'user_id'`), **never from a client-supplied `p_posted_by`/`p_approved_by`/`p_user_id` parameter** — checking against a client-supplied value would be trivially bypassable by sending a different user's id in the RPC payload while authenticated as yourself. This is the first function in the schema to read `user_id` out of the JWT rather than trusting a parameter for anything security-relevant.
+- **No JWT context at all → skip, not deny.** pgTAP tests (and migrations) call these functions directly via SQL with no `request.jwt.claims` ever set — same trust boundary RLS itself already assumes for a privileged/direct caller. `fn_check_approve_permission` treats a NULL/unparseable JWT as "nothing to enforce" rather than raising, so every pre-existing 105/106/107 pgTAP assertion keeps passing unchanged; `108_finance_voucher_approve_permission_test.sql` explicitly `set_config('request.jwt.claims', ...)` to exercise the real enforcement path instead.
+- **`fn_post_finance_voucher` maps `voucher_type_code` → `feature_code`**: `'JV'` → `FN-JRN`, `'CTR'` → `FN-CTR`. **Deliberately NOT gated for CRV/BRV/CPV/BPV** (Payment/Receipt Voucher, `finance_voucher_entry_screen.dart`, which also calls this same shared engine) — grepping the whole backend found no seeded `feature_code`/`screen_name` row for `/finance/voucher-list` anywhere in `fn_seed_client_modules.sql` or any migration, meaning that screen's own client-side `_findFeature()` already returns null and blocks it for every client today. A separate, pre-existing menu-wiring gap — flagged here, not silently papered over with a guessed feature_code mapping. **Anyone picking this up: Payment/Receipt Voucher needs its own menu-seed migration before it can be gated the same way.**
+- **`fn_reverse_voucher` maps the POSTED GL voucher's own `voucher_type_code`** — for Expense Voucher this is `'EXP'` (the posting code), never `'EXV'` (the document-numbering code), matching Expense Voucher's own numbering-vs-posting split.
+- No Flutter changes needed — `DioClient`'s `onError` interceptor + `ErrorPresenter.format` (see "Error handling" under Mandatory Patterns) already surface the new `APPROVE_NOT_PERMITTED` DETAIL as a friendly `_actionError` message with zero additional code.
+
 ---
 
 ## Dart / Flutter Rules (never get these wrong)
@@ -693,15 +767,15 @@ if (!_formKey.currentState!.validate()) {
 }
 ```
 
-### Save exception handling — catch all, not just DioException
-Never catch only `DioException` in a save handler. Always add a catch-all after it:
+### Save exception handling — one catch clause via ErrorPresenter, not a DioException/catch-all split
+Superseded 2026-07-27 by `ErrorPresenter.format` (see "Error handling" under Mandatory Patterns above) — it already knows how to read a `DioException`'s response, so a single `catch (e, st)` replaces the old two-branch shape:
 ```dart
-} on DioException catch (e) {
-  setState(() { _saving = false; _error = e.response?.data?['message'] ?? 'Save failed.'; });
-} catch (e) {
-  setState(() { _saving = false; _error = 'Unexpected error: $e'; });
+} catch (e, st) {
+  AppLogger.error('MyScreenSave', e, st);
+  setState(() { _saving = false; _error = ErrorPresenter.format(e, action: 'save this document'); });
 }
 ```
+Never write `on DioException catch (e) { ... } catch (e) { ... }` or interpolate `$e` directly into user-facing text in a new screen.
 
 ### JWT expiry check on app startup
 `OfflineSessionCache.tryRestoreSession()` now decodes the JWT `exp` claim on startup.
@@ -724,6 +798,9 @@ Always add `{ }` braces to single-statement `if`/`for` bodies (`curly_braces_in_
 ### Before adding a method to an existing file — always read the file first
 Dart has no method overloading. Duplicate method names are a compile error.
 Always `Read` the full file before adding new methods or imports.
+
+### FormField-family widgets — externally-driven value changes need `key: ValueKey(currentValue)`
+Any `FormField` subclass (`TextFormField`, `DropdownButtonFormField`, `SakalAutocomplete`) reads `initialValue` **once**, at first build, and manages its own internal state afterward — a later rebuild with a *different* `initialValue` does NOT resync the displayed value. This is invisible as long as the field's value only ever changes via its own `onChanged` (the common case), but breaks the moment something ELSE sets the underlying state variable — e.g. picking a Supplier auto-fills the Currency dropdown, or picking an Expense account auto-suggests its Tax Group. Caught four times this session across two different widget types (`SakalAutocomplete` on Contra Voucher's From/To swap; `DropdownButtonFormField` on Expense Voucher's Currency and Tax Group fields). Fix: give the widget `key: ValueKey(theStateVariable)` so a real value change forces a clean remount instead of silently keeping the stale display. Apply this proactively on any picker/dropdown whose value can be set from more than one place — don't wait to find it by testing.
 
 ### pgTAP tests — hardcoded UUIDs, never temp tables
 Supabase SQL Editor auto-commits after each `DO` block. Any `CREATE TEMP TABLE ... ON COMMIT DROP` is destroyed immediately — SELECT tests that follow cannot see the IDs.

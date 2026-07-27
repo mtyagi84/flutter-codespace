@@ -17,6 +17,7 @@ import '../../features/setup/presentation/screens/master_menu_screen.dart';
 import '../../features/setup/presentation/screens/permissions_screen.dart';
 import '../../features/setup/presentation/screens/quick_invoice_setup_screen.dart';
 import '../../features/setup/presentation/screens/offline_settings_screen.dart';
+import '../../features/setup/presentation/screens/log_viewer_screen.dart';
 import '../../features/setup/presentation/screens/users_screen.dart';
 import '../../features/setup/presentation/screens/user_location_access_screen.dart';
 import '../../features/setup/presentation/screens/accounting_setup_screen.dart';
@@ -181,6 +182,7 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.permissions,    builder: (c, s) => const PermissionsScreen()),
         GoRoute(path: RouteNames.quickInvoiceSetup, builder: (c, s) => const QuickInvoiceSetupScreen()),
         GoRoute(path: RouteNames.offlineSettings, builder: (c, s) => const OfflineSettingsScreen()),
+        GoRoute(path: RouteNames.appLogs, builder: (c, s) => const LogViewerScreen()),
         GoRoute(path: RouteNames.accountingSetup,builder: (c, s) => const AccountingSetupScreen()),
         GoRoute(path: RouteNames.financialYears, builder: (c, s) => const _Placeholder('Financial Years')),
         GoRoute(path: RouteNames.periodClose,    builder: (c, s) => const PeriodCloseScreen()),

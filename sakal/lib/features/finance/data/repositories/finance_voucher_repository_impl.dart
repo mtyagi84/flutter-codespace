@@ -20,12 +20,16 @@ class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
     required String toDate,
     String? voucherTypeCode,
     bool? isPosted,
+    String? search,
+    int limit = 50,
+    int offset = 0,
   }) {
     if (_isOffline && _local != null) {
       return _local.listHeaders(
         clientId: clientId, companyId: companyId, locationId: locationId,
         fromDate: fromDate, toDate: toDate,
-        voucherTypeCode: voucherTypeCode, isPosted: isPosted,
+        voucherTypeCode: voucherTypeCode, isPosted: isPosted, search: search,
+        limit: limit, offset: offset,
       );
     }
     // Online: remote is the source of truth for browsing history. Offline-created
@@ -35,7 +39,8 @@ class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
     return _remote.listHeaders(
       clientId: clientId, companyId: companyId, locationId: locationId,
       fromDate: fromDate, toDate: toDate,
-      voucherTypeCode: voucherTypeCode, isPosted: isPosted,
+      voucherTypeCode: voucherTypeCode, isPosted: isPosted, search: search,
+      limit: limit, offset: offset,
     );
   }
 

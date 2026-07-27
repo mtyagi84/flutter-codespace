@@ -1,14 +1,16 @@
 import 'dart:async';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/app_number_format.dart';
+import '../../../../core/utils/deferred_row_disposal.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
@@ -24,7 +26,7 @@ import '../providers/cash_receipt_providers.dart';
 /// single editable "Apply" field (entered in LOCAL currency, per the
 /// confirmed design — the backend waterfalls it across the local/base
 /// cash pools automatically at Approve time).
-class _BillRow {
+class _BillRow implements DisposableRow {
   final String invBillNo;
   final String invBillDate;
   final String partyCurrency;
@@ -43,6 +45,7 @@ class _BillRow {
 
   double get applyLocal => double.tryParse(applyCtrl.text) ?? 0;
 
+  @override
   void dispose() {
     applyCtrl.dispose();
     applyFocusNode.dispose();
@@ -58,7 +61,7 @@ class CashReceiptEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
-    with ScreenPermissionMixin<CashReceiptEntryScreen> {
+    with ScreenPermissionMixin<CashReceiptEntryScreen>, DeferredRowDisposal<CashReceiptEntryScreen> {
   // Entry screen is not itself a menu item — Menu -> List -> Entry pattern.
   @override
   String get screenName => RouteNames.salesReceipts;
@@ -88,14 +91,12 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
   String? _localCcy;
   double _baseToLocalRate = 1;
 
-  final List<_BillRow> _bills = [];
   // Rows swapped out when the pending-bills list is reloaded (customer
   // change, date change, reopening a draft) are never disposed
   // synchronously inside the same setState that removes them — Flutter
   // may still reference an outgoing row's FocusNode this same frame.
-  // Deferred all the way to this screen's own dispose(), same fix already
-  // applied once for this exact bug class on Sales Invoice's line rows.
-  final List<_BillRow> _pendingBillDisposal = [];
+  // Deferred all the way to this screen's own dispose() via DeferredRowDisposal.
+  final List<_BillRow> _bills = [];
 
   bool _loading = true;
   String? _error;
@@ -135,9 +136,7 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
     for (final b in _bills) {
       b.dispose();
     }
-    for (final b in _pendingBillDisposal) {
-      b.dispose();
-    }
+    disposeDeferredRows();
     super.dispose();
   }
 
@@ -198,11 +197,12 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
 
       if (mounted) setState(() => _loading = false);
       if (_status == 'APPROVED') unawaited(_loadPostedVouchers());
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.error('CashReceiptLoad', e, st);
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Could not load: $e';
+          _error = ErrorPresenter.format(e, action: 'load this receipt');
         });
       }
     }
@@ -237,8 +237,8 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
             ..addAll(lines);
         });
       }
-    } catch (_) {
-      /* best-effort */
+    } catch (e, st) {
+      AppLogger.warn('CashReceiptLoadPostedVouchers', e, st: st); // best-effort
     }
   }
 
@@ -251,7 +251,8 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
       return await _ds.getCustomersWithPendingBills(
         clientId: session.clientId, companyId: session.companyId, locationId: _locationId!, search: query,
       );
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.warn('CashReceiptSearchCustomers', e, st: st);
       return [];
     }
   }
@@ -262,7 +263,7 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
     setState(() {
       _customerId = row['account_id'] as String?;
       _customerDisplay = account != null ? '[${account['account_code']}] ${account['account_name']}' : '';
-      _pendingBillDisposal.addAll(_bills);
+      for (final b in _bills) { deferRowDisposal(b); }
       _bills.clear();
     });
     await _loadPendingBillsAndRestore(session);
@@ -319,14 +320,15 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
       }
       if (mounted) {
         setState(() {
-          _pendingBillDisposal.addAll(_bills);
+          for (final b in _bills) { deferRowDisposal(b); }
           _bills
             ..clear()
             ..addAll(newBills);
           _loadingBills = false;
         });
       }
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.error('CashReceiptLoadPendingBills', e, st);
       if (mounted) setState(() => _loadingBills = false);
     }
   }
@@ -416,25 +418,14 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
         unawaited(_loadPostedVouchers());
       }
       return true;
-    } on DioException catch (e) {
+    } catch (e, st) {
+      AppLogger.error('CashReceiptSave', e, st);
       setState(() {
         _saving = false;
-        _actionError = _serverError(e);
-      });
-      return false;
-    } catch (e) {
-      setState(() {
-        _saving = false;
-        _actionError = 'Unexpected error: $e';
+        _actionError = ErrorPresenter.format(e, action: 'save this receipt');
       });
       return false;
     }
-  }
-
-  String _serverError(DioException e) {
-    final data = e.response?.data;
-    if (data is Map && data['message'] is String) return data['message'] as String;
-    return e.message ?? e.toString();
   }
 
   // ── Print ─────────────────────────────────────────────────────────────
@@ -475,8 +466,9 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
       final template = await ref.read(printTemplateProvider('CASH_RECEIPT').future);
       final document = _buildPrintDocument(company);
       await PrintEngine.printDocument(template: template, document: document, filename: '$_receiptNo.pdf');
-    } catch (e) {
-      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('CashReceiptPrint', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this receipt'), color: AppColors.negative);
     } finally {
       if (mounted) setState(() => _printing = false);
     }

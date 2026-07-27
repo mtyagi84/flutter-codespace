@@ -11,6 +11,9 @@ class FinanceVoucherRemoteDs {
     required String toDate,
     String? voucherTypeCode,
     bool? isPosted,
+    String? search,
+    int limit = 50,
+    int offset = 0,
   }) async {
     final params = <String, dynamic>{
       'client_id':   'eq.$clientId',
@@ -25,10 +28,14 @@ class FinanceVoucherRemoteDs {
       'trans_date':  ['gte.$fromDate', 'lte.$toDate'],
       'select':      'trans_no,trans_date,voucher_type_code,payment_mode_code,is_on_account,is_posted,remarks',
       'order':       'trans_date.desc,trans_no.desc',
-      'limit':       '500',
+      'limit':       '$limit',
+      'offset':      '$offset',
     };
     if (voucherTypeCode != null) params['voucher_type_code'] = 'eq.$voucherTypeCode';
     if (isPosted != null) params['is_posted'] = 'eq.$isPosted';
+    if (search != null && search.isNotEmpty) {
+      params['or'] = '(trans_no.ilike.*$search*,remarks.ilike.*$search*)';
+    }
     final res = await DioClient.instance.get('/rih_finance_headers', queryParameters: params);
     return List<Map<String, dynamic>>.from(res.data as List);
   }

@@ -25,6 +25,7 @@ class RouteNames {
   static const String permissions = '/setup/permissions';
   static const String quickInvoiceSetup = '/setup/quick-invoice-setup';
   static const String offlineSettings = '/setup/offline-settings';
+  static const String appLogs = '/setup/app-logs';
   static const String periodClose = '/setup/period-close';
   static const String backdatedEntryControl = '/setup/backdated-entry-control';
   static const String printTemplates = '/setup/print-templates';

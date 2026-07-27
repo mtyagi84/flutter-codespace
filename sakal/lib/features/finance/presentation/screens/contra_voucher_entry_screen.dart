@@ -1,13 +1,14 @@
 import 'dart:async';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
@@ -240,11 +241,12 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
       }
 
       if (mounted) setState(() => _loading = false);
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.error('ContraVoucherLoad', e, st);
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Could not load: $e';
+          _error = ErrorPresenter.format(e, action: 'load this voucher');
         });
       }
     }
@@ -548,16 +550,11 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
         _showSnack('Contra Voucher $savedTransNo saved.', color: AppColors.positive);
       }
       return true;
-    } on DioException catch (e) {
+    } catch (e, st) {
+      AppLogger.error('ContraVoucherSave', e, st);
       setState(() {
         _saving = false;
-        _actionError = _serverError(e);
-      });
-      return false;
-    } catch (e) {
-      setState(() {
-        _saving = false;
-        _actionError = 'Unexpected error: $e';
+        _actionError = ErrorPresenter.format(e, action: 'save the voucher');
       });
       return false;
     }
@@ -603,10 +600,9 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
         _showSnack('Contra Voucher $_transNo approved.', color: AppColors.positive);
         await _init();
       }
-    } on DioException catch (e) {
-      setState(() => _actionError = _serverError(e));
-    } catch (e) {
-      setState(() => _actionError = 'Unexpected error: $e');
+    } catch (e, st) {
+      AppLogger.error('ContraVoucherApprove', e, st);
+      setState(() => _actionError = ErrorPresenter.format(e, action: 'approve the voucher'));
     } finally {
       if (mounted) setState(() => _approving = false);
     }
@@ -652,19 +648,12 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
             userId: session.userId,
           );
       if (mounted) _showSnack('Reversal voucher $res posted.', color: AppColors.positive);
-    } on DioException catch (e) {
-      setState(() => _actionError = _serverError(e));
-    } catch (e) {
-      setState(() => _actionError = 'Unexpected error: $e');
+    } catch (e, st) {
+      AppLogger.error('ContraVoucherReverse', e, st);
+      setState(() => _actionError = ErrorPresenter.format(e, action: 'reverse the voucher'));
     } finally {
       if (mounted) setState(() => _reversing = false);
     }
-  }
-
-  String _serverError(DioException e) {
-    final data = e.response?.data;
-    if (data is Map && data['message'] is String) return data['message'] as String;
-    return e.message ?? e.toString();
   }
 
   // ── Print ─────────────────────────────────────────────────────────────
@@ -704,8 +693,9 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
       final template = await ref.read(printTemplateProvider('VOUCHER').future);
       final document = _buildPrintDocument(company);
       await PrintEngine.printDocument(template: template, document: document, filename: '$_transNo.pdf');
-    } catch (e) {
-      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('ContraVoucherPrint', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this voucher'), color: AppColors.negative);
     } finally {
       if (mounted) setState(() => _printing = false);
     }

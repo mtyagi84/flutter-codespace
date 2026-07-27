@@ -7,6 +7,7 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
@@ -83,6 +84,13 @@ class _FinanceVoucherListScreenState
           toDate:    _fmtDate(_toDate),
           voucherTypeCode: _filterType,
           isPosted:  _filterPosted,
+          // Preserves this screen's pre-pagination behavior — only Journal
+          // Voucher's own list screen has been converted to real paging so
+          // far (see CLAUDE.md's "Pagination" mandatory pattern); this
+          // default changed from 500 to 50 when limit/offset were added to
+          // the shared listHeaders(), so an explicit value is needed here
+          // to avoid silently hiding rows beyond the new default.
+          limit: 500,
         ),
         ref.read(syncEngineProvider).pendingDocumentIds('FINANCE_VOUCHER'),
       ]);
@@ -93,7 +101,8 @@ class _FinanceVoucherListScreenState
           _loading    = false;
         });
       }
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.error('FinanceVoucherListLoad', e, st);
       if (mounted) setState(() { _loading = false; _error = 'Could not load vouchers.'; });
     }
   }

@@ -29,7 +29,12 @@ class ExpenseVoucherRemoteDs {
       'offset': '$offset',
     };
     if (status != null && status.isNotEmpty) params['status'] = 'eq.$status';
-    if (search != null && search.isNotEmpty) params['trans_no'] = 'ilike.*$search*';
+    // Narrower than the old client-side filter (which also matched supplier
+    // name) — a supplier-name match would need an embedded-resource filter;
+    // left for a future pass, not silently dropped without a note.
+    if (search != null && search.isNotEmpty) {
+      params['or'] = '(trans_no.ilike.*$search*,bill_no.ilike.*$search*)';
+    }
     final res = await _dio.get('/rih_expense_voucher_headers', queryParameters: params);
     return List<Map<String, dynamic>>.from(res.data as List);
   }

@@ -16,6 +16,9 @@ class FinanceVoucherLocalDs {
     required String toDate,
     String? voucherTypeCode,
     bool? isPosted,
+    String? search,
+    int limit = 50,
+    int offset = 0,
   }) async {
     final q = _db.select(_db.financeVoucherHeadersCache)
       ..where((t) => t.clientId.equals(clientId))
@@ -29,7 +32,7 @@ class FinanceVoucherLocalDs {
     // Date range filtered in Dart, not SQL — this is a small local cache
     // table (whatever's already been synced/created), not worth chasing
     // Drift's comparison-operator API for.
-    return rows
+    final filtered = rows
         .where((r) => r.transDate.compareTo(fromDate) >= 0 && r.transDate.compareTo(toDate) <= 0)
         .map((r) => {
       'trans_no':           r.transNo,
@@ -40,6 +43,14 @@ class FinanceVoucherLocalDs {
       'is_posted':          r.isPosted,
       'remarks':            r.remarks,
     }).toList();
+    final searched = (search == null || search.isEmpty)
+        ? filtered
+        : filtered.where((r) {
+            final s = search.toLowerCase();
+            return (r['trans_no'] as String).toLowerCase().contains(s) ||
+                (r['remarks'] as String).toLowerCase().contains(s);
+          }).toList();
+    return searched.skip(offset).take(limit).toList();
   }
 
   Future<FinanceVoucherHeader?> getHeader({
