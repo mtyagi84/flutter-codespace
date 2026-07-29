@@ -68,7 +68,7 @@ void main() {
         'customer': {'account_name': 'Acme Retail'},
         'customer_po_ref': 'PO-REF-99',
         'status': 'APPROVED',
-        'grand_total': '2500.50',
+        'grand_total': 2500.50,
         'currency': {'currency_id': 'USD'},
       });
       expect(h.orderMode, 'AGAINST_QUOTATION');
@@ -226,7 +226,7 @@ void main() {
         'customer': {'account_code': 'CUST-01', 'account_name': 'Acme Retail'},
         'location': {'location_name': 'Main Store'},
         'local_amount': 500,
-        'base_amount': '480.5',
+        'base_amount': 480.5,
         'status': 'APPROVED',
       });
       expect(h.customerName, 'Acme Retail');

@@ -16,17 +16,20 @@ void main() {
       expect(t.sortOrder, 0);
     });
 
-    test('fromJson — all fields present, sort_order coerces from various numeric types', () {
+    test('fromJson — all fields present, sort_order handles int and double alike', () {
       final t = AccountLinkType.fromJson(const {
         'id': 'link-001',
         'link_key': 'SALES_ACCOUNT',
         'link_name': 'Sales Account',
-        'sort_order': '3',
+        'sort_order': 3,
       });
       expect(t.id, 'link-001');
       expect(t.linkKey, 'SALES_ACCOUNT');
       expect(t.linkName, 'Sales Account');
       expect(t.sortOrder, 3);
+
+      final tFromDouble = AccountLinkType.fromJson(const {'sort_order': 3.0});
+      expect(tFromDouble.sortOrder, 3);
     });
   });
 
