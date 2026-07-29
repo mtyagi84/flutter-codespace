@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 import '../../../../core/database/app_database.dart';
+import '../models/sales_quotation_header.dart';
 
 class SalesQuotationLocalDs {
   final AppDatabase _db;
@@ -7,7 +8,7 @@ class SalesQuotationLocalDs {
 
   // ── Read ──────────────────────────────────────────────────────────────────
 
-  Future<List<Map<String, dynamic>>> listQuotations({
+  Future<List<SalesQuotationHeader>> listQuotations({
     required String clientId,
     required String companyId,
     String? search,
@@ -22,10 +23,10 @@ class SalesQuotationLocalDs {
       ..orderBy([(t) => OrderingTerm.desc(t.quotationDate), (t) => OrderingTerm.desc(t.quotationNo)]);
     if (status != null && status.isNotEmpty) q.where((t) => t.status.equals(status));
     final rows = await q.get();
-    var result = rows.map(_headerToMap).toList();
+    var result = rows.map((r) => SalesQuotationHeader.fromJson(_headerToMap(r))).toList();
     if (search != null && search.isNotEmpty) {
       final s = search.toLowerCase();
-      result = result.where((r) => (r['quotation_no'] as String).toLowerCase().contains(s)).toList();
+      result = result.where((r) => r.quotationNo.toLowerCase().contains(s)).toList();
     }
     return result.skip(offset).take(limit).toList();
   }

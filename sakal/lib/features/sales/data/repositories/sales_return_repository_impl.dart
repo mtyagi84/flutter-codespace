@@ -1,6 +1,7 @@
 import '../../domain/repositories/sales_return_repository.dart';
 import '../datasources/sales_return_remote_ds.dart';
 import '../datasources/sales_return_local_ds.dart';
+import '../models/sales_return_header.dart';
 
 /// Offline SAVE only (retrofit, 2026-07-21) — mirrors Sales Invoice's own
 /// DIRECT-mode offline pattern. Approve stays online-only always: it needs
@@ -17,7 +18,7 @@ class SalesReturnRepositoryImpl implements SalesReturnRepository {
   SalesReturnRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
-  Future<List<Map<String, dynamic>>> listReturns({
+  Future<List<SalesReturnHeader>> listReturns({
     required String clientId,
     required String companyId,
     String? search,

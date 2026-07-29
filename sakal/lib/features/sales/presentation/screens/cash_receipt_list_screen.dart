@@ -13,6 +13,7 @@ import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
+import '../../data/models/cash_receipt_header.dart';
 import '../providers/cash_receipt_providers.dart';
 
 class CashReceiptListScreen extends ConsumerStatefulWidget {
@@ -27,7 +28,7 @@ class _CashReceiptListScreenState extends ConsumerState<CashReceiptListScreen>
   @override
   String get screenName => RouteNames.salesReceipts;
 
-  List<Map<String, dynamic>> _receipts = [];
+  List<CashReceiptHeader> _receipts = [];
   Set<String> _pendingIds = {};
   bool _loading = true;
   String? _error;
@@ -69,7 +70,7 @@ class _CashReceiptListScreenState extends ConsumerState<CashReceiptListScreen>
       ]);
       if (mounted) {
         setState(() {
-          _receipts = results[0] as List<Map<String, dynamic>>;
+          _receipts = results[0] as List<CashReceiptHeader>;
           _pendingIds = results[1] as Set<String>;
           _loading = false;
         });
@@ -85,9 +86,9 @@ class _CashReceiptListScreenState extends ConsumerState<CashReceiptListScreen>
     }
   }
 
-  List<Map<String, dynamic>> get _filtered {
+  List<CashReceiptHeader> get _filtered {
     if (_searchText.isEmpty) return _receipts;
-    return _receipts.where((r) => (r['receipt_no'] as String? ?? '').toLowerCase().contains(_searchText)).toList();
+    return _receipts.where((r) => r.receiptNo.toLowerCase().contains(_searchText)).toList();
   }
 
   Future<void> _openNew() async {
@@ -95,8 +96,8 @@ class _CashReceiptListScreenState extends ConsumerState<CashReceiptListScreen>
     if (mounted) _load();
   }
 
-  Future<void> _openEdit(Map<String, dynamic> r) async {
-    await context.push(RouteNames.cashReceiptEntry, extra: {'receiptNo': r['receipt_no']});
+  Future<void> _openEdit(CashReceiptHeader r) async {
+    await context.push(RouteNames.cashReceiptEntry, extra: {'receiptNo': r.receiptNo});
     if (mounted) _load();
   }
 
@@ -114,21 +115,17 @@ class _CashReceiptListScreenState extends ConsumerState<CashReceiptListScreen>
         _ => s,
       };
 
-  String _customerLabel(Map<String, dynamic> r) {
-    final c = r['customer'] as Map<String, dynamic>?;
-    if (c == null) return '—';
-    return '[${c['account_code']}] ${c['account_name']}';
+  String _customerLabel(CashReceiptHeader r) {
+    if (r.customerName == null) return '—';
+    return '[${r.customerCode}] ${r.customerName}';
   }
 
-  String _locationLabel(Map<String, dynamic> r) {
-    final l = r['location'] as Map<String, dynamic>?;
-    return l?['location_name'] as String? ?? '—';
-  }
+  String _locationLabel(CashReceiptHeader r) => r.locationName ?? '—';
 
-  String _amountLabel(Map<String, dynamic> r) {
+  String _amountLabel(CashReceiptHeader r) {
     final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
-    final local = (r['local_amount'] as num? ?? 0).toDouble();
-    final base = (r['base_amount'] as num? ?? 0).toDouble();
+    final local = r.localAmount;
+    final base = r.baseAmount;
     final parts = <String>[];
     if (local > 0) parts.add(AppNumberFormat.amount(local, numberFormat));
     if (base > 0) parts.add('${AppNumberFormat.amount(base, numberFormat)} (base)');
@@ -205,7 +202,7 @@ class _CashReceiptListScreenState extends ConsumerState<CashReceiptListScreen>
           ]),
         ),
         Expanded(
-          child: SakalAdaptiveList<Map<String, dynamic>>(
+          child: SakalAdaptiveList<CashReceiptHeader>(
             loading: _loading,
             error: _error,
             rows: rows,
@@ -245,7 +242,7 @@ class _CashReceiptListScreenState extends ConsumerState<CashReceiptListScreen>
     );
   }
 
-  Widget _buildRow(Map<String, dynamic> r, int index) {
+  Widget _buildRow(CashReceiptHeader r, int index) {
     return InkWell(
       onTap: () => _openEdit(r),
       child: Container(
@@ -255,9 +252,9 @@ class _CashReceiptListScreenState extends ConsumerState<CashReceiptListScreen>
               flex: 2,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                child: Text(r['receipt_no'] as String? ?? '', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)),
+                child: Text(r.receiptNo, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)),
               )),
-          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(_displayDate(r['receipt_date'] as String?), style: const TextStyle(fontSize: 13)))),
+          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(_displayDate(r.receiptDate), style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 3, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(_customerLabel(r), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(_locationLabel(r), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(_amountLabel(r), textAlign: TextAlign.right, style: const TextStyle(fontSize: 13)))),
@@ -266,8 +263,8 @@ class _CashReceiptListScreenState extends ConsumerState<CashReceiptListScreen>
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Row(children: [
-                  _statusBadge(r['status'] as String? ?? 'DRAFT'),
-                  if (_pendingIds.contains(r['receipt_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+                  _statusBadge(r.status),
+                  if (_pendingIds.contains(r.receiptNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
                 ]),
               )),
           Expanded(
@@ -281,7 +278,7 @@ class _CashReceiptListScreenState extends ConsumerState<CashReceiptListScreen>
     );
   }
 
-  Widget _buildCard(Map<String, dynamic> r) {
+  Widget _buildCard(CashReceiptHeader r) {
     return InkWell(
       onTap: () => _openEdit(r),
       borderRadius: BorderRadius.circular(8),
@@ -290,12 +287,12 @@ class _CashReceiptListScreenState extends ConsumerState<CashReceiptListScreen>
         decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Expanded(child: Text(r['receipt_no'] as String? ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
-            _statusBadge(r['status'] as String? ?? 'DRAFT'),
-            if (_pendingIds.contains(r['receipt_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+            Expanded(child: Text(r.receiptNo, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
+            _statusBadge(r.status),
+            if (_pendingIds.contains(r.receiptNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
           ]),
           const SizedBox(height: 6),
-          Text(_displayDate(r['receipt_date'] as String?), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          Text(_displayDate(r.receiptDate), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
           Text(_customerLabel(r), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
           const SizedBox(height: 4),

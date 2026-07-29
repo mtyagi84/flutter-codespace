@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 import '../../../../core/database/app_database.dart';
+import '../models/stock_count_model.dart';
 
 class StockCountLocalDs {
   final AppDatabase _db;
@@ -8,7 +9,7 @@ class StockCountLocalDs {
 
   // ── Read ──────────────────────────────────────────────────────────────────
 
-  Future<List<Map<String, dynamic>>> listStockCounts({
+  Future<List<StockCountHeader>> listStockCounts({
     required String clientId,
     required String companyId,
     String? search,
@@ -23,10 +24,10 @@ class StockCountLocalDs {
       ..orderBy([(t) => OrderingTerm.desc(t.countDate), (t) => OrderingTerm.desc(t.countNo)]);
     if (status != null && status.isNotEmpty) q.where((t) => t.status.equals(status));
     final rows = await q.get();
-    var result = rows.map(_headerToMap).toList();
+    var result = rows.map((r) => StockCountHeader.fromJson(_headerToMap(r))).toList();
     if (search != null && search.isNotEmpty) {
       final s = search.toLowerCase();
-      result = result.where((r) => (r['count_no'] as String).toLowerCase().contains(s)).toList();
+      result = result.where((r) => r.countNo.toLowerCase().contains(s)).toList();
     }
     return result.skip(offset).take(limit).toList();
   }

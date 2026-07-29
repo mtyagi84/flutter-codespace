@@ -8,7 +8,7 @@ class FinanceVoucherLocalDs {
 
   // ── Read ──────────────────────────────────────────────────────────────────
 
-  Future<List<Map<String, dynamic>>> listHeaders({
+  Future<List<FinanceVoucherHeader>> listHeaders({
     required String clientId,
     required String companyId,
     required String locationId,
@@ -34,21 +34,14 @@ class FinanceVoucherLocalDs {
     // Drift's comparison-operator API for.
     final filtered = rows
         .where((r) => r.transDate.compareTo(fromDate) >= 0 && r.transDate.compareTo(toDate) <= 0)
-        .map((r) => {
-      'trans_no':           r.transNo,
-      'trans_date':         r.transDate,
-      'voucher_type_code':  r.voucherTypeCode,
-      'payment_mode_code':  r.paymentModeCode,
-      'is_on_account':      r.isOnAccount,
-      'is_posted':          r.isPosted,
-      'remarks':            r.remarks,
-    }).toList();
+        .map(_headerFromCache)
+        .toList();
     final searched = (search == null || search.isEmpty)
         ? filtered
-        : filtered.where((r) {
+        : filtered.where((h) {
             final s = search.toLowerCase();
-            return (r['trans_no'] as String).toLowerCase().contains(s) ||
-                (r['remarks'] as String).toLowerCase().contains(s);
+            return h.transNo.toLowerCase().contains(s) ||
+                h.remarks.toLowerCase().contains(s);
           }).toList();
     return searched.skip(offset).take(limit).toList();
   }

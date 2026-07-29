@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 import '../../../../core/database/app_database.dart';
+import '../models/price_master_header.dart';
 
 class PriceMasterLocalDs {
   final AppDatabase _db;
@@ -7,7 +8,7 @@ class PriceMasterLocalDs {
 
   // ── Read ──────────────────────────────────────────────────────────────────
 
-  Future<List<Map<String, dynamic>>> listBatches({
+  Future<List<PriceMasterHeader>> listBatches({
     required String clientId,
     required String companyId,
     String? search,
@@ -26,12 +27,12 @@ class PriceMasterLocalDs {
     if (priceType != null && priceType.isNotEmpty) q.where((t) => t.priceType.equals(priceType));
     if (locationId != null && locationId.isNotEmpty) q.where((t) => t.locationId.equals(locationId));
     final rows = await q.get();
-    var result = rows.map(_headerToMap).toList();
+    var result = rows.map((r) => PriceMasterHeader.fromJson(_headerToMap(r))).toList();
     if (search != null && search.isNotEmpty) {
       final s = search.toLowerCase();
       result = result.where((r) =>
-          (r['entry_no'] as String).toLowerCase().contains(s) ||
-          ((r['customer'] as Map)['account_name'] as String? ?? '').toLowerCase().contains(s)).toList();
+          r.entryNo.toLowerCase().contains(s) ||
+          (r.customerName ?? '').toLowerCase().contains(s)).toList();
     }
     return result.skip(offset).take(limit).toList();
   }

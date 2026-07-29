@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 import '../../../../core/database/app_database.dart';
+import '../models/material_issue_model.dart';
 
 class MaterialIssueLocalDs {
   final AppDatabase _db;
@@ -8,7 +9,7 @@ class MaterialIssueLocalDs {
 
   // ── Read ──────────────────────────────────────────────────────────────────
 
-  Future<List<Map<String, dynamic>>> listIssues({
+  Future<List<MaterialIssueHeader>> listIssues({
     required String clientId,
     required String companyId,
     String? search,
@@ -23,10 +24,10 @@ class MaterialIssueLocalDs {
       ..orderBy([(t) => OrderingTerm.desc(t.issueDate), (t) => OrderingTerm.desc(t.issueNo)]);
     if (status != null && status.isNotEmpty) q.where((t) => t.status.equals(status));
     final rows = await q.get();
-    var result = rows.map(_headerToMap).toList();
+    var result = rows.map((r) => MaterialIssueHeader.fromJson(_headerToMap(r))).toList();
     if (search != null && search.isNotEmpty) {
       final s = search.toLowerCase();
-      result = result.where((r) => (r['issue_no'] as String).toLowerCase().contains(s)).toList();
+      result = result.where((r) => r.issueNo.toLowerCase().contains(s)).toList();
     }
     return result.skip(offset).take(limit).toList();
   }

@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 import '../../../../core/database/app_database.dart';
+import '../models/sales_return_header.dart';
 
 /// Offline-SAVE support for Sales Return (retrofit, 2026-07-21) — mirrors
 /// SalesInvoiceLocalDs's shape. Approve is never queued offline for this
@@ -9,7 +10,7 @@ class SalesReturnLocalDs {
   final AppDatabase _db;
   SalesReturnLocalDs(this._db);
 
-  Future<List<Map<String, dynamic>>> listReturns({
+  Future<List<SalesReturnHeader>> listReturns({
     required String clientId,
     required String companyId,
     String? search,
@@ -24,12 +25,12 @@ class SalesReturnLocalDs {
       ..orderBy([(t) => OrderingTerm.desc(t.returnDate), (t) => OrderingTerm.desc(t.returnNo)]);
     if (status != null && status.isNotEmpty) q.where((t) => t.status.equals(status));
     final rows = await q.get();
-    var result = rows.map(_headerToMap).toList();
+    var result = rows.map((r) => SalesReturnHeader.fromJson(_headerToMap(r))).toList();
     if (search != null && search.isNotEmpty) {
       final s = search.toLowerCase();
       result = result.where((r) =>
-          (r['return_no'] as String).toLowerCase().contains(s) ||
-          (r['invoice_no'] as String? ?? '').toLowerCase().contains(s)).toList();
+          r.returnNo.toLowerCase().contains(s) ||
+          (r.invoiceNo ?? '').toLowerCase().contains(s)).toList();
     }
     return result.skip(offset).take(limit).toList();
   }

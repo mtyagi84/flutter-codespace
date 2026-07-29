@@ -1,6 +1,7 @@
 import '../../domain/repositories/expense_voucher_repository.dart';
 import '../datasources/expense_voucher_remote_ds.dart';
 import '../datasources/expense_voucher_local_ds.dart';
+import '../models/expense_voucher_model.dart';
 
 class ExpenseVoucherRepositoryImpl implements ExpenseVoucherRepository {
   final ExpenseVoucherRemoteDs _remote;
@@ -10,7 +11,7 @@ class ExpenseVoucherRepositoryImpl implements ExpenseVoucherRepository {
   ExpenseVoucherRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
-  Future<List<Map<String, dynamic>>> listVouchers({
+  Future<List<ExpenseVoucherHeader>> listVouchers({
     required String clientId,
     required String companyId,
     String? search,

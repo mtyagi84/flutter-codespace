@@ -14,6 +14,30 @@ import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 
+// No repository/model layer exists for this screen (it calls DioClient/
+// GenericLookupLocalDs directly) — this small row type is defined locally
+// rather than introducing a new data/models file for a single screen.
+class AccountLinkType {
+  final String id;
+  final String linkKey;
+  final String linkName;
+  final int    sortOrder;
+
+  const AccountLinkType({
+    required this.id,
+    required this.linkKey,
+    required this.linkName,
+    required this.sortOrder,
+  });
+
+  factory AccountLinkType.fromJson(Map<String, dynamic> j) => AccountLinkType(
+    id:        j['id']         as String? ?? '',
+    linkKey:   j['link_key']   as String? ?? '',
+    linkName:  j['link_name']  as String? ?? '',
+    sortOrder: (j['sort_order'] as num? ?? 0).toInt(),
+  );
+}
+
 /// Lists the seeded account-link types (Sales Account, Stock Account,
 /// Purchase Accrual Account…) and the granularity each is currently
 /// configured at. See backend/migrations/032_account_link_setup.sql.
@@ -28,7 +52,7 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
     with ScreenPermissionMixin<AccountLinkSetupScreen> {
   @override String get screenName => RouteNames.accountLinkSetup;
 
-  List<Map<String, dynamic>> _types = [];
+  List<AccountLinkType> _types = [];
   Map<String, String> _levelByType = {};   // link_type_id -> link_type
   Map<String, int>    _countByType = {};   // link_type_id -> configured default rows
   bool    _loading = true;
@@ -106,7 +130,7 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
         countMap[id] = (countMap[id] ?? 0) + 1;
       }
       setState(() {
-        _types       = typeRows;
+        _types       = typeRows.map(AccountLinkType.fromJson).toList();
         _levelByType = levelMap;
         _countByType = countMap;
         _loading     = false;
@@ -127,11 +151,11 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
   Color _levelColor(String? level) =>
       level == null ? AppColors.textDisabled : AppColors.positive;
 
-  void _openConfigure(Map<String, dynamic> type) {
+  void _openConfigure(AccountLinkType type) {
     context.push(RouteNames.accountLinkConfigure, extra: {
-      'linkTypeId': type['id'],
-      'linkKey':    type['link_key'],
-      'linkName':   type['link_name'],
+      'linkTypeId': type.id,
+      'linkKey':    type.linkKey,
+      'linkName':   type.linkName,
     }).then((_) => _load());
   }
 
@@ -177,7 +201,7 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
           ),
 
         Expanded(
-          child: SakalAdaptiveList<Map<String, dynamic>>(
+          child: SakalAdaptiveList<AccountLinkType>(
             loading: _loading,
             error: null,
             rows: _types,
@@ -197,15 +221,15 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
     );
   }
 
-  Widget _buildRow(Map<String, dynamic> type, bool offline) {
-    final level  = _levelByType[type['id']];
-    final count  = _countByType[type['id']] ?? 0;
+  Widget _buildRow(AccountLinkType type, bool offline) {
+    final level  = _levelByType[type.id];
+    final count  = _countByType[type.id] ?? 0;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Expanded(flex: 3, child: Text(type['link_name'] ?? '',
+          Expanded(flex: 3, child: Text(type.linkName,
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
           Expanded(
             flex: 2,
@@ -240,9 +264,9 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
     );
   }
 
-  Widget _buildMobileCard(Map<String, dynamic> type, bool offline) {
-    final level = _levelByType[type['id']];
-    final count = _countByType[type['id']] ?? 0;
+  Widget _buildMobileCard(AccountLinkType type, bool offline) {
+    final level = _levelByType[type.id];
+    final count = _countByType[type.id] ?? 0;
     final configuredText = level == null ? 'Not configured' : (level == 'COMPANY' ? (count > 0 ? '1 account' : '—') : '$count assigned');
     final canTap = canEdit && !offline;
     // The whole card is now tappable — it used to be a plain Container with
@@ -258,7 +282,7 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               Expanded(
-                child: Text(type['link_name'] ?? '',
+                child: Text(type.linkName,
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
               ),
               Container(

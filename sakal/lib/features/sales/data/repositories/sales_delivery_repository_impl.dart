@@ -1,6 +1,7 @@
 import '../../domain/repositories/sales_delivery_repository.dart';
 import '../datasources/sales_delivery_remote_ds.dart';
 import '../datasources/sales_delivery_local_ds.dart';
+import '../models/sales_delivery_header.dart';
 
 class SalesDeliveryRepositoryImpl implements SalesDeliveryRepository {
   final SalesDeliveryRemoteDs _remote;
@@ -10,7 +11,7 @@ class SalesDeliveryRepositoryImpl implements SalesDeliveryRepository {
   SalesDeliveryRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
-  Future<List<Map<String, dynamic>>> listDeliveries({
+  Future<List<SalesDeliveryHeader>> listDeliveries({
     required String clientId,
     required String companyId,
     String? search,

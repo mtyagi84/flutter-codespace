@@ -14,6 +14,7 @@ import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
+import '../../data/models/sales_invoice_header.dart';
 import '../providers/sales_invoice_providers.dart';
 import '../providers/sales_delivery_providers.dart';
 
@@ -28,7 +29,7 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
     with ScreenPermissionMixin<SalesInvoiceListScreen> {
   @override String get screenName => RouteNames.salesInvoices;
 
-  List<Map<String, dynamic>> _rows = [];
+  List<SalesInvoiceHeader> _rows = [];
   Set<String> _pendingIds = {};
   Map<String, String> _deliveryStatusByInvoice = {};
   bool    _loading = true;
@@ -70,7 +71,7 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
       ]);
       if (mounted) {
         setState(() {
-          _rows       = results[0] as List<Map<String, dynamic>>;
+          _rows       = results[0] as List<SalesInvoiceHeader>;
           _pendingIds = results[1] as Set<String>;
           _loading    = false;
         });
@@ -87,8 +88,8 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
   /// off, never blocks the list itself from rendering).
   Future<void> _loadDeliveryStatuses(UserSession session) async {
     final deferredInvoiceNos = _rows
-        .where((r) => r['stock_dispatch_mode'] == 'DEFERRED')
-        .map((r) => r['invoice_no'] as String)
+        .where((r) => r.stockDispatchMode == 'DEFERRED')
+        .map((r) => r.invoiceNo)
         .toList();
     if (deferredInvoiceNos.isEmpty) return;
     try {
@@ -127,19 +128,17 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
     );
   }
 
-  List<Map<String, dynamic>> get _filtered {
+  List<SalesInvoiceHeader> get _filtered {
     if (_searchText.isEmpty) return _rows;
-    return _rows.where((r) {
-      final customer = r['customer'] as Map<String, dynamic>?;
-      return (r['invoice_no'] as String? ?? '').toLowerCase().contains(_searchText) ||
-          (customer?['account_name'] as String? ?? '').toLowerCase().contains(_searchText) ||
-          (r['party_name'] as String? ?? '').toLowerCase().contains(_searchText);
-    }).toList();
+    return _rows.where((r) =>
+        r.invoiceNo.toLowerCase().contains(_searchText) ||
+        r.customerName.toLowerCase().contains(_searchText) ||
+        r.partyName.toLowerCase().contains(_searchText)).toList();
   }
 
-  Future<void> _openEdit(Map<String, dynamic> r) async {
+  Future<void> _openEdit(SalesInvoiceHeader r) async {
     await context.push(RouteNames.salesInvoiceEntry,
-        extra: {'invoiceNo': r['invoice_no'], 'invoiceDate': r['invoice_date']});
+        extra: {'invoiceNo': r.invoiceNo, 'invoiceDate': r.invoiceDate});
     if (mounted) _load();
   }
 
@@ -314,10 +313,8 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
   // toggle asks for an exact 40.0/54.0px row height, not an approximation
   // via vertical padding. Horizontal cell padding also scales with density
   // (12.0 dense / 18.0 comfortable) per the same spec.
-  Widget _buildRow(Map<String, dynamic> r, int index) {
-    final customer = r['customer'] as Map<String, dynamic>?;
-    final currency = r['currency'] as Map<String, dynamic>?;
-    final partyName = customer?['account_name'] as String? ?? r['party_name'] as String? ?? '—';
+  Widget _buildRow(SalesInvoiceHeader r, int index) {
+    final partyName = r.customerName.isNotEmpty ? r.customerName : (r.partyName.isNotEmpty ? r.partyName : '—');
     final metrics = DensityMetrics.of(ref.watch(isCompactDensityProvider));
     final hPad = metrics.margin;
     return InkWell(
@@ -327,22 +324,22 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
         height: metrics.rowHeight,
         child: Row(children: [
           Expanded(flex: 2, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad),
-              child: Text(r['invoice_no'] as String, overflow: TextOverflow.ellipsis,
+              child: Text(r.invoiceNo, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)))),
           Expanded(flex: 2, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad),
-              child: Text(_displayDate(r['invoice_date'] as String?), style: const TextStyle(fontSize: 13)))),
+              child: Text(_displayDate(r.invoiceDate), style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad),
-              child: _saleTypeBadge(r['sale_type'] as String? ?? 'CASH'))),
+              child: _saleTypeBadge(r.saleType))),
           Expanded(flex: 3, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad),
               child: Text(partyName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad),
               child: Row(children: [
-                _statusBadge(r['status'] as String),
-                if (_pendingIds.contains(r['invoice_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
-                if (_deliveryStatusByInvoice[r['invoice_no']] != null) ...[const SizedBox(width: 6), _deliveryStatusBadge(r['invoice_no'] as String?)!],
+                _statusBadge(r.status),
+                if (_pendingIds.contains(r.invoiceNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+                if (_deliveryStatusByInvoice[r.invoiceNo] != null) ...[const SizedBox(width: 6), _deliveryStatusBadge(r.invoiceNo)!],
               ]))),
           Expanded(flex: 2, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad),
-              child: Text('${currency?['currency_id'] ?? ''} ${AppNumberFormat.amount((r['grand_total'] as num?) ?? 0, ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL')}',
+              child: Text('${r.currencyId} ${AppNumberFormat.amount(r.grandTotal, ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL')}',
                   textAlign: TextAlign.right, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)))),
           Expanded(flex: 1, child: Padding(padding: EdgeInsets.symmetric(horizontal: hPad * 2 / 3),
               child: IconButton(icon: const Icon(Icons.arrow_forward_ios, size: 14), color: AppColors.primary,
@@ -352,10 +349,8 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
     );
   }
 
-  Widget _buildCard(Map<String, dynamic> r) {
-    final customer = r['customer'] as Map<String, dynamic>?;
-    final currency = r['currency'] as Map<String, dynamic>?;
-    final partyName = customer?['account_name'] as String? ?? r['party_name'] as String? ?? '—';
+  Widget _buildCard(SalesInvoiceHeader r) {
+    final partyName = r.customerName.isNotEmpty ? r.customerName : (r.partyName.isNotEmpty ? r.partyName : '—');
     return InkWell(
       onTap: () => _openEdit(r),
       borderRadius: BorderRadius.circular(8),
@@ -364,20 +359,20 @@ class _SalesInvoiceListScreenState extends ConsumerState<SalesInvoiceListScreen>
         decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Expanded(child: Text(r['invoice_no'] as String,
+            Expanded(child: Text(r.invoiceNo,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
-            _saleTypeBadge(r['sale_type'] as String? ?? 'CASH'),
+            _saleTypeBadge(r.saleType),
             const SizedBox(width: 6),
-            _statusBadge(r['status'] as String),
-            if (_pendingIds.contains(r['invoice_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
-            if (_deliveryStatusByInvoice[r['invoice_no']] != null) ...[const SizedBox(width: 6), _deliveryStatusBadge(r['invoice_no'] as String?)!],
+            _statusBadge(r.status),
+            if (_pendingIds.contains(r.invoiceNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+            if (_deliveryStatusByInvoice[r.invoiceNo] != null) ...[const SizedBox(width: 6), _deliveryStatusBadge(r.invoiceNo)!],
           ]),
           const SizedBox(height: 6),
           Text(partyName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
           const SizedBox(height: 4),
-          Text(_displayDate(r['invoice_date'] as String?), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          Text(_displayDate(r.invoiceDate), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
-          Text('${currency?['currency_id'] ?? ''} ${AppNumberFormat.amount((r['grand_total'] as num?) ?? 0, ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL')}',
+          Text('${r.currencyId} ${AppNumberFormat.amount(r.grandTotal, ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL')}',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
         ]),
       ),

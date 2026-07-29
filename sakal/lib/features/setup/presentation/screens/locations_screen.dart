@@ -11,6 +11,80 @@ import '../../../../core/widgets/sakal_adaptive_list.dart';
 
 const _locationTypes = ['Store', 'Warehouse', 'Office', 'Head Office', 'Distribution Centre'];
 
+// No repository/model layer exists for this screen (it calls DioClient
+// directly) — this row type is defined locally rather than introducing a
+// new data/models file for a single screen. Groups/users/cities stay Map
+// — dropdown lookup sources for this screen, not its own row type.
+class Location {
+  final String  id;
+  final String  locationName;
+  final String? locationShort;
+  final String? locationType;
+  final String? groupId;
+  final String? groupName;
+  final String? responsibleUserId;
+  final String? addressLine1;
+  final String? addressLine2;
+  final String? cityId;
+  final String? cityName;
+  final String? postalCode;
+  final String? phone;
+  final String? email;
+  final String? taxRegNumber;
+  final String? serverUrl;
+  final bool    isNegativeStockAllowed;
+  final bool    isIssueAllowed;
+  final bool    isActive;
+
+  const Location({
+    required this.id,
+    required this.locationName,
+    required this.locationShort,
+    required this.locationType,
+    required this.groupId,
+    required this.groupName,
+    required this.responsibleUserId,
+    required this.addressLine1,
+    required this.addressLine2,
+    required this.cityId,
+    required this.cityName,
+    required this.postalCode,
+    required this.phone,
+    required this.email,
+    required this.taxRegNumber,
+    required this.serverUrl,
+    required this.isNegativeStockAllowed,
+    required this.isIssueAllowed,
+    required this.isActive,
+  });
+
+  factory Location.fromJson(Map<String, dynamic> j) {
+    final group = j['group'] as Map<String, dynamic>?;
+    final city  = j['city']  as Map<String, dynamic>?;
+    return Location(
+      id:                     j['id']                         as String? ?? '',
+      locationName:           j['location_name']              as String? ?? '',
+      locationShort:          j['location_short']              as String?,
+      locationType:           j['location_type']               as String?,
+      groupId:                j['group_id']                    as String?,
+      groupName:              group?['group_name']             as String?,
+      responsibleUserId:      j['responsible_user_id']         as String?,
+      addressLine1:           j['address_line1']               as String?,
+      addressLine2:           j['address_line2']               as String?,
+      cityId:                 j['city_id']                     as String?,
+      cityName:               city?['city_name']                as String?,
+      postalCode:             j['postal_code']                 as String?,
+      phone:                  j['phone']                       as String?,
+      email:                  j['email']                       as String?,
+      taxRegNumber:           j['tax_reg_number']               as String?,
+      serverUrl:              j['server_url']                  as String?,
+      isNegativeStockAllowed: j['is_negative_stock_allowed']   as bool?   ?? false,
+      isIssueAllowed:         j['is_issue_allowed']             as bool?   ?? true,
+      isActive:               j['is_active']                   as bool?   ?? true,
+    );
+  }
+}
+
 class LocationsScreen extends ConsumerStatefulWidget {
   const LocationsScreen({super.key});
 
@@ -22,7 +96,7 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
     with ScreenPermissionMixin<LocationsScreen> {
   @override String get screenName => '/setup/locations';
 
-  List<Map<String, dynamic>> _rows   = [];
+  List<Location> _rows   = [];
   List<Map<String, dynamic>> _groups = [];
   List<Map<String, dynamic>> _users  = [];
   List<Map<String, dynamic>> _cities = [];
@@ -77,7 +151,9 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
       ]);
       if (mounted) {
         setState(() {
-          _rows    = List<Map<String, dynamic>>.from(results[0].data as List);
+          _rows    = (results[0].data as List)
+              .map((j) => Location.fromJson(j as Map<String, dynamic>))
+              .toList();
           _groups  = List<Map<String, dynamic>>.from(results[1].data as List);
           _users   = List<Map<String, dynamic>>.from(results[2].data as List);
           _cities  = List<Map<String, dynamic>>.from(results[3].data as List);
@@ -90,12 +166,12 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
     }
   }
 
-  Future<void> _toggleActive(Map<String, dynamic> row) async {
-    final newVal = !(row['is_active'] as bool? ?? true);
+  Future<void> _toggleActive(Location row) async {
+    final newVal = !row.isActive;
     try {
       await DioClient.instance.patch(
         '/ric_locations',
-        queryParameters: {'id': 'eq.${row['id']}'},
+        queryParameters: {'id': 'eq.${row.id}'},
         data: {'is_active': newVal, 'updated_at': DateTime.now().toUtc().toIso8601String()},
         options: Options(headers: {'Prefer': 'return=minimal'}),
       );
@@ -128,7 +204,7 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
     );
   }
 
-  void _openDialog([Map<String, dynamic>? existing]) {
+  void _openDialog([Location? existing]) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -219,7 +295,7 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
         // mobile-card/desktop-table switch; a raw fixed-width Row table
         // here overflowed by 616px on mobile since it never adapted at all.
         Expanded(
-          child: SakalAdaptiveList<Map<String, dynamic>>(
+          child: SakalAdaptiveList<Location>(
             loading: _loading,
             error: null,
             rows: _rows,
@@ -238,7 +314,7 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
               canEdit: canEdit && !offline,
               onEdit: () => _openDialog(row),
               onToggle: () => _toggleActive(row),
-              onDelete: () => _confirmDelete(row['id'] as String),
+              onDelete: () => _confirmDelete(row.id),
             ),
             emptyState: const Center(
               child: Column(
@@ -260,10 +336,8 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
     );
   }
 
-  Widget _buildTableRow(Map<String, dynamic> row, bool canEditRow) {
-    final active = row['is_active'] as bool? ?? true;
-    final group  = row['group'] as Map<String, dynamic>?;
-    final city   = row['city']  as Map<String, dynamic>?;
+  Widget _buildTableRow(Location row, bool canEditRow) {
+    final active = row.isActive;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Row(
@@ -274,16 +348,16 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(row['location_name'] ?? '',
+                Text(row.locationName,
                     style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary)),
-                if ((row['address_line1'] ?? '').isNotEmpty || city != null)
+                if ((row.addressLine1 ?? '').isNotEmpty || row.cityName != null)
                   Text(
                     [
-                      if ((row['address_line1'] ?? '').isNotEmpty) row['address_line1'] as String,
-                      if (city != null) city['city_name'] as String,
+                      if ((row.addressLine1 ?? '').isNotEmpty) row.addressLine1!,
+                      if (row.cityName != null) row.cityName!,
                     ].join(', '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -294,19 +368,19 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
           ),
           Expanded(
             flex: 1,
-            child: Text(row['location_short'] ?? '—',
+            child: Text(row.locationShort ?? '—',
                 style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
           ),
-          Expanded(flex: 2, child: _TypeChip(type: row['location_type'] as String?)),
+          Expanded(flex: 2, child: _TypeChip(type: row.locationType)),
           Expanded(
             flex: 2,
-            child: Text(group?['group_name'] as String? ?? '—',
+            child: Text(row.groupName ?? '—',
                 style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
                 maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
           Expanded(
             flex: 2,
-            child: Text(row['phone'] ?? '—',
+            child: Text(row.phone ?? '—',
                 style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
           ),
           Expanded(
@@ -330,7 +404,7 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
                 IconButton(
                   tooltip: 'Delete',
                   icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
-                  onPressed: canEditRow ? () => _confirmDelete(row['id'] as String) : null,
+                  onPressed: canEditRow ? () => _confirmDelete(row.id) : null,
                 ),
               ],
             ),
@@ -365,7 +439,7 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
 // ── Mobile card ───────────────────────────────────────────────────────────────
 
 class _LocationCard extends StatelessWidget {
-  final Map<String, dynamic> row;
+  final Location row;
   final bool canEdit;
   final VoidCallback onEdit;
   final VoidCallback onToggle;
@@ -380,9 +454,7 @@ class _LocationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final active = row['is_active'] as bool? ?? true;
-    final group  = row['group'] as Map<String, dynamic>?;
-    final city   = row['city']  as Map<String, dynamic>?;
+    final active = row.isActive;
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -396,16 +468,16 @@ class _LocationCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(row['location_name'] ?? '',
+                      Text(row.locationName,
                           style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                               color: AppColors.textPrimary)),
-                      if ((row['address_line1'] ?? '').isNotEmpty || city != null)
+                      if ((row.addressLine1 ?? '').isNotEmpty || row.cityName != null)
                         Text(
                           [
-                            if ((row['address_line1'] ?? '').isNotEmpty) row['address_line1'] as String,
-                            if (city != null) city['city_name'] as String,
+                            if ((row.addressLine1 ?? '').isNotEmpty) row.addressLine1!,
+                            if (row.cityName != null) row.cityName!,
                           ].join(', '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -427,15 +499,15 @@ class _LocationCard extends StatelessWidget {
               runSpacing: 4,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                _TypeChip(type: row['location_type'] as String?),
-                if ((row['location_short'] as String? ?? '').isNotEmpty)
-                  Text(row['location_short'] as String,
+                _TypeChip(type: row.locationType),
+                if ((row.locationShort ?? '').isNotEmpty)
+                  Text(row.locationShort!,
                       style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                if (group != null)
-                  Text(group['group_name'] as String,
+                if (row.groupName != null)
+                  Text(row.groupName!,
                       style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                if ((row['phone'] as String? ?? '').isNotEmpty)
-                  Text(row['phone'] as String,
+                if ((row.phone ?? '').isNotEmpty)
+                  Text(row.phone!,
                       style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
               ],
             ),
@@ -492,7 +564,7 @@ class _TypeChip extends StatelessWidget {
 // ── Add / Edit Dialog ─────────────────────────────────────────────────────────
 
 class _LocationDialog extends ConsumerStatefulWidget {
-  final Map<String, dynamic>? existing;
+  final Location? existing;
   final List<Map<String, dynamic>> groups;
   final List<Map<String, dynamic>> users;
   final List<Map<String, dynamic>> cities;
@@ -537,21 +609,21 @@ class _LocationDialogState extends ConsumerState<_LocationDialog> {
     super.initState();
     final d = widget.existing;
     if (d != null) {
-      _nameCtrl.text   = d['location_name']  ?? '';
-      _shortCtrl.text  = d['location_short'] ?? '';
-      _addr1Ctrl.text  = d['address_line1']  ?? '';
-      _addr2Ctrl.text  = d['address_line2']  ?? '';
-      _postalCtrl.text = d['postal_code']    ?? '';
-      _phoneCtrl.text  = d['phone']          ?? '';
-      _emailCtrl.text  = d['email']          ?? '';
-      _taxRegCtrl.text = d['tax_reg_number'] ?? '';
-      _serverCtrl.text = d['server_url']     ?? '';
-      _locationType    = d['location_type']  as String?;
-      _groupId         = d['group_id']       as String?;
-      _responsibleUserId = d['responsible_user_id'] as String?;
-      _cityId          = d['city_id']        as String?;
-      _negativeStockAllowed = d['is_negative_stock_allowed'] as bool? ?? false;
-      _issueAllowed = d['is_issue_allowed'] as bool? ?? true;
+      _nameCtrl.text   = d.locationName;
+      _shortCtrl.text  = d.locationShort ?? '';
+      _addr1Ctrl.text  = d.addressLine1  ?? '';
+      _addr2Ctrl.text  = d.addressLine2  ?? '';
+      _postalCtrl.text = d.postalCode    ?? '';
+      _phoneCtrl.text  = d.phone         ?? '';
+      _emailCtrl.text  = d.email         ?? '';
+      _taxRegCtrl.text = d.taxRegNumber  ?? '';
+      _serverCtrl.text = d.serverUrl     ?? '';
+      _locationType    = d.locationType;
+      _groupId         = d.groupId;
+      _responsibleUserId = d.responsibleUserId;
+      _cityId          = d.cityId;
+      _negativeStockAllowed = d.isNegativeStockAllowed;
+      _issueAllowed = d.isIssueAllowed;
       if (_locationType != null && !_locationTypes.contains(_locationType)) {
         _locationType = null;
       }
@@ -605,7 +677,7 @@ class _LocationDialogState extends ConsumerState<_LocationDialog> {
       if (_isEdit) {
         await DioClient.instance.patch(
           '/ric_locations',
-          queryParameters: {'id': 'eq.${widget.existing!['id']}'},
+          queryParameters: {'id': 'eq.${widget.existing!.id}'},
           data: {
             ...fields,
             'updated_at': now,

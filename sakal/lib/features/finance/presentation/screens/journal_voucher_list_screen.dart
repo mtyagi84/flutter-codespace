@@ -13,6 +13,7 @@ import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
+import '../../data/models/finance_voucher_model.dart';
 import '../providers/finance_voucher_providers.dart';
 
 /// Reference implementation for scroll-triggered pagination — see
@@ -33,7 +34,7 @@ class _JournalVoucherListScreenState extends ConsumerState<JournalVoucherListScr
   @override
   String get screenName => RouteNames.journalEntry;
 
-  late final PagedListController<Map<String, dynamic>> _controller;
+  late final PagedListController<FinanceVoucherHeader> _controller;
   UserSession _session() => ref.read(sessionProvider)!;
   Set<String> _pendingIds = {};
   bool _loading = true;
@@ -48,7 +49,7 @@ class _JournalVoucherListScreenState extends ConsumerState<JournalVoucherListScr
   @override
   void initState() {
     super.initState();
-    _controller = PagedListController<Map<String, dynamic>>(
+    _controller = PagedListController<FinanceVoucherHeader>(
       fetchPage: ({required limit, required offset}) => ref.read(financeVoucherRepositoryProvider).listHeaders(
             clientId: _session().clientId, companyId: _session().companyId,
             locationId: _session().locationId ?? '',
@@ -124,8 +125,8 @@ class _JournalVoucherListScreenState extends ConsumerState<JournalVoucherListScr
     if (mounted) _load();
   }
 
-  Future<void> _openEdit(Map<String, dynamic> v) async {
-    await context.push(RouteNames.journalVoucherEntry, extra: {'transNo': v['trans_no'], 'transDate': v['trans_date']});
+  Future<void> _openEdit(FinanceVoucherHeader v) async {
+    await context.push(RouteNames.journalVoucherEntry, extra: {'transNo': v.transNo, 'transDate': v.transDate});
     if (mounted) _load();
   }
 
@@ -200,7 +201,7 @@ class _JournalVoucherListScreenState extends ConsumerState<JournalVoucherListScr
           ]),
         ),
         Expanded(
-          child: SakalAdaptiveList<Map<String, dynamic>>(
+          child: SakalAdaptiveList<FinanceVoucherHeader>(
             loading: _loading,
             error: _error,
             rows: rows,
@@ -225,18 +226,18 @@ class _JournalVoucherListScreenState extends ConsumerState<JournalVoucherListScr
     );
   }
 
-  Widget _buildRow(Map<String, dynamic> v, int index) {
-    final transNo = v['trans_no'] as String? ?? '';
+  Widget _buildRow(FinanceVoucherHeader v, int index) {
+    final transNo = v.transNo;
     return InkWell(
       onTap: () => _openEdit(v),
       child: Container(
         color: index.isEven ? Colors.white : AppColors.background,
         child: Row(children: [
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12), child: Text(transNo, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)))),
-          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(_displayDate(v['trans_date'] as String?), style: const TextStyle(fontSize: 13)))),
-          Expanded(flex: 4, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(v['remarks'] as String? ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
+          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(_displayDate(v.transDate), style: const TextStyle(fontSize: 13)))),
+          Expanded(flex: 4, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(v.remarks.isNotEmpty ? v.remarks : '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Row(children: [
-            _statusBadge(v['is_posted'] as bool? ?? false),
+            _statusBadge(v.isPosted),
             if (_pendingIds.contains(transNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
           ]))),
           Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: IconButton(icon: const Icon(Icons.arrow_forward_ios, size: 14), color: AppColors.primary, onPressed: () => _openEdit(v), tooltip: 'Open', padding: EdgeInsets.zero))),
@@ -245,8 +246,8 @@ class _JournalVoucherListScreenState extends ConsumerState<JournalVoucherListScr
     );
   }
 
-  Widget _buildCard(Map<String, dynamic> v) {
-    final transNo = v['trans_no'] as String? ?? '';
+  Widget _buildCard(FinanceVoucherHeader v) {
+    final transNo = v.transNo;
     return InkWell(
       onTap: () => _openEdit(v),
       borderRadius: BorderRadius.circular(8),
@@ -256,13 +257,13 @@ class _JournalVoucherListScreenState extends ConsumerState<JournalVoucherListScr
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Expanded(child: Text(transNo, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
-            _statusBadge(v['is_posted'] as bool? ?? false),
+            _statusBadge(v.isPosted),
             if (_pendingIds.contains(transNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
           ]),
           const SizedBox(height: 6),
-          Text(_displayDate(v['trans_date'] as String?), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          Text(_displayDate(v.transDate), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
-          Text(v['remarks'] as String? ?? '—', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+          Text(v.remarks.isNotEmpty ? v.remarks : '—', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
         ]),
       ),
     );

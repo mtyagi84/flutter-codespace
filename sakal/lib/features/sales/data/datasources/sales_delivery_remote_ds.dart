@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../../../core/network/dio_client.dart';
+import '../models/sales_delivery_header.dart';
 
 class SalesDeliveryRemoteDs {
   final Dio _dio = DioClient.instance;
@@ -8,7 +9,7 @@ class SalesDeliveryRemoteDs {
       'customer:rim_accounts!customer_id(account_code,account_name),'
       'location:ric_locations!location_id(location_name)';
 
-  Future<List<Map<String, dynamic>>> listDeliveries({
+  Future<List<SalesDeliveryHeader>> listDeliveries({
     required String clientId,
     required String companyId,
     String? search,
@@ -28,7 +29,9 @@ class SalesDeliveryRemoteDs {
     if (status != null && status.isNotEmpty) params['status'] = 'eq.$status';
     if (search != null && search.isNotEmpty) params['or'] = '(delivery_no.ilike.*$search*,invoice_no.ilike.*$search*)';
     final res = await _dio.get('/rih_sales_delivery_headers', queryParameters: params);
-    return List<Map<String, dynamic>>.from(res.data as List);
+    return (res.data as List)
+        .map((j) => SalesDeliveryHeader.fromJson(j as Map<String, dynamic>))
+        .toList();
   }
 
   Future<Map<String, dynamic>?> getHeader({

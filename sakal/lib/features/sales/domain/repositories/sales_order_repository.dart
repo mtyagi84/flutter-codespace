@@ -1,5 +1,7 @@
+import '../../data/models/sales_order_header.dart';
+
 abstract class SalesOrderRepository {
-  Future<List<Map<String, dynamic>>> listOrders({
+  Future<List<SalesOrderHeader>> listOrders({
     required String clientId,
     required String companyId,
     String? search,

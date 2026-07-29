@@ -11,6 +11,7 @@ import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
+import '../../data/models/material_requisition_model.dart';
 import '../providers/material_requisition_providers.dart';
 
 class MaterialRequisitionListScreen extends ConsumerStatefulWidget {
@@ -24,7 +25,7 @@ class _MaterialRequisitionListScreenState extends ConsumerState<MaterialRequisit
     with ScreenPermissionMixin<MaterialRequisitionListScreen> {
   @override String get screenName => RouteNames.materialRequisitions;
 
-  List<Map<String, dynamic>> _rows = [];
+  List<MaterialRequisitionHeader> _rows = [];
   Set<String> _pendingIds = {};
   bool    _loading = true;
   String? _error;
@@ -64,7 +65,7 @@ class _MaterialRequisitionListScreenState extends ConsumerState<MaterialRequisit
       ]);
       if (mounted) {
         setState(() {
-          _rows       = results[0] as List<Map<String, dynamic>>;
+          _rows       = results[0] as List<MaterialRequisitionHeader>;
           _pendingIds = results[1] as Set<String>;
           _loading    = false;
         });
@@ -74,12 +75,12 @@ class _MaterialRequisitionListScreenState extends ConsumerState<MaterialRequisit
     }
   }
 
-  List<Map<String, dynamic>> get _filtered {
+  List<MaterialRequisitionHeader> get _filtered {
     if (_searchText.isEmpty) return _rows;
     return _rows.where((r) =>
-        (r['requisition_no'] as String? ?? '').toLowerCase().contains(_searchText) ||
-        (r['requested_by'] as String? ?? '').toLowerCase().contains(_searchText) ||
-        (r['reason'] as String? ?? '').toLowerCase().contains(_searchText)).toList();
+        r.requisitionNo.toLowerCase().contains(_searchText) ||
+        r.requestedBy.toLowerCase().contains(_searchText) ||
+        r.reason.toLowerCase().contains(_searchText)).toList();
   }
 
   Future<void> _openNew() async {
@@ -87,9 +88,9 @@ class _MaterialRequisitionListScreenState extends ConsumerState<MaterialRequisit
     if (mounted) _load();
   }
 
-  Future<void> _openEdit(Map<String, dynamic> r) async {
+  Future<void> _openEdit(MaterialRequisitionHeader r) async {
     await context.push(RouteNames.materialRequisitionEntry,
-        extra: {'requisitionNo': r['requisition_no'], 'requisitionDate': r['requisition_date']});
+        extra: {'requisitionNo': r.requisitionNo, 'requisitionDate': r.requisitionDate});
     if (mounted) _load();
   }
 
@@ -214,28 +215,27 @@ class _MaterialRequisitionListScreenState extends ConsumerState<MaterialRequisit
     );
   }
 
-  Widget _buildRow(Map<String, dynamic> r, int index) {
-    final location = r['location'] as Map<String, dynamic>?;
+  Widget _buildRow(MaterialRequisitionHeader r, int index) {
     return InkWell(
       onTap: () => _openEdit(r),
       child: Container(
         color: index.isEven ? Colors.white : AppColors.background,
         child: Row(children: [
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              child: Text(r['requisition_no'] as String, overflow: TextOverflow.ellipsis,
+              child: Text(r.requisitionNo, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(_displayDate(r['requisition_date'] as String), style: const TextStyle(fontSize: 13)))),
+              child: Text(_displayDate(r.requisitionDate), style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(r['requested_by'] as String? ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
+              child: Text(r.requestedBy.isEmpty ? '—' : r.requestedBy, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(location?['location_name'] as String? ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
+              child: Text(r.locationName.isEmpty ? '—' : r.locationName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(r['reason'] as String? ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
+              child: Text(r.reason.isEmpty ? '—' : r.reason, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(children: [
-                _statusBadge(r['status'] as String),
-                if (_pendingIds.contains(r['requisition_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+                _statusBadge(r.status),
+                if (_pendingIds.contains(r.requisitionNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
               ]))),
           Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
               child: IconButton(icon: const Icon(Icons.arrow_forward_ios, size: 14), color: AppColors.primary,
@@ -245,8 +245,7 @@ class _MaterialRequisitionListScreenState extends ConsumerState<MaterialRequisit
     );
   }
 
-  Widget _buildCard(Map<String, dynamic> r) {
-    final location = r['location'] as Map<String, dynamic>?;
+  Widget _buildCard(MaterialRequisitionHeader r) {
     return InkWell(
       onTap: () => _openEdit(r),
       borderRadius: BorderRadius.circular(8),
@@ -255,15 +254,15 @@ class _MaterialRequisitionListScreenState extends ConsumerState<MaterialRequisit
         decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Expanded(child: Text(r['requisition_no'] as String,
+            Expanded(child: Text(r.requisitionNo,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
-            _statusBadge(r['status'] as String),
-            if (_pendingIds.contains(r['requisition_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+            _statusBadge(r.status),
+            if (_pendingIds.contains(r.requisitionNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
           ]),
           const SizedBox(height: 6),
-          Text('${r['reason'] ?? '—'} · ${_displayDate(r['requisition_date'] as String)}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          Text('${r.reason.isEmpty ? '—' : r.reason} · ${_displayDate(r.requisitionDate)}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
-          Text('${r['requested_by'] ?? '—'} · ${location?['location_name'] ?? '—'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+          Text('${r.requestedBy.isEmpty ? '—' : r.requestedBy} · ${r.locationName.isEmpty ? '—' : r.locationName}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
         ]),
       ),
     );

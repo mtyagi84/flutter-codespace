@@ -1,5 +1,7 @@
+import '../../data/models/material_issue_model.dart';
+
 abstract class MaterialIssueRepository {
-  Future<List<Map<String, dynamic>>> listIssues({
+  Future<List<MaterialIssueHeader>> listIssues({
     required String clientId,
     required String companyId,
     String? search,

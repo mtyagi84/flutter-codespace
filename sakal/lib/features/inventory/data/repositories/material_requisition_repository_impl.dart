@@ -2,6 +2,7 @@ import 'dart:async';
 import '../../domain/repositories/material_requisition_repository.dart';
 import '../datasources/material_requisition_remote_ds.dart';
 import '../datasources/material_requisition_local_ds.dart';
+import '../models/material_requisition_model.dart';
 
 class MaterialRequisitionRepositoryImpl implements MaterialRequisitionRepository {
   final MaterialRequisitionRemoteDs _remote;
@@ -11,7 +12,7 @@ class MaterialRequisitionRepositoryImpl implements MaterialRequisitionRepository
   MaterialRequisitionRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
-  Future<List<Map<String, dynamic>>> listRequisitions({
+  Future<List<MaterialRequisitionHeader>> listRequisitions({
     required String clientId,
     required String companyId,
     String? search,

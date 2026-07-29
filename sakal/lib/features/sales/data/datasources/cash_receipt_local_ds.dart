@@ -1,11 +1,12 @@
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 import '../../../../core/database/app_database.dart';
+import '../models/cash_receipt_header.dart';
 
 class CashReceiptLocalDs {
   final AppDatabase _db;
   CashReceiptLocalDs(this._db);
 
-  Future<List<Map<String, dynamic>>> listReceipts({
+  Future<List<CashReceiptHeader>> listReceipts({
     required String clientId,
     required String companyId,
     String? search,
@@ -20,10 +21,10 @@ class CashReceiptLocalDs {
       ..orderBy([(t) => OrderingTerm.desc(t.receiptDate), (t) => OrderingTerm.desc(t.receiptNo)]);
     if (status != null && status.isNotEmpty) q.where((t) => t.status.equals(status));
     final rows = await q.get();
-    var result = rows.map(_headerToMap).toList();
+    var result = rows.map((r) => CashReceiptHeader.fromJson(_headerToMap(r))).toList();
     if (search != null && search.isNotEmpty) {
       final s = search.toLowerCase();
-      result = result.where((r) => (r['receipt_no'] as String).toLowerCase().contains(s)).toList();
+      result = result.where((r) => r.receiptNo.toLowerCase().contains(s)).toList();
     }
     return result.skip(offset).take(limit).toList();
   }

@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../../../core/network/dio_client.dart';
+import '../models/expense_voucher_model.dart';
 
 class ExpenseVoucherRemoteDs {
   final Dio _dio = DioClient.instance;
@@ -11,7 +12,7 @@ class ExpenseVoucherRemoteDs {
       'created_by_user:rim_users!created_by(full_name),'
       'approved_by_user:rim_users!approved_by(full_name)';
 
-  Future<List<Map<String, dynamic>>> listVouchers({
+  Future<List<ExpenseVoucherHeader>> listVouchers({
     required String clientId,
     required String companyId,
     String? search,
@@ -36,7 +37,9 @@ class ExpenseVoucherRemoteDs {
       params['or'] = '(trans_no.ilike.*$search*,bill_no.ilike.*$search*)';
     }
     final res = await _dio.get('/rih_expense_voucher_headers', queryParameters: params);
-    return List<Map<String, dynamic>>.from(res.data as List);
+    return (res.data as List)
+        .map((j) => ExpenseVoucherHeader.fromJson(j as Map<String, dynamic>))
+        .toList();
   }
 
   Future<Map<String, dynamic>?> getHeader({

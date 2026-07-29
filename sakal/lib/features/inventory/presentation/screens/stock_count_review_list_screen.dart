@@ -9,6 +9,7 @@ import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
+import '../../data/models/stock_count_review_model.dart';
 import '../providers/stock_count_review_providers.dart';
 
 class StockCountReviewListScreen extends ConsumerStatefulWidget {
@@ -22,7 +23,7 @@ class _StockCountReviewListScreenState extends ConsumerState<StockCountReviewLis
     with ScreenPermissionMixin<StockCountReviewListScreen> {
   @override String get screenName => RouteNames.stockCountReview;
 
-  List<Map<String, dynamic>> _rows = [];
+  List<StockCountReviewHeader> _rows = [];
   bool    _loading = true;
   String? _error;
   String? _filterStatus;
@@ -57,9 +58,9 @@ class _StockCountReviewListScreenState extends ConsumerState<StockCountReviewLis
     }
   }
 
-  List<Map<String, dynamic>> get _filtered {
+  List<StockCountReviewHeader> get _filtered {
     if (_searchText.isEmpty) return _rows;
-    return _rows.where((r) => (r['review_no'] as String? ?? '').toLowerCase().contains(_searchText)).toList();
+    return _rows.where((r) => r.reviewNo.toLowerCase().contains(_searchText)).toList();
   }
 
   Future<void> _openNew() async {
@@ -67,8 +68,8 @@ class _StockCountReviewListScreenState extends ConsumerState<StockCountReviewLis
     if (mounted) _load();
   }
 
-  Future<void> _openEdit(Map<String, dynamic> r) async {
-    await context.push(RouteNames.stockCountReviewEntry, extra: {'reviewNo': r['review_no'], 'reviewDate': r['review_date']});
+  Future<void> _openEdit(StockCountReviewHeader r) async {
+    await context.push(RouteNames.stockCountReviewEntry, extra: {'reviewNo': r.reviewNo, 'reviewDate': r.reviewDate});
     if (mounted) _load();
   }
 
@@ -180,24 +181,23 @@ class _StockCountReviewListScreenState extends ConsumerState<StockCountReviewLis
     );
   }
 
-  Widget _buildRow(Map<String, dynamic> r, int index) {
-    final location = r['location'] as Map<String, dynamic>?;
+  Widget _buildRow(StockCountReviewHeader r, int index) {
     return InkWell(
       onTap: () => _openEdit(r),
       child: Container(
         color: index.isEven ? Colors.white : AppColors.background,
         child: Row(children: [
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              child: Text(r['review_no'] as String, overflow: TextOverflow.ellipsis,
+              child: Text(r.reviewNo, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(_displayDate(r['review_date'] as String), style: const TextStyle(fontSize: 13)))),
+              child: Text(_displayDate(r.reviewDate), style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 3, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(location?['location_name'] as String? ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
+              child: Text(r.locationName.isEmpty ? '—' : r.locationName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(r['posted_adjustment_no'] as String? ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis,
+              child: Text(r.postedAdjustmentNo ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 13, color: AppColors.positive)))),
-          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: _statusBadge(r['status'] as String))),
+          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: _statusBadge(r.status))),
           Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
               child: IconButton(icon: const Icon(Icons.arrow_forward_ios, size: 14), color: AppColors.primary,
                   onPressed: () => _openEdit(r), tooltip: 'Open', padding: EdgeInsets.zero))),
@@ -206,8 +206,7 @@ class _StockCountReviewListScreenState extends ConsumerState<StockCountReviewLis
     );
   }
 
-  Widget _buildCard(Map<String, dynamic> r) {
-    final location = r['location'] as Map<String, dynamic>?;
+  Widget _buildCard(StockCountReviewHeader r) {
     return InkWell(
       onTap: () => _openEdit(r),
       borderRadius: BorderRadius.circular(8),
@@ -216,16 +215,16 @@ class _StockCountReviewListScreenState extends ConsumerState<StockCountReviewLis
         decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Expanded(child: Text(r['review_no'] as String, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
-            _statusBadge(r['status'] as String),
+            Expanded(child: Text(r.reviewNo, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
+            _statusBadge(r.status),
           ]),
           const SizedBox(height: 6),
-          Text(_displayDate(r['review_date'] as String), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          Text(_displayDate(r.reviewDate), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
-          Text(location?['location_name'] as String? ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
-          if (r['posted_adjustment_no'] != null) ...[
+          Text(r.locationName.isEmpty ? '—' : r.locationName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+          if (r.postedAdjustmentNo != null) ...[
             const SizedBox(height: 4),
-            Text('Adjustment: ${r['posted_adjustment_no']}', style: const TextStyle(fontSize: 12, color: AppColors.positive)),
+            Text('Adjustment: ${r.postedAdjustmentNo}', style: const TextStyle(fontSize: 12, color: AppColors.positive)),
           ],
         ]),
       ),

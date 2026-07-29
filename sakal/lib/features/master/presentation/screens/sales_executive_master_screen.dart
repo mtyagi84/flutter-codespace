@@ -10,6 +10,45 @@ import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 
+// No repository/model layer exists for this screen (it calls DioClient
+// directly) — this row type is defined locally rather than introducing a
+// new data/models file for a single screen.
+class SalesExecutive {
+  final String id;
+  final String employeeCode;
+  final String fullName;
+  final String phone;
+  final String email;
+  final String? linkedUserId;
+  final String? linkedUserName;
+  final bool   isActive;
+
+  const SalesExecutive({
+    required this.id,
+    required this.employeeCode,
+    required this.fullName,
+    required this.phone,
+    required this.email,
+    required this.linkedUserId,
+    required this.linkedUserName,
+    required this.isActive,
+  });
+
+  factory SalesExecutive.fromJson(Map<String, dynamic> j) {
+    final linkedUser = j['linked_user'] as Map<String, dynamic>?;
+    return SalesExecutive(
+      id:             j['id']              as String? ?? '',
+      employeeCode:   j['employee_code']   as String? ?? '',
+      fullName:       j['full_name']       as String? ?? '',
+      phone:          j['phone']           as String? ?? '',
+      email:          j['email']           as String? ?? '',
+      linkedUserId:   j['linked_user_id']  as String?,
+      linkedUserName: linkedUser?['full_name'] as String?,
+      isActive:       j['is_active']       as bool? ?? true,
+    );
+  }
+}
+
 /// Sales Executive master (migration 103) — decouples "who sold this" from
 /// "who has a system login". A sales exec's linkedUserId is optional; most
 /// field reps/commission agents have none. Consumed by the sales_person_id
@@ -26,7 +65,7 @@ class _SalesExecutiveMasterScreenState extends ConsumerState<SalesExecutiveMaste
     with ScreenPermissionMixin<SalesExecutiveMasterScreen> {
   @override String get screenName => RouteNames.salesExecutives;
 
-  List<Map<String, dynamic>> _rows  = [];
+  List<SalesExecutive> _rows  = [];
   List<Map<String, dynamic>> _users = [];
   bool    _loading = true;
   String? _error;
@@ -68,7 +107,9 @@ class _SalesExecutiveMasterScreenState extends ConsumerState<SalesExecutiveMaste
       ]);
       if (mounted) {
         setState(() {
-          _rows    = List<Map<String, dynamic>>.from(results[0].data as List);
+          _rows    = (results[0].data as List)
+              .map((j) => SalesExecutive.fromJson(j as Map<String, dynamic>))
+              .toList();
           _users   = List<Map<String, dynamic>>.from(results[1].data as List);
           _loading = false;
         });
@@ -78,11 +119,11 @@ class _SalesExecutiveMasterScreenState extends ConsumerState<SalesExecutiveMaste
     }
   }
 
-  List<Map<String, dynamic>> get _filtered {
+  List<SalesExecutive> get _filtered {
     if (_searchText.isEmpty) return _rows;
     return _rows.where((r) =>
-        (r['employee_code'] as String? ?? '').toLowerCase().contains(_searchText) ||
-        (r['full_name'] as String? ?? '').toLowerCase().contains(_searchText)).toList();
+        r.employeeCode.toLowerCase().contains(_searchText) ||
+        r.fullName.toLowerCase().contains(_searchText)).toList();
   }
 
   Future<void> _save(Map<String, dynamic> payload, {String? id}) async {
@@ -100,12 +141,12 @@ class _SalesExecutiveMasterScreenState extends ConsumerState<SalesExecutiveMaste
     }
   }
 
-  Future<void> _toggleActive(Map<String, dynamic> row) async {
+  Future<void> _toggleActive(SalesExecutive row) async {
     final session = ref.read(sessionProvider)!;
     try {
       await DioClient.instance.patch('/rim_sales_executives',
-          queryParameters: {'id': 'eq.${row['id']}'},
-          data: {'is_active': !(row['is_active'] as bool? ?? true), 'updated_by': session.userId});
+          queryParameters: {'id': 'eq.${row.id}'},
+          data: {'is_active': !row.isActive, 'updated_by': session.userId});
       await _load();
     } on DioException catch (e) {
       _showError(e.response?.data?['message'] ?? 'Update failed.');
@@ -117,12 +158,12 @@ class _SalesExecutiveMasterScreenState extends ConsumerState<SalesExecutiveMaste
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: AppColors.negative));
   }
 
-  Future<void> _showEntryDialog({Map<String, dynamic>? existing}) async {
-    final codeCtrl  = TextEditingController(text: existing?['employee_code'] as String? ?? '');
-    final nameCtrl  = TextEditingController(text: existing?['full_name'] as String? ?? '');
-    final phoneCtrl = TextEditingController(text: existing?['phone'] as String? ?? '');
-    final emailCtrl = TextEditingController(text: existing?['email'] as String? ?? '');
-    String? linkedUserId = existing?['linked_user_id'] as String?;
+  Future<void> _showEntryDialog({SalesExecutive? existing}) async {
+    final codeCtrl  = TextEditingController(text: existing?.employeeCode ?? '');
+    final nameCtrl  = TextEditingController(text: existing?.fullName ?? '');
+    final phoneCtrl = TextEditingController(text: existing?.phone ?? '');
+    final emailCtrl = TextEditingController(text: existing?.email ?? '');
+    String? linkedUserId = existing?.linkedUserId;
 
     final saved = await showDialog<bool>(
       context: context,
@@ -170,7 +211,7 @@ class _SalesExecutiveMasterScreenState extends ConsumerState<SalesExecutiveMaste
         'phone':          phoneCtrl.text.trim().isEmpty ? null : phoneCtrl.text.trim(),
         'email':          emailCtrl.text.trim().isEmpty ? null : emailCtrl.text.trim(),
         'linked_user_id': linkedUserId,
-      }, id: existing?['id'] as String?);
+      }, id: existing?.id);
     }
     codeCtrl.dispose();
     nameCtrl.dispose();
@@ -178,10 +219,7 @@ class _SalesExecutiveMasterScreenState extends ConsumerState<SalesExecutiveMaste
     emailCtrl.dispose();
   }
 
-  String _linkedUserLabel(Map<String, dynamic> r) {
-    final u = r['linked_user'] as Map<String, dynamic>?;
-    return u?['full_name'] as String? ?? '—';
-  }
+  String _linkedUserLabel(SalesExecutive r) => r.linkedUserName ?? '—';
 
   @override
   Widget build(BuildContext context) {
@@ -230,7 +268,7 @@ class _SalesExecutiveMasterScreenState extends ConsumerState<SalesExecutiveMaste
           ]),
         ),
         Expanded(
-          child: SakalAdaptiveList<Map<String, dynamic>>(
+          child: SakalAdaptiveList<SalesExecutive>(
             loading: _loading,
             error: _error,
             rows: rows,
@@ -260,19 +298,19 @@ class _SalesExecutiveMasterScreenState extends ConsumerState<SalesExecutiveMaste
     );
   }
 
-  Widget _buildRow(Map<String, dynamic> r, int index) {
-    final isActive = r['is_active'] as bool? ?? true;
+  Widget _buildRow(SalesExecutive r, int index) {
+    final isActive = r.isActive;
     return InkWell(
       onTap: canEdit ? () => _showEntryDialog(existing: r) : null,
       child: Container(
         color: index.isEven ? Colors.white : AppColors.background,
         child: Row(children: [
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              child: Text(r['employee_code'] as String? ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)))),
+              child: Text(r.employeeCode, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)))),
           Expanded(flex: 3, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(r['full_name'] as String? ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
+              child: Text(r.fullName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(r['phone'] as String? ?? '—', style: const TextStyle(fontSize: 13)))),
+              child: Text(r.phone.isNotEmpty ? r.phone : '—', style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Text(_linkedUserLabel(r), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -288,8 +326,8 @@ class _SalesExecutiveMasterScreenState extends ConsumerState<SalesExecutiveMaste
     );
   }
 
-  Widget _buildCard(Map<String, dynamic> r) {
-    final isActive = r['is_active'] as bool? ?? true;
+  Widget _buildCard(SalesExecutive r) {
+    final isActive = r.isActive;
     return InkWell(
       onTap: canEdit ? () => _showEntryDialog(existing: r) : null,
       borderRadius: BorderRadius.circular(8),
@@ -298,14 +336,14 @@ class _SalesExecutiveMasterScreenState extends ConsumerState<SalesExecutiveMaste
         decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Expanded(child: Text(r['full_name'] as String? ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
+            Expanded(child: Text(r.fullName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
             _statusBadge(isActive),
           ]),
           const SizedBox(height: 4),
-          Text(r['employee_code'] as String? ?? '', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          if ((r['phone'] as String? ?? '').isNotEmpty) ...[
+          Text(r.employeeCode, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          if (r.phone.isNotEmpty) ...[
             const SizedBox(height: 4),
-            Text(r['phone'] as String, style: const TextStyle(fontSize: 12)),
+            Text(r.phone, style: const TextStyle(fontSize: 12)),
           ],
         ]),
       ),

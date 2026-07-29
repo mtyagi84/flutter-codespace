@@ -2,6 +2,7 @@ import 'dart:async';
 import '../../domain/repositories/stock_receipt_repository.dart';
 import '../datasources/stock_receipt_remote_ds.dart';
 import '../datasources/stock_receipt_local_ds.dart';
+import '../models/stock_receipt_model.dart';
 
 class StockReceiptRepositoryImpl implements StockReceiptRepository {
   final StockReceiptRemoteDs _remote;
@@ -11,7 +12,7 @@ class StockReceiptRepositoryImpl implements StockReceiptRepository {
   StockReceiptRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
-  Future<List<Map<String, dynamic>>> listReceipts({
+  Future<List<StockReceiptHeader>> listReceipts({
     required String clientId,
     required String companyId,
     String? search,

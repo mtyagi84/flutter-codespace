@@ -1,5 +1,7 @@
+import '../../data/models/sales_quotation_header.dart';
+
 abstract class SalesQuotationRepository {
-  Future<List<Map<String, dynamic>>> listQuotations({
+  Future<List<SalesQuotationHeader>> listQuotations({
     required String clientId,
     required String companyId,
     String? search,

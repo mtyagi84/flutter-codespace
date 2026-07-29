@@ -1,5 +1,7 @@
+import '../../data/models/material_requisition_model.dart';
+
 abstract class MaterialRequisitionRepository {
-  Future<List<Map<String, dynamic>>> listRequisitions({
+  Future<List<MaterialRequisitionHeader>> listRequisitions({
     required String clientId,
     required String companyId,
     String? search,

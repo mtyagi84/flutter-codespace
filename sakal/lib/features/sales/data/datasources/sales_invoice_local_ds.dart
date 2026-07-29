@@ -6,6 +6,7 @@ import '../../../../core/database/datasources/product_uom_local_ds.dart';
 import '../../../../core/database/datasources/tax_group_members_local_ds.dart';
 import '../../../../core/database/datasources/tax_rates_local_ds.dart';
 import '../../../master/data/datasources/products_local_ds.dart';
+import '../models/sales_invoice_header.dart';
 
 class SalesInvoiceLocalDs {
   final AppDatabase _db;
@@ -220,7 +221,7 @@ class SalesInvoiceLocalDs {
 
   // ── Read — invoice documents ────────────────────────────────────────────
 
-  Future<List<Map<String, dynamic>>> listInvoices({
+  Future<List<SalesInvoiceHeader>> listInvoices({
     required String clientId,
     required String companyId,
     String? search,
@@ -237,12 +238,12 @@ class SalesInvoiceLocalDs {
     if (status != null && status.isNotEmpty) q.where((t) => t.status.equals(status));
     if (saleType != null && saleType.isNotEmpty) q.where((t) => t.saleType.equals(saleType));
     final rows = await q.get();
-    var result = rows.map(_headerToMap).toList();
+    var result = rows.map((r) => SalesInvoiceHeader.fromJson(_headerToMap(r))).toList();
     if (search != null && search.isNotEmpty) {
       final s = search.toLowerCase();
       result = result.where((r) =>
-          (r['invoice_no'] as String).toLowerCase().contains(s) ||
-          (r['party_name'] as String? ?? '').toLowerCase().contains(s)).toList();
+          r.invoiceNo.toLowerCase().contains(s) ||
+          r.partyName.toLowerCase().contains(s)).toList();
     }
     return result.skip(offset).take(limit).toList();
   }

@@ -25,6 +25,53 @@ const _languages = [
   {'code': 'sw', 'label': 'Swahili'},
 ];
 
+// No repository/model layer exists for this screen (it calls DioClient/
+// GenericLookupLocalDs directly) — this row type is defined locally rather
+// than introducing a new data/models file for a single screen. `_locations`
+// stays Map — it comes from the shared, already-Map-typed locationsProvider
+// used across the whole app; retyping it is out of scope for this screen.
+class UserRow {
+  final String  id;
+  final String? salutation;
+  final String  fullName;
+  final String  username;
+  final String? email;
+  final String? phone;
+  final String  languageCode;
+  final String  theme;
+  final String? photo;
+  final bool    isActive;
+  final String? defaultLocationId;
+
+  const UserRow({
+    required this.id,
+    required this.salutation,
+    required this.fullName,
+    required this.username,
+    required this.email,
+    required this.phone,
+    required this.languageCode,
+    required this.theme,
+    required this.photo,
+    required this.isActive,
+    required this.defaultLocationId,
+  });
+
+  factory UserRow.fromJson(Map<String, dynamic> j) => UserRow(
+    id:                j['id']                 as String? ?? '',
+    salutation:        j['salutation']         as String?,
+    fullName:          j['full_name']          as String? ?? '',
+    username:          j['username']           as String? ?? '',
+    email:             j['email']              as String?,
+    phone:             j['phone']              as String?,
+    languageCode:      j['language_code']      as String? ?? 'en',
+    theme:             j['theme']              as String? ?? 'light',
+    photo:             j['photo']              as String?,
+    isActive:          j['is_active']          as bool?   ?? true,
+    defaultLocationId: j['default_location_id'] as String?,
+  );
+}
+
 class UsersScreen extends ConsumerStatefulWidget {
   const UsersScreen({super.key});
 
@@ -36,7 +83,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     with ScreenPermissionMixin<UsersScreen> {
   @override String get screenName => '/setup/users';
 
-  List<Map<String, dynamic>> _rows      = [];
+  List<UserRow> _rows      = [];
   List<Map<String, dynamic>> _locations = [];
   bool    _loading = true;
   String? _error;
@@ -88,7 +135,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
 
       if (mounted) {
         setState(() {
-          _rows      = rows;
+          _rows      = rows.map(UserRow.fromJson).toList();
           _locations = locations;
           _loading   = false;
         });
@@ -98,12 +145,12 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     }
   }
 
-  Future<void> _toggleActive(Map<String, dynamic> row) async {
-    final newVal = !(row['is_active'] as bool? ?? true);
+  Future<void> _toggleActive(UserRow row) async {
+    final newVal = !row.isActive;
     try {
       await DioClient.instance.patch(
         '/rim_users',
-        queryParameters: {'id': 'eq.${row['id']}'},
+        queryParameters: {'id': 'eq.${row.id}'},
         data: {
           'is_active':  newVal,
           'updated_at': DateTime.now().toUtc().toIso8601String(),
@@ -140,7 +187,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     );
   }
 
-  void _openDialog([Map<String, dynamic>? existing]) {
+  void _openDialog([UserRow? existing]) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -152,13 +199,13 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     );
   }
 
-  void _openResetPassword(Map<String, dynamic> row) {
+  void _openResetPassword(UserRow row) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => _ResetPasswordDialog(
-        userId:   row['id'] as String,
-        userName: row['full_name'] as String? ?? row['username'] as String? ?? '',
+        userId:   row.id,
+        userName: row.fullName.isNotEmpty ? row.fullName : row.username,
       ),
     );
   }
@@ -240,7 +287,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
         // the width class SakalAdaptiveList's own desktop threshold
         // (isDesktop >= 1024px) deliberately falls back to cards for.
         Expanded(
-          child: SakalAdaptiveList<Map<String, dynamic>>(
+          child: SakalAdaptiveList<UserRow>(
             loading: _loading,
             error: null,
             rows: _rows,
@@ -258,7 +305,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
               canEdit: canEdit && !offline,
               onEdit: () => _openDialog(row),
               onToggle: () => _toggleActive(row),
-              onDelete: () => _confirmDelete(row['id'] as String),
+              onDelete: () => _confirmDelete(row.id),
               onResetPassword: () => _openResetPassword(row),
             ),
             emptyState: const Center(
@@ -279,13 +326,13 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     );
   }
 
-  Widget _buildTableRow(Map<String, dynamic> row, bool canEditRow) {
-    final active     = row['is_active'] as bool? ?? true;
-    final fullName   = row['full_name']  as String? ?? '';
-    final salutation = row['salutation'] as String?;
-    final username   = row['username']   as String? ?? '';
-    final langCode    = row['language_code'] as String? ?? 'en';
-    final photoBase64 = row['photo'] as String?;
+  Widget _buildTableRow(UserRow row, bool canEditRow) {
+    final active     = row.isActive;
+    final fullName   = row.fullName;
+    final salutation = row.salutation;
+    final username   = row.username;
+    final langCode    = row.languageCode;
+    final photoBase64 = row.photo;
 
     final displayName = [if (salutation != null) salutation, fullName]
         .where((s) => s.isNotEmpty)
@@ -321,13 +368,13 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
           ),
           Expanded(
             flex: 3,
-            child: Text(row['email'] as String? ?? '—',
+            child: Text(row.email ?? '—',
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
           ),
           Expanded(
             flex: 2,
-            child: Text(row['phone'] as String? ?? '—',
+            child: Text(row.phone ?? '—',
                 style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
           ),
           Expanded(flex: 1, child: _LangChip(code: langCode)),
@@ -357,7 +404,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                 IconButton(
                   tooltip: 'Delete',
                   icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.negative),
-                  onPressed: canEditRow ? () => _confirmDelete(row['id'] as String) : null,
+                  onPressed: canEditRow ? () => _confirmDelete(row.id) : null,
                 ),
               ],
             ),
@@ -399,7 +446,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
 // ── Mobile card ───────────────────────────────────────────────────────────────
 
 class _UserCard extends StatelessWidget {
-  final Map<String, dynamic> row;
+  final UserRow row;
   final bool canEdit;
   final VoidCallback onEdit;
   final VoidCallback onToggle;
@@ -416,12 +463,12 @@ class _UserCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final active     = row['is_active'] as bool? ?? true;
-    final fullName   = row['full_name']  as String? ?? '';
-    final salutation = row['salutation'] as String?;
-    final username   = row['username']   as String? ?? '';
-    final langCode    = row['language_code'] as String? ?? 'en';
-    final photoBase64 = row['photo'] as String?;
+    final active     = row.isActive;
+    final fullName   = row.fullName;
+    final salutation = row.salutation;
+    final username   = row.username;
+    final langCode    = row.languageCode;
+    final photoBase64 = row.photo;
 
     final displayName = [if (salutation != null) salutation, fullName]
         .where((s) => s.isNotEmpty)
@@ -469,11 +516,11 @@ class _UserCard extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 _LangChip(code: langCode),
-                if ((row['email'] as String? ?? '').isNotEmpty)
-                  Text(row['email'] as String,
+                if ((row.email ?? '').isNotEmpty)
+                  Text(row.email!,
                       style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                if ((row['phone'] as String? ?? '').isNotEmpty)
-                  Text(row['phone'] as String,
+                if ((row.phone ?? '').isNotEmpty)
+                  Text(row.phone!,
                       style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
               ],
             ),
@@ -586,7 +633,7 @@ class _LangChip extends StatelessWidget {
 // ── Add / Edit Dialog ─────────────────────────────────────────────────────────
 
 class _UserDialog extends ConsumerStatefulWidget {
-  final Map<String, dynamic>?        existing;
+  final UserRow?                     existing;
   final List<Map<String, dynamic>>   locations;
   final VoidCallback                 onSaved;
 
@@ -629,15 +676,15 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
     super.initState();
     final d = widget.existing;
     if (d != null) {
-      _nameCtrl.text  = d['full_name']           ?? '';
-      _userCtrl.text  = d['username']            ?? '';
-      _emailCtrl.text = d['email']               ?? '';
-      _phoneCtrl.text = d['phone']               ?? '';
-      _salutation     = d['salutation']          as String?;
-      _language       = d['language_code']       as String? ?? 'en';
-      _theme          = d['theme']               as String? ?? 'light';
-      _photoBase64    = d['photo']               as String?;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _loadAccess(d['id'] as String));
+      _nameCtrl.text  = d.fullName;
+      _userCtrl.text  = d.username;
+      _emailCtrl.text = d.email ?? '';
+      _phoneCtrl.text = d.phone ?? '';
+      _salutation     = d.salutation;
+      _language       = d.languageCode;
+      _theme          = d.theme;
+      _photoBase64    = d.photo;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadAccess(d.id));
     }
   }
 
@@ -697,7 +744,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
     try {
       String userId;
       if (_isEdit) {
-        userId = widget.existing!['id'] as String;
+        userId = widget.existing!.id;
         await DioClient.instance.patch(
           '/rim_users',
           queryParameters: {'id': 'eq.$userId'},
@@ -955,7 +1002,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                         child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
                       )
                     : LocationAccessPicker(
-                        key: ValueKey(widget.existing?['id'] ?? 'new'),
+                        key: ValueKey(widget.existing?.id ?? 'new'),
                         locations: widget.locations,
                         initialSelected: _selectedLocationIds,
                         initialDefault: _defaultLocationId,

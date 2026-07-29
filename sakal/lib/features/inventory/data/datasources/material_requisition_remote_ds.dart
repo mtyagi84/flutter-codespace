@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../../../core/network/dio_client.dart';
+import '../models/material_requisition_model.dart';
 
 class MaterialRequisitionRemoteDs {
   final Dio _dio = DioClient.instance;
@@ -7,7 +8,7 @@ class MaterialRequisitionRemoteDs {
   static const _headerSelect = '*,'
       'location:ric_locations!location_id(location_name)';
 
-  Future<List<Map<String, dynamic>>> listRequisitions({
+  Future<List<MaterialRequisitionHeader>> listRequisitions({
     required String clientId,
     required String companyId,
     String? search,
@@ -27,7 +28,9 @@ class MaterialRequisitionRemoteDs {
     if (status != null && status.isNotEmpty) params['status'] = 'eq.$status';
     if (search != null && search.isNotEmpty) params['requisition_no'] = 'ilike.*$search*';
     final res = await _dio.get('/rih_material_requisition_headers', queryParameters: params);
-    return List<Map<String, dynamic>>.from(res.data as List);
+    return (res.data as List)
+        .map((j) => MaterialRequisitionHeader.fromJson(j as Map<String, dynamic>))
+        .toList();
   }
 
   Future<Map<String, dynamic>?> getHeader({

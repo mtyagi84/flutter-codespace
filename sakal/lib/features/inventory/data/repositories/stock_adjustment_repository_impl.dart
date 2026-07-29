@@ -2,6 +2,7 @@ import 'dart:async';
 import '../../domain/repositories/stock_adjustment_repository.dart';
 import '../datasources/stock_adjustment_remote_ds.dart';
 import '../datasources/stock_adjustment_local_ds.dart';
+import '../models/stock_adjustment_model.dart';
 
 class StockAdjustmentRepositoryImpl implements StockAdjustmentRepository {
   final StockAdjustmentRemoteDs _remote;
@@ -11,7 +12,7 @@ class StockAdjustmentRepositoryImpl implements StockAdjustmentRepository {
   StockAdjustmentRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
-  Future<List<Map<String, dynamic>>> listAdjustments({
+  Future<List<StockAdjustmentHeader>> listAdjustments({
     required String clientId,
     required String companyId,
     String? search,

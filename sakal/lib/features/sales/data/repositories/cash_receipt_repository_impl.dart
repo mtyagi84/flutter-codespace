@@ -1,6 +1,7 @@
 import '../../domain/repositories/cash_receipt_repository.dart';
 import '../datasources/cash_receipt_remote_ds.dart';
 import '../datasources/cash_receipt_local_ds.dart';
+import '../models/cash_receipt_header.dart';
 
 class CashReceiptRepositoryImpl implements CashReceiptRepository {
   final CashReceiptRemoteDs _remote;
@@ -10,7 +11,7 @@ class CashReceiptRepositoryImpl implements CashReceiptRepository {
   CashReceiptRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
-  Future<List<Map<String, dynamic>>> listReceipts({
+  Future<List<CashReceiptHeader>> listReceipts({
     required String clientId,
     required String companyId,
     String? search,

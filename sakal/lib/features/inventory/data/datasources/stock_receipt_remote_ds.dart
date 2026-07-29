@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../../../core/network/dio_client.dart';
+import '../models/stock_receipt_model.dart';
 
 class StockReceiptRemoteDs {
   final Dio _dio = DioClient.instance;
@@ -8,7 +9,7 @@ class StockReceiptRemoteDs {
       'from_location:ric_locations!from_location_id(location_name),'
       'to_location:ric_locations!to_location_id(location_name)';
 
-  Future<List<Map<String, dynamic>>> listReceipts({
+  Future<List<StockReceiptHeader>> listReceipts({
     required String clientId,
     required String companyId,
     String? search,
@@ -28,7 +29,9 @@ class StockReceiptRemoteDs {
     if (status != null && status.isNotEmpty) params['status'] = 'eq.$status';
     if (search != null && search.isNotEmpty) params['receipt_no'] = 'ilike.*$search*';
     final res = await _dio.get('/rih_stock_receipts', queryParameters: params);
-    return List<Map<String, dynamic>>.from(res.data as List);
+    return (res.data as List)
+        .map((j) => StockReceiptHeader.fromJson(j as Map<String, dynamic>))
+        .toList();
   }
 
   Future<Map<String, dynamic>?> getHeader({

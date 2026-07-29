@@ -13,6 +13,7 @@ import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
+import '../../data/models/finance_voucher_model.dart';
 import '../providers/finance_voucher_providers.dart';
 
 MenuFeature? _findFeature(List<MenuModule> modules, String screenPath) {
@@ -37,7 +38,7 @@ class FinanceVoucherListScreen extends ConsumerStatefulWidget {
 class _FinanceVoucherListScreenState
     extends ConsumerState<FinanceVoucherListScreen> {
 
-  List<Map<String, dynamic>> _vouchers = [];
+  List<FinanceVoucherHeader> _vouchers = [];
   Set<String> _pendingIds = {};
   bool    _loading = true;
   String? _error;
@@ -96,7 +97,7 @@ class _FinanceVoucherListScreenState
       ]);
       if (mounted) {
         setState(() {
-          _vouchers   = results[0] as List<Map<String, dynamic>>;
+          _vouchers   = results[0] as List<FinanceVoucherHeader>;
           _pendingIds = results[1] as Set<String>;
           _loading    = false;
         });
@@ -107,11 +108,11 @@ class _FinanceVoucherListScreenState
     }
   }
 
-  List<Map<String, dynamic>> get _filtered {
+  List<FinanceVoucherHeader> get _filtered {
     if (_searchText.isEmpty) return _vouchers;
     return _vouchers.where((v) {
-      final no      = (v['trans_no'] as String? ?? '').toLowerCase();
-      final remarks = (v['remarks'] as String? ?? '').toLowerCase();
+      final no      = v.transNo.toLowerCase();
+      final remarks = v.remarks.toLowerCase();
       return no.contains(_searchText) || remarks.contains(_searchText);
     }).toList();
   }
@@ -303,7 +304,7 @@ class _FinanceVoucherListScreenState
 
         // ── Table (desktop/tablet) / Card list (mobile) ───────────────────────
         Expanded(
-          child: SakalAdaptiveList<Map<String, dynamic>>(
+          child: SakalAdaptiveList<FinanceVoucherHeader>(
             loading: _loading,
             error: _error,
             rows: rows,
@@ -339,12 +340,12 @@ class _FinanceVoucherListScreenState
     );
   }
 
-  Widget _buildRow(Map<String, dynamic> v, int index) {
-    final isPosted  = v['is_posted']      as bool?   ?? false;
-    final isOnAcct  = v['is_on_account']  as bool?   ?? false;
-    final transNo   = (v['trans_no']       as String?) ?? '';
-    final transDate = v['trans_date']     as String? ?? '';
-    final vtype     = v['voucher_type_code'] as String? ?? '';
+  Widget _buildRow(FinanceVoucherHeader v, int index) {
+    final isPosted  = v.isPosted;
+    final isOnAcct  = v.isOnAccount;
+    final transNo   = v.transNo;
+    final transDate = v.transDate;
+    final vtype     = v.voucherTypeCode;
 
     return InkWell(
       onTap: () => _openEdit(transNo, transDate),
@@ -388,7 +389,7 @@ class _FinanceVoucherListScreenState
             flex: 2,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(v['payment_mode_code'] as String? ?? '—',
+              child: Text(v.paymentModeCode.isNotEmpty ? v.paymentModeCode : '—',
                   style: const TextStyle(fontSize: 12)),
             ),
           ),
@@ -412,7 +413,7 @@ class _FinanceVoucherListScreenState
             flex: 3,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(v['remarks'] as String? ?? '',
+              child: Text(v.remarks,
                   maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 12,
                       color: AppColors.textSecondary)),
@@ -436,14 +437,14 @@ class _FinanceVoucherListScreenState
     );
   }
 
-  Widget _buildCard(Map<String, dynamic> v) {
-    final isPosted  = v['is_posted']         as bool?   ?? false;
-    final isOnAcct  = v['is_on_account']     as bool?   ?? false;
-    final transNo   = v['trans_no']          as String? ?? '';
-    final transDate = v['trans_date']        as String? ?? '';
-    final vtype     = v['voucher_type_code'] as String? ?? '';
-    final mode      = v['payment_mode_code'] as String? ?? '';
-    final remarks   = v['remarks']           as String? ?? '';
+  Widget _buildCard(FinanceVoucherHeader v) {
+    final isPosted  = v.isPosted;
+    final isOnAcct  = v.isOnAccount;
+    final transNo   = v.transNo;
+    final transDate = v.transDate;
+    final vtype     = v.voucherTypeCode;
+    final mode      = v.paymentModeCode;
+    final remarks   = v.remarks;
 
     return InkWell(
       onTap: () => _openEdit(transNo, transDate),

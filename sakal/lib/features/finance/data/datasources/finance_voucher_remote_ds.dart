@@ -3,7 +3,7 @@ import '../../../../core/network/dio_client.dart';
 import '../models/finance_voucher_model.dart';
 
 class FinanceVoucherRemoteDs {
-  Future<List<Map<String, dynamic>>> listHeaders({
+  Future<List<FinanceVoucherHeader>> listHeaders({
     required String clientId,
     required String companyId,
     required String locationId,
@@ -37,7 +37,9 @@ class FinanceVoucherRemoteDs {
       params['or'] = '(trans_no.ilike.*$search*,remarks.ilike.*$search*)';
     }
     final res = await DioClient.instance.get('/rih_finance_headers', queryParameters: params);
-    return List<Map<String, dynamic>>.from(res.data as List);
+    return (res.data as List)
+        .map((j) => FinanceVoucherHeader.fromJson(j as Map<String, dynamic>))
+        .toList();
   }
 
   Future<FinanceVoucherHeader?> getHeader({

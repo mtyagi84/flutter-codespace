@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../../../core/network/dio_client.dart';
+import '../models/sales_invoice_header.dart';
 
 class SalesInvoiceRemoteDs {
   final Dio _dio = DioClient.instance;
@@ -10,7 +11,7 @@ class SalesInvoiceRemoteDs {
       'sales_person:rim_sales_executives!sales_person_id(employee_code,full_name),'
       'currency:rim_currencies!invoice_currency_id(currency_id)';
 
-  Future<List<Map<String, dynamic>>> listInvoices({
+  Future<List<SalesInvoiceHeader>> listInvoices({
     required String clientId,
     required String companyId,
     String? search,
@@ -34,7 +35,9 @@ class SalesInvoiceRemoteDs {
       params['or'] = '(invoice_no.ilike.*$search*,party_name.ilike.*$search*)';
     }
     final res = await _dio.get('/rih_sales_invoices', queryParameters: params);
-    return List<Map<String, dynamic>>.from(res.data as List);
+    return (res.data as List)
+        .map((j) => SalesInvoiceHeader.fromJson(j as Map<String, dynamic>))
+        .toList();
   }
 
   Future<Map<String, dynamic>?> getHeader({

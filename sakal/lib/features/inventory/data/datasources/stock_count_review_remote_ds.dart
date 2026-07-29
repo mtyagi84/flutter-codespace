@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../../../core/network/dio_client.dart';
+import '../models/stock_count_review_model.dart';
 
 class StockCountReviewRemoteDs {
   final Dio _dio = DioClient.instance;
@@ -8,7 +9,7 @@ class StockCountReviewRemoteDs {
       'location:ric_locations!location_id(location_name),'
       'reason:rim_common_masters!reason_id(description)';
 
-  Future<List<Map<String, dynamic>>> listReviews({
+  Future<List<StockCountReviewHeader>> listReviews({
     required String clientId,
     required String companyId,
     String? search,
@@ -28,7 +29,9 @@ class StockCountReviewRemoteDs {
     if (status != null && status.isNotEmpty) params['status'] = 'eq.$status';
     if (search != null && search.isNotEmpty) params['review_no'] = 'ilike.*$search*';
     final res = await _dio.get('/rih_stock_count_review_headers', queryParameters: params);
-    return List<Map<String, dynamic>>.from(res.data as List);
+    return (res.data as List)
+        .map((j) => StockCountReviewHeader.fromJson(j as Map<String, dynamic>))
+        .toList();
   }
 
   Future<Map<String, dynamic>?> getHeader({

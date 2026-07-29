@@ -2,6 +2,7 @@ import 'dart:async';
 import '../../domain/repositories/stock_count_repository.dart';
 import '../datasources/stock_count_remote_ds.dart';
 import '../datasources/stock_count_local_ds.dart';
+import '../models/stock_count_model.dart';
 
 class StockCountRepositoryImpl implements StockCountRepository {
   final StockCountRemoteDs _remote;
@@ -11,7 +12,7 @@ class StockCountRepositoryImpl implements StockCountRepository {
   StockCountRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
-  Future<List<Map<String, dynamic>>> listStockCounts({
+  Future<List<StockCountHeader>> listStockCounts({
     required String clientId,
     required String companyId,
     String? search,

@@ -1,5 +1,7 @@
+import '../../data/models/price_master_header.dart';
+
 abstract class PriceMasterRepository {
-  Future<List<Map<String, dynamic>>> listBatches({
+  Future<List<PriceMasterHeader>> listBatches({
     required String clientId,
     required String companyId,
     String? search,

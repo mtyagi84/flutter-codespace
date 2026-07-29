@@ -12,6 +12,7 @@ import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
+import '../../data/models/sales_quotation_header.dart';
 import '../providers/sales_quotation_providers.dart';
 
 class SalesQuotationListScreen extends ConsumerStatefulWidget {
@@ -25,7 +26,7 @@ class _SalesQuotationListScreenState extends ConsumerState<SalesQuotationListScr
     with ScreenPermissionMixin<SalesQuotationListScreen> {
   @override String get screenName => RouteNames.salesQuotations;
 
-  List<Map<String, dynamic>> _rows = [];
+  List<SalesQuotationHeader> _rows = [];
   Set<String> _pendingIds = {};
   bool    _loading = true;
   String? _error;
@@ -68,7 +69,7 @@ class _SalesQuotationListScreenState extends ConsumerState<SalesQuotationListScr
       ]);
       if (mounted) {
         setState(() {
-          _rows       = results[0] as List<Map<String, dynamic>>;
+          _rows       = results[0] as List<SalesQuotationHeader>;
           _pendingIds = results[1] as Set<String>;
           _loading    = false;
         });
@@ -78,11 +79,11 @@ class _SalesQuotationListScreenState extends ConsumerState<SalesQuotationListScr
     }
   }
 
-  List<Map<String, dynamic>> get _filtered {
+  List<SalesQuotationHeader> get _filtered {
     if (_searchText.isEmpty) return _rows;
     return _rows.where((r) =>
-        (r['quotation_no'] as String? ?? '').toLowerCase().contains(_searchText) ||
-        (r['party_name'] as String? ?? '').toLowerCase().contains(_searchText)).toList();
+        r.quotationNo.toLowerCase().contains(_searchText) ||
+        r.partyName.toLowerCase().contains(_searchText)).toList();
   }
 
   Future<void> _openNew() async {
@@ -90,16 +91,16 @@ class _SalesQuotationListScreenState extends ConsumerState<SalesQuotationListScr
     if (mounted) _load();
   }
 
-  Future<void> _openEdit(Map<String, dynamic> r) async {
+  Future<void> _openEdit(SalesQuotationHeader r) async {
     await context.push(RouteNames.salesQuotationEntry,
-        extra: {'quotationNo': r['quotation_no'], 'quotationDate': r['quotation_date']});
+        extra: {'quotationNo': r.quotationNo, 'quotationDate': r.quotationDate});
     if (mounted) _load();
   }
 
-  bool _isExpired(Map<String, dynamic> r) {
-    final status = r['status'] as String;
+  bool _isExpired(SalesQuotationHeader r) {
+    final status = r.status;
     if (status != 'SENT' && status != 'ACCEPTED') return false;
-    final validUntil = DateTime.tryParse(r['valid_until_date'] as String? ?? '');
+    final validUntil = DateTime.tryParse(r.validUntilDate ?? '');
     return validUntil != null && validUntil.isBefore(DateTime.now());
   }
 
@@ -219,8 +220,8 @@ class _SalesQuotationListScreenState extends ConsumerState<SalesQuotationListScr
     );
   }
 
-  Widget _statusBadge(Map<String, dynamic> r) {
-    final status = _isExpired(r) ? 'EXPIRED' : r['status'] as String;
+  Widget _statusBadge(SalesQuotationHeader r) {
+    final status = _isExpired(r) ? 'EXPIRED' : r.status;
     final color = status == 'EXPIRED' ? AppColors.negative : (_statusColors[status] ?? AppColors.textSecondary);
     final label = status == 'EXPIRED' ? 'Expired' : _statusLabel(status);
     return Container(
@@ -230,36 +231,35 @@ class _SalesQuotationListScreenState extends ConsumerState<SalesQuotationListScr
     );
   }
 
-  Widget _buildRow(Map<String, dynamic> r, int index) {
-    final currency = r['currency'] as Map<String, dynamic>?;
-    final isProspect = r['customer_type'] == 'PROSPECT';
+  Widget _buildRow(SalesQuotationHeader r, int index) {
+    final isProspect = r.customerType == 'PROSPECT';
     return InkWell(
       onTap: () => _openEdit(r),
       child: Container(
         color: index.isEven ? Colors.white : AppColors.background,
         child: Row(children: [
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              child: Text(r['quotation_no'] as String, overflow: TextOverflow.ellipsis,
+              child: Text(r.quotationNo, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(_displayDate(r['quotation_date'] as String?), style: const TextStyle(fontSize: 13)))),
+              child: Text(_displayDate(r.quotationDate), style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 3, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(children: [
-                Flexible(child: Text(r['party_name'] as String? ?? '—',
+                Flexible(child: Text(r.partyName.isEmpty ? '—' : r.partyName,
                     maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
                 if (isProspect) const Padding(padding: EdgeInsets.only(left: 6),
                     child: Text('Prospect', style: TextStyle(fontSize: 10, color: AppColors.secondary, fontWeight: FontWeight.w600))),
               ]))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(_displayDate(r['valid_until_date'] as String?),
+              child: Text(_displayDate(r.validUntilDate),
                   style: TextStyle(fontSize: 13, color: _isExpired(r) ? AppColors.negative : AppColors.textPrimary)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(children: [
                 _statusBadge(r),
-                if (_pendingIds.contains(r['quotation_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+                if (_pendingIds.contains(r.quotationNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
               ]))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text('${currency?['currency_id'] ?? ''} ${AppNumberFormat.amount((r['grand_total'] as num?) ?? 0, ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL')}',
+              child: Text('${r.currencyId} ${AppNumberFormat.amount(r.grandTotal, ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL')}',
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)))),
           Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
               child: IconButton(icon: const Icon(Icons.arrow_forward_ios, size: 14), color: AppColors.primary,
@@ -269,9 +269,8 @@ class _SalesQuotationListScreenState extends ConsumerState<SalesQuotationListScr
     );
   }
 
-  Widget _buildCard(Map<String, dynamic> r) {
-    final currency = r['currency'] as Map<String, dynamic>?;
-    final isProspect = r['customer_type'] == 'PROSPECT';
+  Widget _buildCard(SalesQuotationHeader r) {
+    final isProspect = r.customerType == 'PROSPECT';
     return InkWell(
       onTap: () => _openEdit(r),
       borderRadius: BorderRadius.circular(8),
@@ -280,23 +279,23 @@ class _SalesQuotationListScreenState extends ConsumerState<SalesQuotationListScr
         decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Expanded(child: Text(r['quotation_no'] as String,
+            Expanded(child: Text(r.quotationNo,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
             _statusBadge(r),
-            if (_pendingIds.contains(r['quotation_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+            if (_pendingIds.contains(r.quotationNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
           ]),
           const SizedBox(height: 6),
           Row(children: [
-            Flexible(child: Text(r['party_name'] as String? ?? '—',
+            Flexible(child: Text(r.partyName.isEmpty ? '—' : r.partyName,
                 maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
             if (isProspect) const Padding(padding: EdgeInsets.only(left: 6),
                 child: Text('Prospect', style: TextStyle(fontSize: 10, color: AppColors.secondary, fontWeight: FontWeight.w600))),
           ]),
           const SizedBox(height: 4),
-          Text('${_displayDate(r['quotation_date'] as String?)} · Valid until ${_displayDate(r['valid_until_date'] as String?)}',
+          Text('${_displayDate(r.quotationDate)} · Valid until ${_displayDate(r.validUntilDate)}',
               style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
-          Text('${currency?['currency_id'] ?? ''} ${AppNumberFormat.amount((r['grand_total'] as num?) ?? 0, ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL')}',
+          Text('${r.currencyId} ${AppNumberFormat.amount(r.grandTotal, ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL')}',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
         ]),
       ),

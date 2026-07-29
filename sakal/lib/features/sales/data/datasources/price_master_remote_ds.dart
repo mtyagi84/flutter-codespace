@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../../../core/network/dio_client.dart';
+import '../models/price_master_header.dart';
 
 class PriceMasterRemoteDs {
   final Dio _dio = DioClient.instance;
@@ -20,7 +21,7 @@ class PriceMasterRemoteDs {
       'currency:rim_currencies!price_currency_id(currency_id,currency_name),'
       'rid_price_master_lines(count)';
 
-  Future<List<Map<String, dynamic>>> listBatches({
+  Future<List<PriceMasterHeader>> listBatches({
     required String clientId,
     required String companyId,
     String? search,
@@ -49,7 +50,7 @@ class PriceMasterRemoteDs {
       final embed = r['rid_price_master_lines'];
       r['line_count'] = (embed is List && embed.isNotEmpty) ? (embed.first['count'] as num?)?.toInt() ?? 0 : 0;
     }
-    return rows;
+    return rows.map((j) => PriceMasterHeader.fromJson(j)).toList();
   }
 
   Future<Map<String, dynamic>?> getHeader({

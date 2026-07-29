@@ -4,6 +4,7 @@ import '../../../../core/database/app_database.dart';
 import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
 import '../../../../core/database/datasources/product_uom_local_ds.dart';
 import '../../../master/data/datasources/products_local_ds.dart';
+import '../models/stock_transfer_model.dart';
 
 class StockTransferLocalDs {
   final AppDatabase _db;
@@ -63,7 +64,7 @@ class StockTransferLocalDs {
 
   // ── Read — transfer documents ────────────────────────────────────────────
 
-  Future<List<Map<String, dynamic>>> listTransfers({
+  Future<List<StockTransferHeader>> listTransfers({
     required String clientId,
     required String companyId,
     String? search,
@@ -78,10 +79,10 @@ class StockTransferLocalDs {
       ..orderBy([(t) => OrderingTerm.desc(t.transferDate), (t) => OrderingTerm.desc(t.transferNo)]);
     if (status != null && status.isNotEmpty) q.where((t) => t.status.equals(status));
     final rows = await q.get();
-    var result = rows.map(_headerToMap).toList();
+    var result = rows.map((r) => StockTransferHeader.fromJson(_headerToMap(r))).toList();
     if (search != null && search.isNotEmpty) {
       final s = search.toLowerCase();
-      result = result.where((r) => (r['transfer_no'] as String).toLowerCase().contains(s)).toList();
+      result = result.where((r) => r.transferNo.toLowerCase().contains(s)).toList();
     }
     return result.skip(offset).take(limit).toList();
   }

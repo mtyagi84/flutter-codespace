@@ -11,6 +11,7 @@ import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
+import '../../data/models/stock_transfer_request_model.dart';
 import '../providers/stock_transfer_request_providers.dart';
 
 class StockTransferRequestListScreen extends ConsumerStatefulWidget {
@@ -24,7 +25,7 @@ class _StockTransferRequestListScreenState extends ConsumerState<StockTransferRe
     with ScreenPermissionMixin<StockTransferRequestListScreen> {
   @override String get screenName => RouteNames.stockTransferRequests;
 
-  List<Map<String, dynamic>> _rows = [];
+  List<StockTransferRequestHeader> _rows = [];
   Set<String> _pendingIds = {};
   bool    _loading = true;
   String? _error;
@@ -64,7 +65,7 @@ class _StockTransferRequestListScreenState extends ConsumerState<StockTransferRe
       ]);
       if (mounted) {
         setState(() {
-          _rows       = results[0] as List<Map<String, dynamic>>;
+          _rows       = results[0] as List<StockTransferRequestHeader>;
           _pendingIds = results[1] as Set<String>;
           _loading    = false;
         });
@@ -74,9 +75,9 @@ class _StockTransferRequestListScreenState extends ConsumerState<StockTransferRe
     }
   }
 
-  List<Map<String, dynamic>> get _filtered {
+  List<StockTransferRequestHeader> get _filtered {
     if (_searchText.isEmpty) return _rows;
-    return _rows.where((r) => (r['request_no'] as String? ?? '').toLowerCase().contains(_searchText)).toList();
+    return _rows.where((r) => r.requestNo.toLowerCase().contains(_searchText)).toList();
   }
 
   Future<void> _openNew() async {
@@ -84,9 +85,9 @@ class _StockTransferRequestListScreenState extends ConsumerState<StockTransferRe
     if (mounted) _load();
   }
 
-  Future<void> _openEdit(Map<String, dynamic> r) async {
+  Future<void> _openEdit(StockTransferRequestHeader r) async {
     await context.push(RouteNames.stockTransferRequestEntry,
-        extra: {'requestNo': r['request_no'], 'requestDate': r['request_date']});
+        extra: {'requestNo': r.requestNo, 'requestDate': r.requestDate});
     if (mounted) _load();
   }
 
@@ -210,27 +211,25 @@ class _StockTransferRequestListScreenState extends ConsumerState<StockTransferRe
     );
   }
 
-  Widget _buildRow(Map<String, dynamic> r, int index) {
-    final from = r['from_location'] as Map<String, dynamic>?;
-    final to   = r['to_location'] as Map<String, dynamic>?;
+  Widget _buildRow(StockTransferRequestHeader r, int index) {
     return InkWell(
       onTap: () => _openEdit(r),
       child: Container(
         color: index.isEven ? Colors.white : AppColors.background,
         child: Row(children: [
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              child: Text(r['request_no'] as String, overflow: TextOverflow.ellipsis,
+              child: Text(r.requestNo, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(_displayDate(r['request_date'] as String), style: const TextStyle(fontSize: 13)))),
+              child: Text(_displayDate(r.requestDate), style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(from?['location_name'] as String? ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
+              child: Text(r.fromLocationName.isEmpty ? '—' : r.fromLocationName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(to?['location_name'] as String? ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
+              child: Text(r.toLocationName.isEmpty ? '—' : r.toLocationName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(children: [
-                _statusBadge(r['status'] as String),
-                if (_pendingIds.contains(r['request_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+                _statusBadge(r.status),
+                if (_pendingIds.contains(r.requestNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
               ]))),
           Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
               child: IconButton(icon: const Icon(Icons.arrow_forward_ios, size: 14), color: AppColors.primary,
@@ -240,9 +239,7 @@ class _StockTransferRequestListScreenState extends ConsumerState<StockTransferRe
     );
   }
 
-  Widget _buildCard(Map<String, dynamic> r) {
-    final from = r['from_location'] as Map<String, dynamic>?;
-    final to   = r['to_location'] as Map<String, dynamic>?;
+  Widget _buildCard(StockTransferRequestHeader r) {
     return InkWell(
       onTap: () => _openEdit(r),
       borderRadius: BorderRadius.circular(8),
@@ -251,15 +248,15 @@ class _StockTransferRequestListScreenState extends ConsumerState<StockTransferRe
         decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Expanded(child: Text(r['request_no'] as String,
+            Expanded(child: Text(r.requestNo,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
-            _statusBadge(r['status'] as String),
-            if (_pendingIds.contains(r['request_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+            _statusBadge(r.status),
+            if (_pendingIds.contains(r.requestNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
           ]),
           const SizedBox(height: 6),
-          Text('${from?['location_name'] ?? '—'} → ${to?['location_name'] ?? '—'}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          Text('${r.fromLocationName.isEmpty ? '—' : r.fromLocationName} → ${r.toLocationName.isEmpty ? '—' : r.toLocationName}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
-          Text(_displayDate(r['request_date'] as String), style: const TextStyle(fontSize: 12)),
+          Text(_displayDate(r.requestDate), style: const TextStyle(fontSize: 12)),
         ]),
       ),
     );

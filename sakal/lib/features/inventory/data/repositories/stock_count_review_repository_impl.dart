@@ -1,5 +1,6 @@
 import '../../domain/repositories/stock_count_review_repository.dart';
 import '../datasources/stock_count_review_remote_ds.dart';
+import '../models/stock_count_review_model.dart';
 
 /// Online-only — no Drift caching. See project docs: a live view of other
 /// counters' SUBMITTED status and a live ledger-based system-qty
@@ -12,7 +13,7 @@ class StockCountReviewRepositoryImpl implements StockCountReviewRepository {
   StockCountReviewRepositoryImpl(this._remote);
 
   @override
-  Future<List<Map<String, dynamic>>> listReviews({
+  Future<List<StockCountReviewHeader>> listReviews({
     required String clientId,
     required String companyId,
     String? search,

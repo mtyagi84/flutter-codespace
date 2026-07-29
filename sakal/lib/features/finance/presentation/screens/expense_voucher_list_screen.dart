@@ -13,6 +13,7 @@ import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
+import '../../data/models/expense_voucher_model.dart';
 import '../providers/expense_voucher_providers.dart';
 
 /// Reference implementation for scroll-triggered pagination — see
@@ -31,7 +32,7 @@ class _ExpenseVoucherListScreenState extends ConsumerState<ExpenseVoucherListScr
   @override
   String get screenName => RouteNames.expenseVoucherList;
 
-  late final PagedListController<Map<String, dynamic>> _controller;
+  late final PagedListController<ExpenseVoucherHeader> _controller;
   UserSession _session() => ref.read(sessionProvider)!;
   Set<String> _pendingIds = {};
   bool _loading = true;
@@ -44,7 +45,7 @@ class _ExpenseVoucherListScreenState extends ConsumerState<ExpenseVoucherListScr
   @override
   void initState() {
     super.initState();
-    _controller = PagedListController<Map<String, dynamic>>(
+    _controller = PagedListController<ExpenseVoucherHeader>(
       fetchPage: ({required limit, required offset}) => ref.read(expenseVoucherRepositoryProvider).listVouchers(
             clientId: _session().clientId, companyId: _session().companyId,
             status: _filterStatus, search: _searchText.isEmpty ? null : _searchText,
@@ -117,8 +118,8 @@ class _ExpenseVoucherListScreenState extends ConsumerState<ExpenseVoucherListScr
     if (mounted) _load();
   }
 
-  Future<void> _openEdit(Map<String, dynamic> v) async {
-    await context.push(RouteNames.expenseVoucherEntry, extra: {'transNo': v['trans_no']});
+  Future<void> _openEdit(ExpenseVoucherHeader v) async {
+    await context.push(RouteNames.expenseVoucherEntry, extra: {'transNo': v.transNo});
     if (mounted) _load();
   }
 
@@ -192,7 +193,7 @@ class _ExpenseVoucherListScreenState extends ConsumerState<ExpenseVoucherListScr
           ]),
         ),
         Expanded(
-          child: SakalAdaptiveList<Map<String, dynamic>>(
+          child: SakalAdaptiveList<ExpenseVoucherHeader>(
             loading: _loading,
             error: _error,
             rows: rows,
@@ -218,21 +219,20 @@ class _ExpenseVoucherListScreenState extends ConsumerState<ExpenseVoucherListScr
     );
   }
 
-  Widget _buildRow(Map<String, dynamic> v, int index) {
-    final transNo = v['trans_no'] as String? ?? '';
-    final supplier = v['supplier'] as Map<String, dynamic>?;
-    final supplierName = supplier != null ? '[${supplier['account_code']}] ${supplier['account_name']}' : '—';
+  Widget _buildRow(ExpenseVoucherHeader v, int index) {
+    final transNo = v.transNo;
+    final supplierName = v.supplierCode.isNotEmpty ? '[${v.supplierCode}] ${v.supplierName}' : '—';
     return InkWell(
       onTap: () => _openEdit(v),
       child: Container(
         color: index.isEven ? Colors.white : AppColors.background,
         child: Row(children: [
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12), child: Text(transNo, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)))),
-          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(_displayDate(v['trans_date'] as String?), style: const TextStyle(fontSize: 13)))),
+          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(_displayDate(v.transDate), style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 3, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(supplierName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
-          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(v['bill_no'] as String? ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
+          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(v.billNo.isNotEmpty ? v.billNo : '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Row(children: [
-            _statusBadge(v['status'] as String? ?? 'DRAFT'),
+            _statusBadge(v.status),
             if (_pendingIds.contains(transNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
           ]))),
           Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: IconButton(icon: const Icon(Icons.arrow_forward_ios, size: 14), color: AppColors.primary, onPressed: () => _openEdit(v), tooltip: 'Open', padding: EdgeInsets.zero))),
@@ -241,10 +241,9 @@ class _ExpenseVoucherListScreenState extends ConsumerState<ExpenseVoucherListScr
     );
   }
 
-  Widget _buildCard(Map<String, dynamic> v) {
-    final transNo = v['trans_no'] as String? ?? '';
-    final supplier = v['supplier'] as Map<String, dynamic>?;
-    final supplierName = supplier != null ? '[${supplier['account_code']}] ${supplier['account_name']}' : '—';
+  Widget _buildCard(ExpenseVoucherHeader v) {
+    final transNo = v.transNo;
+    final supplierName = v.supplierCode.isNotEmpty ? '[${v.supplierCode}] ${v.supplierName}' : '—';
     return InkWell(
       onTap: () => _openEdit(v),
       borderRadius: BorderRadius.circular(8),
@@ -254,13 +253,13 @@ class _ExpenseVoucherListScreenState extends ConsumerState<ExpenseVoucherListScr
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Expanded(child: Text(transNo, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
-            _statusBadge(v['status'] as String? ?? 'DRAFT'),
+            _statusBadge(v.status),
             if (_pendingIds.contains(transNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
           ]),
           const SizedBox(height: 6),
           Text(supplierName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
-          Text('${_displayDate(v['trans_date'] as String?)} · Bill ${v['bill_no'] ?? '—'}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          Text('${_displayDate(v.transDate)} · Bill ${v.billNo.isNotEmpty ? v.billNo : '—'}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
         ]),
       ),
     );

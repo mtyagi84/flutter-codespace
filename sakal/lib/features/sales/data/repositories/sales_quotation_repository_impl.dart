@@ -2,6 +2,7 @@ import 'dart:async';
 import '../../domain/repositories/sales_quotation_repository.dart';
 import '../datasources/sales_quotation_remote_ds.dart';
 import '../datasources/sales_quotation_local_ds.dart';
+import '../models/sales_quotation_header.dart';
 
 class SalesQuotationRepositoryImpl implements SalesQuotationRepository {
   final SalesQuotationRemoteDs _remote;
@@ -11,7 +12,7 @@ class SalesQuotationRepositoryImpl implements SalesQuotationRepository {
   SalesQuotationRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
-  Future<List<Map<String, dynamic>>> listQuotations({
+  Future<List<SalesQuotationHeader>> listQuotations({
     required String clientId,
     required String companyId,
     String? search,

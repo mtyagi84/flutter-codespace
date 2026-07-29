@@ -2,6 +2,7 @@ import 'dart:async';
 import '../../domain/repositories/price_master_repository.dart';
 import '../datasources/price_master_remote_ds.dart';
 import '../datasources/price_master_local_ds.dart';
+import '../models/price_master_header.dart';
 
 class PriceMasterRepositoryImpl implements PriceMasterRepository {
   final PriceMasterRemoteDs _remote;
@@ -11,7 +12,7 @@ class PriceMasterRepositoryImpl implements PriceMasterRepository {
   PriceMasterRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
-  Future<List<Map<String, dynamic>>> listBatches({
+  Future<List<PriceMasterHeader>> listBatches({
     required String clientId,
     required String companyId,
     String? search,

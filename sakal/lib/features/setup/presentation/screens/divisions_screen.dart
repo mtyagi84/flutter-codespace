@@ -10,6 +10,37 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 
+// No repository/model layer exists for this screen (it calls DioClient/
+// GenericLookupLocalDs directly) — this row type is defined locally rather
+// than introducing a new data/models file for a single screen. Countries
+// stay Map — a dropdown lookup source for this screen, not its own row type.
+class Division {
+  final String id;
+  final String countryCode;
+  final String divisionCode;
+  final String divisionName;
+  final String divisionType;
+  final bool   isSystem;
+
+  const Division({
+    required this.id,
+    required this.countryCode,
+    required this.divisionCode,
+    required this.divisionName,
+    required this.divisionType,
+    required this.isSystem,
+  });
+
+  factory Division.fromJson(Map<String, dynamic> j) => Division(
+    id:           j['id']            as String? ?? '',
+    countryCode:  j['country_code']  as String? ?? '',
+    divisionCode: j['division_code'] as String? ?? '',
+    divisionName: j['division_name'] as String? ?? '',
+    divisionType: j['division_type'] as String? ?? 'Province',
+    isSystem:     j['is_system']     as bool?   ?? true,
+  );
+}
+
 class DivisionsScreen extends ConsumerStatefulWidget {
   const DivisionsScreen({super.key});
 
@@ -19,7 +50,7 @@ class DivisionsScreen extends ConsumerStatefulWidget {
 
 class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
   List<Map<String, dynamic>> _countries  = [];
-  List<Map<String, dynamic>> _divisions  = [];
+  List<Division> _divisions  = [];
   String? _selectedCountry;
   bool _loadingCountries  = true;
   bool _loadingDivisions  = false;
@@ -104,7 +135,7 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
         }
       }
       if (mounted) { setState(() {
-        _divisions = rows;
+        _divisions = rows.map(Division.fromJson).toList();
         _loadingDivisions = false;
       }); }
     } on DioException catch (e) {
@@ -169,7 +200,7 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
     }
   }
 
-  void _openDialog([Map<String, dynamic>? entry]) {
+  void _openDialog([Division? entry]) {
     final offline = ref.read(sessionProvider)?.offlineMode ?? false;
     showDialog<void>(
       context: context,
@@ -189,8 +220,7 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
     if (_divisions.isEmpty) return 'Province / State';
     final counts = <String, int>{};
     for (final d in _divisions) {
-      final t = d['division_type'] as String? ?? 'Province';
-      counts[t] = (counts[t] ?? 0) + 1;
+      counts[d.divisionType] = (counts[d.divisionType] ?? 0) + 1;
     }
     return counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
   }
@@ -223,7 +253,7 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
                       _selectedCountry == null
                           ? 'Select a country to view its divisions'
                           : '${_divisions.length} ${_divisionLabel.toLowerCase()}s'
-                            '  ·  ${_divisions.where((d) => d['is_system'] != true).length} custom',
+                            '  ·  ${_divisions.where((d) => !d.isSystem).length} custom',
                       style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                     ),
                   ],
@@ -302,7 +332,7 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
                     ),
                   ),
                 )
-              : SakalAdaptiveList<Map<String, dynamic>>(
+              : SakalAdaptiveList<Division>(
                   loading: _loadingDivisions,
                   error: null,
                   rows: _divisions,
@@ -318,7 +348,7 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
                     row: d,
                     offline: offline,
                     onEdit: () => _openDialog(d),
-                    onDelete: () => _delete(d['id'] as String),
+                    onDelete: () => _delete(d.id),
                   ),
                   emptyState: const Center(
                     child: Text('No divisions found. Add a custom one.',
@@ -331,8 +361,8 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
     );
   }
 
-  Widget _buildTableRow(Map<String, dynamic> d, bool offline) {
-    final isSystem = d['is_system'] as bool? ?? true;
+  Widget _buildTableRow(Division d, bool offline) {
+    final isSystem = d.isSystem;
     final tc = isSystem ? AppColors.textSecondary : AppColors.textPrimary;
 
     return Padding(
@@ -342,16 +372,16 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
         children: [
           Expanded(
             flex: 2,
-            child: Text(d['division_code'] as String? ?? '',
+            child: Text(d.divisionCode,
                 style: const TextStyle(fontSize: 12, color: AppColors.primary, fontFamily: 'monospace')),
           ),
           Expanded(
             flex: 3,
-            child: Text(d['division_name'] as String? ?? '', style: TextStyle(fontSize: 13, color: tc)),
+            child: Text(d.divisionName, style: TextStyle(fontSize: 13, color: tc)),
           ),
           Expanded(
             flex: 2,
-            child: Text(d['division_type'] as String? ?? '',
+            child: Text(d.divisionType,
                 style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           ),
           Expanded(flex: 2, child: _SourceBadge(isSystem: isSystem)),
@@ -372,7 +402,7 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
                         icon: const Icon(Icons.delete_outline, size: 17),
                         color: AppColors.negative,
                         tooltip: 'Delete',
-                        onPressed: () => _delete(d['id'] as String),
+                        onPressed: () => _delete(d.id),
                       ),
                     ],
                   ),
@@ -410,7 +440,7 @@ class _SourceBadge extends StatelessWidget {
 // ── Mobile card ───────────────────────────────────────────────────────────────
 
 class _DivisionCard extends StatelessWidget {
-  final Map<String, dynamic> row;
+  final Division row;
   final bool offline;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -423,7 +453,7 @@ class _DivisionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isSystem = row['is_system'] as bool? ?? true;
+    final isSystem = row.isSystem;
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -437,10 +467,10 @@ class _DivisionCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(row['division_name'] as String? ?? '',
+                      Text(row.divisionName,
                           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                       Text(
-                        '${row['division_code'] ?? ''} · ${row['division_type'] ?? ''}',
+                        '${row.divisionCode} · ${row.divisionType}',
                         style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                       ),
                     ],
@@ -480,7 +510,7 @@ class _DivisionCard extends StatelessWidget {
 
 class _DivisionDialog extends StatefulWidget {
   final List<Map<String, dynamic>> countries;
-  final Map<String, dynamic>? entry;
+  final Division? entry;
   final String? preselectedCountry;
   final bool offline;
   final Future<void> Function(Map<String, dynamic> data, String? id) onSave;
@@ -516,10 +546,10 @@ class _DivisionDialogState extends State<_DivisionDialog> {
   void initState() {
     super.initState();
     final e = widget.entry;
-    _countryCode = e?['country_code'] as String? ?? widget.preselectedCountry;
-    _code = TextEditingController(text: e?['division_code'] as String? ?? '');
-    _name = TextEditingController(text: e?['division_name'] as String? ?? '');
-    _type = e?['division_type'] as String? ?? 'Province';
+    _countryCode = e?.countryCode ?? widget.preselectedCountry;
+    _code = TextEditingController(text: e?.divisionCode ?? '');
+    _name = TextEditingController(text: e?.divisionName ?? '');
+    _type = e?.divisionType ?? 'Province';
   }
 
   @override
@@ -541,7 +571,7 @@ class _DivisionDialogState extends State<_DivisionDialog> {
     };
 
     if (mounted) Navigator.of(context, rootNavigator: true).pop();
-    await widget.onSave(data, widget.entry?['id'] as String?);
+    await widget.onSave(data, widget.entry?.id);
   }
 
   @override

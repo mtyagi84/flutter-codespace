@@ -2,6 +2,7 @@ import 'dart:async';
 import '../../domain/repositories/opening_stock_repository.dart';
 import '../datasources/opening_stock_remote_ds.dart';
 import '../datasources/opening_stock_local_ds.dart';
+import '../models/opening_stock_model.dart';
 
 class OpeningStockRepositoryImpl implements OpeningStockRepository {
   final OpeningStockRemoteDs _remote;
@@ -11,7 +12,7 @@ class OpeningStockRepositoryImpl implements OpeningStockRepository {
   OpeningStockRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
-  Future<List<Map<String, dynamic>>> listOpeningStocks({
+  Future<List<OpeningStockHeader>> listOpeningStocks({
     required String clientId,
     required String companyId,
     String? search,

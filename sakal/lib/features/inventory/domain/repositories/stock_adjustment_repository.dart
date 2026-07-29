@@ -1,5 +1,7 @@
+import '../../data/models/stock_adjustment_model.dart';
+
 abstract class StockAdjustmentRepository {
-  Future<List<Map<String, dynamic>>> listAdjustments({
+  Future<List<StockAdjustmentHeader>> listAdjustments({
     required String clientId,
     required String companyId,
     String? search,

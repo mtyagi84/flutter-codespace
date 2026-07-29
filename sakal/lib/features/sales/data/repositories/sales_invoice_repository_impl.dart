@@ -2,6 +2,7 @@ import 'dart:async';
 import '../../domain/repositories/sales_invoice_repository.dart';
 import '../datasources/sales_invoice_remote_ds.dart';
 import '../datasources/sales_invoice_local_ds.dart';
+import '../models/sales_invoice_header.dart';
 
 class SalesInvoiceRepositoryImpl implements SalesInvoiceRepository {
   final SalesInvoiceRemoteDs _remote;
@@ -11,7 +12,7 @@ class SalesInvoiceRepositoryImpl implements SalesInvoiceRepository {
   SalesInvoiceRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
-  Future<List<Map<String, dynamic>>> listInvoices({
+  Future<List<SalesInvoiceHeader>> listInvoices({
     required String clientId,
     required String companyId,
     String? search,

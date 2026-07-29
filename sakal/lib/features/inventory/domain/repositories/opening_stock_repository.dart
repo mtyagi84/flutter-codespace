@@ -1,5 +1,7 @@
+import '../../data/models/opening_stock_model.dart';
+
 abstract class OpeningStockRepository {
-  Future<List<Map<String, dynamic>>> listOpeningStocks({
+  Future<List<OpeningStockHeader>> listOpeningStocks({
     required String clientId,
     required String companyId,
     String? search,

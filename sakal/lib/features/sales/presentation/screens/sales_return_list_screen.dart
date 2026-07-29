@@ -10,6 +10,7 @@ import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
+import '../../data/models/sales_return_header.dart';
 import '../providers/sales_return_providers.dart';
 
 class SalesReturnListScreen extends ConsumerStatefulWidget {
@@ -23,7 +24,7 @@ class _SalesReturnListScreenState extends ConsumerState<SalesReturnListScreen>
     with ScreenPermissionMixin<SalesReturnListScreen> {
   @override String get screenName => RouteNames.salesReturns;
 
-  List<Map<String, dynamic>> _returns = [];
+  List<SalesReturnHeader> _returns = [];
   Set<String> _pendingIds = {};
   bool    _loading = true;
   String? _error;
@@ -62,7 +63,7 @@ class _SalesReturnListScreenState extends ConsumerState<SalesReturnListScreen>
       ]);
       if (mounted) {
         setState(() {
-          _returns    = results[0] as List<Map<String, dynamic>>;
+          _returns    = results[0] as List<SalesReturnHeader>;
           _pendingIds = results[1] as Set<String>;
           _loading    = false;
         });
@@ -72,11 +73,11 @@ class _SalesReturnListScreenState extends ConsumerState<SalesReturnListScreen>
     }
   }
 
-  List<Map<String, dynamic>> get _filtered {
+  List<SalesReturnHeader> get _filtered {
     if (_searchText.isEmpty) return _returns;
     return _returns.where((r) =>
-        (r['return_no'] as String? ?? '').toLowerCase().contains(_searchText) ||
-        (r['invoice_no'] as String? ?? '').toLowerCase().contains(_searchText)).toList();
+        r.returnNo.toLowerCase().contains(_searchText) ||
+        (r.invoiceNo ?? '').toLowerCase().contains(_searchText)).toList();
   }
 
   Future<void> _openNew() async {
@@ -84,8 +85,8 @@ class _SalesReturnListScreenState extends ConsumerState<SalesReturnListScreen>
     if (mounted) _load();
   }
 
-  Future<void> _openEdit(Map<String, dynamic> r) async {
-    await context.push(RouteNames.salesReturnEntry, extra: {'returnNo': r['return_no'], 'returnDate': r['return_date']});
+  Future<void> _openEdit(SalesReturnHeader r) async {
+    await context.push(RouteNames.salesReturnEntry, extra: {'returnNo': r.returnNo, 'returnDate': r.returnDate});
     if (mounted) _load();
   }
 
@@ -103,10 +104,9 @@ class _SalesReturnListScreenState extends ConsumerState<SalesReturnListScreen>
     _ => s,
   };
 
-  String _customerLabel(Map<String, dynamic> r) {
-    final c = r['customer'] as Map<String, dynamic>?;
-    if (c == null) return '—';
-    return '[${c['account_code']}] ${c['account_name']}';
+  String _customerLabel(SalesReturnHeader r) {
+    if (r.customerName == null) return '—';
+    return '[${r.customerCode}] ${r.customerName}';
   }
 
   @override
@@ -176,7 +176,7 @@ class _SalesReturnListScreenState extends ConsumerState<SalesReturnListScreen>
         ),
 
         Expanded(
-          child: SakalAdaptiveList<Map<String, dynamic>>(
+          child: SakalAdaptiveList<SalesReturnHeader>(
             loading: _loading,
             error: _error,
             rows: rows,
@@ -219,8 +219,8 @@ class _SalesReturnListScreenState extends ConsumerState<SalesReturnListScreen>
     );
   }
 
-  Widget _buildRow(Map<String, dynamic> r, int index) {
-    final total = (r['return_total'] as num?)?.toDouble() ?? 0;
+  Widget _buildRow(SalesReturnHeader r, int index) {
+    final total = r.returnTotal;
     return InkWell(
       onTap: () => _openEdit(r),
       child: Container(
@@ -228,15 +228,15 @@ class _SalesReturnListScreenState extends ConsumerState<SalesReturnListScreen>
         child: Row(children: [
           Expanded(flex: 2, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            child: Text(r['return_no'] as String? ?? '',
+            child: Text(r.returnNo,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)))),
           Expanded(flex: 2, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Text(_displayDate(r['return_date'] as String?), style: const TextStyle(fontSize: 13)))),
+            child: Text(_displayDate(r.returnDate), style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Text(r['invoice_no'] as String? ?? '—', style: const TextStyle(fontSize: 13)))),
+            child: Text(r.invoiceNo ?? '—', style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 3, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Text(_customerLabel(r), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
@@ -247,8 +247,8 @@ class _SalesReturnListScreenState extends ConsumerState<SalesReturnListScreen>
           Expanded(flex: 2, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(children: [
-              _statusBadge(r['status'] as String? ?? 'DRAFT'),
-              if (_pendingIds.contains(r['return_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+              _statusBadge(r.status),
+              if (_pendingIds.contains(r.returnNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
             ]))),
           Expanded(flex: 1, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -265,8 +265,8 @@ class _SalesReturnListScreenState extends ConsumerState<SalesReturnListScreen>
     );
   }
 
-  Widget _buildCard(Map<String, dynamic> r) {
-    final total = (r['return_total'] as num?)?.toDouble() ?? 0;
+  Widget _buildCard(SalesReturnHeader r) {
+    final total = r.returnTotal;
     return InkWell(
       onTap: () => _openEdit(r),
       borderRadius: BorderRadius.circular(8),
@@ -279,13 +279,13 @@ class _SalesReturnListScreenState extends ConsumerState<SalesReturnListScreen>
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Expanded(child: Text(r['return_no'] as String? ?? '',
+            Expanded(child: Text(r.returnNo,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
-            _statusBadge(r['status'] as String? ?? 'DRAFT'),
-            if (_pendingIds.contains(r['return_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+            _statusBadge(r.status),
+            if (_pendingIds.contains(r.returnNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
           ]),
           const SizedBox(height: 6),
-          Text('Against ${r['invoice_no'] ?? '—'} · ${_displayDate(r['return_date'] as String?)}',
+          Text('Against ${r.invoiceNo ?? '—'} · ${_displayDate(r.returnDate)}',
               style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
           Text(_customerLabel(r), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),

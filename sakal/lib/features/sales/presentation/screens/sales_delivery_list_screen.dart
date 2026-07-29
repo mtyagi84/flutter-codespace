@@ -10,6 +10,7 @@ import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
+import '../../data/models/sales_delivery_header.dart';
 import '../providers/sales_delivery_providers.dart';
 
 class SalesDeliveryListScreen extends ConsumerStatefulWidget {
@@ -23,7 +24,7 @@ class _SalesDeliveryListScreenState extends ConsumerState<SalesDeliveryListScree
     with ScreenPermissionMixin<SalesDeliveryListScreen> {
   @override String get screenName => RouteNames.salesDeliveries;
 
-  List<Map<String, dynamic>> _deliveries = [];
+  List<SalesDeliveryHeader> _deliveries = [];
   Set<String> _pendingIds = {};
   bool    _loading = true;
   String? _error;
@@ -62,7 +63,7 @@ class _SalesDeliveryListScreenState extends ConsumerState<SalesDeliveryListScree
       ]);
       if (mounted) {
         setState(() {
-          _deliveries = results[0] as List<Map<String, dynamic>>;
+          _deliveries = results[0] as List<SalesDeliveryHeader>;
           _pendingIds = results[1] as Set<String>;
           _loading    = false;
         });
@@ -72,11 +73,11 @@ class _SalesDeliveryListScreenState extends ConsumerState<SalesDeliveryListScree
     }
   }
 
-  List<Map<String, dynamic>> get _filtered {
+  List<SalesDeliveryHeader> get _filtered {
     if (_searchText.isEmpty) return _deliveries;
     return _deliveries.where((r) =>
-        (r['delivery_no'] as String? ?? '').toLowerCase().contains(_searchText) ||
-        (r['invoice_no'] as String? ?? '').toLowerCase().contains(_searchText)).toList();
+        r.deliveryNo.toLowerCase().contains(_searchText) ||
+        (r.invoiceNo ?? '').toLowerCase().contains(_searchText)).toList();
   }
 
   Future<void> _openNew() async {
@@ -84,8 +85,8 @@ class _SalesDeliveryListScreenState extends ConsumerState<SalesDeliveryListScree
     if (mounted) _load();
   }
 
-  Future<void> _openEdit(Map<String, dynamic> r) async {
-    await context.push(RouteNames.salesDeliveryEntry, extra: {'deliveryNo': r['delivery_no'], 'deliveryDate': r['delivery_date']});
+  Future<void> _openEdit(SalesDeliveryHeader r) async {
+    await context.push(RouteNames.salesDeliveryEntry, extra: {'deliveryNo': r.deliveryNo, 'deliveryDate': r.deliveryDate});
     if (mounted) _load();
   }
 
@@ -103,16 +104,12 @@ class _SalesDeliveryListScreenState extends ConsumerState<SalesDeliveryListScree
     _ => s,
   };
 
-  String _customerLabel(Map<String, dynamic> r) {
-    final c = r['customer'] as Map<String, dynamic>?;
-    if (c == null) return '—';
-    return '[${c['account_code']}] ${c['account_name']}';
+  String _customerLabel(SalesDeliveryHeader r) {
+    if (r.customerName == null) return '—';
+    return '[${r.customerCode}] ${r.customerName}';
   }
 
-  String _locationLabel(Map<String, dynamic> r) {
-    final l = r['location'] as Map<String, dynamic>?;
-    return l?['location_name'] as String? ?? '—';
-  }
+  String _locationLabel(SalesDeliveryHeader r) => r.locationName ?? '—';
 
   @override
   Widget build(BuildContext context) {
@@ -181,7 +178,7 @@ class _SalesDeliveryListScreenState extends ConsumerState<SalesDeliveryListScree
         ),
 
         Expanded(
-          child: SakalAdaptiveList<Map<String, dynamic>>(
+          child: SakalAdaptiveList<SalesDeliveryHeader>(
             loading: _loading,
             error: _error,
             rows: rows,
@@ -224,7 +221,7 @@ class _SalesDeliveryListScreenState extends ConsumerState<SalesDeliveryListScree
     );
   }
 
-  Widget _buildRow(Map<String, dynamic> r, int index) {
+  Widget _buildRow(SalesDeliveryHeader r, int index) {
     return InkWell(
       onTap: () => _openEdit(r),
       child: Container(
@@ -232,15 +229,15 @@ class _SalesDeliveryListScreenState extends ConsumerState<SalesDeliveryListScree
         child: Row(children: [
           Expanded(flex: 2, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            child: Text(r['delivery_no'] as String? ?? '',
+            child: Text(r.deliveryNo,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)))),
           Expanded(flex: 2, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Text(_displayDate(r['delivery_date'] as String?), style: const TextStyle(fontSize: 13)))),
+            child: Text(_displayDate(r.deliveryDate), style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Text(r['invoice_no'] as String? ?? '—', style: const TextStyle(fontSize: 13)))),
+            child: Text(r.invoiceNo ?? '—', style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 3, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Text(_customerLabel(r), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
@@ -250,8 +247,8 @@ class _SalesDeliveryListScreenState extends ConsumerState<SalesDeliveryListScree
           Expanded(flex: 2, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(children: [
-              _statusBadge(r['status'] as String? ?? 'DRAFT'),
-              if (_pendingIds.contains(r['delivery_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+              _statusBadge(r.status),
+              if (_pendingIds.contains(r.deliveryNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
             ]))),
           Expanded(flex: 1, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -268,7 +265,7 @@ class _SalesDeliveryListScreenState extends ConsumerState<SalesDeliveryListScree
     );
   }
 
-  Widget _buildCard(Map<String, dynamic> r) {
+  Widget _buildCard(SalesDeliveryHeader r) {
     return InkWell(
       onTap: () => _openEdit(r),
       borderRadius: BorderRadius.circular(8),
@@ -281,13 +278,13 @@ class _SalesDeliveryListScreenState extends ConsumerState<SalesDeliveryListScree
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Expanded(child: Text(r['delivery_no'] as String? ?? '',
+            Expanded(child: Text(r.deliveryNo,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
-            _statusBadge(r['status'] as String? ?? 'DRAFT'),
-            if (_pendingIds.contains(r['delivery_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+            _statusBadge(r.status),
+            if (_pendingIds.contains(r.deliveryNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
           ]),
           const SizedBox(height: 6),
-          Text('Against ${r['invoice_no'] ?? '—'} · ${_displayDate(r['delivery_date'] as String?)}',
+          Text('Against ${r.invoiceNo ?? '—'} · ${_displayDate(r.deliveryDate)}',
               style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
           Text(_customerLabel(r), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),

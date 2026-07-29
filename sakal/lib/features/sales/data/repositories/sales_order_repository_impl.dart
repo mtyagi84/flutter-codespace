@@ -2,6 +2,7 @@ import 'dart:async';
 import '../../domain/repositories/sales_order_repository.dart';
 import '../datasources/sales_order_remote_ds.dart';
 import '../datasources/sales_order_local_ds.dart';
+import '../models/sales_order_header.dart';
 
 class SalesOrderRepositoryImpl implements SalesOrderRepository {
   final SalesOrderRemoteDs _remote;
@@ -11,7 +12,7 @@ class SalesOrderRepositoryImpl implements SalesOrderRepository {
   SalesOrderRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
-  Future<List<Map<String, dynamic>>> listOrders({
+  Future<List<SalesOrderHeader>> listOrders({
     required String clientId,
     required String companyId,
     String? search,

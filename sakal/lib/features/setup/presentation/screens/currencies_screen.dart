@@ -7,6 +7,45 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 
+// No repository/model layer exists for this screen (it calls DioClient
+// directly) — this row type is defined locally rather than introducing a
+// new data/models file for a single screen.
+class Currency {
+  final String id;
+  final String currencyId;        // ISO code — see CLAUDE.md's rim_currencies note
+  final String currencyName;
+  final String currencyNotation;  // symbol
+  final String? currencyCoin;     // sub-unit name
+  final String? countryCode;
+  final bool   isActive;
+
+  const Currency({
+    required this.id,
+    required this.currencyId,
+    required this.currencyName,
+    required this.currencyNotation,
+    required this.currencyCoin,
+    required this.countryCode,
+    required this.isActive,
+  });
+
+  factory Currency.fromJson(Map<String, dynamic> j) => Currency(
+    id:               j['id']                as String? ?? '',
+    currencyId:       j['currency_id']       as String? ?? '',
+    currencyName:     j['currency_name']     as String? ?? '',
+    currencyNotation: j['currency_notation'] as String? ?? '',
+    currencyCoin:     j['currency_coin']     as String?,
+    countryCode:      j['country_code']      as String?,
+    isActive:         j['is_active']         as bool?   ?? false,
+  );
+
+  Currency copyWith({bool? isActive}) => Currency(
+    id: id, currencyId: currencyId, currencyName: currencyName,
+    currencyNotation: currencyNotation, currencyCoin: currencyCoin, countryCode: countryCode,
+    isActive: isActive ?? this.isActive,
+  );
+}
+
 class CurrenciesScreen extends ConsumerStatefulWidget {
   const CurrenciesScreen({super.key});
 
@@ -15,8 +54,8 @@ class CurrenciesScreen extends ConsumerStatefulWidget {
 }
 
 class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
-  List<Map<String, dynamic>> _allRows      = [];
-  List<Map<String, dynamic>> _filtered     = [];
+  List<Currency> _allRows      = [];
+  List<Currency> _filtered     = [];
   final _searchCtrl = TextEditingController();
   bool _activeOnly  = false;
   bool _loading     = true;
@@ -52,7 +91,9 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
       );
       if (mounted) {
         setState(() {
-          _allRows  = List<Map<String, dynamic>>.from(res.data as List);
+          _allRows  = (res.data as List)
+              .map((j) => Currency.fromJson(j as Map<String, dynamic>))
+              .toList();
           _loading  = false;
           _error    = null;
         });
@@ -67,25 +108,25 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
     final q = _searchCtrl.text.trim().toLowerCase();
     setState(() {
       _filtered = _allRows.where((r) {
-        final matchActive = !_activeOnly || (r['is_active'] as bool? ?? false);
+        final matchActive = !_activeOnly || r.isActive;
         if (q.isEmpty) return matchActive;
-        final code = (r['currency_id']   as String? ?? '').toLowerCase();
-        final name = (r['currency_name'] as String? ?? '').toLowerCase();
+        final code = r.currencyId.toLowerCase();
+        final name = r.currencyName.toLowerCase();
         return matchActive && (code.contains(q) || name.contains(q));
       }).toList();
     });
   }
 
-  Future<void> _toggle(Map<String, dynamic> row) async {
-    final id     = row['id'] as String;
-    final newVal = !(row['is_active'] as bool? ?? false);
+  Future<void> _toggle(Currency row) async {
+    final id     = row.id;
+    final newVal = !row.isActive;
     if (_toggling.contains(id)) return;
 
     // Optimistic update
     setState(() {
       _toggling.add(id);
-      final idx = _allRows.indexWhere((r) => r['id'] == id);
-      if (idx != -1) _allRows[idx] = {..._allRows[idx], 'is_active': newVal};
+      final idx = _allRows.indexWhere((r) => r.id == id);
+      if (idx != -1) _allRows[idx] = _allRows[idx].copyWith(isActive: newVal);
     });
     _applyFilter();
 
@@ -105,10 +146,10 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
       ref.invalidate(currenciesProvider);
     } on DioException {
       // Revert on failure
-      final idx = _allRows.indexWhere((r) => r['id'] == id);
+      final idx = _allRows.indexWhere((r) => r.id == id);
       if (mounted) {
         setState(() {
-          if (idx != -1) _allRows[idx] = {..._allRows[idx], 'is_active': !newVal};
+          if (idx != -1) _allRows[idx] = _allRows[idx].copyWith(isActive: !newVal);
         });
         _applyFilter();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -128,7 +169,7 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
   @override
   Widget build(BuildContext context) {
     final offline     = ref.watch(sessionProvider)?.offlineMode ?? false;
-    final activeCount = _allRows.where((r) => r['is_active'] as bool? ?? false).length;
+    final activeCount = _allRows.where((r) => r.isActive).length;
     final total       = _allRows.length;
 
     return Column(
@@ -236,7 +277,7 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
         // mobile-card/desktop-table switch; the raw fixed-width table here
         // overflowed by 372px on mobile since it never adapted at all.
         Expanded(
-          child: SakalAdaptiveList<Map<String, dynamic>>(
+          child: SakalAdaptiveList<Currency>(
             loading: _loading,
             error: null,
             rows: _filtered,
@@ -251,7 +292,7 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
             rowBuilder: (row, i) => _buildTableRow(row, offline),
             cardBuilder: (row) => _CurrencyCard(
               row: row,
-              toggling: _toggling.contains(row['id'] as String?),
+              toggling: _toggling.contains(row.id),
               offline: offline,
               onToggle: () => _toggle(row),
             ),
@@ -278,10 +319,10 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
     );
   }
 
-  Widget _buildTableRow(Map<String, dynamic> row, bool offline) {
-    final isActive = row['is_active'] as bool? ?? false;
-    final coin     = row['currency_coin'] as String?;
-    final toggling = _toggling.contains(row['id'] as String?);
+  Widget _buildTableRow(Currency row, bool offline) {
+    final isActive = row.isActive;
+    final coin     = row.currencyCoin;
+    final toggling = _toggling.contains(row.id);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -299,7 +340,7 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                row['currency_id'] as String? ?? '',
+                row.currencyId,
                 style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -310,7 +351,7 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
           Expanded(
             flex: 3,
             child: Text(
-              row['currency_name'] as String? ?? '',
+              row.currencyName,
               style: TextStyle(
                   fontSize: 13,
                   color: isActive ? AppColors.textPrimary : AppColors.textSecondary),
@@ -319,7 +360,7 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
           Expanded(
             flex: 1,
             child: Text(
-              row['currency_notation'] as String? ?? '',
+              row.currencyNotation,
               style: const TextStyle(
                   fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
             ),
@@ -334,7 +375,7 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
           Expanded(
             flex: 1,
             child: Text(
-              row['country_code'] as String? ?? '—',
+              row.countryCode ?? '—',
               style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, letterSpacing: 0.5),
             ),
           ),
@@ -430,7 +471,7 @@ class _ErrorBanner extends StatelessWidget {
 // ── Mobile card ───────────────────────────────────────────────────────────────
 
 class _CurrencyCard extends StatelessWidget {
-  final Map<String, dynamic> row;
+  final Currency row;
   final bool toggling;
   final bool offline;
   final VoidCallback onToggle;
@@ -443,8 +484,8 @@ class _CurrencyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isActive = row['is_active'] as bool? ?? false;
-    final coin     = row['currency_coin'] as String?;
+    final isActive = row.isActive;
+    final coin     = row.currencyCoin;
 
     return Card(
       margin: EdgeInsets.zero,
@@ -461,7 +502,7 @@ class _CurrencyCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                row['currency_id'] as String? ?? '',
+                row.currencyId,
                 style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -474,7 +515,7 @@ class _CurrencyCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    row['currency_name'] as String? ?? '',
+                    row.currencyName,
                     style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -483,10 +524,9 @@ class _CurrencyCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     [
-                      row['currency_notation'] as String? ?? '',
+                      row.currencyNotation,
                       if (coin != null && coin.isNotEmpty) coin,
-                      if ((row['country_code'] as String? ?? '').isNotEmpty)
-                        row['country_code'] as String,
+                      if ((row.countryCode ?? '').isNotEmpty) row.countryCode!,
                     ].where((s) => s.isNotEmpty).join('  ·  '),
                     style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                   ),

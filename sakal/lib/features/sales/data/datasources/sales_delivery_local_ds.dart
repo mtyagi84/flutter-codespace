@@ -1,11 +1,12 @@
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 import '../../../../core/database/app_database.dart';
+import '../models/sales_delivery_header.dart';
 
 class SalesDeliveryLocalDs {
   final AppDatabase _db;
   SalesDeliveryLocalDs(this._db);
 
-  Future<List<Map<String, dynamic>>> listDeliveries({
+  Future<List<SalesDeliveryHeader>> listDeliveries({
     required String clientId,
     required String companyId,
     String? search,
@@ -20,12 +21,12 @@ class SalesDeliveryLocalDs {
       ..orderBy([(t) => OrderingTerm.desc(t.deliveryDate), (t) => OrderingTerm.desc(t.deliveryNo)]);
     if (status != null && status.isNotEmpty) q.where((t) => t.status.equals(status));
     final rows = await q.get();
-    var result = rows.map(_headerToMap).toList();
+    var result = rows.map((r) => SalesDeliveryHeader.fromJson(_headerToMap(r))).toList();
     if (search != null && search.isNotEmpty) {
       final s = search.toLowerCase();
       result = result.where((r) =>
-          (r['delivery_no'] as String).toLowerCase().contains(s) ||
-          (r['invoice_no'] as String? ?? '').toLowerCase().contains(s)).toList();
+          r.deliveryNo.toLowerCase().contains(s) ||
+          (r.invoiceNo ?? '').toLowerCase().contains(s)).toList();
     }
     return result.skip(offset).take(limit).toList();
   }

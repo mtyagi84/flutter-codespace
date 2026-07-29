@@ -1,5 +1,7 @@
+import '../../data/models/stock_count_review_model.dart';
+
 abstract class StockCountReviewRepository {
-  Future<List<Map<String, dynamic>>> listReviews({
+  Future<List<StockCountReviewHeader>> listReviews({
     required String clientId,
     required String companyId,
     String? search,

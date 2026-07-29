@@ -1,5 +1,7 @@
+import '../../data/models/expense_voucher_model.dart';
+
 abstract class ExpenseVoucherRepository {
-  Future<List<Map<String, dynamic>>> listVouchers({
+  Future<List<ExpenseVoucherHeader>> listVouchers({
     required String clientId,
     required String companyId,
     String? search,

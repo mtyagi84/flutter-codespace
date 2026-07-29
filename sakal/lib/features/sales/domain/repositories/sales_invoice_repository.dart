@@ -1,5 +1,7 @@
+import '../../data/models/sales_invoice_header.dart';
+
 abstract class SalesInvoiceRepository {
-  Future<List<Map<String, dynamic>>> listInvoices({
+  Future<List<SalesInvoiceHeader>> listInvoices({
     required String clientId,
     required String companyId,
     String? search,

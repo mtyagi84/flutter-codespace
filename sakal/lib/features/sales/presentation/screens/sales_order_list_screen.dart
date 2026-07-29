@@ -12,6 +12,7 @@ import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
+import '../../data/models/sales_order_header.dart';
 import '../providers/sales_order_providers.dart';
 
 class SalesOrderListScreen extends ConsumerStatefulWidget {
@@ -25,7 +26,7 @@ class _SalesOrderListScreenState extends ConsumerState<SalesOrderListScreen>
     with ScreenPermissionMixin<SalesOrderListScreen> {
   @override String get screenName => RouteNames.salesOrders;
 
-  List<Map<String, dynamic>> _rows = [];
+  List<SalesOrderHeader> _rows = [];
   Set<String> _pendingIds = {};
   bool    _loading = true;
   String? _error;
@@ -68,7 +69,7 @@ class _SalesOrderListScreenState extends ConsumerState<SalesOrderListScreen>
       ]);
       if (mounted) {
         setState(() {
-          _rows       = results[0] as List<Map<String, dynamic>>;
+          _rows       = results[0] as List<SalesOrderHeader>;
           _pendingIds = results[1] as Set<String>;
           _loading    = false;
         });
@@ -78,19 +79,17 @@ class _SalesOrderListScreenState extends ConsumerState<SalesOrderListScreen>
     }
   }
 
-  List<Map<String, dynamic>> get _filtered {
+  List<SalesOrderHeader> get _filtered {
     if (_searchText.isEmpty) return _rows;
-    return _rows.where((r) {
-      final customer = r['customer'] as Map<String, dynamic>?;
-      return (r['order_no'] as String? ?? '').toLowerCase().contains(_searchText) ||
-          (customer?['account_name'] as String? ?? '').toLowerCase().contains(_searchText) ||
-          (r['customer_po_ref'] as String? ?? '').toLowerCase().contains(_searchText);
-    }).toList();
+    return _rows.where((r) =>
+        r.orderNo.toLowerCase().contains(_searchText) ||
+        r.customerName.toLowerCase().contains(_searchText) ||
+        r.customerPoRef.toLowerCase().contains(_searchText)).toList();
   }
 
-  Future<void> _openEdit(Map<String, dynamic> r) async {
+  Future<void> _openEdit(SalesOrderHeader r) async {
     await context.push(RouteNames.salesOrderEntry,
-        extra: {'orderNo': r['order_no'], 'orderDate': r['order_date']});
+        extra: {'orderNo': r.orderNo, 'orderDate': r.orderDate});
     if (mounted) _load();
   }
 
@@ -337,34 +336,32 @@ class _SalesOrderListScreenState extends ConsumerState<SalesOrderListScreen>
     );
   }
 
-  Widget _buildRow(Map<String, dynamic> r, int index) {
-    final customer = r['customer'] as Map<String, dynamic>?;
-    final currency = r['currency'] as Map<String, dynamic>?;
+  Widget _buildRow(SalesOrderHeader r, int index) {
     return InkWell(
       onTap: () => _openEdit(r),
       child: Container(
         color: index.isEven ? Colors.white : AppColors.background,
         child: Row(children: [
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              child: Text(r['order_no'] as String, overflow: TextOverflow.ellipsis,
+              child: Text(r.orderNo, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(_displayDate(r['order_date'] as String?), style: const TextStyle(fontSize: 13)))),
+              child: Text(_displayDate(r.orderDate), style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: _modeBadge(r['order_mode'] as String? ?? 'DIRECT'))),
+              child: _modeBadge(r.orderMode))),
           Expanded(flex: 3, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(customer?['account_name'] as String? ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis,
+              child: Text(r.customerName.isEmpty ? '—' : r.customerName, maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(r['source_quotation_no'] as String? ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis,
+              child: Text(r.sourceQuotationNo ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(children: [
-                _statusBadge(r['status'] as String),
-                if (_pendingIds.contains(r['order_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+                _statusBadge(r.status),
+                if (_pendingIds.contains(r.orderNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
               ]))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text('${currency?['currency_id'] ?? ''} ${AppNumberFormat.amount((r['grand_total'] as num?) ?? 0, ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL')}',
+              child: Text('${r.currencyId} ${AppNumberFormat.amount(r.grandTotal, ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL')}',
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)))),
           Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
               child: IconButton(icon: const Icon(Icons.arrow_forward_ios, size: 14), color: AppColors.primary,
@@ -374,9 +371,7 @@ class _SalesOrderListScreenState extends ConsumerState<SalesOrderListScreen>
     );
   }
 
-  Widget _buildCard(Map<String, dynamic> r) {
-    final customer = r['customer'] as Map<String, dynamic>?;
-    final currency = r['currency'] as Map<String, dynamic>?;
+  Widget _buildCard(SalesOrderHeader r) {
     return InkWell(
       onTap: () => _openEdit(r),
       borderRadius: BorderRadius.circular(8),
@@ -385,23 +380,23 @@ class _SalesOrderListScreenState extends ConsumerState<SalesOrderListScreen>
         decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Expanded(child: Text(r['order_no'] as String,
+            Expanded(child: Text(r.orderNo,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
-            _modeBadge(r['order_mode'] as String? ?? 'DIRECT'),
+            _modeBadge(r.orderMode),
             const SizedBox(width: 6),
-            _statusBadge(r['status'] as String),
-            if (_pendingIds.contains(r['order_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+            _statusBadge(r.status),
+            if (_pendingIds.contains(r.orderNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
           ]),
           const SizedBox(height: 6),
-          Text(customer?['account_name'] as String? ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
-          if ((r['source_quotation_no'] as String?)?.isNotEmpty ?? false) ...[
+          Text(r.customerName.isEmpty ? '—' : r.customerName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+          if (r.sourceQuotationNo?.isNotEmpty ?? false) ...[
             const SizedBox(height: 4),
-            Text('From ${r['source_quotation_no']}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            Text('From ${r.sourceQuotationNo}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           ],
           const SizedBox(height: 4),
-          Text(_displayDate(r['order_date'] as String?), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          Text(_displayDate(r.orderDate), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
-          Text('${currency?['currency_id'] ?? ''} ${AppNumberFormat.amount((r['grand_total'] as num?) ?? 0, ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL')}',
+          Text('${r.currencyId} ${AppNumberFormat.amount(r.grandTotal, ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL')}',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
         ]),
       ),

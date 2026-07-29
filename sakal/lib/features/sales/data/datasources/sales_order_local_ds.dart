@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 import '../../../../core/database/app_database.dart';
+import '../models/sales_order_header.dart';
 
 class SalesOrderLocalDs {
   final AppDatabase _db;
@@ -7,7 +8,7 @@ class SalesOrderLocalDs {
 
   // ── Read ──────────────────────────────────────────────────────────────────
 
-  Future<List<Map<String, dynamic>>> listOrders({
+  Future<List<SalesOrderHeader>> listOrders({
     required String clientId,
     required String companyId,
     String? search,
@@ -24,12 +25,12 @@ class SalesOrderLocalDs {
     if (status != null && status.isNotEmpty) q.where((t) => t.status.equals(status));
     if (orderMode != null && orderMode.isNotEmpty) q.where((t) => t.orderMode.equals(orderMode));
     final rows = await q.get();
-    var result = rows.map(_headerToMap).toList();
+    var result = rows.map((r) => SalesOrderHeader.fromJson(_headerToMap(r))).toList();
     if (search != null && search.isNotEmpty) {
       final s = search.toLowerCase();
       result = result.where((r) =>
-          (r['order_no'] as String).toLowerCase().contains(s) ||
-          (r['customer_po_ref'] as String? ?? '').toLowerCase().contains(s)).toList();
+          r.orderNo.toLowerCase().contains(s) ||
+          r.customerPoRef.toLowerCase().contains(s)).toList();
     }
     return result.skip(offset).take(limit).toList();
   }

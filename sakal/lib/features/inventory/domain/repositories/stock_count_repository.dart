@@ -1,5 +1,7 @@
+import '../../data/models/stock_count_model.dart';
+
 abstract class StockCountRepository {
-  Future<List<Map<String, dynamic>>> listStockCounts({
+  Future<List<StockCountHeader>> listStockCounts({
     required String clientId,
     required String companyId,
     String? search,

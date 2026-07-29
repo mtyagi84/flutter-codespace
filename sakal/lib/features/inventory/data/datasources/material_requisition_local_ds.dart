@@ -3,6 +3,7 @@ import '../../../../core/database/app_database.dart';
 import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
 import '../../../../core/database/datasources/product_uom_local_ds.dart';
 import '../../../master/data/datasources/products_local_ds.dart';
+import '../models/material_requisition_model.dart';
 
 class MaterialRequisitionLocalDs {
   final AppDatabase _db;
@@ -77,7 +78,7 @@ class MaterialRequisitionLocalDs {
 
   // ── Read — requisition documents ─────────────────────────────────────────
 
-  Future<List<Map<String, dynamic>>> listRequisitions({
+  Future<List<MaterialRequisitionHeader>> listRequisitions({
     required String clientId,
     required String companyId,
     String? search,
@@ -92,13 +93,13 @@ class MaterialRequisitionLocalDs {
       ..orderBy([(t) => OrderingTerm.desc(t.requisitionDate), (t) => OrderingTerm.desc(t.requisitionNo)]);
     if (status != null && status.isNotEmpty) q.where((t) => t.status.equals(status));
     final rows = await q.get();
-    var result = rows.map(_headerToMap).toList();
+    var result = rows.map((r) => MaterialRequisitionHeader.fromJson(_headerToMap(r))).toList();
     if (search != null && search.isNotEmpty) {
       final s = search.toLowerCase();
       result = result.where((r) =>
-          (r['requisition_no'] as String).toLowerCase().contains(s) ||
-          (r['requested_by'] as String? ?? '').toLowerCase().contains(s) ||
-          (r['reason'] as String? ?? '').toLowerCase().contains(s)).toList();
+          r.requisitionNo.toLowerCase().contains(s) ||
+          r.requestedBy.toLowerCase().contains(s) ||
+          r.reason.toLowerCase().contains(s)).toList();
     }
     return result.skip(offset).take(limit).toList();
   }

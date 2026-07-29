@@ -1,11 +1,12 @@
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 import '../../../../core/database/app_database.dart';
+import '../models/expense_voucher_model.dart';
 
 class ExpenseVoucherLocalDs {
   final AppDatabase _db;
   ExpenseVoucherLocalDs(this._db);
 
-  Future<List<Map<String, dynamic>>> listVouchers({
+  Future<List<ExpenseVoucherHeader>> listVouchers({
     required String clientId,
     required String companyId,
     String? search,
@@ -20,10 +21,10 @@ class ExpenseVoucherLocalDs {
       ..orderBy([(t) => OrderingTerm.desc(t.transDate), (t) => OrderingTerm.desc(t.transNo)]);
     if (status != null && status.isNotEmpty) q.where((t) => t.status.equals(status));
     final rows = await q.get();
-    var result = rows.map(_headerToMap).toList();
+    var result = rows.map((r) => ExpenseVoucherHeader.fromJson(_headerToMap(r))).toList();
     if (search != null && search.isNotEmpty) {
       final s = search.toLowerCase();
-      result = result.where((r) => (r['trans_no'] as String).toLowerCase().contains(s)).toList();
+      result = result.where((r) => r.transNo.toLowerCase().contains(s)).toList();
     }
     return result.skip(offset).take(limit).toList();
   }

@@ -2,6 +2,7 @@ import 'dart:async';
 import '../../domain/repositories/material_issue_repository.dart';
 import '../datasources/material_issue_remote_ds.dart';
 import '../datasources/material_issue_local_ds.dart';
+import '../models/material_issue_model.dart';
 
 class MaterialIssueRepositoryImpl implements MaterialIssueRepository {
   final MaterialIssueRemoteDs _remote;
@@ -11,7 +12,7 @@ class MaterialIssueRepositoryImpl implements MaterialIssueRepository {
   MaterialIssueRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
-  Future<List<Map<String, dynamic>>> listIssues({
+  Future<List<MaterialIssueHeader>> listIssues({
     required String clientId,
     required String companyId,
     String? search,

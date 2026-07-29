@@ -1,5 +1,7 @@
+import '../../data/models/stock_transfer_model.dart';
+
 abstract class StockTransferRepository {
-  Future<List<Map<String, dynamic>>> listTransfers({
+  Future<List<StockTransferHeader>> listTransfers({
     required String clientId,
     required String companyId,
     String? search,

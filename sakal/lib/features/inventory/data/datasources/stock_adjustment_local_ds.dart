@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 import '../../../../core/database/app_database.dart';
+import '../models/stock_adjustment_model.dart';
 
 class StockAdjustmentLocalDs {
   final AppDatabase _db;
@@ -8,7 +9,7 @@ class StockAdjustmentLocalDs {
 
   // ── Read ──────────────────────────────────────────────────────────────────
 
-  Future<List<Map<String, dynamic>>> listAdjustments({
+  Future<List<StockAdjustmentHeader>> listAdjustments({
     required String clientId,
     required String companyId,
     String? search,
@@ -23,10 +24,10 @@ class StockAdjustmentLocalDs {
       ..orderBy([(t) => OrderingTerm.desc(t.adjustmentDate), (t) => OrderingTerm.desc(t.adjustmentNo)]);
     if (status != null && status.isNotEmpty) q.where((t) => t.status.equals(status));
     final rows = await q.get();
-    var result = rows.map(_headerToMap).toList();
+    var result = rows.map((r) => StockAdjustmentHeader.fromJson(_headerToMap(r))).toList();
     if (search != null && search.isNotEmpty) {
       final s = search.toLowerCase();
-      result = result.where((r) => (r['adjustment_no'] as String).toLowerCase().contains(s)).toList();
+      result = result.where((r) => r.adjustmentNo.toLowerCase().contains(s)).toList();
     }
     return result.skip(offset).take(limit).toList();
   }

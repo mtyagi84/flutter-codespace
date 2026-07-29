@@ -12,7 +12,7 @@ class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
   FinanceVoucherRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
-  Future<List<Map<String, dynamic>>> listHeaders({
+  Future<List<FinanceVoucherHeader>> listHeaders({
     required String clientId,
     required String companyId,
     required String locationId,

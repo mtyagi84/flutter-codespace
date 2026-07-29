@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart' show Value, OrderingTerm;
 import '../../../../core/database/app_database.dart';
+import '../models/opening_stock_model.dart';
 
 class OpeningStockLocalDs {
   final AppDatabase _db;
@@ -7,7 +8,7 @@ class OpeningStockLocalDs {
 
   // ── Read ──────────────────────────────────────────────────────────────────
 
-  Future<List<Map<String, dynamic>>> listOpeningStocks({
+  Future<List<OpeningStockHeader>> listOpeningStocks({
     required String clientId,
     required String companyId,
     String? search,
@@ -22,10 +23,10 @@ class OpeningStockLocalDs {
       ..orderBy([(t) => OrderingTerm.desc(t.openingDate), (t) => OrderingTerm.desc(t.openingNo)]);
     if (status != null && status.isNotEmpty) q.where((t) => t.status.equals(status));
     final rows = await q.get();
-    var result = rows.map(_headerToMap).toList();
+    var result = rows.map((r) => OpeningStockHeader.fromJson(_headerToMap(r))).toList();
     if (search != null && search.isNotEmpty) {
       final s = search.toLowerCase();
-      result = result.where((r) => (r['opening_no'] as String).toLowerCase().contains(s)).toList();
+      result = result.where((r) => r.openingNo.toLowerCase().contains(s)).toList();
     }
     return result.skip(offset).take(limit).toList();
   }

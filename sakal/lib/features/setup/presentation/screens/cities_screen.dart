@@ -10,6 +10,40 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 
+// No repository/model layer exists for this screen (it calls DioClient/
+// GenericLookupLocalDs directly) — this row type is defined locally rather
+// than introducing a new data/models file for a single screen. Countries
+// and divisions stay Map — they're dropdown lookup sources for this
+// screen, not its own primary row type.
+class City {
+  final String id;
+  final String cityName;
+  final String? divisionId;
+  final String countryCode;
+  final bool   isActive;
+
+  const City({
+    required this.id,
+    required this.cityName,
+    required this.divisionId,
+    required this.countryCode,
+    required this.isActive,
+  });
+
+  factory City.fromJson(Map<String, dynamic> j) => City(
+    id:          j['id']           as String? ?? '',
+    cityName:    j['city_name']    as String? ?? '',
+    divisionId:  j['division_id']  as String?,
+    countryCode: j['country_code'] as String? ?? '',
+    isActive:    j['is_active']    as bool?   ?? true,
+  );
+
+  City copyWith({bool? isActive}) => City(
+    id: id, cityName: cityName, divisionId: divisionId, countryCode: countryCode,
+    isActive: isActive ?? this.isActive,
+  );
+}
+
 class CitiesScreen extends ConsumerStatefulWidget {
   const CitiesScreen({super.key});
 
@@ -20,7 +54,7 @@ class CitiesScreen extends ConsumerStatefulWidget {
 class _CitiesScreenState extends ConsumerState<CitiesScreen> {
   List<Map<String, dynamic>> _countries  = [];
   List<Map<String, dynamic>> _divisions  = [];
-  List<Map<String, dynamic>> _cities     = [];
+  List<City> _cities     = [];
 
   String? _selectedCountry;
   String? _selectedDivision;  // division id (uuid)
@@ -167,7 +201,7 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
         }
       }
       if (mounted) { setState(() {
-        _cities = rows;
+        _cities = rows.map(City.fromJson).toList();
         _loadingCities = false;
       }); }
     } on DioException catch (e) {
@@ -209,8 +243,8 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
     if (_toggling.contains(id)) return;
     setState(() {
       _toggling.add(id);
-      final idx = _cities.indexWhere((c) => c['id'] == id);
-      if (idx >= 0) _cities[idx] = {..._cities[idx], 'is_active': !current};
+      final idx = _cities.indexWhere((c) => c.id == id);
+      if (idx >= 0) _cities[idx] = _cities[idx].copyWith(isActive: !current);
     });
     try {
       await DioClient.instance.patch(
@@ -221,8 +255,8 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
     } on DioException {
       // revert
       setState(() {
-        final idx = _cities.indexWhere((c) => c['id'] == id);
-        if (idx >= 0) _cities[idx] = {..._cities[idx], 'is_active': current};
+        final idx = _cities.indexWhere((c) => c.id == id);
+        if (idx >= 0) _cities[idx] = _cities[idx].copyWith(isActive: current);
       });
     } finally {
       if (mounted) setState(() => _toggling.remove(id));
@@ -261,7 +295,7 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
     }
   }
 
-  void _openDialog([Map<String, dynamic>? entry]) {
+  void _openDialog([City? entry]) {
     final offline = ref.read(sessionProvider)?.offlineMode ?? false;
     showDialog<void>(
       context: context,
@@ -280,12 +314,10 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
 
   // ── Filtered list ─────────────────────────────────────────────────
 
-  List<Map<String, dynamic>> get _filtered {
+  List<City> get _filtered {
     final q = _searchCtrl.text.trim().toLowerCase();
     if (q.isEmpty) return _cities;
-    return _cities.where((c) {
-      return (c['city_name'] as String? ?? '').toLowerCase().contains(q);
-    }).toList();
+    return _cities.where((c) => c.cityName.toLowerCase().contains(q)).toList();
   }
 
   String _divisionName(String? divId) {
@@ -301,7 +333,7 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
   Widget build(BuildContext context) {
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     final filtered = _filtered;
-    final activeCount = _cities.where((c) => c['is_active'] == true).length;
+    final activeCount = _cities.where((c) => c.isActive).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -468,7 +500,7 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
                     ),
                   ),
                 )
-              : SakalAdaptiveList<Map<String, dynamic>>(
+              : SakalAdaptiveList<City>(
                   loading: _loadingCities,
                   error: null,
                   rows: filtered,
@@ -481,12 +513,12 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
                   rowBuilder: (c, i) => _buildTableRow(c, offline),
                   cardBuilder: (c) => _CityCard(
                     row: c,
-                    divisionName: _divisionName(c['division_id'] as String?),
+                    divisionName: _divisionName(c.divisionId),
                     offline: offline,
-                    toggling: _toggling.contains(c['id'] as String?),
-                    onToggle: () => _toggleActive(c['id'] as String, c['is_active'] as bool? ?? true),
+                    toggling: _toggling.contains(c.id),
+                    onToggle: () => _toggleActive(c.id, c.isActive),
                     onEdit: () => _openDialog(c),
-                    onDelete: () => _delete(c['id'] as String),
+                    onDelete: () => _delete(c.id),
                   ),
                   emptyState: const Center(
                     child: Text('No cities found. Add one using the button above.',
@@ -499,9 +531,9 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
     );
   }
 
-  Widget _buildTableRow(Map<String, dynamic> c, bool offline) {
-    final active = c['is_active'] as bool? ?? true;
-    final id     = c['id'] as String;
+  Widget _buildTableRow(City c, bool offline) {
+    final active = c.isActive;
+    final id     = c.id;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -510,13 +542,13 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
         children: [
           Expanded(
             flex: 3,
-            child: Text(c['city_name'] as String? ?? '',
+            child: Text(c.cityName,
                 style: TextStyle(fontSize: 13,
                     color: active ? AppColors.textPrimary : AppColors.textDisabled)),
           ),
           Expanded(
             flex: 3,
-            child: Text(_divisionName(c['division_id'] as String?),
+            child: Text(_divisionName(c.divisionId),
                 style: TextStyle(fontSize: 12,
                     color: active ? AppColors.textSecondary : AppColors.textDisabled)),
           ),
@@ -566,7 +598,7 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
 // ── Mobile card ───────────────────────────────────────────────────────────────
 
 class _CityCard extends StatelessWidget {
-  final Map<String, dynamic> row;
+  final City row;
   final String divisionName;
   final bool offline;
   final bool toggling;
@@ -585,7 +617,7 @@ class _CityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final active = row['is_active'] as bool? ?? true;
+    final active = row.isActive;
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -599,7 +631,7 @@ class _CityCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(row['city_name'] as String? ?? '',
+                      Text(row.cityName,
                           style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -659,7 +691,7 @@ class _CityCard extends StatelessWidget {
 class _CityDialog extends StatefulWidget {
   final List<Map<String, dynamic>> countries;
   final List<Map<String, dynamic>> divisions;
-  final Map<String, dynamic>? entry;
+  final City? entry;
   final String? preselectedCountry;
   final String? preselectedDivision;
   final bool offline;
@@ -693,10 +725,10 @@ class _CityDialogState extends State<_CityDialog> {
   void initState() {
     super.initState();
     final e = widget.entry;
-    _countryCode = e?['country_code'] as String? ?? widget.preselectedCountry;
-    _divisionId  = e?['division_id']  as String? ?? widget.preselectedDivision;
-    _name        = TextEditingController(text: e?['city_name'] as String? ?? '');
-    _isActive    = e?['is_active'] as bool? ?? true;
+    _countryCode = e?.countryCode ?? widget.preselectedCountry;
+    _divisionId  = e?.divisionId  ?? widget.preselectedDivision;
+    _name        = TextEditingController(text: e?.cityName ?? '');
+    _isActive    = e?.isActive ?? true;
   }
 
   @override
@@ -717,7 +749,7 @@ class _CityDialogState extends State<_CityDialog> {
     };
 
     if (mounted) Navigator.of(context, rootNavigator: true).pop();
-    await widget.onSave(data, widget.entry?['id'] as String?);
+    await widget.onSave(data, widget.entry?.id);
   }
 
   @override

@@ -14,6 +14,7 @@ import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
+import '../../data/models/price_master_header.dart';
 import '../providers/price_master_providers.dart';
 
 class PriceMasterListScreen extends ConsumerStatefulWidget {
@@ -27,7 +28,7 @@ class _PriceMasterListScreenState extends ConsumerState<PriceMasterListScreen>
     with ScreenPermissionMixin<PriceMasterListScreen> {
   @override String get screenName => RouteNames.salesPriceMaster;
 
-  List<Map<String, dynamic>> _rows = [];
+  List<PriceMasterHeader> _rows = [];
   List<Map<String, dynamic>> _locations = [];
   Set<String> _pendingIds = {};
   bool    _loading = true;
@@ -69,7 +70,7 @@ class _PriceMasterListScreenState extends ConsumerState<PriceMasterListScreen>
       ]);
       if (mounted) {
         setState(() {
-          _rows       = results[0] as List<Map<String, dynamic>>;
+          _rows       = results[0] as List<PriceMasterHeader>;
           _pendingIds = results[1] as Set<String>;
           _locations  = results[2] as List<Map<String, dynamic>>;
           _loading    = false;
@@ -81,24 +82,22 @@ class _PriceMasterListScreenState extends ConsumerState<PriceMasterListScreen>
     }
   }
 
-  List<Map<String, dynamic>> get _filtered {
+  List<PriceMasterHeader> get _filtered {
     var result = _rows;
     if (_searchText.isNotEmpty) {
-      result = result.where((r) {
-        final customer = r['customer'] as Map<String, dynamic>?;
-        return (r['entry_no'] as String).toLowerCase().contains(_searchText) ||
-            (customer?['account_name'] as String? ?? '').toLowerCase().contains(_searchText);
-      }).toList();
+      result = result.where((r) =>
+          r.entryNo.toLowerCase().contains(_searchText) ||
+          (r.customerName ?? '').toLowerCase().contains(_searchText)).toList();
     }
     if (_effFrom != null) {
       result = result.where((r) {
-        final d = DateTime.tryParse(r['effective_date'] as String? ?? '');
+        final d = DateTime.tryParse(r.effectiveDate ?? '');
         return d != null && !d.isBefore(_effFrom!);
       }).toList();
     }
     if (_effTo != null) {
       result = result.where((r) {
-        final d = DateTime.tryParse(r['effective_date'] as String? ?? '');
+        final d = DateTime.tryParse(r.effectiveDate ?? '');
         return d != null && !d.isAfter(_effTo!);
       }).toList();
     }
@@ -110,14 +109,14 @@ class _PriceMasterListScreenState extends ConsumerState<PriceMasterListScreen>
     if (mounted) _load();
   }
 
-  Future<void> _openEdit(Map<String, dynamic> r) async {
+  Future<void> _openEdit(PriceMasterHeader r) async {
     await context.push(RouteNames.salesPriceMasterEntry,
-        extra: {'entryNo': r['entry_no'], 'entryDate': r['entry_date']});
+        extra: {'entryNo': r.entryNo, 'entryDate': r.entryDate});
     if (mounted) _load();
   }
 
-  bool _isFutureEffective(Map<String, dynamic> r) {
-    final d = DateTime.tryParse(r['effective_date'] as String? ?? '');
+  bool _isFutureEffective(PriceMasterHeader r) {
+    final d = DateTime.tryParse(r.effectiveDate ?? '');
     return d != null && d.isAfter(DateTime.now());
   }
 
@@ -326,42 +325,39 @@ class _PriceMasterListScreenState extends ConsumerState<PriceMasterListScreen>
     );
   }
 
-  Widget _buildRow(Map<String, dynamic> r, int index) {
-    final customer = r['customer'] as Map<String, dynamic>?;
-    final location = r['location'] as Map<String, dynamic>?;
-    final currency = r['currency'] as Map<String, dynamic>?;
-    final customerLabel = r['price_type'] == 'CUSTOMER' && customer != null
-        ? '[${customer['account_code']}] ${customer['account_name']}' : '—';
+  Widget _buildRow(PriceMasterHeader r, int index) {
+    final customerLabel = r.priceType == 'CUSTOMER' && r.customerName != null
+        ? '[${r.customerCode}] ${r.customerName}' : '—';
     return InkWell(
       onTap: () => _openEdit(r),
       child: Container(
         color: index.isEven ? Colors.white : AppColors.background,
         child: Row(children: [
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              child: Text(r['entry_no'] as String, overflow: TextOverflow.ellipsis,
+              child: Text(r.entryNo, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(location?['location_name'] as String? ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis,
+              child: Text(r.locationName ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(_displayDate(r['entry_date'] as String?), style: const TextStyle(fontSize: 13)))),
+              child: Text(_displayDate(r.entryDate), style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: _typeBadge(r['price_type'] as String? ?? 'GENERIC'))),
+              child: _typeBadge(r.priceType))),
           Expanded(flex: 3, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Text(customerLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(currency?['currency_id'] as String? ?? '—', style: const TextStyle(fontSize: 13)))),
+              child: Text(r.currencyId ?? '—', style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(_displayDate(r['effective_date'] as String?),
+              child: Text(_displayDate(r.effectiveDate),
                   style: TextStyle(fontSize: 13, color: _isFutureEffective(r) ? AppColors.secondary : AppColors.textPrimary,
                       fontWeight: _isFutureEffective(r) ? FontWeight.w600 : FontWeight.w400)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(children: [
-                _statusBadge(r['status'] as String),
-                if (_pendingIds.contains(r['entry_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+                _statusBadge(r.status),
+                if (_pendingIds.contains(r.entryNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
               ]))),
           Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text('${r['line_count'] ?? 0}', style: const TextStyle(fontSize: 13)))),
+              child: Text('${r.lineCount}', style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
               child: IconButton(icon: const Icon(Icons.arrow_forward_ios, size: 14), color: AppColors.primary,
                   onPressed: () => _openEdit(r), tooltip: 'Open', padding: EdgeInsets.zero))),
@@ -370,12 +366,9 @@ class _PriceMasterListScreenState extends ConsumerState<PriceMasterListScreen>
     );
   }
 
-  Widget _buildCard(Map<String, dynamic> r) {
-    final customer = r['customer'] as Map<String, dynamic>?;
-    final location = r['location'] as Map<String, dynamic>?;
-    final currency = r['currency'] as Map<String, dynamic>?;
-    final customerLabel = r['price_type'] == 'CUSTOMER' && customer != null
-        ? '[${customer['account_code']}] ${customer['account_name']}' : 'Generic (all customers)';
+  Widget _buildCard(PriceMasterHeader r) {
+    final customerLabel = r.priceType == 'CUSTOMER' && r.customerName != null
+        ? '[${r.customerCode}] ${r.customerName}' : 'Generic (all customers)';
     return InkWell(
       onTap: () => _openEdit(r),
       borderRadius: BorderRadius.circular(8),
@@ -384,23 +377,23 @@ class _PriceMasterListScreenState extends ConsumerState<PriceMasterListScreen>
         decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Expanded(child: Text(r['entry_no'] as String,
+            Expanded(child: Text(r.entryNo,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
-            _typeBadge(r['price_type'] as String? ?? 'GENERIC'),
+            _typeBadge(r.priceType),
             const SizedBox(width: 6),
-            _statusBadge(r['status'] as String),
-            if (_pendingIds.contains(r['entry_no'])) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
+            _statusBadge(r.status),
+            if (_pendingIds.contains(r.entryNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
           ]),
           const SizedBox(height: 6),
-          Text('${location?['location_name'] as String? ?? '—'}  ·  ${currency?['currency_id'] as String? ?? '—'}',
+          Text('${r.locationName ?? '—'}  ·  ${r.currencyId ?? '—'}',
               style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
           Text(customerLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
           const SizedBox(height: 4),
-          Text('${_displayDate(r['entry_date'] as String?)} · Effective ${_displayDate(r['effective_date'] as String?)}',
+          Text('${_displayDate(r.entryDate)} · Effective ${_displayDate(r.effectiveDate)}',
               style: TextStyle(fontSize: 12, color: _isFutureEffective(r) ? AppColors.secondary : AppColors.textSecondary)),
           const SizedBox(height: 4),
-          Text('${r['line_count'] ?? 0} line(s)', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          Text('${r.lineCount} line(s)', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
         ]),
       ),
     );

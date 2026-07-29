@@ -11,6 +11,7 @@ import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
+import '../../data/models/finance_voucher_model.dart';
 import '../providers/finance_voucher_providers.dart';
 
 class ContraVoucherListScreen extends ConsumerStatefulWidget {
@@ -25,7 +26,7 @@ class _ContraVoucherListScreenState extends ConsumerState<ContraVoucherListScree
   @override
   String get screenName => RouteNames.contraVoucherList;
 
-  List<Map<String, dynamic>> _vouchers = [];
+  List<FinanceVoucherHeader> _vouchers = [];
   Set<String> _pendingIds = {};
   bool _loading = true;
   String? _error;
@@ -69,7 +70,7 @@ class _ContraVoucherListScreenState extends ConsumerState<ContraVoucherListScree
       ]);
       if (mounted) {
         setState(() {
-          _vouchers = results[0] as List<Map<String, dynamic>>;
+          _vouchers = results[0] as List<FinanceVoucherHeader>;
           _pendingIds = results[1] as Set<String>;
           _loading = false;
         });
@@ -85,11 +86,11 @@ class _ContraVoucherListScreenState extends ConsumerState<ContraVoucherListScree
     }
   }
 
-  List<Map<String, dynamic>> get _filtered {
+  List<FinanceVoucherHeader> get _filtered {
     if (_searchText.isEmpty) return _vouchers;
     return _vouchers.where((v) =>
-        (v['trans_no'] as String? ?? '').toLowerCase().contains(_searchText) ||
-        (v['remarks'] as String? ?? '').toLowerCase().contains(_searchText)).toList();
+        v.transNo.toLowerCase().contains(_searchText) ||
+        v.remarks.toLowerCase().contains(_searchText)).toList();
   }
 
   Future<void> _openNew() async {
@@ -97,8 +98,8 @@ class _ContraVoucherListScreenState extends ConsumerState<ContraVoucherListScree
     if (mounted) _load();
   }
 
-  Future<void> _openEdit(Map<String, dynamic> v) async {
-    await context.push(RouteNames.contraVoucherEntry, extra: {'transNo': v['trans_no'], 'transDate': v['trans_date']});
+  Future<void> _openEdit(FinanceVoucherHeader v) async {
+    await context.push(RouteNames.contraVoucherEntry, extra: {'transNo': v.transNo, 'transDate': v.transDate});
     if (mounted) _load();
   }
 
@@ -173,7 +174,7 @@ class _ContraVoucherListScreenState extends ConsumerState<ContraVoucherListScree
           ]),
         ),
         Expanded(
-          child: SakalAdaptiveList<Map<String, dynamic>>(
+          child: SakalAdaptiveList<FinanceVoucherHeader>(
             loading: _loading,
             error: _error,
             rows: rows,
@@ -195,18 +196,18 @@ class _ContraVoucherListScreenState extends ConsumerState<ContraVoucherListScree
     );
   }
 
-  Widget _buildRow(Map<String, dynamic> v, int index) {
-    final transNo = v['trans_no'] as String? ?? '';
+  Widget _buildRow(FinanceVoucherHeader v, int index) {
+    final transNo = v.transNo;
     return InkWell(
       onTap: () => _openEdit(v),
       child: Container(
         color: index.isEven ? Colors.white : AppColors.background,
         child: Row(children: [
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12), child: Text(transNo, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary)))),
-          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(_displayDate(v['trans_date'] as String?), style: const TextStyle(fontSize: 13)))),
-          Expanded(flex: 4, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(v['remarks'] as String? ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
+          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(_displayDate(v.transDate), style: const TextStyle(fontSize: 13)))),
+          Expanded(flex: 4, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(v.remarks.isNotEmpty ? v.remarks : '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Row(children: [
-            _statusBadge(v['is_posted'] as bool? ?? false),
+            _statusBadge(v.isPosted),
             if (_pendingIds.contains(transNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
           ]))),
           Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: IconButton(icon: const Icon(Icons.arrow_forward_ios, size: 14), color: AppColors.primary, onPressed: () => _openEdit(v), tooltip: 'Open', padding: EdgeInsets.zero))),
@@ -215,8 +216,8 @@ class _ContraVoucherListScreenState extends ConsumerState<ContraVoucherListScree
     );
   }
 
-  Widget _buildCard(Map<String, dynamic> v) {
-    final transNo = v['trans_no'] as String? ?? '';
+  Widget _buildCard(FinanceVoucherHeader v) {
+    final transNo = v.transNo;
     return InkWell(
       onTap: () => _openEdit(v),
       borderRadius: BorderRadius.circular(8),
@@ -226,13 +227,13 @@ class _ContraVoucherListScreenState extends ConsumerState<ContraVoucherListScree
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Expanded(child: Text(transNo, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
-            _statusBadge(v['is_posted'] as bool? ?? false),
+            _statusBadge(v.isPosted),
             if (_pendingIds.contains(transNo)) ...[const SizedBox(width: 6), const PendingSyncBadge.static(isPending: true)],
           ]),
           const SizedBox(height: 6),
-          Text(_displayDate(v['trans_date'] as String?), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          Text(_displayDate(v.transDate), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
-          Text(v['remarks'] as String? ?? '—', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+          Text(v.remarks.isNotEmpty ? v.remarks : '—', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
         ]),
       ),
     );

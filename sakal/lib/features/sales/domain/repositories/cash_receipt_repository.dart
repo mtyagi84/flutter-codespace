@@ -1,5 +1,7 @@
+import '../../data/models/cash_receipt_header.dart';
+
 abstract class CashReceiptRepository {
-  Future<List<Map<String, dynamic>>> listReceipts({
+  Future<List<CashReceiptHeader>> listReceipts({
     required String clientId,
     required String companyId,
     String? search,

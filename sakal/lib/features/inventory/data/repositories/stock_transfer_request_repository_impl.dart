@@ -2,6 +2,7 @@ import 'dart:async';
 import '../../domain/repositories/stock_transfer_request_repository.dart';
 import '../datasources/stock_transfer_request_remote_ds.dart';
 import '../datasources/stock_transfer_request_local_ds.dart';
+import '../models/stock_transfer_request_model.dart';
 
 class StockTransferRequestRepositoryImpl implements StockTransferRequestRepository {
   final StockTransferRequestRemoteDs _remote;
@@ -11,7 +12,7 @@ class StockTransferRequestRepositoryImpl implements StockTransferRequestReposito
   StockTransferRequestRepositoryImpl(this._remote, this._local, this._isOffline);
 
   @override
-  Future<List<Map<String, dynamic>>> listRequests({
+  Future<List<StockTransferRequestHeader>> listRequests({
     required String clientId,
     required String companyId,
     String? search,
