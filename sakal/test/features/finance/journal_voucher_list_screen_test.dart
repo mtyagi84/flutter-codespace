@@ -20,14 +20,19 @@ void main() {
     mockRepo = MockFinanceVoucherRepository();
   });
 
+  // Built fresh inside each test (never at the top of main()) — mockRepo is
+  // a `late` variable only assigned once setUp() runs before each test, so
+  // referencing it while main() itself is still executing synchronously
+  // (i.e. before any test has started) throws LateError.
+  //
   // SyncEngine(null) is a real instance, not a mock — with no Drift database
   // it degrades every read method to an empty/zero result (see the class's
   // own doc comment), which is exactly the "nothing pending" state these
   // tests want, with no need to mock it at all.
-  final overrides = <Override>[
-    financeVoucherRepositoryProvider.overrideWithValue(mockRepo),
-    syncEngineProvider.overrideWithValue(SyncEngine(null)),
-  ];
+  List<Override> overrides() => [
+        financeVoucherRepositoryProvider.overrideWithValue(mockRepo),
+        syncEngineProvider.overrideWithValue(SyncEngine(null)),
+      ];
 
   testWidgets('shows a loading indicator before the first page resolves', (tester) async {
     // A fetchPage that never completes during this test — lets us inspect
@@ -45,7 +50,7 @@ void main() {
           offset: any(named: 'offset'),
         )).thenAnswer((_) => Completer<List<FinanceVoucherHeader>>().future);
 
-    await pumpApp(tester, const JournalVoucherListScreen(), overrides: overrides, session: testSession());
+    await pumpApp(tester, const JournalVoucherListScreen(), overrides: overrides(), session: testSession());
     await tester.pump(); // let initState's postFrameCallback fire and _load() start
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
@@ -80,7 +85,7 @@ void main() {
           }),
         ]);
 
-    await pumpApp(tester, const JournalVoucherListScreen(), overrides: overrides, session: testSession());
+    await pumpApp(tester, const JournalVoucherListScreen(), overrides: overrides(), session: testSession());
     await tester.pumpAndSettle();
 
     expect(find.text('JV-001'), findsOneWidget);
@@ -108,7 +113,7 @@ void main() {
           offset: any(named: 'offset'),
         )).thenAnswer((_) async => []);
 
-    await pumpApp(tester, const JournalVoucherListScreen(), overrides: overrides, session: testSession());
+    await pumpApp(tester, const JournalVoucherListScreen(), overrides: overrides(), session: testSession());
     await tester.pumpAndSettle();
 
     expect(find.text('No journal vouchers found'), findsOneWidget);
@@ -128,7 +133,7 @@ void main() {
           offset: any(named: 'offset'),
         )).thenThrow(Exception('connection refused'));
 
-    await pumpApp(tester, const JournalVoucherListScreen(), overrides: overrides, session: testSession());
+    await pumpApp(tester, const JournalVoucherListScreen(), overrides: overrides(), session: testSession());
     await tester.pumpAndSettle();
 
     expect(find.text('Unable to load journal vouchers. Please try again.'), findsOneWidget);
