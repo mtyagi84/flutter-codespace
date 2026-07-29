@@ -101,12 +101,15 @@ void main() {
       final secondLoadMore = controller.loadMore(); // should immediately no-op due to isLoadingMore guard
 
       await secondLoadMore; // this one returns right away, doesn't touch fetchCallCount
-      expect(fetchCallCount, 1); // only the first loadMore actually called fetchPage so far
+      // 2, not 1: loadFirstPage's own fetchPage call already counted once,
+      // plus the in-flight first loadMore's call — the guarded second
+      // loadMore call must NOT have added a third.
+      expect(fetchCallCount, 2);
 
       gate.complete();     // release the first loadMore's fetch
       await firstLoadMore; // let it finish
 
-      expect(fetchCallCount, 1); // still only ever called once total
+      expect(fetchCallCount, 2); // still exactly 2 — no extra call snuck in
       expect(controller.isLoadingMore, false);
     });
 
