@@ -4,9 +4,22 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sakal/core/network/dio_client.dart';
 import 'package:sakal/features/setup/presentation/screens/print_template_list_screen.dart';
+
+// DioClient's own request interceptor does `await _storage.read(...)`
+// (FlutterSecureStorage) on every single request, including the ones this
+// file's fake adapter serves. In a bare `flutter_test` run (dart VM target,
+// no real Android/iOS platform underneath), flutter_secure_storage's
+// MethodChannel call has no native side to answer it — with no mock handler
+// registered, that call never resolves at all (not even with an exception),
+// which permanently stalls the screen in its loading state regardless of how
+// long this file pumps for. Registering a mock handler on the plugin's own
+// channel that resolves `read` to null (no stored token — the interceptor
+// already handles that by falling back to the anon key) unblocks it.
+const _secureStorageChannel = MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
 
 import '../../test_helpers/pump_app.dart';
 
@@ -70,6 +83,23 @@ void main() {
   late Duration? originalSendTimeout;
 
   setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_secureStorageChannel, (call) async {
+      switch (call.method) {
+        case 'read':
+        case 'write':
+        case 'delete':
+        case 'deleteAll':
+          return null;
+        case 'readAll':
+          return <String, String>{};
+        case 'containsKey':
+          return false;
+        default:
+          return null;
+      }
+    });
+
     originalAdapter = DioClient.instance.httpClientAdapter;
     // DioClient's real Dio instance carries a 15s connect/receive timeout.
     // flutter_test runs every test inside a FakeAsync zone, so Dio's
@@ -90,6 +120,8 @@ void main() {
   });
 
   tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_secureStorageChannel, null);
     DioClient.instance.httpClientAdapter = originalAdapter;
     DioClient.instance.options.connectTimeout = originalConnectTimeout;
     DioClient.instance.options.receiveTimeout = originalReceiveTimeout;
