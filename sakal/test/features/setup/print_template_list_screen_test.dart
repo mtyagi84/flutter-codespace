@@ -45,6 +45,24 @@ ResponseBody _jsonResponse(Object data, {int statusCode = 200}) => ResponseBody.
       },
     );
 
+/// Dio's own `DioMixin.fetch()` schedules a zero-duration `Timer` internally
+/// (unrelated to connectTimeout/receiveTimeout — confirmed from the actual
+/// failure trace: `Timer (duration: 0:00:00.000000, ...)` created inside
+/// `dio_mixin.dart:507`, before Dio ever reaches this file's fake adapter)
+/// as part of its own request-dispatch plumbing. Neither a single bare
+/// `tester.pump()` nor `tester.pumpAndSettle()` reliably flushes it in this
+/// codebase's Flutter/dio version combination — pumpAndSettle's own
+/// settle-heuristic gets stuck on it ("pumpAndSettle timed out"), and a
+/// single pump leaves it "still pending" at teardown. Pumping a fixed
+/// number of times with an explicit small duration sidesteps both failure
+/// modes: fake_async's `elapse()` actually fires due timers when given a
+/// real (non-zero) duration to advance by, unlike a bare `pump()`.
+Future<void> _pumpSettled(WidgetTester tester, {int times = 10}) async {
+  for (var i = 0; i < times; i++) {
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+}
+
 void main() {
   late HttpClientAdapter originalAdapter;
   late Duration? originalConnectTimeout;
@@ -84,6 +102,12 @@ void main() {
 
     await pumpApp(tester, const PrintTemplateListScreen(), session: testSession());
     await tester.pump(); // let initState's postFrameCallback fire and _load() start
+    // One more pump with an explicit small duration to flush Dio's own
+    // internal zero-duration dispatch Timer (see _pumpSettled's doc comment)
+    // — the fake adapter's Completer still never resolves, so the screen
+    // stays in loading state; this just lets fake_async settle Dio's own
+    // housekeeping Timer before the test tears down.
+    await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
@@ -112,7 +136,7 @@ void main() {
     });
 
     await pumpApp(tester, const PrintTemplateListScreen(), session: testSession());
-    await tester.pumpAndSettle();
+    await _pumpSettled(tester);
 
     expect(find.text('GRN Custom A4'), findsOneWidget);
     expect(find.text('PO Draft'), findsOneWidget);
@@ -129,7 +153,7 @@ void main() {
     DioClient.instance.httpClientAdapter = _FakeHttpClientAdapter((_) async => _jsonResponse([]));
 
     await pumpApp(tester, const PrintTemplateListScreen(), session: testSession());
-    await tester.pumpAndSettle();
+    await _pumpSettled(tester);
 
     expect(
       find.text('No print templates yet — every document type prints using a built-in '
@@ -146,7 +170,7 @@ void main() {
         _FakeHttpClientAdapter((_) async => _jsonResponse({'message': 'boom'}, statusCode: 500));
 
     await pumpApp(tester, const PrintTemplateListScreen(), session: testSession());
-    await tester.pumpAndSettle();
+    await _pumpSettled(tester);
 
     expect(find.text('Could not load print templates.'), findsOneWidget);
   });
