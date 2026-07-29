@@ -47,13 +47,35 @@ ResponseBody _jsonResponse(Object data, {int statusCode = 200}) => ResponseBody.
 
 void main() {
   late HttpClientAdapter originalAdapter;
+  late Duration? originalConnectTimeout;
+  late Duration? originalReceiveTimeout;
+  late Duration? originalSendTimeout;
 
   setUp(() {
     originalAdapter = DioClient.instance.httpClientAdapter;
+    // DioClient's real Dio instance carries a 15s connect/receive timeout.
+    // flutter_test runs every test inside a FakeAsync zone, so Dio's
+    // internal timeout Timer becomes a fake-clock Timer that never fires
+    // (pumpAndSettle doesn't advance 15s of virtual time) and is never
+    // cancelled quickly enough for the fake adapter's use here — tripping
+    // "A Timer is still pending" / "pumpAndSettle timed out" even though
+    // the fake adapter itself resolves immediately. Disabling Dio's own
+    // timeout policy for the duration of these tests sidesteps that
+    // machinery entirely; a fake in-memory adapter never actually hangs in
+    // a way that needs a real timeout guard.
+    originalConnectTimeout = DioClient.instance.options.connectTimeout;
+    originalReceiveTimeout = DioClient.instance.options.receiveTimeout;
+    originalSendTimeout = DioClient.instance.options.sendTimeout;
+    DioClient.instance.options.connectTimeout = null;
+    DioClient.instance.options.receiveTimeout = null;
+    DioClient.instance.options.sendTimeout = null;
   });
 
   tearDown(() {
     DioClient.instance.httpClientAdapter = originalAdapter;
+    DioClient.instance.options.connectTimeout = originalConnectTimeout;
+    DioClient.instance.options.receiveTimeout = originalReceiveTimeout;
+    DioClient.instance.options.sendTimeout = originalSendTimeout;
   });
 
   testWidgets('shows a loading indicator before the first page resolves', (tester) async {
