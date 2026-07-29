@@ -9,6 +9,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sakal/core/network/dio_client.dart';
 import 'package:sakal/features/setup/presentation/screens/print_template_list_screen.dart';
 
+import '../../test_helpers/pump_app.dart';
+
 // DioClient's own request interceptor does `await _storage.read(...)`
 // (FlutterSecureStorage) on every single request, including the ones this
 // file's fake adapter serves. In a bare `flutter_test` run (dart VM target,
@@ -20,8 +22,6 @@ import 'package:sakal/features/setup/presentation/screens/print_template_list_sc
 // channel that resolves `read` to null (no stored token — the interceptor
 // already handles that by falling back to the anon key) unblocks it.
 const _secureStorageChannel = MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
-
-import '../../test_helpers/pump_app.dart';
 
 /// PrintTemplateListScreen is a real structural outlier in this batch: it has
 /// NO repository/provider layer at all — every read/write goes straight
