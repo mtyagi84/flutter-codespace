@@ -399,13 +399,16 @@ class _StockCountReviewEntryScreenState extends ConsumerState<StockCountReviewEn
     crossAxisAlignment: CrossAxisAlignment.center,
     mainAxisSize: MainAxisSize.min,
     children: [
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(_reviewNo != null ? 'Stock Count Review · $_reviewNo' : 'New Stock Count Review',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-        const SizedBox(height: 2),
-        _status == 'APPROVED' ? _statusChip() : Text(_reviewNo != null ? 'Draft' : 'Unsaved draft',
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-      ]),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_reviewNo != null ? 'Stock Count Review · $_reviewNo' : 'New Stock Count Review',
+              overflow: TextOverflow.ellipsis, maxLines: 1,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+          const SizedBox(height: 2),
+          _status == 'APPROVED' ? _statusChip() : Text(_reviewNo != null ? 'Draft' : 'Unsaved draft',
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        ]),
+      ),
     ],
   );
 
