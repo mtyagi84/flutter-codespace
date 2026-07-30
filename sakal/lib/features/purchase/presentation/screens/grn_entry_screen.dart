@@ -1327,22 +1327,25 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     crossAxisAlignment: CrossAxisAlignment.center,
     mainAxisSize: MainAxisSize.min,
     children: [
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(_grnNo != null ? 'Goods Receipt · $_grnNo' : 'New Goods Receipt',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-        const SizedBox(height: 2),
-        if (locked)
-          _statusChip(_status)
-        else
-          Row(children: [
-            Text(_grnNo != null ? 'Draft' : 'Unsaved draft',
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            if (_grnNo != null) ...[
-              const SizedBox(width: 8),
-              PendingSyncBadge(documentType: 'GRN', documentId: _grnNo!),
-            ],
-          ]),
-      ]),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_grnNo != null ? 'Goods Receipt · $_grnNo' : 'New Goods Receipt',
+              overflow: TextOverflow.ellipsis, maxLines: 1,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+          const SizedBox(height: 2),
+          if (locked)
+            _statusChip(_status)
+          else
+            Row(children: [
+              Text(_grnNo != null ? 'Draft' : 'Unsaved draft',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              if (_grnNo != null) ...[
+                const SizedBox(width: 8),
+                PendingSyncBadge(documentType: 'GRN', documentId: _grnNo!),
+              ],
+            ]),
+        ]),
+      ),
     ],
   );
 
