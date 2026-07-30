@@ -30,6 +30,16 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
   }
 }
 
+/// SakalFieldCard renders its label as a raw `RichText` (root TextSpan +
+/// an optional " *" child span for required fields), not wrapped in a
+/// `Text`/`Text.rich` widget — `find.text()`/`find.textContaining()` only
+/// reliably match `Text`/`EditableText`, not an arbitrary bare `RichText`
+/// built this way. Matching directly against the RichText's own
+/// `TextSpan.toPlainText()` sidesteps that ambiguity entirely.
+Finder _findFieldLabel(String label) => find.byWidgetPredicate(
+      (w) => w is RichText && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
+    );
+
 void main() {
   late MockStockTransferRequestRepository mockRepo;
 
@@ -61,11 +71,17 @@ void main() {
       await pumpApp(tester, const StockTransferRequestEntryScreen(), overrides: overrides(), session: testSession());
       await tester.pumpAndSettle();
 
+      // Rules out "the header card just never left its _loading state" as
+      // an alternative explanation for the label checks below — the title
+      // block renders unconditionally, but the header/lines cards (and
+      // their field labels) only render once _init() has finished.
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
       expect(find.text('New Stock Transfer Request'), findsOneWidget);
       expect(find.text('Unsaved draft'), findsOneWidget);
-      expect(find.textContaining('FROM LOCATION'), findsOneWidget);
-      expect(find.textContaining('TO LOCATION'), findsOneWidget);
-      expect(find.textContaining('REQUEST DATE'), findsOneWidget);
+      expect(_findFieldLabel('FROM LOCATION'), findsOneWidget);
+      expect(_findFieldLabel('TO LOCATION'), findsOneWidget);
+      expect(_findFieldLabel('REQUEST DATE'), findsOneWidget);
       expect(find.text('No lines yet — add a product.'), findsOneWidget);
       expect(find.text('Add Line'), findsOneWidget);
       expect(find.text('Save Draft'), findsOneWidget);

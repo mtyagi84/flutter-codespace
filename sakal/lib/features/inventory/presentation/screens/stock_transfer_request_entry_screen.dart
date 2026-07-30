@@ -440,19 +440,22 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
     crossAxisAlignment: CrossAxisAlignment.center,
     mainAxisSize: MainAxisSize.min,
     children: [
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(_requestNo != null ? 'Stock Transfer Request · $_requestNo' : 'New Stock Transfer Request',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-        const SizedBox(height: 2),
-        Row(children: [
-          _status != 'DRAFT' ? _statusChip(_status) : Text(_requestNo != null ? 'Draft' : 'Unsaved draft',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          if (_requestNo != null) ...[
-            const SizedBox(width: 8),
-            PendingSyncBadge(documentType: 'STOCK_TRANSFER_REQUEST', documentId: _requestNo!),
-          ],
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_requestNo != null ? 'Stock Transfer Request · $_requestNo' : 'New Stock Transfer Request',
+              overflow: TextOverflow.ellipsis, maxLines: 1,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+          const SizedBox(height: 2),
+          Row(children: [
+            _status != 'DRAFT' ? _statusChip(_status) : Text(_requestNo != null ? 'Draft' : 'Unsaved draft',
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            if (_requestNo != null) ...[
+              const SizedBox(width: 8),
+              PendingSyncBadge(documentType: 'STOCK_TRANSFER_REQUEST', documentId: _requestNo!),
+            ],
+          ]),
         ]),
-      ]),
+      ),
     ],
   );
 
