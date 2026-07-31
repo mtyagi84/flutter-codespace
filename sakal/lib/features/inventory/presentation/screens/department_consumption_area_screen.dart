@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
@@ -93,8 +95,9 @@ class _DepartmentConsumptionAreaScreenState extends ConsumerState<DepartmentCons
         }));
         _loadingRows = false;
       });
-    } catch (e) {
-      if (mounted) { setState(() => _loadingRows = false); _showSnack('Could not load links: $e', color: AppColors.negative); }
+    } catch (e, st) {
+      AppLogger.error('DepartmentConsumptionAreaLoadLinks', e, st);
+      if (mounted) { setState(() => _loadingRows = false); _showSnack(ErrorPresenter.format(e, action: 'load consumption area links'), color: AppColors.negative); }
     }
   }
 

@@ -4,6 +4,7 @@ import 'package:collection/collection.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -12,6 +13,7 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
@@ -470,8 +472,9 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
       for (final row in newLines) {
         if (row.isBatchTracked || row.isSerialTracked) unawaited(_loadCandidates(row));
       }
-    } catch (e) {
-      if (mounted) { setState(() => _loadingInvoiceLines = false); _showSnack('Could not load invoice lines: $e', color: AppColors.negative); }
+    } catch (e, st) {
+      AppLogger.error('SalesReturnLoadInvoiceLines', e, st);
+      if (mounted) { setState(() => _loadingInvoiceLines = false); _showSnack(ErrorPresenter.format(e, action: 'load invoice lines'), color: AppColors.negative); }
     }
   }
 
@@ -564,8 +567,9 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
             .toList();
         if (mounted) setState(() { row.serialCandidates = candidates; row.candidatesLoaded = true; });
       }
-    } catch (e) {
-      if (mounted) _showSnack('Could not load batch/serial data for "${row.productDisplay}": $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('SalesReturnLoadBatchSerial', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'load batch/serial data for "${row.productDisplay}"'), color: AppColors.negative);
     }
   }
 
@@ -847,8 +851,9 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
       final template = await ref.read(printTemplateProvider('SALES_RETURN').future);
       final document = _buildPrintDocument(company);
       await PrintEngine.printDocument(template: template, document: document, filename: '$_returnNo.pdf');
-    } catch (e) {
-      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('SalesReturnPrint', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this return'), color: AppColors.negative);
     } finally {
       if (mounted) setState(() => _printing = false);
     }

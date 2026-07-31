@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -11,6 +12,7 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
@@ -232,8 +234,9 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
     try {
       final rows = await _ds.getReceivableTransfers(clientId: session.clientId, companyId: session.companyId);
       if (mounted) setState(() { _receivableTransfers = rows; _loadingTransfers = false; });
-    } catch (e) {
-      if (mounted) { setState(() => _loadingTransfers = false); _showSnack('Could not load receivable transfers: $e', color: AppColors.negative); }
+    } catch (e, st) {
+      AppLogger.error('StockReceiptLoadReceivableTransfers', e, st);
+      if (mounted) { setState(() => _loadingTransfers = false); _showSnack(ErrorPresenter.format(e, action: 'load receivable transfers'), color: AppColors.negative); }
     }
   }
 
@@ -279,8 +282,9 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
       for (final row in newRows) {
         if (row.isBatchTracked || row.isSerialTracked) unawaited(_loadCandidatesForNewLine(row));
       }
-    } catch (e) {
-      if (mounted) _showSnack('Could not load transfer lines: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('StockReceiptLoadTransferLines', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'load transfer lines'), color: AppColors.negative);
     }
   }
 
@@ -305,8 +309,9 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
         final candidates = rows.map((s) => _ReceiptSerialCandidate(serialNo: s['serial_no'] as String)).toList();
         if (mounted) setState(() { row.serialCandidates = candidates; row.candidatesLoaded = true; });
       }
-    } catch (e) {
-      if (mounted) _showSnack('Could not load batch/serial data for "${row.productDisplay}": $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('StockReceiptLoadCandidatesForNewLine', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'load batch/serial data for "${row.productDisplay}"'), color: AppColors.negative);
     }
   }
 
@@ -343,8 +348,9 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
         final candidates = dispatched.map((s) => _ReceiptSerialCandidate(serialNo: s['serial_no'] as String, selected: savedSet.contains(s['serial_no']))).toList();
         if (mounted) setState(() { row.serialCandidates = candidates; row.candidatesLoaded = true; });
       }
-    } catch (e) {
-      if (mounted) _showSnack('Could not load batch/serial data for "${row.productDisplay}": $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('StockReceiptLoadExistingCandidates', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'load batch/serial data for "${row.productDisplay}"'), color: AppColors.negative);
     }
   }
 
@@ -564,8 +570,9 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
       final template = await ref.read(printTemplateProvider('STOCK_RECEIPT').future);
       final document = _buildPrintDocument(company);
       await PrintEngine.printDocument(template: template, document: document, filename: '$_receiptNo.pdf');
-    } catch (e) {
-      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('StockReceiptPrint', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this stock receipt'), color: AppColors.negative);
     } finally {
       if (mounted) setState(() => _printing = false);
     }

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_field_registry.dart';
@@ -11,6 +12,7 @@ import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
@@ -367,9 +369,10 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
       final msg = e.response?.data?['message'] as String? ?? 'Save failed.';
       if (mounted) setState(() => _saving = false);
       if (mounted) _showSnack(msg, color: AppColors.negative);
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.error('PrintTemplateDesignerSave', e, st);
       if (mounted) setState(() => _saving = false);
-      if (mounted) _showSnack('Unexpected error: $e', color: AppColors.negative);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'save this template'), color: AppColors.negative);
     }
   }
 
@@ -389,8 +392,9 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
         document: PrintSampleData.forDocumentType(_documentType),
         filename: 'template_preview.pdf',
       );
-    } catch (e) {
-      if (mounted) _showSnack('Preview failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('PrintTemplateDesignerPreview', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'preview this template'), color: AppColors.negative);
     } finally {
       if (mounted) setState(() => _printing = false);
     }

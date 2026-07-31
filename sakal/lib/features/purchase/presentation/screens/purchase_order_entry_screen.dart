@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/master_type_keys.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -10,6 +11,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
@@ -444,8 +446,9 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     } on DioException catch (e) {
       if (mounted) _showSnack('Barcode lookup failed: ${_serverError(e)}', color: AppColors.negative);
       return;
-    } catch (e) {
-      if (mounted) _showSnack('Barcode lookup failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('PoBarcodeLookup', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'look up this barcode'), color: AppColors.negative);
       return;
     }
     if (!mounted) return;
@@ -802,8 +805,9 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
       final template = await ref.read(printTemplateProvider('PURCHASE_ORDER').future);
       final document = _buildPrintDocument(company);
       await PrintEngine.printDocument(template: template, document: document, filename: '$_orderNo.pdf');
-    } catch (e) {
-      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('PoPrint', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this document'), color: AppColors.negative);
     } finally {
       if (mounted) setState(() => _printing = false);
     }

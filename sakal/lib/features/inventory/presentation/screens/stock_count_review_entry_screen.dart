@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -10,6 +11,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
@@ -127,8 +129,9 @@ class _StockCountReviewEntryScreenState extends ConsumerState<StockCountReviewEn
         locationId: _locationId!, currentReviewNo: _reviewNo,
       );
       if (mounted) setState(() => _availableCounts = counts);
-    } catch (e) {
-      if (mounted) _showSnack('Could not load submitted counts: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('StockCountReviewLoadSubmittedCounts', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'load submitted counts'), color: AppColors.negative);
     }
   }
 
@@ -203,8 +206,9 @@ class _StockCountReviewEntryScreenState extends ConsumerState<StockCountReviewEn
         reviewNo: _reviewNo!, reviewDate: _fmtDate(_reviewDate),
       );
       if (mounted) setState(() { _variance = variance; _refreshingVariance = false; });
-    } catch (e) {
-      if (mounted) { setState(() => _refreshingVariance = false); _showSnack('Could not compute variance: $e', color: AppColors.negative); }
+    } catch (e, st) {
+      AppLogger.error('StockCountReviewComputeVariance', e, st);
+      if (mounted) { setState(() => _refreshingVariance = false); _showSnack(ErrorPresenter.format(e, action: 'compute variance'), color: AppColors.negative); }
     }
   }
 
@@ -304,8 +308,9 @@ class _StockCountReviewEntryScreenState extends ConsumerState<StockCountReviewEn
       final template = await ref.read(printTemplateProvider('STOCK_COUNT_REVIEW').future);
       final document = _buildPrintDocument(company);
       await PrintEngine.printDocument(template: template, document: document, filename: '$_reviewNo.pdf');
-    } catch (e) {
-      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('StockCountReviewPrint', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this stock count review'), color: AppColors.negative);
     } finally {
       if (mounted) setState(() => _printing = false);
     }

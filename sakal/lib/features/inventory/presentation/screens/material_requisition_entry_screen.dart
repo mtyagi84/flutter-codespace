@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -11,6 +12,7 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
@@ -165,8 +167,9 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
         clientId: session.clientId, companyId: session.companyId, departmentId: row.departmentId!,
       );
       if (mounted) setState(() => row.areaOptions = areas);
-    } catch (e) {
-      if (mounted) _showSnack('Could not load consumption areas: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('MaterialRequisitionLoadConsumptionAreas', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'load consumption areas'), color: AppColors.negative);
     }
   }
 
@@ -201,8 +204,9 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
     Map<String, dynamic>? match;
     try {
       match = await _ds.getProductByBarcode(clientId: session.clientId, companyId: session.companyId, barcode: barcode);
-    } catch (e) {
-      if (mounted) _showSnack('Barcode lookup failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('MaterialRequisitionBarcodeLookup', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'look up this barcode'), color: AppColors.negative);
       return;
     }
     if (!mounted) return;
@@ -379,8 +383,9 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
       final template = await ref.read(printTemplateProvider('MATERIAL_REQUISITION').future);
       final document = _buildPrintDocument(company);
       await PrintEngine.printDocument(template: template, document: document, filename: '$_requisitionNo.pdf');
-    } catch (e) {
-      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('MaterialRequisitionPrint', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this material requisition'), color: AppColors.negative);
     } finally {
       if (mounted) setState(() => _printing = false);
     }

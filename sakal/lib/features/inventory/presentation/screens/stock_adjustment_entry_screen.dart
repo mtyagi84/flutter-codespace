@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -11,6 +12,7 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
@@ -290,8 +292,9 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
           if (mounted) setState(() { row.serialCandidates = candidates; row.candidatesLoaded = true; });
         }
       }
-    } catch (e) {
-      if (mounted) _showSnack('Could not load batch/serial data for "${row.productDisplay}": $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('StockAdjustmentLoadSavedBatchSerial', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'load batch/serial data for "${row.productDisplay}"'), color: AppColors.negative);
     }
   }
 
@@ -344,8 +347,9 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
     Map<String, dynamic>? match;
     try {
       match = await _ds.getProductByBarcode(clientId: session.clientId, companyId: session.companyId, barcode: barcode);
-    } catch (e) {
-      if (mounted) _showSnack('Barcode lookup failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('StockAdjustmentBarcodeLookup', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'look up this barcode'), color: AppColors.negative);
       return;
     }
     if (!mounted) return;
@@ -411,8 +415,9 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
         final candidates = rows.map((s) => _AdjSerialCandidate(serialNo: s['serial_no'] as String)).toList();
         if (mounted) setState(() { row.serialCandidates = candidates; row.candidatesLoaded = true; });
       }
-    } catch (e) {
-      if (mounted) _showSnack('Could not load batch/serial data for "${row.productDisplay}": $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('StockAdjustmentLoadDirectionCandidates', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'load batch/serial data for "${row.productDisplay}"'), color: AppColors.negative);
     }
   }
 
@@ -639,8 +644,9 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
       final template = await ref.read(printTemplateProvider('STOCK_ADJUSTMENT').future);
       final document = _buildPrintDocument(company);
       await PrintEngine.printDocument(template: template, document: document, filename: '$_adjustmentNo.pdf');
-    } catch (e) {
-      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('StockAdjustmentPrint', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this stock adjustment'), color: AppColors.negative);
     } finally {
       if (mounted) setState(() => _printing = false);
     }

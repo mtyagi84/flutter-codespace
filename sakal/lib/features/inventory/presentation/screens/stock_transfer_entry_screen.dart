@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -11,6 +12,7 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
@@ -310,8 +312,9 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
         }
         if (mounted) setState(() { row.serialCandidates = candidates.values.toList(); row.candidatesLoaded = true; });
       }
-    } catch (e) {
-      if (mounted) _showSnack('Could not load batch/serial data for "${row.productDisplay}": $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('StockTransferLoadExistingCandidates', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'load batch/serial data for "${row.productDisplay}"'), color: AppColors.negative);
     }
   }
 
@@ -339,8 +342,9 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
     try {
       final rows = await _ds.getFulfillableRequests(clientId: session.clientId, companyId: session.companyId, fromLocationId: _fromLocationId!);
       if (mounted) setState(() { _fulfillableRequests = rows; _loadingRequests = false; });
-    } catch (e) {
-      if (mounted) { setState(() => _loadingRequests = false); _showSnack('Could not load fulfillable requests: $e', color: AppColors.negative); }
+    } catch (e, st) {
+      AppLogger.error('StockTransferLoadFulfillableRequests', e, st);
+      if (mounted) { setState(() => _loadingRequests = false); _showSnack(ErrorPresenter.format(e, action: 'load fulfillable requests'), color: AppColors.negative); }
     }
   }
 
@@ -404,8 +408,9 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
         if (row.isBatchTracked || row.isSerialTracked) unawaited(_loadCandidatesForNewLine(row));
       }
       unawaited(_refreshCostPrices());
-    } catch (e) {
-      if (mounted) _showSnack('Could not load request lines: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('StockTransferLoadRequestLines', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'load request lines'), color: AppColors.negative);
     }
   }
 
@@ -443,8 +448,9 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
     Map<String, dynamic>? match;
     try {
       match = await _ds.getProductByBarcode(clientId: session.clientId, companyId: session.companyId, barcode: barcode);
-    } catch (e) {
-      if (mounted) _showSnack('Barcode lookup failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('StockTransferBarcodeLookup', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'look up this barcode'), color: AppColors.negative);
       return;
     }
     if (!mounted) return;
@@ -474,8 +480,9 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
         final candidates = rows.map((s) => _TransferSerialCandidate(serialNo: s['serial_no'] as String)).toList();
         if (mounted) setState(() { row.serialCandidates = candidates; row.candidatesLoaded = true; });
       }
-    } catch (e) {
-      if (mounted) _showSnack('Could not load batch/serial data for "${row.productDisplay}": $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('StockTransferLoadCandidatesForNewLine', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'load batch/serial data for "${row.productDisplay}"'), color: AppColors.negative);
     }
   }
 
@@ -746,8 +753,9 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
       final template = await ref.read(printTemplateProvider('STOCK_TRANSFER').future);
       final document = _buildPrintDocument(company);
       await PrintEngine.printDocument(template: template, document: document, filename: '$_transferNo.pdf');
-    } catch (e) {
-      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('StockTransferPrint', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this stock transfer'), color: AppColors.negative);
     } finally {
       if (mounted) setState(() => _printing = false);
     }

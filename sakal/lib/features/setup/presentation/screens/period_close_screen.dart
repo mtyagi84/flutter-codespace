@@ -5,10 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
@@ -143,10 +145,11 @@ class _PeriodCloseScreenState extends ConsumerState<PeriodCloseScreen>
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text(msg), backgroundColor: AppColors.negative));
                   }
-                } catch (e) {
+                } catch (e, st) {
+                  AppLogger.error('PeriodCloseLock', e, st);
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Unexpected error: $e'), backgroundColor: AppColors.negative));
+                      SnackBar(content: Text(ErrorPresenter.format(e, action: 'lock this period')), backgroundColor: AppColors.negative));
                   }
                 }
               },
@@ -206,10 +209,11 @@ class _PeriodCloseScreenState extends ConsumerState<PeriodCloseScreen>
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text(msg), backgroundColor: AppColors.negative));
                 }
-              } catch (e) {
+              } catch (e, st) {
+                AppLogger.error('PeriodCloseReopen', e, st);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Unexpected error: $e'), backgroundColor: AppColors.negative));
+                    SnackBar(content: Text(ErrorPresenter.format(e, action: 'reopen this period')), backgroundColor: AppColors.negative));
                 }
               }
             },
@@ -218,6 +222,7 @@ class _PeriodCloseScreenState extends ConsumerState<PeriodCloseScreen>
         ],
       ),
     );
+    reasonCtrl.dispose();
   }
 
   static Widget _req(String text) => RichText(

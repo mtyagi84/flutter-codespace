@@ -2,11 +2,13 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/printing/print_field_registry.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
@@ -95,8 +97,9 @@ class _PrintTemplateListScreenState extends ConsumerState<PrintTemplateListScree
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] as String? ?? 'Could not set default template.';
       if (mounted) _showSnack(msg, color: AppColors.negative);
-    } catch (e) {
-      if (mounted) _showSnack('Unexpected error: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('PrintTemplateSetDefault', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'set the default template'), color: AppColors.negative);
     }
   }
 

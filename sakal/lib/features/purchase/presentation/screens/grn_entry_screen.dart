@@ -577,8 +577,9 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     List<Map<String, dynamic>> suppliers;
     try {
       suppliers = await _ds.getSuppliersWithOpenPos(clientId: session.clientId, companyId: session.companyId);
-    } catch (e) {
-      if (mounted) _showSnack('Could not load suppliers with open purchase orders: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('GrnLoadSuppliersWithOpenPos', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'load suppliers with open purchase orders'), color: AppColors.negative);
       if (mounted) setState(() => _receiptMode = 'DIRECT');
       return;
     }
@@ -665,8 +666,9 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     try {
       openPos = await _ds.getOpenPurchaseOrdersForSupplier(
           clientId: session.clientId, companyId: session.companyId, supplierId: _supplierId!);
-    } catch (e) {
-      if (mounted) _showSnack('Could not load open purchase orders: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('GrnLoadOpenPos', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'load open purchase orders'), color: AppColors.negative);
       return false;
     }
     if (!isInitialWizard) {
@@ -867,8 +869,9 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
         setState(() {});
         if (addedLines > 0) _showSnack('Added $addedLines line(s) from the selected order(s).', color: AppColors.positive);
       }
-    } catch (e) {
-      if (mounted) _showSnack('Could not add from PO: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('GrnAddFromPo', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'add lines from the selected purchase order'), color: AppColors.negative);
     } finally {
       if (mounted) setState(() => _consolidating = false);
     }
@@ -1148,8 +1151,9 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
       final template = await ref.read(printTemplateProvider('GRN').future);
       final document = _buildPrintDocument(company);
       await PrintEngine.printDocument(template: template, document: document, filename: '$_grnNo.pdf');
-    } catch (e) {
-      if (mounted) _showSnack('Print failed: $e', color: AppColors.negative);
+    } catch (e, st) {
+      AppLogger.error('GrnPrint', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this document'), color: AppColors.negative);
     } finally {
       if (mounted) setState(() => _printing = false);
     }

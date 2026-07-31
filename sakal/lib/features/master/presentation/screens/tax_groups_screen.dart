@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
@@ -174,10 +176,11 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
       }
       _closePanel();
       await _load();
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.error('TaxGroupsSave', e, st);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save failed: $e'), backgroundColor: AppColors.negative));
+          SnackBar(content: Text(ErrorPresenter.format(e, action: 'save this tax group')), backgroundColor: AppColors.negative));
       }
     } finally {
       setState(() => _saving = false);
