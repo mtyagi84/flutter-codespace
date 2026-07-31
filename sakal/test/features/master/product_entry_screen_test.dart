@@ -12,6 +12,7 @@ import 'package:sakal/features/master/data/models/tax_group_model.dart';
 import 'package:sakal/features/master/domain/repositories/products_repository.dart';
 import 'package:sakal/features/master/presentation/providers/products_providers.dart';
 import 'package:sakal/features/master/presentation/screens/product_entry_screen.dart';
+import 'package:sakal/core/widgets/sakal_field_card.dart';
 
 import '../../test_helpers/pump_app.dart';
 
@@ -251,6 +252,78 @@ void main() {
       // transient SnackBar ('Product saved.') — asserting the banner text
       // avoids racing the SnackBar's ~4s auto-dismiss timer.
       expect(find.text('Product saved successfully.'), findsOneWidget);
+    });
+  });
+
+  // Product Master has no Product/Customer picker of its own (it IS
+  // product master data) — but it does have one other SakalAutocomplete-
+  // based picker, the Category field (`_buildCategoryPicker`,
+  // Classification section), never exercised by Phase 5's own tests
+  // (setUp()'s default `getCategories` stub returns an empty list, so the
+  // picker was always effectively untestable before this group re-stubs
+  // it). Its optionsBuilder filters an already-loaded `_categories` list
+  // purely client-side/synchronously (`getCategories()` is called once in
+  // `_loadRefs()`, no per-keystroke repository call) — pumpAndSettle()
+  // after typing is only needed to let RawAutocomplete's own OverlayEntry
+  // render, not to resolve a real async gap.
+  group('Category autocomplete interaction (real search + select)', () {
+    // Stricter than a plain "contains" label match — see
+    // grn_entry_screen_test.dart's own identical helper for the full
+    // rationale (SakalFieldCard appends a child TextSpan(' *') for
+    // required fields — Category itself isn't required on this screen,
+    // but the helper handles both forms regardless).
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(
+                of: find.byWidgetPredicate((w) =>
+                    w is RichText &&
+                    (w.text.toPlainText().trim().toUpperCase() == label.toUpperCase() ||
+                        w.text.toPlainText().trim().toUpperCase() == '${label.toUpperCase()} *')),
+                matching: find.byType(SakalFieldCard),
+              ).first,
+          matching: matcher(),
+        );
+
+    testWidgets('typing into the Category field shows the matching option, and tapping it selects the category', (tester) async {
+      // Overrides setUp()'s own default empty-list stub for this test only.
+      when(() => mockRepo.getCategories(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+          )).thenAnswer((_) async => [
+            const ItemCategoryModel(
+              id: 'cat-001',
+              clientId: 'client-001',
+              companyId: 'company-001',
+              levelNo: 1,
+              categoryName: 'Beverages',
+              sortOrder: 1,
+              isActive: true,
+              isDeleted: false,
+            ),
+          ]);
+
+      await pumpApp(tester, const ProductEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      final categoryField = fieldInCard('Category', () => find.byType(TextFormField));
+      await tester.enterText(categoryField, 'Bev');
+      // optionsBuilder filters the already-loaded _categories list
+      // synchronously — pumpAndSettle just lets RawAutocomplete's
+      // OverlayEntry render the filtered options.
+      await tester.pumpAndSettle();
+
+      expect(find.text('Beverages'), findsOneWidget);
+
+      await tester.tap(find.text('Beverages'));
+      // The Category field carries `key: ValueKey(_categoryId)` — selecting
+      // changes _categoryId from null, forcing a remount; pumpAndSettle
+      // lets that finish.
+      await tester.pumpAndSettle();
+
+      // onSelected sets _categoryId/_categoryDisplay (via _catPaths, a root
+      // category's own path is just its bare name) — the field's own
+      // displayed value is the simplest observable proof the selection
+      // landed, without needing to save and inspect a payload.
+      expect(find.text('Beverages'), findsOneWidget);
     });
   });
 }

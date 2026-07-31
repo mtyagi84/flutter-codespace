@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/sales/domain/repositories/sales_invoice_repository.dart';
 import 'package:sakal/features/sales/presentation/providers/sales_invoice_providers.dart';
 import 'package:sakal/features/sales/presentation/screens/sales_invoice_entry_screen.dart';
@@ -392,6 +393,158 @@ void main() {
       expect(line['barcode'], ''); // e.value.matchedBarcode ?? ''
 
       expect(find.text('Sales Invoice SI-001 completed.'), findsOneWidget);
+    });
+  });
+
+  // Every prior Sales Invoice test batch (Phase 5) deliberately excluded
+  // driving SakalAutocomplete through real user interaction — this group
+  // drives the screen's own two pickers, Customer (header) and Product
+  // (per line). The default fixture is DIRECT + CASH, where Customer is a
+  // plain read-only SakalFieldCard.readOnly (resolved from Quick Invoice
+  // Setup, no picker to drive at all) — see the screen's own
+  // `(_saleType == 'CREDIT' && !_isAgainstSource) ? SakalAutocomplete... :
+  // SakalFieldCard.readOnly` branch around _buildCashHeaderSection's
+  // sibling. Switching to Credit via the Cash/Credit SegmentedButton is
+  // what turns it into a real, drivable field. Both pickers call the
+  // repository ASYNCHRONOUSLY per keystroke: Customer via
+  // `accountsProvider.future` (a cached FutureProvider, filtered
+  // client-side once resolved) and Product via
+  // `ds.getProductsForPicker(..., search: v.text)` (a real per-keystroke
+  // repository call, unlike GRN's own client-side `_searchField` helper) —
+  // pumpAndSettle() after typing lets either resolve before the overlay's
+  // filtered options are asserted.
+  group('Customer + Product autocomplete interaction (real search + select, DIRECT + CREDIT)', () {
+    // Stricter than a plain "contains" label match — see
+    // grn_entry_screen_test.dart's own identical helper for the full
+    // rationale (SakalFieldCard appends a child TextSpan(' *') for required
+    // fields, and a bare `.contains()` match on "Customer" would also hit
+    // "Walk-in Customer Name (optional)" in Cash mode).
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(
+                of: find.byWidgetPredicate((w) =>
+                    w is RichText &&
+                    (w.text.toPlainText().trim().toUpperCase() == label.toUpperCase() ||
+                        w.text.toPlainText().trim().toUpperCase() == '${label.toUpperCase()} *')),
+                matching: find.byType(SakalFieldCard),
+              ).first,
+          matching: matcher(),
+        );
+
+    // accountsProvider isn't in the base overrides() (no test needed it
+    // until now — the CASH-mode fixture never touches it) — added only for
+    // this group, via spread, so the other 6 tests above stay unaffected.
+    List<Override> creditOverrides() => [
+          ...overrides(),
+          accountsProvider.overrideWith((ref) async => [
+                {'id': 'cust-002', 'account_code': 'CUS-002', 'account_name': 'Acme Corp', 'account_nature': 'Customer', 'posting_allowed': true},
+              ]),
+        ];
+
+    testWidgets('switching to Credit shows an editable Customer field; typing and selecting a customer updates the display', (tester) async {
+      when(() => mockRepo.getCustomerDetails(customerId: any(named: 'customerId')))
+          .thenAnswer((_) async => {'rim_currencies': {'currency_id': 'USD'}});
+
+      await pumpApp(tester, const SalesInvoiceEntryScreen(), overrides: creditOverrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      // Default is Cash, where Customer is read-only (resolved from Quick
+      // Invoice Setup) — switch to Credit first, which is what makes the
+      // field a real, drivable SakalAutocomplete. The Sale Type
+      // SegmentedButton is only rendered `if (_isNew)`, true here.
+      await tester.tap(find.text('Credit'));
+      await tester.pumpAndSettle();
+
+      final customerField = fieldInCard('Customer', () => find.byType(TextFormField));
+      await tester.enterText(customerField, 'Acme');
+      // optionsBuilder awaits accountsProvider.future then filters
+      // client-side — pumpAndSettle resolves that Future and lets
+      // RawAutocomplete's OverlayEntry render the filtered options.
+      await tester.pumpAndSettle();
+
+      expect(find.text('[CUS-002] Acme Corp'), findsOneWidget);
+
+      await tester.tap(find.text('[CUS-002] Acme Corp'));
+      await tester.pumpAndSettle();
+
+      // onSelected sets _customerId/_customerDisplay — RawAutocomplete's
+      // own field controller already reflects the selection text (this
+      // screen doesn't key the Customer field to _customerDisplay, so no
+      // remount is even needed for this to show up), directly observable
+      // without saving and inspecting a payload.
+      expect(find.text('[CUS-002] Acme Corp'), findsOneWidget);
+    });
+
+    testWidgets('selecting a Customer then a Product on the auto-seeded line resolves price and updates the line title and rate', (tester) async {
+      when(() => mockRepo.getCustomerDetails(customerId: any(named: 'customerId')))
+          .thenAnswer((_) async => {'rim_currencies': {'currency_id': 'USD'}});
+      when(() => mockRepo.getProductsForPicker(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            search: any(named: 'search'),
+          )).thenAnswer((_) async => [
+            {
+              'id': 'prod-001',
+              'product_code': 'WID-A',
+              'product_name': 'Widget A',
+              'base_uom_id': 'uom-001',
+              'uom': {'description': 'Piece'},
+              'tracking_type': 'NONE',
+              'sales_tax_group_id': null,
+            },
+          ]);
+      when(() => mockRepo.getActivePrice(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            locationId: any(named: 'locationId'),
+            productId: any(named: 'productId'),
+            uomId: any(named: 'uomId'),
+            customerId: any(named: 'customerId'),
+            asOfDate: any(named: 'asOfDate'),
+            currencyCode: any(named: 'currencyCode'),
+          )).thenAnswer((_) async => {'selling_price': 42.5, 'entry_no': 'PM-001'});
+
+      await pumpApp(tester, const SalesInvoiceEntryScreen(), overrides: creditOverrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Credit'));
+      await tester.pumpAndSettle();
+
+      final customerField = fieldInCard('Customer', () => find.byType(TextFormField));
+      await tester.enterText(customerField, 'Acme');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('[CUS-002] Acme Corp'));
+      await tester.pumpAndSettle();
+
+      // Before any product is picked, the auto-seeded blank line's own
+      // title falls back to 'New Line' (`row.productDisplay.isEmpty ?
+      // 'New Line' : row.productDisplay` — no numeric prefix on this
+      // screen's own SakalLineItemCard title, unlike GRN/Price Master's
+      // own '${idx+1}. ...' convention).
+      expect(find.text('New Line'), findsOneWidget);
+
+      final productField = fieldInCard('Product', () => find.byType(TextFormField));
+      await tester.enterText(productField, 'Widget');
+      await tester.pumpAndSettle();
+
+      expect(find.text('[WID-A] Widget A'), findsOneWidget);
+
+      await tester.tap(find.text('[WID-A] Widget A'));
+      await tester.pumpAndSettle();
+
+      // _onProductSelected sets row.productId/productDisplay (used
+      // directly as the SakalLineItemCard's own title, a plain Text that
+      // updates on every rebuild) and, since a customer + currency were
+      // already resolved above, calls _resolvePrice -> getActivePrice ->
+      // row.rateCtrl.text = '42.5'. The Rate field is a
+      // SakalFormattedNumberField wrapping that controller: its own
+      // display controller reformats synchronously the moment the
+      // underlying controller's text changes (a real ChangeNotifier
+      // listener, not something that waits for a rebuild), so the widget
+      // actually rendered shows the grouped/rounded "42.50", not the raw
+      // "42.5" the repository returned.
+      expect(find.text('[WID-A] Widget A'), findsOneWidget);
+      final rateField = fieldInCard('Rate', () => find.byType(TextFormField));
+      expect(tester.widget<TextFormField>(rateField).controller!.text, '42.50');
     });
   });
 }

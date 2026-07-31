@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/sales/domain/repositories/price_master_repository.dart';
 import 'package:sakal/features/sales/presentation/providers/price_master_providers.dart';
 import 'package:sakal/features/sales/presentation/screens/price_master_entry_screen.dart';
@@ -294,6 +295,85 @@ void main() {
       expect(line['remarks'], 'Line remark A');
 
       expect(find.text('Price Master batch PM-001 saved.'), findsOneWidget);
+    });
+  });
+
+  // Every prior Price Master test batch (Phase 5) deliberately excluded
+  // driving SakalAutocomplete through real user interaction — this group
+  // drives the screen's own Product picker on a freshly added line
+  // (`_buildLinesCard`'s productField). Unlike GRN/Sales Invoice, this
+  // screen's optionsBuilder filters an already-loaded `_products` list
+  // purely client-side/synchronously (`_ds.getProductsForPicker()` is
+  // called once in _init(), no `search:` per keystroke) — so
+  // pumpAndSettle() after typing is only needed to let RawAutocomplete's
+  // own OverlayEntry render, not to resolve a real async gap.
+  group('Product autocomplete interaction on a freshly added line (real search + select)', () {
+    // Stricter than a plain "contains" label match — see
+    // grn_entry_screen_test.dart's own identical helper for the full
+    // rationale (SakalFieldCard appends a child TextSpan(' *') for
+    // required fields).
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(
+                of: find.byWidgetPredicate((w) =>
+                    w is RichText &&
+                    (w.text.toPlainText().trim().toUpperCase() == label.toUpperCase() ||
+                        w.text.toPlainText().trim().toUpperCase() == '${label.toUpperCase()} *')),
+                matching: find.byType(SakalFieldCard),
+              ).first,
+          matching: matcher(),
+        );
+
+    testWidgets('typing into the Product field on a freshly added line shows the matching option, and selecting it loads UOM options and Cost Price',
+        (tester) async {
+      stubBaseline(); // getProductsForPicker() -> one product, WID-A, cost_currency_id ccy-usd
+      when(() => mockRepo.getProductUoms('prod-001')).thenAnswer((_) async => [
+            {
+              'uom_id': 'uom-001',
+              'uom': {'description': 'Piece'},
+              'conversion_factor': 1,
+              'is_base_uom': true,
+            },
+          ]);
+      when(() => mockRepo.getProductLocationCost(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            locationId: any(named: 'locationId'),
+            productId: any(named: 'productId'),
+          )).thenAnswer((_) async => {'cost_price': 45.0, 'cost_price_specific': null});
+
+      await pumpApp(tester, const PriceMasterEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Add Line'));
+      await tester.pumpAndSettle();
+
+      // Before any product is picked, the fresh line's own title falls
+      // back to 'New Line' (`'${idx+1}. ${row.productDisplay.isEmpty ?
+      // 'New Line' : row.productDisplay}'`).
+      expect(find.text('1. New Line'), findsOneWidget);
+
+      final productField = fieldInCard('Product', () => find.byType(TextFormField));
+      await tester.enterText(productField, 'Widget');
+      await tester.pumpAndSettle();
+
+      expect(find.text('[WID-A] Widget A'), findsOneWidget);
+
+      await tester.tap(find.text('[WID-A] Widget A'));
+      // The Product field carries `key: ValueKey('${row.hashCode}-${row.productDisplay}')`
+      // — selecting a product changes productDisplay, forcing a remount;
+      // pumpAndSettle also lets the two chained async calls
+      // (_loadUomOptions then _refreshLineCost) resolve.
+      await tester.pumpAndSettle();
+
+      // _onProductSelected sets row.productId/productDisplay (used
+      // directly in the SakalLineItemCard's own title), then
+      // _loadUomOptions auto-selects the single base UOM candidate, then
+      // _refreshLineCost resolves Cost Price — currency defaults to base
+      // (USD) on a new batch, so the three-way rule's first branch
+      // applies directly: resolvedCost = cost_price (45.0).
+      expect(find.text('1. [WID-A] Widget A'), findsOneWidget);
+      expect(find.text('Piece'), findsOneWidget); // UOM dropdown, auto-selected
+      expect(find.text('45.00'), findsOneWidget); // Cost Price, read-only, toStringAsFixed(2)
     });
   });
 }

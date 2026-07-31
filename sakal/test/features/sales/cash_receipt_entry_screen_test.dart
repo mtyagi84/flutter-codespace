@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/sales/domain/repositories/cash_receipt_repository.dart';
 import 'package:sakal/features/sales/presentation/providers/cash_receipt_providers.dart';
 import 'package:sakal/features/sales/presentation/screens/cash_receipt_entry_screen.dart';
@@ -316,6 +317,97 @@ void main() {
           )).called(1);
 
       expect(find.text('Cash Receipt CR-001 collected and posted.'), findsOneWidget);
+    });
+  });
+
+  // Every prior Cash Receipt test batch (Phase 5) deliberately excluded
+  // driving SakalAutocomplete through real user interaction — this group
+  // drives the screen's own single picker, the header Customer field
+  // (`_buildCustomerSection`). Unlike GRN's own client-side
+  // `_searchField` filter, this screen's optionsBuilder is a real
+  // per-keystroke repository call — `_searchCustomers(query)` ->
+  // `_ds.getCustomersWithPendingBills(..., search: query)` — so
+  // pumpAndSettle() after typing is what resolves that Future and lets
+  // RawAutocomplete's OverlayEntry render the filtered options.
+  group('Customer autocomplete interaction (real search + select, loads pending bills)', () {
+    // Stricter than a plain "contains" label match — see
+    // grn_entry_screen_test.dart's own identical helper for the full
+    // rationale (SakalFieldCard appends a child TextSpan(' *') for
+    // required fields).
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(
+                of: find.byWidgetPredicate((w) =>
+                    w is RichText &&
+                    (w.text.toPlainText().trim().toUpperCase() == label.toUpperCase() ||
+                        w.text.toPlainText().trim().toUpperCase() == '${label.toUpperCase()} *')),
+                matching: find.byType(SakalFieldCard),
+              ).first,
+          matching: matcher(),
+        );
+
+    testWidgets("typing into the Customer field shows the matching option, and selecting it loads that customer's pending bills", (tester) async {
+      stubBaseline();
+      when(() => mockRepo.getCustomersWithPendingBills(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            locationId: any(named: 'locationId'),
+            search: any(named: 'search'),
+          )).thenAnswer((_) async => [
+            {
+              'account_id': 'cust-001',
+              'account': {'account_code': 'CUS01', 'account_name': 'Customer One'},
+            },
+          ]);
+      // Same fixture shape (SI-001, EUR, 700) as the existing resume-flow
+      // test above, deliberately reused so this test can piggyback on
+      // stubBaseline()'s own EUR->USD (1.1) / EUR->FC (2.5) exchange-rate
+      // stubs instead of adding new ones.
+      when(() => mockRepo.getPendingBills(
+            companyId: any(named: 'companyId'),
+            locationId: any(named: 'locationId'),
+            accountId: any(named: 'accountId'),
+          )).thenAnswer((_) async => [
+            {
+              'inv_bill_no': 'SI-001',
+              'inv_bill_date': '2026-07-10',
+              'party_currency': 'EUR',
+              'balance_amount': 700,
+            },
+          ]);
+
+      await pumpApp(tester, const CashReceiptEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      // No customer picked yet -> the whole Pending Invoices section is
+      // gated on `_customerId != null` and isn't rendered at all.
+      expect(find.text('Pending Invoices'), findsNothing);
+
+      final customerField = fieldInCard('Customer', () => find.byType(TextFormField));
+      await tester.enterText(customerField, 'Customer');
+      await tester.pumpAndSettle();
+
+      expect(find.text('[CUS01] Customer One'), findsOneWidget);
+
+      await tester.tap(find.text('[CUS01] Customer One'));
+      // _onCustomerSelected -> _loadPendingBillsAndRestore() -> a further
+      // async ds.getPendingBills() call plus two getExchangeRate lookups
+      // (EUR->USD/EUR->FC, already stubbed by stubBaseline()) —
+      // pumpAndSettle lets all of that resolve before asserting on it.
+      await tester.pumpAndSettle();
+
+      // _onCustomerSelected sets _customerId/_customerDisplay — directly
+      // observable on the field itself.
+      expect(find.text('[CUS01] Customer One'), findsOneWidget);
+
+      // The real proof the selection actually drove the rest of the
+      // screen: the Pending Invoices section appears with this customer's
+      // one bill, its Base/Local balance columns computed from the same
+      // EUR->USD (1.1) / EUR->FC (2.5) rates stubBaseline() already wires.
+      expect(find.text('Pending Invoices'), findsOneWidget);
+      expect(find.text('SI-001\n2026-07-10'), findsOneWidget);
+      expect(find.text('700.00'), findsOneWidget); // Balance (EUR) — raw party balance
+      expect(find.text('770.00'), findsOneWidget); // Balance (USD) — 700 * 1.1
+      expect(find.text('1,750.00'), findsOneWidget); // Balance (FC) — 700 * 2.5
     });
   });
 }
