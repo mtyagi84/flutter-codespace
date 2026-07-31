@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/sales/domain/repositories/sales_return_repository.dart';
 import 'package:sakal/features/sales/presentation/providers/sales_return_providers.dart';
 import 'package:sakal/features/sales/presentation/screens/sales_return_entry_screen.dart';
@@ -328,6 +329,108 @@ void main() {
       expect(line['final_amount'], 232.0);
 
       expect(find.text('Sales Return SR-001 saved.'), findsOneWidget);
+    });
+  });
+
+  // Same GRN-consolidation shape as Purchase Return, applied to a Sales
+  // Invoice instead — no free product-line SakalAutocomplete anywhere. The
+  // Customer/Sale Type fields are both read-only (SakalFieldCard.readOnly),
+  // driven entirely off the Invoice selection — there is no separate
+  // Customer picker on this screen — so this group drives only the
+  // Invoice picker itself. Same "unawaited search + return stale state"
+  // optionsBuilder shape as Sales Delivery's own Invoice field — see that
+  // screen's own test for why two distinct keystrokes are needed.
+  group('Invoice autocomplete interaction (real search + select)', () {
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(
+                of: find.byWidgetPredicate((w) =>
+                    w is RichText &&
+                    (w.text.toPlainText().trim().toUpperCase() == label.toUpperCase() ||
+                        w.text.toPlainText().trim().toUpperCase() == '${label.toUpperCase()} *')),
+                matching: find.byType(SakalFieldCard),
+              ).first,
+          matching: matcher(),
+        );
+
+    testWidgets(
+        'typing into the Invoice field shows the matching option, and selecting it loads that invoice\'s returnable lines',
+        (tester) async {
+      when(() => mockRepo.getApprovedInvoices(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            search: any(named: 'search'),
+          )).thenAnswer((_) async => [
+            {
+              'invoice_no': 'SI-001',
+              'invoice_date': '2026-07-15',
+              'customer': {'account_code': 'CUS01', 'account_name': 'Customer One'},
+              'sale_type': 'CREDIT',
+              'stock_dispatch_mode': 'DEFERRED',
+              'cash_collection_mode': 'DEFERRED',
+              'collected_amount_local': 0,
+              'collected_amount_base': 0,
+            },
+          ]);
+      when(() => mockRepo.getInvoiceLines(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            invoiceNo: any(named: 'invoiceNo'),
+            invoiceDate: any(named: 'invoiceDate'),
+          )).thenAnswer((_) async => [
+            {
+              'serial_no': 1,
+              'product_id': 'prod-001',
+              'product': {'product_code': 'WID-A', 'product_name': 'Widget A', 'tracking_type': 'NONE'},
+              'base_qty': 10,
+              'gross_amount': 250,
+              'tax_amount': 40,
+              'final_amount': 290,
+            },
+          ]);
+      when(() => mockRepo.getInvoiceCharges(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            invoiceNo: any(named: 'invoiceNo'),
+            invoiceDate: any(named: 'invoiceDate'),
+          )).thenAnswer((_) async => []);
+      when(() => mockRepo.getAlreadyReturnedByLine(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            invoiceNo: any(named: 'invoiceNo'),
+            invoiceDate: any(named: 'invoiceDate'),
+          )).thenAnswer((_) async => []);
+
+      await pumpApp(tester, const SalesReturnEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      final invoiceField = fieldInCard('Invoice', () => find.byType(TextFormField));
+
+      // Same "returns stale state synchronously while fetching in the
+      // background" optionsBuilder shape as Sales Delivery's own Invoice
+      // field — a second, different keystroke is needed to observe the
+      // real (by-then-fetched) options; see that screen's test for the
+      // full explanation.
+      await tester.enterText(invoiceField, 'S');
+      await tester.pumpAndSettle();
+      await tester.enterText(invoiceField, 'SI');
+      await tester.pumpAndSettle();
+
+      const expectedOption = 'SI-001 — [CUS01] Customer One';
+      expect(find.text(expectedOption), findsOneWidget);
+
+      await tester.tap(find.text(expectedOption));
+      // invoiceField carries key: ValueKey(_invoiceNo ?? '') — selecting
+      // sets _invoiceNo, forcing a remount.
+      await tester.pumpAndSettle();
+
+      // _onInvoiceSelected sets the customer/sale-type header snapshot
+      // (both read-only fields) and replaces _lines with the invoice's
+      // own returnable lines.
+      expect(find.text('No lines yet — pick an invoice above.'), findsNothing);
+      expect(find.textContaining('Widget A'), findsWidgets);
+      expect(find.text('[CUS01] Customer One'), findsOneWidget); // Customer read-only field
+      expect(find.text('Credit'), findsOneWidget); // Sale Type read-only field, resolved from sale_type
+      expect(find.textContaining('SI-001'), findsWidgets); // Invoice field's own updated display text
     });
   });
 }

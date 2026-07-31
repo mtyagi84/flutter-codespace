@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/sales/domain/repositories/sales_order_repository.dart';
 import 'package:sakal/features/sales/presentation/providers/sales_order_providers.dart';
 import 'package:sakal/features/sales/presentation/screens/sales_order_entry_screen.dart';
@@ -372,6 +373,107 @@ void main() {
       expect(line['source_quotation_line_serial'], null); // DIRECT-mode line, never quotation-sourced
 
       expect(find.text('Sales Order SO-001 saved.'), findsOneWidget);
+    });
+  });
+
+  // DIRECT mode's own two pickers: Customer (header, filtering an already-
+  // resolved accountsProvider list) and Product (per line). Unlike Sales
+  // Quotation, DIRECT mode does NOT auto-add a blank line on open, AND
+  // _addLine() hard-requires a customer to already be selected (see
+  // _addLine()'s own "Select a Customer first." guard) — so the Product
+  // interaction test must select a customer and tap "Add Line" first
+  // before a Product field even exists to type into.
+  group('Customer + Product autocomplete interaction (real search + select)', () {
+    // Exact-match (never a bare substring) label lookup — SakalFieldCard
+    // appends a child TextSpan(' *') for required fields, so a required
+    // label's full toPlainText() is "LABEL *", not "LABEL". A plain
+    // .contains() match would be ambiguous here too: "Customer" alone also
+    // matches the "Customer PO Ref" field's own label.
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(
+                of: find.byWidgetPredicate((w) =>
+                    w is RichText &&
+                    (w.text.toPlainText().trim().toUpperCase() == label.toUpperCase() ||
+                        w.text.toPlainText().trim().toUpperCase() == '${label.toUpperCase()} *')),
+                matching: find.byType(SakalFieldCard),
+              ).first,
+          matching: matcher(),
+        );
+
+    testWidgets('typing into the Customer field shows the matching option, and tapping it selects the customer', (tester) async {
+      when(() => mockRepo.getCustomerDetails(customerId: any(named: 'customerId')))
+          .thenAnswer((_) async => null);
+
+      await pumpApp(tester, const SalesOrderEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      final customerField = fieldInCard('Customer', () => find.byType(TextFormField));
+      await tester.enterText(customerField, 'Customer');
+      await tester.pumpAndSettle();
+
+      expect(find.text('[CUS01] Customer One'), findsOneWidget);
+
+      await tester.tap(find.text('[CUS01] Customer One'));
+      await tester.pumpAndSettle();
+
+      // _onCustomerSelected sets _customerId/_customerDisplay — the field's
+      // own displayed value is the simplest observable proof of selection.
+      expect(find.text('[CUS01] Customer One'), findsOneWidget);
+    });
+
+    testWidgets(
+        'after selecting a customer and adding a line, typing into the Product field shows the matching option, and selecting it updates the line title and unit',
+        (tester) async {
+      when(() => mockRepo.getCustomerDetails(customerId: any(named: 'customerId')))
+          .thenAnswer((_) async => null);
+      when(() => mockRepo.getProductsForPicker(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+          )).thenAnswer((_) async => [
+            {
+              'id': 'prod-001',
+              'product_code': 'WID-A',
+              'product_name': 'Widget A',
+              'base_uom_id': 'uom-001',
+              'uom': {'description': 'Piece'},
+              'sales_tax_group_id': null,
+              'cost_currency_id': null,
+            },
+          ]);
+
+      await pumpApp(tester, const SalesOrderEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      // _addLine() hard-requires a customer to already be selected — pick
+      // one first via the same Customer autocomplete driven above.
+      final customerField = fieldInCard('Customer', () => find.byType(TextFormField));
+      await tester.enterText(customerField, 'Customer');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('[CUS01] Customer One'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('No lines yet.'), findsOneWidget);
+      await tester.tap(find.text('Add Line'));
+      await tester.pumpAndSettle();
+      expect(find.text('1. New Line'), findsOneWidget);
+
+      final productField = fieldInCard('Product', () => find.byType(TextFormField));
+      await tester.enterText(productField, 'Widget');
+      await tester.pumpAndSettle();
+
+      expect(find.text('[WID-A] Widget A'), findsOneWidget);
+
+      await tester.tap(find.text('[WID-A] Widget A'));
+      await tester.pumpAndSettle();
+
+      // _onProductSelected sets row.productId/productDisplay (line title)
+      // and row.uomLabel from the product's own nested 'uom' map. Rate
+      // stays unresolved/unchanged here since _resolvePrice's own
+      // _orderCurrencyCode == null guard short-circuits before any network
+      // call (no currency picked in this test) — only title/unit are
+      // asserted, matching what this test actually exercises.
+      expect(find.text('1. [WID-A] Widget A'), findsOneWidget);
+      expect(find.text('Piece'), findsOneWidget); // Unit field, readOnly
     });
   });
 }
