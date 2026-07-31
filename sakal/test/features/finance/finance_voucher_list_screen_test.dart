@@ -25,7 +25,7 @@ class MockFinanceVoucherRepository extends Mock implements FinanceVoucherReposit
 // so this file supplies its own menuProvider override.
 List<Override> _menuOverride() => [
       menuProvider.overrideWith((ref) => [
-            MenuModule(
+            const MenuModule(
               moduleCode: 'FIN',
               moduleName: 'Finance',
               serialNo: 1,

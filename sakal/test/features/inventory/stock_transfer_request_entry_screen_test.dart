@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/inventory/domain/repositories/stock_transfer_request_repository.dart';
 import 'package:sakal/features/inventory/presentation/providers/stock_transfer_request_providers.dart';
 import 'package:sakal/features/inventory/presentation/screens/stock_transfer_request_entry_screen.dart';

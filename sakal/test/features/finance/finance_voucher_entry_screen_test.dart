@@ -45,7 +45,7 @@ Finder _findFieldLabel(String label) => find.byWidgetPredicate(
 // finance_voucher_list_screen_test.dart for the sibling list screen.
 List<Override> _menuOverride() => [
       menuProvider.overrideWith((ref) => [
-            MenuModule(
+            const MenuModule(
               moduleCode: 'FIN',
               moduleName: 'Finance',
               serialNo: 1,
