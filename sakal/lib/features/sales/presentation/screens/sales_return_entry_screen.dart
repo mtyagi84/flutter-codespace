@@ -247,8 +247,9 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
       }
       if (mounted) setState(() => _loading = false);
       if (_status == 'APPROVED') unawaited(_loadPostedVouchers());
-    } catch (e) {
-      if (mounted) setState(() { _loading = false; _error = 'Could not load: $e'; });
+    } catch (e, st) {
+      AppLogger.error('SalesReturnLoadHeader', e, st);
+      if (mounted) setState(() { _loading = false; _error = ErrorPresenter.format(e, action: 'load this sales return'); });
     }
   }
 
@@ -736,8 +737,9 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
     } on DioException catch (e) {
       setState(() { _saving = false; _actionError = _serverError(e); });
       return false;
-    } catch (e) {
-      setState(() { _saving = false; _actionError = 'Unexpected error: $e'; });
+    } catch (e, st) {
+      AppLogger.error('SalesReturnSave', e, st);
+      setState(() { _saving = false; _actionError = ErrorPresenter.format(e, action: 'save this sales return'); });
       return false;
     }
   }
@@ -800,8 +802,9 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
       }
     } on DioException catch (e) {
       setState(() { _actionError = _serverError(e); });
-    } catch (e) {
-      setState(() { _actionError = 'Unexpected error: $e'; });
+    } catch (e, st) {
+      AppLogger.error('SalesReturnApprove', e, st);
+      setState(() { _actionError = ErrorPresenter.format(e, action: 'approve this sales return'); });
     } finally {
       if (mounted) setState(() => _approving = false);
     }

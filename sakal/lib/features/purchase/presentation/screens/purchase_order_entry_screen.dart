@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/master_type_keys.dart';
@@ -443,9 +442,6 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     Map<String, dynamic>? match;
     try {
       match = await _ds.getProductByBarcode(clientId: session.clientId, companyId: session.companyId, barcode: barcode);
-    } on DioException catch (e) {
-      if (mounted) _showSnack('Barcode lookup failed: ${_serverError(e)}', color: AppColors.negative);
-      return;
     } catch (e, st) {
       AppLogger.error('PoBarcodeLookup', e, st);
       if (mounted) _showSnack(ErrorPresenter.format(e, action: 'look up this barcode'), color: AppColors.negative);
@@ -701,10 +697,9 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
           return true;
         }
       }
-    } on DioException catch (e) {
-      if (mounted) setState(() { _saving = false; _actionError = 'Save failed: ${_serverError(e)}'; });
-    } catch (e) {
-      if (mounted) setState(() { _saving = false; _actionError = 'Unexpected error: $e'; });
+    } catch (e, st) {
+      AppLogger.error('PurchaseOrderSave', e, st);
+      if (mounted) setState(() { _saving = false; _actionError = ErrorPresenter.format(e, action: 'save this purchase order'); });
     }
     return false;
   }
@@ -866,27 +861,10 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         setState(() { _status = 'APPROVED'; _approving = false; });
         _showSnack('$_orderNo approved.', color: AppColors.positive);
       }
-    } on DioException catch (e) {
-      if (mounted) setState(() { _approving = false; _actionError = 'Approve failed: ${_serverError(e)}'; });
-    } catch (e) {
-      if (mounted) setState(() { _approving = false; _actionError = 'Unexpected error: $e'; });
+    } catch (e, st) {
+      AppLogger.error('PurchaseOrderApprove', e, st);
+      if (mounted) setState(() { _approving = false; _actionError = ErrorPresenter.format(e, action: 'approve this purchase order'); });
     }
-  }
-
-  // PostgREST error bodies are {code, details, hint, message} — `message` is
-  // the short RAISE EXCEPTION code (e.g. 'FUTURE_DATE_NOT_ALLOWED'), `details`
-  // is the human-readable text from `USING DETAIL`. Prefer details, fall back
-  // to message, then to the raw exception — never show the user a bare
-  // DioException dump.
-  String _serverError(DioException e) {
-    final data = e.response?.data;
-    if (data is Map) {
-      final details = data['details'] as String?;
-      final message = data['message'] as String?;
-      if (details != null && details.isNotEmpty) return details;
-      if (message != null && message.isNotEmpty) return message;
-    }
-    return e.message ?? e.toString();
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

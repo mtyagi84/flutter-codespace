@@ -214,8 +214,9 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
       } else {
         if (mounted) setState(() { _loading = false; _addLine(); });
       }
-    } catch (e) {
-      if (mounted) setState(() { _loading = false; _error = 'Could not load data: $e'; });
+    } catch (e, st) {
+      AppLogger.error('SalesQuotationLoadHeader', e, st);
+      if (mounted) setState(() { _loading = false; _error = ErrorPresenter.format(e, action: 'load this sales quotation'); });
     }
   }
 
@@ -690,8 +691,9 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
     } on DioException catch (e) {
       setState(() { _saving = false; _actionError = e.response?.data?['message'] ?? _serverError(e); });
       return false;
-    } catch (e) {
-      setState(() { _saving = false; _actionError = 'Unexpected error: $e'; });
+    } catch (e, st) {
+      AppLogger.error('SalesQuotationSave', e, st);
+      setState(() { _saving = false; _actionError = ErrorPresenter.format(e, action: 'save this sales quotation'); });
       return false;
     }
   }
@@ -734,8 +736,9 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
       }
     } on DioException catch (e) {
       setState(() { _actionError = e.response?.data?['message'] ?? _serverError(e); });
-    } catch (e) {
-      setState(() { _actionError = 'Unexpected error: $e'; });
+    } catch (e, st) {
+      AppLogger.error('SalesQuotationApprove', e, st);
+      setState(() { _actionError = ErrorPresenter.format(e, action: 'approve this sales quotation'); });
     } finally {
       if (mounted) setState(() => _approving = false);
     }
@@ -757,8 +760,9 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
       }
     } on DioException catch (e) {
       setState(() { _actionError = e.response?.data?['message'] ?? _serverError(e); });
-    } catch (e) {
-      setState(() { _actionError = 'Unexpected error: $e'; });
+    } catch (e, st) {
+      AppLogger.error('SalesQuotationUpdateStatus', e, st);
+      setState(() { _actionError = ErrorPresenter.format(e, action: 'update this quotation status'); });
     } finally {
       if (mounted) setState(() => _statusUpdating = false);
     }

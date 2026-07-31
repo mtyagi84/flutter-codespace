@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
@@ -768,11 +767,9 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
         }
       }
       return true;
-    } on DioException catch (e) {
-      setState(() { _saving = false; _actionError = e.response?.data?['message'] ?? _serverError(e); });
-      return false;
-    } catch (e) {
-      setState(() { _saving = false; _actionError = 'Unexpected error: $e'; });
+    } catch (e, st) {
+      AppLogger.error('PurchaseReturnSave', e, st);
+      setState(() { _saving = false; _actionError = ErrorPresenter.format(e, action: 'save this purchase return'); });
       return false;
     }
   }
@@ -833,10 +830,9 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
         _showSnack('Purchase Return $_returnNo approved.', color: AppColors.positive);
         await _init();
       }
-    } on DioException catch (e) {
-      setState(() { _actionError = e.response?.data?['message'] ?? _serverError(e); });
-    } catch (e) {
-      setState(() { _actionError = 'Unexpected error: $e'; });
+    } catch (e, st) {
+      AppLogger.error('PurchaseReturnApprove', e, st);
+      setState(() { _actionError = ErrorPresenter.format(e, action: 'approve this purchase return'); });
     } finally {
       // Always reset, regardless of what happened above — previously this
       // only reset inside the catch blocks, so a successful approve()
@@ -845,12 +841,6 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
       // since _status also never got refreshed off 'DRAFT' in that case.
       if (mounted) setState(() => _approving = false);
     }
-  }
-
-  String _serverError(DioException e) {
-    final data = e.response?.data;
-    if (data is Map && data['message'] is String) return data['message'] as String;
-    return e.message ?? e.toString();
   }
 
   // ── Print ─────────────────────────────────────────────────────────────────

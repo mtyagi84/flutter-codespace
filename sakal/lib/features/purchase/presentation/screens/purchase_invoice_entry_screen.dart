@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
@@ -298,10 +297,9 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
         setState(() { _invoiceNo = invoiceNo; _saving = false; });
         _showSnack('Purchase Bill $invoiceNo saved.', color: AppColors.positive);
       }
-    } on DioException catch (e) {
-      setState(() { _saving = false; _actionError = e.response?.data?['message'] ?? _serverError(e); });
-    } catch (e) {
-      setState(() { _saving = false; _actionError = 'Unexpected error: $e'; });
+    } catch (e, st) {
+      AppLogger.error('PurchaseInvoiceSave', e, st);
+      setState(() { _saving = false; _actionError = ErrorPresenter.format(e, action: 'save this purchase bill'); });
     }
   }
 
@@ -337,17 +335,10 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
         _showSnack('Purchase Bill $_invoiceNo approved.', color: AppColors.positive);
         await _init();
       }
-    } on DioException catch (e) {
-      setState(() { _approving = false; _actionError = e.response?.data?['message'] ?? _serverError(e); });
-    } catch (e) {
-      setState(() { _approving = false; _actionError = 'Unexpected error: $e'; });
+    } catch (e, st) {
+      AppLogger.error('PurchaseInvoiceApprove', e, st);
+      setState(() { _approving = false; _actionError = ErrorPresenter.format(e, action: 'approve this purchase bill'); });
     }
-  }
-
-  String _serverError(DioException e) {
-    final data = e.response?.data;
-    if (data is Map && data['message'] is String) return data['message'] as String;
-    return e.message ?? e.toString();
   }
 
   // ── Print ─────────────────────────────────────────────────────────────────
