@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -167,7 +168,12 @@ void main() {
       expect(_findFieldLabel('MOBILE'), findsOneWidget);
       expect(_findFieldLabel('ADDRESS'), findsOneWidget);
       expect(_findFieldLabel('INVOICE DATE'), findsOneWidget);
-      expect(_findFieldLabel('CURRENCY'), findsOneWidget);
+      // "Currency" label, plus "Collected — Local Currency" and "Collected
+      // — Base Currency" (Collect Payment section, further down the page —
+      // only actually built into the tree now that the taller test
+      // viewport brings it within the Sliver's build range) all contain
+      // the substring CURRENCY.
+      expect(_findFieldLabel('CURRENCY'), findsNWidgets(3));
       expect(_findFieldLabel('HEADER DISCOUNT'), findsOneWidget);
 
       expect(find.text('Main Warehouse'), findsOneWidget); // Location, from Quick Invoice Setup
@@ -568,7 +574,15 @@ void main() {
 
       expect(find.text('[WID-A] Widget A'), findsOneWidget);
 
-      await tester.tap(find.text('[WID-A] Widget A'));
+      // This screen's body is a CustomScrollView/SliverList, which put the
+      // options overlay at a screen position where a Sliver content layer
+      // won the hit-test over it — tapping the option was never reliable
+      // here. SakalAutocomplete supports Enter-to-select instead (its own
+      // documented keyboard-navigation feature): a freshly-populated
+      // options list always pre-highlights index 0, and with only one
+      // matching product in this fixture, Enter selects it directly,
+      // sidestepping the overlay hit-test entirely.
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pumpAndSettle();
 
       // _onProductSelected sets row.productId/productDisplay (used
