@@ -626,7 +626,11 @@ void main() {
       await runAgainstPoWizard(tester);
 
       await tester.tap(find.text('Save Draft'));
-      await _pumpBriefly(tester);
+      // The Against-PO wizard leaves extra queued async work (candidate/
+      // batch loading) ahead of this save — the default 5-pump budget isn't
+      // always enough for the save+cache chain to resolve and the SnackBar
+      // to actually appear; match the wizard's own longer pump budget.
+      await _pumpBriefly(tester, times: 10);
 
       final captured = verify(() => mockRepo.save(
             header: captureAny(named: 'header'),

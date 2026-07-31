@@ -741,21 +741,23 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
 
   Widget _buildTitleBlock() => Row(
     crossAxisAlignment: CrossAxisAlignment.center,
-    mainAxisSize: MainAxisSize.min,
     children: [
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(_adjustmentNo != null ? 'Stock Adjustment · $_adjustmentNo' : 'New Stock Adjustment',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-        const SizedBox(height: 2),
-        Row(children: [
-          _status == 'APPROVED' ? _statusChip(_status) : Text(_adjustmentNo != null ? 'Draft' : 'Unsaved draft',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          if (_adjustmentNo != null) ...[
-            const SizedBox(width: 8),
-            PendingSyncBadge(documentType: 'STOCK_ADJUSTMENT', documentId: _adjustmentNo!),
-          ],
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_adjustmentNo != null ? 'Stock Adjustment · $_adjustmentNo' : 'New Stock Adjustment',
+              overflow: TextOverflow.ellipsis, maxLines: 1,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+          const SizedBox(height: 2),
+          Row(children: [
+            _status == 'APPROVED' ? _statusChip(_status) : Text(_adjustmentNo != null ? 'Draft' : 'Unsaved draft',
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            if (_adjustmentNo != null) ...[
+              const SizedBox(width: 8),
+              PendingSyncBadge(documentType: 'STOCK_ADJUSTMENT', documentId: _adjustmentNo!),
+            ],
+          ]),
         ]),
-      ]),
+      ),
     ],
   );
 
@@ -939,6 +941,10 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
         onChanged: locked ? null : (v) => setState(() => row.reasonId = v),
       ),
     );
+    final remarksField = SakalFieldCard(
+      label: 'Remarks', editable: !locked,
+      child: TextFormField(controller: row.remarksCtrl, enabled: !locked, decoration: bare, style: style),
+    );
 
     return SakalLineItemCard(
       title: row.productDisplay.isEmpty ? 'Line' : row.productDisplay,
@@ -952,6 +958,7 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
         SizedBox(width: 100, child: qtyPackField),
         if (showLooseQty) SizedBox(width: 100, child: qtyLooseField),
         SizedBox(width: 180, child: reasonOverrideField),
+        SizedBox(width: 160, child: remarksField),
       ],
       body: (row.isBatchTracked || row.isSerialTracked) ? _buildBatchSerialEditor(row, locked, showLooseQty) : null,
     );

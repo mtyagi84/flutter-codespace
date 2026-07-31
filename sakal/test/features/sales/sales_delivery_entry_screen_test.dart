@@ -68,7 +68,7 @@ void main() {
       expect(find.text('New Sales Delivery'), findsOneWidget);
       expect(find.text('Unsaved draft'), findsOneWidget);
 
-      expect(_findFieldLabel('INVOICE'), findsOneWidget);
+      expect(_findFieldLabel('INVOICE *'), findsOneWidget);
       expect(_findFieldLabel('DELIVERY NO'), findsOneWidget);
       expect(_findFieldLabel('DELIVERY DATE'), findsOneWidget);
       expect(_findFieldLabel('CUSTOMER'), findsOneWidget);
@@ -350,6 +350,7 @@ void main() {
           )).thenAnswer((_) async => [
             {
               'serial_no': 1,
+              'product_id': 'prod-wid-a',
               'base_qty': 10,
               'delivered_qty': 0,
               'product': {'product_code': 'WID-A', 'product_name': 'Widget A', 'tracking_type': 'NONE'},

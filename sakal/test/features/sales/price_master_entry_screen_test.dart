@@ -358,6 +358,10 @@ void main() {
 
       expect(find.text('[WID-A] Widget A'), findsOneWidget);
 
+      // The overlay option can render below the default ~600px-tall test
+      // viewport — ensureVisible scrolls it into the actual hit-testable
+      // area first.
+      await tester.ensureVisible(find.text('[WID-A] Widget A'));
       await tester.tap(find.text('[WID-A] Widget A'));
       // The Product field carries `key: ValueKey('${row.hashCode}-${row.productDisplay}')`
       // — selecting a product changes productDisplay, forcing a remount;

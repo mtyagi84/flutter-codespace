@@ -105,7 +105,7 @@ void main() {
       // always starts with exactly one blank account line, there's no
       // reachable "no lines" empty state on this screen.
       expect(find.text('Account Lines'), findsOneWidget);
-      expect(_findFieldLabel('ACCOUNT'), findsOneWidget);
+      expect(_findFieldLabel('ACCOUNT *'), findsOneWidget);
       // 'Amount' (editable) + the three readonly 'Base Amount'/'Local
       // Amount'/'Party Amount' fields all contain the substring "AMOUNT".
       expect(_findFieldLabel('AMOUNT'), findsNWidgets(4));
@@ -220,7 +220,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('JV-001'), findsOneWidget);
+      // 'JV-001' appears twice — the title block AND the read-only
+      // Voucher No field card's own value.
+      expect(find.text('JV-001'), findsNWidgets(2));
       expect(find.text('Draft'), findsOneWidget);
 
       // Account lines — resumed straight from getLines(), matched against

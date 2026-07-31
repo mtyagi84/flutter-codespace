@@ -785,7 +785,7 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
   Widget _buildTitleBlock() {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
-        Text(_transNo ?? 'New Contra Voucher', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+        Flexible(child: Text(_transNo ?? 'New Contra Voucher', overflow: TextOverflow.ellipsis, maxLines: 1, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary))),
         const SizedBox(width: 10),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

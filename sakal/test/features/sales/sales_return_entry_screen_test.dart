@@ -66,7 +66,7 @@ void main() {
       expect(find.text('New Sales Return'), findsOneWidget);
       expect(find.text('Unsaved draft'), findsOneWidget);
 
-      expect(_findFieldLabel('INVOICE'), findsOneWidget);
+      expect(_findFieldLabel('INVOICE *'), findsOneWidget);
       expect(_findFieldLabel('RETURN NO'), findsOneWidget);
       expect(_findFieldLabel('RETURN DATE'), findsOneWidget);
       expect(_findFieldLabel('CUSTOMER'), findsOneWidget);

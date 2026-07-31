@@ -79,6 +79,17 @@ void main() {
           companyId: any(named: 'companyId'),
         )).thenAnswer((_) async => <Map<String, dynamic>>[]);
     when(() => mockRepo.getTaxGroupMemberTaxIds(any())).thenAnswer((_) async => <String, List<String>>{});
+    // _buildLineTile's Product SakalAutocomplete calls this unconditionally
+    // on every field focus/change, even in tests that never intend to
+    // search products — an unstubbed call throws (mocktail returns null
+    // for an unstubbed Future-returning method), so every test needs this
+    // default; tests that DO need real search results add their own
+    // more specific when() after this, which takes precedence.
+    when(() => mockRepo.getProductsForPicker(
+          clientId: any(named: 'clientId'),
+          companyId: any(named: 'companyId'),
+          search: any(named: 'search'),
+        )).thenAnswer((_) async => <Map<String, dynamic>>[]);
     when(() => mockRepo.getTaxRatesByIds(
           taxIds: any(named: 'taxIds'),
           asOfDate: any(named: 'asOfDate'),
@@ -139,9 +150,10 @@ void main() {
       expect(find.text('Credit'), findsOneWidget);
 
       expect(_findFieldLabel('LOCATION'), findsOneWidget);
-      // "Customer" and "Walk-in Customer Name (optional)" both contain the
-      // substring CUSTOMER — a genuine 2-way match, not 1.
-      expect(_findFieldLabel('CUSTOMER'), findsNWidgets(2));
+      // "Customer" label, "Walk-in Customer Name (optional)" label, AND the
+      // Customer field's own read-only value "[CUS01] Cash Customer" all
+      // contain the substring CUSTOMER — a genuine 3-way match, not 1.
+      expect(_findFieldLabel('CUSTOMER'), findsNWidgets(3));
       expect(_findFieldLabel('SALES PERSON'), findsOneWidget);
       expect(_findFieldLabel('MOBILE'), findsOneWidget);
       expect(_findFieldLabel('ADDRESS'), findsOneWidget);
@@ -157,7 +169,11 @@ void main() {
       // One auto-seeded blank line — this screen has no separate "Line
       // Items" card/title any more (redesigned away, see CLAUDE.md's
       // 2026-07-18 UI pass); each line is its own SakalLineItemCard.
-      expect(find.text('New Line'), findsOneWidget);
+      // The 'New Line' fallback title only renders on the mobile branch
+      // (Responsive.isMobile, <600px) — the default ~800px test viewport
+      // hits the desktop row layout instead, which has no title text at
+      // all, so assert on the always-present Product field label instead.
+      expect(_findFieldLabel('PRODUCT'), findsOneWidget);
 
       // Charges: always present and always editable for a new DIRECT
       // invoice, regardless of whether any charge types are configured —
@@ -316,7 +332,9 @@ void main() {
       // so there is deliberately no "Piece" assertion here.
       expect(find.text('[WID-A] Widget A'), findsOneWidget);
       expect(find.text('10.0'), findsOneWidget); // qtyPackCtrl set via '${m['qty_pack']}'
-      expect(find.text('0.0'), findsOneWidget); // qtyLooseCtrl
+      // qtyLooseCtrl AND discountPctCtrl both show '0.0' from this fixture's
+      // qty_loose/discount_percent, both defaulting to 0.
+      expect(find.text('0.0'), findsNWidgets(2));
       expect(find.text('25.0'), findsOneWidget); // rateCtrl
       expect(find.text('—'), findsOneWidget); // Tax field — no tax_group_id on this line
       expect(find.text('250.00'), findsOneWidget); // Amount — baseQty(10) * rate(25), no tax/discount/charges
@@ -518,10 +536,11 @@ void main() {
 
       // Before any product is picked, the auto-seeded blank line's own
       // title falls back to 'New Line' (`row.productDisplay.isEmpty ?
-      // 'New Line' : row.productDisplay` — no numeric prefix on this
-      // screen's own SakalLineItemCard title, unlike GRN/Price Master's
-      // own '${idx+1}. ...' convention).
-      expect(find.text('New Line'), findsOneWidget);
+      // 'New Line' : row.productDisplay`) — but only on the mobile branch
+      // (Responsive.isMobile, <600px); the default ~800px test viewport
+      // hits the desktop row layout, which has no title text at all, so
+      // assert on the always-present Product field instead.
+      expect(_findFieldLabel('PRODUCT'), findsOneWidget);
 
       final productField = fieldInCard('Product', () => find.byType(TextFormField));
       await tester.enterText(productField, 'Widget');

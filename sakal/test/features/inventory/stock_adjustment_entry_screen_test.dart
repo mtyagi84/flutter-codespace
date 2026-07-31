@@ -290,7 +290,9 @@ void main() {
       // row.uomLabel) is the simplest observable proof the selection
       // actually landed, without needing to save and inspect a payload.
       expect(fieldInCard('Unit', () => find.text('Piece')), findsOneWidget);
-      expect(find.text('[WID-A] Widget A'), findsOneWidget); // now the field's own displayed value, not an overlay option
+      // Now matches both the field's own displayed value AND the
+      // SakalLineItemCard's own title (bound to the same productDisplay).
+      expect(find.text('[WID-A] Widget A'), findsNWidgets(2));
     });
 
     testWidgets('selecting a product via autocomplete on a "+" line then saving includes it in the payload', (tester) async {

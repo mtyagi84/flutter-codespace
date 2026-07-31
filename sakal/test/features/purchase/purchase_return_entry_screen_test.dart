@@ -82,7 +82,7 @@ void main() {
       expect(find.text('New Purchase Return'), findsOneWidget);
       expect(find.text('Unsaved draft'), findsOneWidget);
 
-      expect(_findFieldLabel('SUPPLIER'), findsOneWidget);
+      expect(_findFieldLabel('SUPPLIER *'), findsOneWidget);
       expect(_findFieldLabel('RETURN NO'), findsOneWidget);
       expect(_findFieldLabel('RETURN DATE'), findsOneWidget);
       expect(_findFieldLabel('CURRENCY (INHERITED FROM GRN)'), findsOneWidget);

@@ -290,7 +290,9 @@ void main() {
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Approve'), findsNothing); // canApprove defaults false from the harness's empty menuProvider
       expect(find.byIcon(Icons.print_outlined), findsOneWidget); // a saved order is printable
-      expect(find.byIcon(Icons.copy_outlined), findsOneWidget); // a saved order can be copied
+      // _canCopy also requires canCopy (copyAllowed), which the harness's
+      // empty menuProvider leaves false — same reasoning as Approve above.
+      expect(find.byIcon(Icons.copy_outlined), findsNothing);
     });
 
     testWidgets('editing remarks and saving calls the repository with the updated payload', (tester) async {

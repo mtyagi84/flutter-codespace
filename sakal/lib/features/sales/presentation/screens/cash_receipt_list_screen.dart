@@ -296,6 +296,8 @@ class _CashReceiptListScreenState extends ConsumerState<CashReceiptListScreen>
           const SizedBox(height: 4),
           Text(_customerLabel(r), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
           const SizedBox(height: 4),
+          Text(_locationLabel(r), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          const SizedBox(height: 4),
           Text(_amountLabel(r), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
         ]),
       ),

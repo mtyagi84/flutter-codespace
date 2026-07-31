@@ -148,7 +148,7 @@ void main() {
       expect(_findFieldLabel('REF DATE'), findsOneWidget);
       expect(_findFieldLabel('REMARKS'), findsOneWidget);
       // Against Bill is the default mode; CRV is a receipt voucher → party field labeled 'Customer'.
-      expect(_findFieldLabel('CUSTOMER'), findsOneWidget);
+      expect(_findFieldLabel('CUSTOMER *'), findsOneWidget);
 
       expect(find.text('(auto on save)'), findsOneWidget); // Voucher No read-only placeholder
       expect(find.text('Against Bill'), findsOneWidget);
@@ -511,7 +511,7 @@ void main() {
       expect(_findFieldLabel('REF DATE'), findsOneWidget);
       expect(_findFieldLabel('REMARKS'), findsOneWidget);
       // BRV is a receipt voucher (isReceiptVoucher → true) → party field labeled 'Customer', same as CRV.
-      expect(_findFieldLabel('CUSTOMER'), findsOneWidget);
+      expect(_findFieldLabel('CUSTOMER *'), findsOneWidget);
 
       expect(find.text('(auto on save)'), findsOneWidget);
       expect(find.text('Against Bill'), findsOneWidget);
@@ -552,7 +552,7 @@ void main() {
       expect(_findFieldLabel('REF DATE'), findsOneWidget);
       expect(_findFieldLabel('REMARKS'), findsOneWidget);
       // CPV is a payment voucher (isReceiptVoucher → false) → party field labeled 'Supplier'.
-      expect(_findFieldLabel('SUPPLIER'), findsOneWidget);
+      expect(_findFieldLabel('SUPPLIER *'), findsOneWidget);
 
       expect(find.text('(auto on save)'), findsOneWidget);
       expect(find.text('Against Bill'), findsOneWidget);
@@ -593,7 +593,7 @@ void main() {
       expect(_findFieldLabel('REF DATE'), findsOneWidget);
       expect(_findFieldLabel('REMARKS'), findsOneWidget);
       // BPV is a payment voucher (isReceiptVoucher → false) → party field labeled 'Supplier'.
-      expect(_findFieldLabel('SUPPLIER'), findsOneWidget);
+      expect(_findFieldLabel('SUPPLIER *'), findsOneWidget);
 
       expect(find.text('(auto on save)'), findsOneWidget);
       expect(find.text('Against Bill'), findsOneWidget);

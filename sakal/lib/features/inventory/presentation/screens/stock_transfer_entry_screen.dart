@@ -1096,6 +1096,10 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
         onChanged: (_) => setState(_recalculateChargeApportionment),
       ),
     );
+    final remarksField = SakalFieldCard(
+      label: 'Remarks', editable: !locked,
+      child: TextFormField(controller: row.remarksCtrl, enabled: !locked, decoration: bare, style: style),
+    );
 
     return SakalLineItemCard(
       title: row.productDisplay.isEmpty ? 'Line' : row.productDisplay,
@@ -1110,6 +1114,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
         SizedBox(width: 100, child: qtyPackField),
         if (showLooseQty) SizedBox(width: 100, child: qtyLooseField),
         if (_isLikelyInterEntity) SizedBox(width: 100, child: salesPriceField),
+        SizedBox(width: 160, child: remarksField),
         if (row.costPriceHint > 0)
           SizedBox(width: 100, height: 56, child: SakalFieldCard.readOnly(label: 'Cost', value: AppNumberFormat.amount(row.costPriceHint.toDouble(), numberFormat), numeric: true)),
         if (row.chargeAmount > 0)

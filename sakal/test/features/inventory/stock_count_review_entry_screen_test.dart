@@ -70,7 +70,7 @@ void main() {
       expect(_findFieldLabel('Review No'), findsOneWidget);
       expect(_findFieldLabel('Store / Location'), findsOneWidget);
       expect(_findFieldLabel('Review Date'), findsOneWidget);
-      expect(_findFieldLabel('As Of Date'), findsOneWidget);
+      expect(_findFieldLabel('As Of Date *'), findsOneWidget);
       expect(_findFieldLabel('Reason'), findsOneWidget);
       expect(_findFieldLabel('Remarks'), findsOneWidget);
 

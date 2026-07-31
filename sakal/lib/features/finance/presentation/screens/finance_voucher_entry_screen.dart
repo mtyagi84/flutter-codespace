@@ -1159,29 +1159,31 @@ class _FinanceVoucherEntryScreenState
     }
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
       children: [
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.primary)),
-          const SizedBox(height: 2),
-          if (_isPosted)
-            _statusChip('POSTED — read only', AppColors.positive)
-          else
-            Row(children: [
-              Text(
-                _voucherNo != null ? 'Draft' : 'Unsaved draft',
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-              ),
-              if (_voucherNo != null) ...[
-                const SizedBox(width: 8),
-                PendingSyncBadge(documentType: 'FINANCE_VOUCHER', documentId: _voucherNo!),
-              ],
-            ]),
-        ]),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title,
+                overflow: TextOverflow.ellipsis, maxLines: 1,
+                style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary)),
+            const SizedBox(height: 2),
+            if (_isPosted)
+              _statusChip('POSTED — read only', AppColors.positive)
+            else
+              Row(children: [
+                Text(
+                  _voucherNo != null ? 'Draft' : 'Unsaved draft',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+                if (_voucherNo != null) ...[
+                  const SizedBox(width: 8),
+                  PendingSyncBadge(documentType: 'FINANCE_VOUCHER', documentId: _voucherNo!),
+                ],
+              ]),
+          ]),
+        ),
       ],
     );
   }

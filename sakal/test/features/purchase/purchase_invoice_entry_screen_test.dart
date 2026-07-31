@@ -79,11 +79,15 @@ void main() {
       expect(find.text('New Purchase Bill'), findsOneWidget);
       expect(find.text('Unsaved draft'), findsOneWidget);
 
-      // "SUPPLIER" alone matches 3 labels on this screen (Supplier, Supplier
-      // Invoice No, Supplier Invoice Date) since _findFieldLabel is a
-      // contains-match — assert the precise count rather than
+      // "SUPPLIER" alone matches 3 field labels on this screen (Supplier,
+      // Supplier Invoice No, Supplier Invoice Date) PLUS 2 helper/
+      // description RichTexts ("Select a supplier to see their approved,
+      // not-yet-billed GRNs." and "Auto-filled from the selected GRN(s) —
+      // validate against the supplier's paper invoice...") that also
+      // contain the substring "supplier" — since _findFieldLabel is a
+      // contains-match, assert the precise total count rather than
       // findsOneWidget, which would be a false failure here.
-      expect(_findFieldLabel('SUPPLIER'), findsNWidgets(3));
+      expect(_findFieldLabel('SUPPLIER'), findsNWidgets(5));
       expect(_findFieldLabel('BILL NO'), findsOneWidget);
       expect(_findFieldLabel('BILL DATE'), findsOneWidget);
       expect(_findFieldLabel('SUPPLIER INVOICE NO'), findsOneWidget);

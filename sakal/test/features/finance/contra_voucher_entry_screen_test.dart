@@ -221,7 +221,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('CTR-001'), findsOneWidget);
+      // 'CTR-001' appears twice — the title block AND the read-only
+      // Voucher No field card's own value.
+      expect(find.text('CTR-001'), findsNWidgets(2));
       // fromNature=Cash, toNature=Bank ⇒ _flavorLabel == 'Deposit'.
       expect(find.text('Deposit'), findsOneWidget);
       expect(find.text('Draft'), findsOneWidget);

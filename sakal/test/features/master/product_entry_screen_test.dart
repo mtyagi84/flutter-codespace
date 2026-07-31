@@ -92,7 +92,7 @@ void main() {
       expect(find.text('Product Master'), findsOneWidget);
 
       expect(_findFieldLabel('PRODUCT CODE'), findsOneWidget);
-      expect(_findFieldLabel('PRODUCT NAME'), findsOneWidget);
+      expect(_findFieldLabel('PRODUCT NAME *'), findsOneWidget);
       expect(_findFieldLabel('BASE UOM'), findsOneWidget);
 
       // Section titles — every card is always present regardless of

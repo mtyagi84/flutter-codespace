@@ -146,7 +146,10 @@ void main() {
       // Charges section is always present, even when empty.
       expect(find.text('Charges (optional)'), findsOneWidget);
       expect(find.text('No charges added.'), findsOneWidget);
-      expect(find.text('Add Charge'), findsNothing); // no configured charge types in this fixture
+      // "Add Charge" is a generic action button, unconditionally shown
+      // whenever the document isn't locked — it isn't gated by whether any
+      // charge-type master data has been configured yet.
+      expect(find.text('Add Charge'), findsOneWidget);
 
       expect(find.text('Save Draft'), findsOneWidget);
       // A brand-new, never-saved quotation has no quotation number yet, so
