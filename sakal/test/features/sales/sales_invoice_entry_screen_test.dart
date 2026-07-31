@@ -133,6 +133,15 @@ void main() {
 
   group('New (blank) invoice — DIRECT + CASH', () {
     testWidgets('renders the blank form with all key fields, one auto-seeded blank line, and no print/cancel', (tester) async {
+      // This screen's body is a CustomScrollView/SliverList — content below
+      // the fold (the Charges card, past the header + one line row) isn't
+      // actually built into the tree at the default ~600px test viewport,
+      // only scheduled to build near the viewport/cache extent. A taller
+      // viewport keeps everything asserted below within the initial build.
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
       await pumpApp(tester, const SalesInvoiceEntryScreen(), overrides: overrides(), session: testSession());
       await tester.pumpAndSettle();
 
@@ -524,6 +533,14 @@ void main() {
             asOfDate: any(named: 'asOfDate'),
             currencyCode: any(named: 'currencyCode'),
           )).thenAnswer((_) async => {'selling_price': 42.5, 'entry_no': 'PM-001'});
+
+      // The Product options overlay renders below the default ~600px-tall
+      // test viewport once Customer is already picked (confirmed: a prior
+      // run reported the tap offset as literally outside Size(800, 600)) —
+      // a taller viewport keeps it on-screen and hit-testable.
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
 
       await pumpApp(tester, const SalesInvoiceEntryScreen(), overrides: creditOverrides(), session: testSession());
       await tester.pumpAndSettle();

@@ -122,9 +122,11 @@ void main() {
       // Customer-type segmented toggle.
       expect(find.text('Existing Customer'), findsOneWidget);
       expect(find.text('Prospect'), findsOneWidget);
-      // 'CUSTOMER' also matches the "Existing Customer" segment label's own
-      // underlying RichText, alongside the Customer field's own label.
-      expect(_findFieldLabel('CUSTOMER'), findsNWidgets(2));
+      // The "Existing Customer" SegmentedButton label used to also match
+      // here (a plain Text with no maxLines override renders maxLines:
+      // null, not 1) before _findFieldLabel was tightened to maxLines==1 —
+      // now only the Customer field's own single-line label matches.
+      expect(_findFieldLabel('CUSTOMER'), findsOneWidget);
 
       expect(_findFieldLabel('LOCATION'), findsOneWidget);
       expect(_findFieldLabel('SALES PERSON'), findsOneWidget);
