@@ -785,19 +785,22 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
     crossAxisAlignment: CrossAxisAlignment.center,
     mainAxisSize: MainAxisSize.min,
     children: [
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(_entryNo != null ? 'Sales Price Master · $_entryNo' : 'New Price Master Batch',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-        const SizedBox(height: 2),
-        Row(children: [
-          _status == 'APPROVED' ? _statusChip() : Text(_entryNo != null ? 'Draft' : 'Unsaved draft',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          if (_entryNo != null) ...[
-            const SizedBox(width: 8),
-            PendingSyncBadge(documentType: 'PRICE_MASTER', documentId: _entryNo!),
-          ],
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_entryNo != null ? 'Sales Price Master · $_entryNo' : 'New Price Master Batch',
+              overflow: TextOverflow.ellipsis, maxLines: 1,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+          const SizedBox(height: 2),
+          Row(children: [
+            _status == 'APPROVED' ? _statusChip() : Text(_entryNo != null ? 'Draft' : 'Unsaved draft',
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            if (_entryNo != null) ...[
+              const SizedBox(width: 8),
+              PendingSyncBadge(documentType: 'PRICE_MASTER', documentId: _entryNo!),
+            ],
+          ]),
         ]),
-      ]),
+      ),
     ],
   );
 
