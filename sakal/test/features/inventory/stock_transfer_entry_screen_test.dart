@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/inventory/domain/repositories/stock_transfer_repository.dart';
 import 'package:sakal/features/inventory/presentation/providers/stock_transfer_providers.dart';
 import 'package:sakal/features/inventory/presentation/screens/stock_transfer_entry_screen.dart';
@@ -232,6 +233,145 @@ void main() {
       expect(lines.first['base_qty'], 10.0);
 
       expect(find.text('Stock Transfer ST-001 saved.'), findsOneWidget);
+    });
+  });
+
+  // Every prior test batch (Phase 4/5) deliberately excluded driving
+  // SakalAutocomplete through real user interaction (type -> see filtered
+  // options -> tap one) — this extends the pattern proven on Stock Transfer
+  // Request's own pilot group to this screen's Product field, DIRECT mode
+  // only (AGAINST_REQUEST mode is a separate, out-of-scope work stream).
+  group('Product autocomplete interaction (real search + select)', () {
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(of: _findFieldLabel(label), matching: find.byType(SakalFieldCard)).first,
+          matching: matcher(),
+        );
+
+    void stubProductSearch() {
+      when(() => mockRepo.getProductsForPicker(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            search: any(named: 'search'),
+          )).thenAnswer((_) async => [
+            {
+              'id': 'prod-001',
+              'product_code': 'WID-A',
+              'product_name': 'Widget A',
+              'base_uom_id': 'uom-001',
+              'tracking_type': 'NONE',
+              'uom': {'description': 'Piece'},
+            },
+          ]);
+    }
+
+    testWidgets('typing into the Product field shows the matching option, and tapping it selects the product', (tester) async {
+      stubProductSearch();
+
+      await pumpApp(tester, const StockTransferEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      // Screen defaults to DIRECT mode — _addDirectLine() adds a fresh
+      // blank row, the only way to get a Product field into the tree.
+      await tester.tap(find.text('Add Line'));
+      await tester.pumpAndSettle();
+
+      // Before any product is picked, the Unit field reads its own
+      // documented placeholder for "nothing selected yet".
+      expect(fieldInCard('Unit', () => find.text('—')), findsOneWidget);
+
+      final productField = fieldInCard('Product', () => find.byType(TextFormField));
+      await tester.enterText(productField, 'Widget');
+      // Lets the async optionsBuilder -> getProductsForPicker(search:
+      // 'Widget') resolve and RawAutocomplete's OverlayEntry render the
+      // options list.
+      await tester.pumpAndSettle();
+
+      // The overlay's own option row (no optionBuilder passed on this
+      // screen's SakalAutocomplete -> falls back to a plain Text of
+      // displayStringForOption) — this is the exact string
+      // `_onProductSelected` will also set as the row's productDisplay.
+      expect(find.text('[WID-A] Widget A'), findsOneWidget);
+
+      await tester.tap(find.text('[WID-A] Widget A'));
+      // The field's own `key: ValueKey('${row.hashCode}-${row.productDisplay}')`
+      // forces a remount once productDisplay changes — pumpAndSettle lets
+      // that remount (and the Unit field's own rebuild, plus the unawaited
+      // _refreshCostPrices() this screen also fires) finish.
+      await tester.pumpAndSettle();
+
+      // _onProductSelected sets row.productId/productDisplay/uomId/uomLabel
+      // — the Unit field (a plain readOnly SakalFieldCard bound to
+      // row.uomLabel) is the simplest observable proof the selection
+      // actually landed, without needing to save and inspect a payload.
+      expect(fieldInCard('Unit', () => find.text('Piece')), findsOneWidget);
+      expect(find.text('[WID-A] Widget A'), findsOneWidget); // now the field's own displayed value, not an overlay option
+    });
+
+    testWidgets('selecting a product via autocomplete then saving includes it in the payload', (tester) async {
+      stubProductSearch();
+      when(() => mockRepo.save(
+            header: any(named: 'header'),
+            lines: any(named: 'lines'),
+            batches: any(named: 'batches'),
+            serials: any(named: 'serials'),
+            charges: any(named: 'charges'),
+            userId: any(named: 'userId'),
+          )).thenAnswer((_) async => 'ST-002');
+      when(() => mockRepo.cacheTransferLocally(
+            effectiveTransferNo: any(named: 'effectiveTransferNo'),
+            header: any(named: 'header'),
+            lines: any(named: 'lines'),
+            batches: any(named: 'batches'),
+            serials: any(named: 'serials'),
+            charges: any(named: 'charges'),
+          )).thenAnswer((_) async {});
+
+      await pumpApp(tester, const StockTransferEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      // From Location already defaults to session.locationId ('loc-001') —
+      // only To Location needs picking.
+      final toLocationDropdown = fieldInCard('To Location', () => find.byType(DropdownButtonFormField<String>));
+      await tester.tap(toLocationDropdown);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Branch Store').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Add Line'));
+      await tester.pumpAndSettle();
+
+      final productField = fieldInCard('Product', () => find.byType(TextFormField));
+      await tester.enterText(productField, 'Widget');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('[WID-A] Widget A'));
+      await tester.pumpAndSettle();
+
+      final qtyField = fieldInCard('Qty Pack', () => find.byType(TextFormField));
+      await tester.enterText(qtyField, '5');
+      await tester.pump();
+
+      await tester.tap(find.text('Save Draft'));
+      await _pumpBriefly(tester);
+
+      final captured = verify(() => mockRepo.save(
+            header: captureAny(named: 'header'),
+            lines: captureAny(named: 'lines'),
+            batches: any(named: 'batches'),
+            serials: any(named: 'serials'),
+            charges: any(named: 'charges'),
+            userId: any(named: 'userId'),
+          )).captured;
+      final header = captured[0] as Map<String, dynamic>;
+      final lines = captured[1] as List<Map<String, dynamic>>;
+
+      expect(header['from_location_id'], 'loc-001');
+      expect(header['to_location_id'], 'loc-002');
+      expect(lines, hasLength(1));
+      expect(lines.first['product_id'], 'prod-001');
+      expect(lines.first['qty_pack'], 5.0);
+      expect(lines.first['base_qty'], 5.0);
+
+      expect(find.text('Stock Transfer ST-002 saved.'), findsOneWidget);
     });
   });
 }

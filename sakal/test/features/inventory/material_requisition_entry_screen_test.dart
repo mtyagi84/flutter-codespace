@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/inventory/domain/repositories/material_requisition_repository.dart';
 import 'package:sakal/features/inventory/presentation/providers/material_requisition_providers.dart';
 import 'package:sakal/features/inventory/presentation/screens/material_requisition_entry_screen.dart';
@@ -210,5 +211,81 @@ void main() {
 
       expect(find.text('Material Requisition MREQ-001 saved.'), findsOneWidget);
     });
+  });
+
+  // Every prior test batch (Phase 4/5) deliberately excluded driving
+  // SakalAutocomplete through real user interaction (type -> see filtered
+  // options -> tap one) — this extends the pattern proven on Stock Transfer
+  // Request's own pilot group to this screen's Product field.
+  group('Product autocomplete interaction (real search + select)', () {
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(of: _findFieldLabel(label), matching: find.byType(SakalFieldCard)).first,
+          matching: matcher(),
+        );
+
+    void stubProductSearch() {
+      when(() => mockRepo.getProductsForPicker(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            search: any(named: 'search'),
+          )).thenAnswer((_) async => [
+            {
+              'id': 'prod-001',
+              'product_code': 'WID-A',
+              'product_name': 'Widget A',
+              'base_uom_id': 'uom-001',
+              'uom': {'description': 'Piece'},
+            },
+          ]);
+    }
+
+    testWidgets('typing into the Product field shows the matching option, and tapping it selects the product', (tester) async {
+      stubProductSearch();
+
+      await pumpApp(tester, const MaterialRequisitionEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      // _addLine() adds a fresh blank row — this screen never auto-seeds
+      // one, so "Add Line" is the only way to get a Product field into the
+      // tree at all.
+      await tester.tap(find.text('Add Line'));
+      await tester.pumpAndSettle();
+
+      // Before any product is picked, the Unit field reads its own
+      // documented placeholder for "nothing selected yet".
+      expect(fieldInCard('Unit', () => find.text('—')), findsOneWidget);
+
+      final productField = fieldInCard('Product', () => find.byType(TextFormField));
+      await tester.enterText(productField, 'Widget');
+      // Lets the async optionsBuilder -> getProductsForPicker(search:
+      // 'Widget') resolve and RawAutocomplete's OverlayEntry render the
+      // options list.
+      await tester.pumpAndSettle();
+
+      // The overlay's own option row (no optionBuilder passed on this
+      // screen's SakalAutocomplete -> falls back to a plain Text of
+      // displayStringForOption) — this is the exact string
+      // `_onProductSelected` will also set as the row's productDisplay.
+      expect(find.text('[WID-A] Widget A'), findsOneWidget);
+
+      await tester.tap(find.text('[WID-A] Widget A'));
+      // The field's own `key: ValueKey('${row.hashCode}-${row.productDisplay}')`
+      // forces a remount once productDisplay changes — pumpAndSettle lets
+      // that remount (and the Unit field's own rebuild) finish.
+      await tester.pumpAndSettle();
+
+      // _onProductSelected sets row.productId/productDisplay/uomId/uomLabel
+      // — the Unit field (a plain readOnly SakalFieldCard bound to
+      // row.uomLabel) is the simplest observable proof the selection
+      // actually landed, without needing to save and inspect a payload.
+      expect(fieldInCard('Unit', () => find.text('Piece')), findsOneWidget);
+      expect(find.text('[WID-A] Widget A'), findsOneWidget); // now the field's own displayed value, not an overlay option
+    });
+
+    // A full-save round trip is deliberately skipped here — this screen's
+    // save path requires a Department AND a Consumption Area on every line
+    // (the latter loaded asynchronously off the former), which is out of
+    // scope for this autocomplete-focused pass; the search+select test
+    // above already proves the picker mechanics work end to end.
   });
 }

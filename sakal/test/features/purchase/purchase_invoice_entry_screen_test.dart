@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
+import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/purchase/data/models/purchase_invoice_model.dart';
 import 'package:sakal/features/purchase/domain/repositories/purchase_invoice_repository.dart';
 import 'package:sakal/features/purchase/presentation/providers/purchase_invoice_providers.dart';
@@ -256,6 +257,90 @@ void main() {
       expect(grnRefs.first['grn_date'], '2026-06-30');
 
       expect(find.text('Purchase Bill PINV-001 saved.'), findsOneWidget);
+    });
+  });
+
+  // This screen is GRN-consolidation-only — no free product-line
+  // SakalAutocomplete anywhere (see the "no free-text Add Line affordance"
+  // assertion in the blank-form render test above) — so unlike GRN/PO this
+  // group drives only the header's own Supplier picker. Unlike GRN/PO's
+  // `_searchField<T>` helper, this screen builds its SakalAutocomplete
+  // directly inline (`_buildHeaderCard`'s own `supplierField`), but the
+  // mechanics are identical: optionsBuilder filters an already-loaded
+  // `_suppliers` list (fetched once in _init() via
+  // getSuppliersWithPendingGrns) client-side on every keystroke, not a
+  // per-keystroke repository call.
+  group('Supplier autocomplete interaction (real search + select)', () {
+    // Exact-match (never a bare substring) label lookup — the existing
+    // blank-form render test above already documents why a plain .contains()
+    // match on "SUPPLIER" is ambiguous on this screen: it also matches
+    // "Supplier Invoice No"/"Supplier Invoice Date" (findsNWidgets(3), not
+    // findsOneWidget). SakalFieldCard also appends a child TextSpan(' *')
+    // for required fields, so a required label's full toPlainText() is
+    // "LABEL *", not "LABEL" — matching either form exactly sidesteps both
+    // issues at once.
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(
+                of: find.byWidgetPredicate((w) =>
+                    w is RichText &&
+                    (w.text.toPlainText().trim().toUpperCase() == label.toUpperCase() ||
+                        w.text.toPlainText().trim().toUpperCase() == '${label.toUpperCase()} *')),
+                matching: find.byType(SakalFieldCard),
+              ).first,
+          matching: matcher(),
+        );
+
+    testWidgets(
+        'typing into the Supplier field shows the matching option, and selecting it loads that supplier\'s pending GRNs',
+        (tester) async {
+      when(() => mockRepo.getSuppliersWithPendingGrns(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+          )).thenAnswer((_) async => [
+            {'id': 'sup-001', 'account_code': 'SUP-001', 'account_name': 'Test Supplier'},
+          ]);
+      when(() => mockRepo.getPendingGrnsForSupplier(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            supplierId: any(named: 'supplierId'),
+            excludeInvoiceNo: any(named: 'excludeInvoiceNo'),
+          )).thenAnswer((_) async => [
+            {
+              'grn_no': 'GRN-001',
+              'grn_date': '2026-06-30',
+              'grn_currency_id': 'ccy-001',
+              'currency': {'currency_id': 'USD'},
+              'rate_to_base': 1,
+              'rate_to_local': 1,
+              'billed_invoice_no': null,
+            },
+          ]);
+
+      await pumpApp(tester, const PurchaseInvoiceEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      expect(find.text('Select a supplier to see their approved, not-yet-billed GRNs.'), findsOneWidget);
+
+      final supplierField = fieldInCard('Supplier', () => find.byType(TextFormField));
+      await tester.enterText(supplierField, 'Test');
+      await tester.pumpAndSettle();
+
+      expect(find.text('[SUP-001] Test Supplier'), findsOneWidget);
+
+      await tester.tap(find.text('[SUP-001] Test Supplier'));
+      // supplierField carries `key: ValueKey(_supplierDisplay ?? '')` —
+      // selecting changes _supplierDisplay, forcing a remount.
+      await tester.pumpAndSettle();
+
+      // _onSupplierSelected sets _supplierId/_supplierDisplay and then
+      // awaits getPendingGrnsForSupplier — the GRN picker card swapping its
+      // "select a supplier" prompt for the fetched GRN's own checkbox row is
+      // the simplest observable proof both the selection and its downstream
+      // fetch actually landed, without needing to save and inspect a
+      // payload.
+      expect(find.text('Select a supplier to see their approved, not-yet-billed GRNs.'), findsNothing);
+      expect(find.text('GRN-001'), findsOneWidget);
+      expect(find.text('[SUP-001] Test Supplier'), findsOneWidget); // now the field's own displayed value
     });
   });
 }

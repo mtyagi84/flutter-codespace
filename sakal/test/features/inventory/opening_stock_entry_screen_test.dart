@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/inventory/domain/repositories/opening_stock_repository.dart';
 import 'package:sakal/features/inventory/presentation/providers/opening_stock_providers.dart';
 import 'package:sakal/features/inventory/presentation/screens/opening_stock_entry_screen.dart';
@@ -187,6 +188,164 @@ void main() {
       expect(lines.first['unit_cost'], 25.5);
 
       expect(find.text('Opening Stock OPN-001 saved.'), findsOneWidget);
+    });
+  });
+
+  // Every prior test batch (Phase 4/5) deliberately excluded driving
+  // SakalAutocomplete through real user interaction (type -> see filtered
+  // options -> tap one) — this extends the pattern proven on Stock Transfer
+  // Request's own pilot group to this screen's Product field. Uses an
+  // untracked (tracking_type: NONE) product so no batch/serial/expiry entry
+  // is ever triggered — that's a separate, out-of-scope work stream.
+  group('Product autocomplete interaction (real search + select)', () {
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(of: _findFieldLabel(label), matching: find.byType(SakalFieldCard)).first,
+          matching: matcher(),
+        );
+
+    void stubProductSearch() {
+      when(() => mockRepo.getProductsForPicker(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            search: any(named: 'search'),
+          )).thenAnswer((_) async => [
+            {
+              'id': 'prod-001',
+              'product_code': 'WID-A',
+              'product_name': 'Widget A',
+              'base_uom_id': 'uom-001',
+              'tracking_type': 'NONE',
+              'uom': {'description': 'Piece'},
+            },
+          ]);
+    }
+
+    testWidgets('typing into the Product field shows the matching option, and tapping it selects the product', (tester) async {
+      stubProductSearch();
+      // _refreshCurrentStock runs (unawaited) as soon as a product lands on
+      // the row — advisory only (wrapped in its own try/catch on the
+      // screen), but stub it anyway so the test isn't relying on that catch.
+      when(() => mockRepo.getCurrentStockAndCost(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            locationId: any(named: 'locationId'),
+            productId: any(named: 'productId'),
+          )).thenAnswer((_) async => null);
+
+      await pumpApp(tester, const OpeningStockEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      // _addLine() adds a fresh blank row — this screen never auto-seeds
+      // one, so "Add Line" is the only way to get a Product field into the
+      // tree at all (the other two ways — scan a barcode, upload Excel —
+      // are separate, out-of-scope entry paths).
+      await tester.tap(find.text('Add Line'));
+      await tester.pumpAndSettle();
+
+      // Before any product is picked, the Unit field reads its own
+      // documented placeholder for "nothing selected yet". Asserted
+      // unscoped (not via fieldInCard) — this screen ALSO has a "Unit
+      // Cost" field on the same line, and _findFieldLabel's substring
+      // match would treat "UNIT COST *" as matching a search for "Unit"
+      // too. A fresh, untracked, pre-selection row has no other '—' on
+      // screen (Expiry/Manufacturing Date only render once
+      // row.isBatchTracked is true), so this is unambiguous as-is.
+      expect(find.text('—'), findsOneWidget);
+
+      final productField = fieldInCard('Product', () => find.byType(TextFormField));
+      await tester.enterText(productField, 'Widget');
+      // Lets the async optionsBuilder -> getProductsForPicker(search:
+      // 'Widget') resolve and RawAutocomplete's OverlayEntry render the
+      // options list.
+      await tester.pumpAndSettle();
+
+      // The overlay's own option row (no optionBuilder passed on this
+      // screen's SakalAutocomplete -> falls back to a plain Text of
+      // displayStringForOption) — this is the exact string
+      // `_onProductSelected` will also set as the row's productDisplay.
+      expect(find.text('[WID-A] Widget A'), findsOneWidget);
+
+      await tester.tap(find.text('[WID-A] Widget A'));
+      // The field's own `key: ValueKey('${row.hashCode}-${row.productDisplay}')`
+      // forces a remount once productDisplay changes — pumpAndSettle lets
+      // that remount (and the Unit field's own rebuild) finish.
+      await tester.pumpAndSettle();
+
+      // _onProductSelected sets row.productId/productDisplay/uomId/uomLabel
+      // — the Unit field (a plain readOnly SakalFieldCard bound to
+      // row.uomLabel) is the simplest observable proof the selection
+      // actually landed, without needing to save and inspect a payload.
+      // Asserted unscoped for the same "Unit" vs "Unit Cost" ambiguity
+      // reason as above — 'Piece' is unique on screen regardless.
+      expect(find.text('Piece'), findsOneWidget);
+      expect(find.text('[WID-A] Widget A'), findsOneWidget); // now the field's own displayed value, not an overlay option
+    });
+
+    testWidgets('selecting a product via autocomplete then saving (with a required unit cost) includes it in the payload', (tester) async {
+      stubProductSearch();
+      when(() => mockRepo.getCurrentStockAndCost(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            locationId: any(named: 'locationId'),
+            productId: any(named: 'productId'),
+          )).thenAnswer((_) async => null);
+      when(() => mockRepo.save(
+            header: any(named: 'header'),
+            lines: any(named: 'lines'),
+            userId: any(named: 'userId'),
+          )).thenAnswer((_) async => 'OPN-002');
+      when(() => mockRepo.cacheOpeningStockLocally(
+            effectiveOpeningNo: any(named: 'effectiveOpeningNo'),
+            header: any(named: 'header'),
+            lines: any(named: 'lines'),
+          )).thenAnswer((_) async {});
+
+      await pumpApp(tester, const OpeningStockEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      // Store/Location already defaults to session.locationId ('loc-001').
+      await tester.tap(find.text('Add Line'));
+      await tester.pumpAndSettle();
+
+      final productField = fieldInCard('Product', () => find.byType(TextFormField));
+      await tester.enterText(productField, 'Widget');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('[WID-A] Widget A'));
+      await tester.pumpAndSettle();
+
+      // testSession()'s UserSession defaults qtyEntryMode to
+      // 'PACK_AND_LOOSE' (not 'PACK_ONLY'), so showLooseQty is true and the
+      // field's label is 'Qty Pack', never the bare 'Quantity' fallback.
+      final qtyField = fieldInCard('Qty Pack', () => find.byType(TextFormField));
+      await tester.enterText(qtyField, '5');
+      await tester.pump();
+
+      // Unlike every other module in this rollout, Opening Stock requires a
+      // user-entered unit cost per line (it's the one document establishing
+      // cost for the first time) — _saveDraft blocks with no cost typed.
+      final unitCostField = fieldInCard('Unit Cost', () => find.byType(TextFormField));
+      await tester.enterText(unitCostField, '25.5');
+      await tester.pump();
+
+      await tester.tap(find.text('Save Draft'));
+      await _pumpBriefly(tester);
+
+      final captured = verify(() => mockRepo.save(
+            header: captureAny(named: 'header'),
+            lines: captureAny(named: 'lines'),
+            userId: any(named: 'userId'),
+          )).captured;
+      final header = captured[0] as Map<String, dynamic>;
+      final lines = captured[1] as List<Map<String, dynamic>>;
+
+      expect(header['location_id'], 'loc-001');
+      expect(lines, hasLength(1));
+      expect(lines.first['product_id'], 'prod-001');
+      expect(lines.first['pack_qty'], 5.0);
+      expect(lines.first['base_qty'], 5.0);
+      expect(lines.first['unit_cost'], 25.5);
+
+      expect(find.text('Opening Stock OPN-002 saved.'), findsOneWidget);
     });
   });
 }

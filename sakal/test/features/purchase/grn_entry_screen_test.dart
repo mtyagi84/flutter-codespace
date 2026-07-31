@@ -5,6 +5,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/config/master_type_keys.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/purchase/data/models/grn_charge_line_model.dart';
 import 'package:sakal/features/purchase/data/models/grn_line_model.dart';
 import 'package:sakal/features/purchase/data/models/grn_model.dart';
@@ -333,6 +334,120 @@ void main() {
       expect(line['barcode'], ''); // l.matchedBarcode ?? ''
 
       expect(find.text('Draft saved — GRN-001'), findsOneWidget);
+    });
+  });
+
+  // Every prior GRN test batch (Phase 5) deliberately excluded driving
+  // SakalAutocomplete through real user interaction (type -> see filtered
+  // options -> tap one) — this group drives GRN's own two pickers, Supplier
+  // (header) and Product (per line), the same way the Stock Transfer
+  // Request pilot proved out. Unlike that pilot's async
+  // getProductsForPicker(search:) call per keystroke, GRN's own
+  // `_searchField<T>` helper (built on SakalAutocomplete, see the widget's
+  // own doc-comment in sakal_autocomplete.dart) filters an ALREADY-loaded
+  // list (`_suppliers`/`_products`, both fetched once in _init()) purely
+  // client-side on every keystroke — so the mock only needs to return its
+  // fixture data once, not per search term, and pumpAndSettle() after
+  // typing is still the right tool (it lets RawAutocomplete's own
+  // OverlayEntry build/render, even though there's no real async gap here).
+  group('Supplier + Product autocomplete interaction (real search + select)', () {
+    // Stricter than a plain "contains" label match: SakalFieldCard appends
+    // a child TextSpan(' *') for required fields (see sakal_field_card.dart),
+    // so a required label's full toPlainText() is "LABEL *", not "LABEL".
+    // Matching either form exactly (never a bare substring) avoids the real
+    // ambiguity on this screen — e.g. a "Supplier" query would otherwise
+    // also match "Supplier Delivery No"/"Supplier Delivery Date" via
+    // .contains(), and "Rate" would also match "Rate → Base (USD)"/"Rate →
+    // Local (FC)".
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(
+                of: find.byWidgetPredicate((w) =>
+                    w is RichText &&
+                    (w.text.toPlainText().trim().toUpperCase() == label.toUpperCase() ||
+                        w.text.toPlainText().trim().toUpperCase() == '${label.toUpperCase()} *')),
+                matching: find.byType(SakalFieldCard),
+              ).first,
+          matching: matcher(),
+        );
+
+    testWidgets('typing into the Supplier field shows the matching option, and tapping it selects the supplier', (tester) async {
+      await pumpApp(tester, const GrnEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      final supplierField = fieldInCard('Supplier', () => find.byType(TextFormField));
+      await tester.enterText(supplierField, 'Test');
+      // _searchField's own optionsBuilder filters the already-loaded
+      // _suppliers list (from accountsProvider, overridden above to one
+      // Supplier-natured account) synchronously — pumpAndSettle just lets
+      // RawAutocomplete's OverlayEntry render the filtered options.
+      await tester.pumpAndSettle();
+
+      expect(find.text('[SUP-001] Test Supplier'), findsOneWidget);
+
+      await tester.tap(find.text('[SUP-001] Test Supplier'));
+      // _searchField's SakalAutocomplete carries `key: ValueKey(initialText)`
+      // (initialText == _supplierDisplay) — selecting changes _supplierDisplay,
+      // forcing a remount; pumpAndSettle lets that finish.
+      await tester.pumpAndSettle();
+
+      // _onSupplierSelected sets _supplierId/_supplierDisplay — the field's
+      // own displayed value is the simplest observable proof the selection
+      // landed, without needing to save and inspect a payload.
+      expect(find.text('[SUP-001] Test Supplier'), findsOneWidget);
+    });
+
+    testWidgets('typing into the Product field on a freshly added line shows the matching option, and selecting it updates the line title and rate',
+        (tester) async {
+      when(() => mockRepo.getProductsForPicker(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+          )).thenAnswer((_) async => [
+            {
+              'id': 'prod-001',
+              'product_code': 'WID-A',
+              'product_name': 'Widget A',
+              'base_uom_id': 'uom-001',
+              'tracking_type': 'NONE',
+              'purchase_tax_group_id': null,
+              'allowed_cost_variance': 0,
+              'last_purchase_cost': 25.5,
+            },
+          ]);
+      when(() => mockRepo.getProductLastCostPrice(
+            productId: any(named: 'productId'),
+            locationId: any(named: 'locationId'),
+          )).thenAnswer((_) async => null);
+
+      await pumpApp(tester, const GrnEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Add Item'));
+      await tester.pumpAndSettle();
+
+      // Before any product is picked, the fresh line's own title falls back
+      // to 'New Line' (`'${idx+1}. ${row.productDisplay.isEmpty ? 'New Line' : row.productDisplay}'`).
+      expect(find.text('1. New Line'), findsOneWidget);
+
+      final productField = fieldInCard('Product', () => find.byType(TextFormField));
+      await tester.enterText(productField, 'Widget');
+      await tester.pumpAndSettle();
+
+      expect(find.text('[WID-A] Widget A'), findsOneWidget);
+
+      await tester.tap(find.text('[WID-A] Widget A'));
+      await tester.pumpAndSettle();
+
+      // _onProductSelected sets row.productId/productDisplay (the
+      // SakalLineItemCard title is a plain Text, not FormField-family, so it
+      // updates on every rebuild with no remount needed) and
+      // row.rateCtrl.text from last_purchase_cost — the Rate field is
+      // TextEditingController-bound (not `initialValue`-driven like a
+      // DropdownButtonFormField), so it also updates live with no key/remount
+      // gotcha. Both are directly observable without saving and inspecting
+      // a payload.
+      expect(find.text('1. [WID-A] Widget A'), findsOneWidget);
+      final rateField = fieldInCard('Rate', () => find.byType(TextFormField));
+      expect(tester.widget<TextFormField>(rateField).controller!.text, '25.5');
     });
   });
 }

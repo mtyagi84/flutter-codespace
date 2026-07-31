@@ -5,6 +5,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/config/master_type_keys.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/purchase/data/models/po_charge_line_model.dart';
 import 'package:sakal/features/purchase/data/models/po_payment_term_model.dart';
 import 'package:sakal/features/purchase/data/models/purchase_order_line_model.dart';
@@ -360,6 +361,98 @@ void main() {
       expect(line['barcode'], ''); // l.matchedBarcode ?? ''
 
       expect(find.text('Draft saved — PO-001'), findsOneWidget);
+    });
+  });
+
+  // Same pilot pattern as Stock Transfer Request / GRN, adapted for this
+  // screen's own two pickers: Supplier (header) and Product (per line, on
+  // the auto-added blank line every brand-new PO already has — see
+  // _init()'s own `_addLine()` call and the "1. New Line" assertion in the
+  // blank-form render test above). Like GRN, PO's `_searchField<T>` helper
+  // filters an ALREADY-loaded list (`_suppliers`/`_products`) client-side on
+  // every keystroke rather than calling the repository per keystroke — the
+  // mock only needs its fixture data stubbed once.
+  group('Supplier + Product autocomplete interaction (real search + select)', () {
+    // Exact-match (never a bare substring) label lookup — SakalFieldCard
+    // appends a child TextSpan(' *') for required fields, so a required
+    // label's full toPlainText() is "LABEL *", not "LABEL". A plain
+    // .contains() match would be ambiguous here too: "Rate" alone also
+    // matches "Rate → Base (USD)"/"Rate → Local (FC)".
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(
+                of: find.byWidgetPredicate((w) =>
+                    w is RichText &&
+                    (w.text.toPlainText().trim().toUpperCase() == label.toUpperCase() ||
+                        w.text.toPlainText().trim().toUpperCase() == '${label.toUpperCase()} *')),
+                matching: find.byType(SakalFieldCard),
+              ).first,
+          matching: matcher(),
+        );
+
+    testWidgets('typing into the Supplier field shows the matching option, and tapping it selects the supplier', (tester) async {
+      await pumpApp(tester, const PurchaseOrderEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      final supplierField = fieldInCard('Supplier', () => find.byType(TextFormField));
+      await tester.enterText(supplierField, 'Test');
+      await tester.pumpAndSettle();
+
+      expect(find.text('[SUP-001] Test Supplier'), findsOneWidget);
+
+      await tester.tap(find.text('[SUP-001] Test Supplier'));
+      // _searchField's SakalAutocomplete carries `key: ValueKey(initialText)`
+      // (initialText == _supplierDisplay) — selecting changes _supplierDisplay,
+      // forcing a remount.
+      await tester.pumpAndSettle();
+
+      // _onSupplierSelected sets _supplierId/_supplierDisplay — the field's
+      // own displayed value is the simplest observable proof of selection.
+      expect(find.text('[SUP-001] Test Supplier'), findsOneWidget);
+    });
+
+    testWidgets('typing into the Product field on the auto-added blank line shows the matching option, and selecting it updates the line title and rate',
+        (tester) async {
+      when(() => mockRepo.getProductsForPicker(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+          )).thenAnswer((_) async => [
+            {
+              'id': 'prod-001',
+              'product_code': 'WID-A',
+              'product_name': 'Widget A',
+              'base_uom_id': 'uom-001',
+              'purchase_tax_group_id': null,
+              'last_purchase_cost': 25.5,
+            },
+          ]);
+      when(() => mockRepo.getProductStockSnapshot(
+            productId: any(named: 'productId'),
+            locationId: any(named: 'locationId'),
+          )).thenAnswer((_) async => {'current_stock': 0.0, 'reorder_level': 0.0});
+
+      await pumpApp(tester, const PurchaseOrderEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      // _init() auto-adds one blank line for a brand-new DIRECT order — no
+      // "Add Item" tap needed, unlike GRN/Stock Transfer Request.
+      expect(find.text('1. New Line'), findsOneWidget);
+
+      final productField = fieldInCard('Product', () => find.byType(TextFormField));
+      await tester.enterText(productField, 'Widget');
+      await tester.pumpAndSettle();
+
+      expect(find.text('[WID-A] Widget A'), findsOneWidget);
+
+      await tester.tap(find.text('[WID-A] Widget A'));
+      await tester.pumpAndSettle();
+
+      // _onProductSelected sets row.productId/productDisplay (line title, a
+      // plain Text — updates on rebuild, no remount needed) and
+      // row.rateCtrl.text from last_purchase_cost (TextEditingController-
+      // bound, not `initialValue`-driven, so it also updates live).
+      expect(find.text('1. [WID-A] Widget A'), findsOneWidget);
+      final rateField = fieldInCard('Rate', () => find.byType(TextFormField));
+      expect(tester.widget<TextFormField>(rateField).controller!.text, '25.5');
     });
   });
 }

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/purchase/data/models/purchase_return_model.dart';
 import 'package:sakal/features/purchase/domain/repositories/purchase_return_repository.dart';
 import 'package:sakal/features/purchase/presentation/providers/purchase_return_providers.dart';
@@ -348,6 +349,86 @@ void main() {
       expect(line['barcode'], '');
 
       expect(find.text('Purchase Return PRET-001 saved.'), findsOneWidget);
+    });
+  });
+
+  // Same shape as Purchase Invoice — this screen is GRN-consolidation-only
+  // (no free product-line SakalAutocomplete anywhere; lines only ever come
+  // from ticking a GRN's checkbox in _buildGrnPickerCard), so this group
+  // drives only the header's own Supplier picker, built the same way
+  // Purchase Invoice's is: a SakalAutocomplete built directly inline
+  // (`_buildHeaderCard`'s own `supplierField`), filtering an already-loaded
+  // `_suppliers` list (fetched once in _init() via
+  // getSuppliersWithApprovedGrns) client-side on every keystroke.
+  group('Supplier autocomplete interaction (real search + select)', () {
+    // Exact-match (never a bare substring) label lookup — SakalFieldCard
+    // appends a child TextSpan(' *') for required fields, so a required
+    // label's full toPlainText() is "LABEL *", not "LABEL". Matching either
+    // form exactly avoids relying on this screen's own "Supplier" label
+    // happening to be unambiguous today.
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(
+                of: find.byWidgetPredicate((w) =>
+                    w is RichText &&
+                    (w.text.toPlainText().trim().toUpperCase() == label.toUpperCase() ||
+                        w.text.toPlainText().trim().toUpperCase() == '${label.toUpperCase()} *')),
+                matching: find.byType(SakalFieldCard),
+              ).first,
+          matching: matcher(),
+        );
+
+    testWidgets(
+        'typing into the Supplier field shows the matching option, and selecting it loads that supplier\'s approved GRNs',
+        (tester) async {
+      when(() => mockRepo.getSuppliersWithApprovedGrns(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+          )).thenAnswer((_) async => [
+            {'id': 'sup-001', 'account_code': 'SUP-001', 'account_name': 'Test Supplier'},
+          ]);
+      when(() => mockRepo.getGrnsForSupplier(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            supplierId: any(named: 'supplierId'),
+          )).thenAnswer((_) async => [
+            {
+              'grn_no': 'GRN-001',
+              'grn_date': '2026-06-30',
+              'grn_currency_id': 'ccy-001',
+              'currency': {'currency_id': 'USD'},
+              'billed_invoice_no': null,
+            },
+          ]);
+      when(() => mockRepo.getFullyReturnedGrnKeys(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+          )).thenAnswer((_) async => <String>{});
+
+      await pumpApp(tester, const PurchaseReturnEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      expect(find.text('Select a supplier to see their approved GRNs (billed or not).'), findsOneWidget);
+
+      final supplierField = fieldInCard('Supplier', () => find.byType(TextFormField));
+      await tester.enterText(supplierField, 'Test');
+      await tester.pumpAndSettle();
+
+      expect(find.text('[SUP-001] Test Supplier'), findsOneWidget);
+
+      await tester.tap(find.text('[SUP-001] Test Supplier'));
+      // supplierField carries `key: ValueKey(_supplierDisplay ?? '')` —
+      // selecting changes _supplierDisplay, forcing a remount.
+      await tester.pumpAndSettle();
+
+      // _onSupplierSelected sets _supplierId/_supplierDisplay and then
+      // awaits getGrnsForSupplier/getFullyReturnedGrnKeys — the GRN picker
+      // card swapping its "select a supplier" prompt for the fetched GRN's
+      // own checkbox row (title is a plain Text of g['grn_no'], asserted
+      // directly, same as the resume-flow test above) is the simplest
+      // observable proof both the selection and its downstream fetch landed.
+      expect(find.text('Select a supplier to see their approved GRNs (billed or not).'), findsNothing);
+      expect(find.text('GRN-001'), findsOneWidget);
+      expect(find.text('[SUP-001] Test Supplier'), findsOneWidget); // now the field's own displayed value
     });
   });
 }
