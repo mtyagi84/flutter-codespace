@@ -450,4 +450,209 @@ void main() {
       expect(tester.widget<TextFormField>(rateField).controller!.text, '25.5');
     });
   });
+
+  // Every prior GRN test batch (Phase 5, then the autocomplete pilot above)
+  // deliberately exercised DIRECT mode only. This group closes that gap for
+  // AGAINST_PO — the multi-step wizard chained from _onReceiptModeChanged:
+  // _startAgainstPoWizard (pick a supplier that has open POs) ->
+  // _pickCurrencyThenPos (resolve currency, then pick PO(s)) ->
+  // _consolidatePos (fetch each PO's pending lines + charge lines and add
+  // them to the GRN's own _lines/_charges). Confirmed by reading the full
+  // screen file directly, not assumed:
+  //   - getSuppliersWithOpenPos(clientId, companyId)
+  //   - getOpenPurchaseOrdersForSupplier(clientId, companyId, supplierId)
+  //   - getPendingPoLines(clientId, companyId, orderNo, orderDate, excludeGrnNo)
+  //   - getPoChargeLinesForOrder(clientId, companyId, orderNo, orderDate)
+  // A PO-derived line is stamped row.isFromPo = (sourcePoOrderNo != null),
+  // which locks Product/UOM/Rate/Discount/Tax Group and renders a
+  // 'PO: <orderNo>' subtitle on the SakalLineItemCard (_buildLineCard) —
+  // that subtitle is this group's strongest proof of consolidation, since
+  // it can't come from any other code path.
+  group('Against-PO consolidation (real wizard flow: pick supplier -> pick PO -> lines land in the grid)', () {
+    // Same exact-match helper as the Supplier + Product autocomplete group
+    // above, duplicated locally per this file's own established convention
+    // (each group defines its own copy rather than sharing one across groups).
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(
+                of: find.byWidgetPredicate((w) =>
+                    w is RichText &&
+                    (w.text.toPlainText().trim().toUpperCase() == label.toUpperCase() ||
+                        w.text.toPlainText().trim().toUpperCase() == '${label.toUpperCase()} *')),
+                matching: find.byType(SakalFieldCard),
+              ).first,
+          matching: matcher(),
+        );
+
+    void stubAgainstPoWizard() {
+      when(() => mockRepo.getSuppliersWithOpenPos(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+          )).thenAnswer((_) async => [
+            {'id': 'sup-001', 'account_code': 'SUP-001', 'account_name': 'Test Supplier'},
+          ]);
+      when(() => mockRepo.getOpenPurchaseOrdersForSupplier(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            supplierId: any(named: 'supplierId'),
+          )).thenAnswer((_) async => [
+            {
+              'order_no': 'PO-2001',
+              'order_date': '2026-07-15',
+              'po_currency_id': 'ccy-usd',
+              'currency': {'currency_id': 'USD'},
+              'rate_to_base': 1.0,
+              'rate_to_local': 1.0,
+              'bill_to': '',
+              'ship_to': '',
+            },
+          ]);
+      when(() => mockRepo.getPendingPoLines(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            orderNo: any(named: 'orderNo'),
+            orderDate: any(named: 'orderDate'),
+            excludeGrnNo: any(named: 'excludeGrnNo'),
+          )).thenAnswer((_) async => [
+            {
+              'product_id': 'prod-001',
+              'product': {
+                'product_code': 'WID-A',
+                'product_name': 'Widget A',
+                'tracking_type': 'NONE',
+                'allowed_cost_variance': 0,
+              },
+              'pending_qty': 10.0,
+              'uom_conversion_factor': 1.0,
+              'uom_id': 'uom-001',
+              'tax_group_id': null,
+              'department_id': null,
+              'consumption_area_id': null,
+              'serial_no': 1,
+              'item_description': '',
+              'rate': 25.0,
+              'discount_percent': 0,
+            },
+          ]);
+      when(() => mockRepo.getPoChargeLinesForOrder(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            orderNo: any(named: 'orderNo'),
+            orderDate: any(named: 'orderDate'),
+          )).thenAnswer((_) async => []);
+      when(() => mockRepo.getProductLastCostPrice(
+            productId: any(named: 'productId'),
+            locationId: any(named: 'locationId'),
+          )).thenAnswer((_) async => null);
+    }
+
+    // Drives the full wizard: Receipt Mode -> Against PO, pick the one
+    // stubbed supplier, pick the one stubbed PO, confirm — mirroring
+    // _startAgainstPoWizard -> _pickCurrencyThenPos -> _consolidatePos.
+    // _consolidatePos shows a transient 'Added N line(s)…' SnackBar at the
+    // end (same _showSnack helper Save Draft uses), so — per this file's own
+    // rule about never pumpAndSettle() right after an action that shows a
+    // SnackBar — the final step uses _pumpBriefly, not pumpAndSettle.
+    Future<void> runAgainstPoWizard(WidgetTester tester) async {
+      final receiptModeDropdown = fieldInCard('Receipt Mode', () => find.byType(DropdownButtonFormField<String>));
+      await tester.tap(receiptModeDropdown);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Against PO').last);
+      await tester.pumpAndSettle();
+
+      // _startAgainstPoWizard's supplier picker dialog.
+      expect(find.text('Select Supplier'), findsOneWidget);
+      await tester.tap(find.text('[SUP-001] Test Supplier'));
+      await tester.pumpAndSettle();
+
+      // _pickCurrencyThenPos's PO picker dialog — one open PO with one
+      // currency, so currency auto-resolves with no separate dialog of its
+      // own (byCurrency.length <= 1 branch).
+      expect(find.text('Select Purchase Order(s)'), findsOneWidget);
+      await tester.tap(find.text('PO-2001'));
+      await tester.pump();
+      await tester.tap(find.text('Add Selected'));
+      await _pumpBriefly(tester, times: 10);
+    }
+
+    testWidgets(
+        'switching to Against PO, picking a supplier then a PO consolidates its pending line into the grid',
+        (tester) async {
+      stubAgainstPoWizard();
+
+      await pumpApp(tester, const GrnEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      await runAgainstPoWizard(tester);
+
+      // Supplier locks into the read-only display field once AGAINST_PO is
+      // active (_receiptMode == 'AGAINST_PO' branch of supplierField).
+      expect(find.text('[SUP-001] Test Supplier'), findsOneWidget);
+
+      // Purchase Orders consolidation section shows the picked PO as a chip.
+      expect(find.text('PO-2001'), findsOneWidget);
+
+      // The PO's pending line landed as its own line card — title format
+      // matches DIRECT mode's own ('idx. productDisplay'), plus the
+      // 'PO: PO-2001' subtitle that only a PO-derived row ever renders.
+      expect(find.text('1. [WID-A] Widget A'), findsOneWidget);
+      expect(find.text('PO: PO-2001'), findsOneWidget);
+      expect(find.text('10.0000'), findsOneWidget); // qtyPackCtrl: (pending_qty / convFactor).toStringAsFixed(4)
+      expect(find.text('25.0'), findsOneWidget); // rateCtrl: (pl['rate'] as num).toString()
+      expect(find.text('Final: 250.00'), findsOneWidget); // baseQty 10 * rate 25, no tax group configured
+    });
+
+    testWidgets('saving after Against-PO consolidation sends receipt_mode and PO traceability in the payload', (tester) async {
+      stubAgainstPoWizard();
+      when(() => mockRepo.save(
+            header: any(named: 'header'),
+            lines: any(named: 'lines'),
+            batches: any(named: 'batches'),
+            serials: any(named: 'serials'),
+            charges: any(named: 'charges'),
+            userId: any(named: 'userId'),
+          )).thenAnswer((_) async => 'GRN-002');
+      when(() => mockRepo.cacheGrnLocally(
+            effectiveGrnNo: any(named: 'effectiveGrnNo'),
+            header: any(named: 'header'),
+            lines: any(named: 'lines'),
+            batches: any(named: 'batches'),
+            serials: any(named: 'serials'),
+            charges: any(named: 'charges'),
+          )).thenAnswer((_) async {});
+
+      await pumpApp(tester, const GrnEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      await runAgainstPoWizard(tester);
+
+      await tester.tap(find.text('Save Draft'));
+      await _pumpBriefly(tester);
+
+      final captured = verify(() => mockRepo.save(
+            header: captureAny(named: 'header'),
+            lines: captureAny(named: 'lines'),
+            batches: any(named: 'batches'),
+            serials: any(named: 'serials'),
+            charges: any(named: 'charges'),
+            userId: any(named: 'userId'),
+          )).captured;
+      final header = captured[0] as Map<String, dynamic>;
+      final lines = captured[1] as List<Map<String, dynamic>>;
+
+      expect(header['receipt_mode'], 'AGAINST_PO');
+      expect(header['supplier_id'], 'sup-001');
+      expect(header['grn_currency_id'], 'ccy-usd');
+
+      expect(lines, hasLength(1));
+      final line = lines.first;
+      expect(line['product_id'], 'prod-001');
+      expect(line['source_po_order_no'], 'PO-2001');
+      expect(line['source_po_order_date'], '2026-07-15');
+      expect(line['source_po_line_serial'], 1);
+      expect(line['qty_pack'], 10.0);
+      expect(line['rate'], 25.0);
+
+      expect(find.text('Draft saved — GRN-002'), findsOneWidget);
+    });
+  });
 }

@@ -470,4 +470,144 @@ void main() {
       expect(find.text('No pending bills found for this party.'), findsOneWidget);
     });
   });
+
+  // Every prior test in this file exercised CRV (Cash Receipt Voucher) only.
+  // This group closes that gap for the 3 remaining voucher types this same
+  // screen renders — BRV/CPV/BPV — confirming lib/core/utils/voucher_logic.dart's
+  // isCashVoucher/isBankVoucher/isReceiptVoucher branches actually drive the
+  // right on-screen field labels/title, not just their own unit tests.
+  // Deliberately lighter-weight than the CRV group above: one blank-form
+  // render test per type (mirroring the existing CRV blank-form test's shape
+  // exactly), not a full resume/save test per type. Label mapping confirmed
+  // directly from the screen source, not assumed:
+  //   _typeLabels: CRV 'Cash Receipt Voucher', BRV 'Bank Receipt Voucher',
+  //                CPV 'Cash Payment Voucher', BPV 'Bank Payment Voucher'
+  //   isCashVoucher (CRV/CPV) -> 'Cash Account' label on the line-1 field
+  //   isBankVoucher (BRV/BPV) -> 'Bank Account' label on the line-1 field
+  //   isReceiptVoucher (CRV/BRV) -> party field labeled 'Customer'
+  //   !isReceiptVoucher (CPV/BPV) -> party field labeled 'Supplier'
+  group('BRV / CPV / BPV blank-form render (remaining voucher-type branches)', () {
+    testWidgets('renders the blank BRV form with Bank Account + Customer labels and the Bank Receipt Voucher title', (tester) async {
+      await pumpApp(
+        tester,
+        const FinanceVoucherEntryScreen(initialVoucherType: 'BRV'),
+        overrides: overrides(),
+        session: testSession(),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      expect(find.text('New Bank Receipt Voucher'), findsOneWidget);
+      expect(find.text('Unsaved draft'), findsOneWidget);
+
+      expect(_findFieldLabel('VOUCHER TYPE'), findsOneWidget);
+      expect(_findFieldLabel('VOUCHER NO'), findsOneWidget);
+      expect(_findFieldLabel('BANK ACCOUNT'), findsOneWidget); // BRV → isBankVoucher → 'Bank Account'
+      expect(_findFieldLabel('CURRENCY'), findsOneWidget);
+      expect(_findFieldLabel('RATE'), findsOneWidget);
+      expect(_findFieldLabel('PAYMENT MODE'), findsOneWidget);
+      expect(_findFieldLabel('REF NO'), findsOneWidget);
+      expect(_findFieldLabel('REF DATE'), findsOneWidget);
+      expect(_findFieldLabel('REMARKS'), findsOneWidget);
+      // BRV is a receipt voucher (isReceiptVoucher → true) → party field labeled 'Customer', same as CRV.
+      expect(_findFieldLabel('CUSTOMER'), findsOneWidget);
+
+      expect(find.text('(auto on save)'), findsOneWidget);
+      expect(find.text('Against Bill'), findsOneWidget);
+      expect(find.text('On Account'), findsOneWidget);
+      expect(find.text('Select a customer or supplier to see pending bills.'), findsOneWidget);
+
+      expect(find.text('Total: '), findsOneWidget);
+      expect(find.text('0.00 USD'), findsOneWidget);
+      expect(find.text('Enter amounts'), findsOneWidget);
+
+      expect(find.text('Save Draft'), findsOneWidget);
+      expect(find.byIcon(Icons.copy_outlined), findsNothing);
+      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(find.text('Post Voucher'), findsNothing);
+    });
+
+    testWidgets('renders the blank CPV form with Cash Account + Supplier labels and the Cash Payment Voucher title', (tester) async {
+      await pumpApp(
+        tester,
+        const FinanceVoucherEntryScreen(initialVoucherType: 'CPV'),
+        overrides: overrides(),
+        session: testSession(),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      expect(find.text('New Cash Payment Voucher'), findsOneWidget);
+      expect(find.text('Unsaved draft'), findsOneWidget);
+
+      expect(_findFieldLabel('VOUCHER TYPE'), findsOneWidget);
+      expect(_findFieldLabel('VOUCHER NO'), findsOneWidget);
+      expect(_findFieldLabel('CASH ACCOUNT'), findsOneWidget); // CPV → isCashVoucher → 'Cash Account'
+      expect(_findFieldLabel('CURRENCY'), findsOneWidget);
+      expect(_findFieldLabel('RATE'), findsOneWidget);
+      expect(_findFieldLabel('PAYMENT MODE'), findsOneWidget);
+      expect(_findFieldLabel('REF NO'), findsOneWidget);
+      expect(_findFieldLabel('REF DATE'), findsOneWidget);
+      expect(_findFieldLabel('REMARKS'), findsOneWidget);
+      // CPV is a payment voucher (isReceiptVoucher → false) → party field labeled 'Supplier'.
+      expect(_findFieldLabel('SUPPLIER'), findsOneWidget);
+
+      expect(find.text('(auto on save)'), findsOneWidget);
+      expect(find.text('Against Bill'), findsOneWidget);
+      expect(find.text('On Account'), findsOneWidget);
+      expect(find.text('Select a customer or supplier to see pending bills.'), findsOneWidget);
+
+      expect(find.text('Total: '), findsOneWidget);
+      expect(find.text('0.00 USD'), findsOneWidget);
+      expect(find.text('Enter amounts'), findsOneWidget);
+
+      expect(find.text('Save Draft'), findsOneWidget);
+      expect(find.byIcon(Icons.copy_outlined), findsNothing);
+      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(find.text('Post Voucher'), findsNothing);
+    });
+
+    testWidgets('renders the blank BPV form with Bank Account + Supplier labels and the Bank Payment Voucher title', (tester) async {
+      await pumpApp(
+        tester,
+        const FinanceVoucherEntryScreen(initialVoucherType: 'BPV'),
+        overrides: overrides(),
+        session: testSession(),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      expect(find.text('New Bank Payment Voucher'), findsOneWidget);
+      expect(find.text('Unsaved draft'), findsOneWidget);
+
+      expect(_findFieldLabel('VOUCHER TYPE'), findsOneWidget);
+      expect(_findFieldLabel('VOUCHER NO'), findsOneWidget);
+      expect(_findFieldLabel('BANK ACCOUNT'), findsOneWidget); // BPV → isBankVoucher → 'Bank Account'
+      expect(_findFieldLabel('CURRENCY'), findsOneWidget);
+      expect(_findFieldLabel('RATE'), findsOneWidget);
+      expect(_findFieldLabel('PAYMENT MODE'), findsOneWidget);
+      expect(_findFieldLabel('REF NO'), findsOneWidget);
+      expect(_findFieldLabel('REF DATE'), findsOneWidget);
+      expect(_findFieldLabel('REMARKS'), findsOneWidget);
+      // BPV is a payment voucher (isReceiptVoucher → false) → party field labeled 'Supplier'.
+      expect(_findFieldLabel('SUPPLIER'), findsOneWidget);
+
+      expect(find.text('(auto on save)'), findsOneWidget);
+      expect(find.text('Against Bill'), findsOneWidget);
+      expect(find.text('On Account'), findsOneWidget);
+      expect(find.text('Select a customer or supplier to see pending bills.'), findsOneWidget);
+
+      expect(find.text('Total: '), findsOneWidget);
+      expect(find.text('0.00 USD'), findsOneWidget);
+      expect(find.text('Enter amounts'), findsOneWidget);
+
+      expect(find.text('Save Draft'), findsOneWidget);
+      expect(find.byIcon(Icons.copy_outlined), findsNothing);
+      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(find.text('Post Voucher'), findsNothing);
+    });
+  });
 }
