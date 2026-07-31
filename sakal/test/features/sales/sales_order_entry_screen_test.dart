@@ -476,4 +476,172 @@ void main() {
       expect(find.text('Piece'), findsOneWidget); // Unit field, readOnly
     });
   });
+
+  // AGAINST_QUOTATION mode — every prior Sales Order test batch (Phase 5)
+  // deliberately exercised DIRECT mode only. Unlike Sales Invoice, this
+  // screen has NO in-screen quotation picker of its own: the list screen
+  // (sales_order_list_screen.dart) fetches the pickable quotation and
+  // navigates here via GoRouter `extra: {'newOrderMode': 'AGAINST_QUOTATION',
+  // 'sourceQuotationNo': ..., 'sourceQuotationDate': ...}`, which
+  // app_router.dart threads straight into this widget's own constructor
+  // params (see app_router.dart's own `salesOrderEntry` route builder) — so
+  // driving this mode means constructing the widget with those params
+  // directly, exactly like the router does, not simulating an in-screen
+  // picker tap (there isn't one for this screen).
+  group('AGAINST_QUOTATION mode — consolidating a Sales Quotation onto a new Order', () {
+    void stubQuotationSource() {
+      when(() => mockRepo.getCustomerDetails(customerId: any(named: 'customerId')))
+          .thenAnswer((_) async => null);
+      when(() => mockRepo.getQuotationHeader(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            quotationNo: any(named: 'quotationNo'),
+            quotationDate: any(named: 'quotationDate'),
+          )).thenAnswer((_) async => {
+            'customer_id': 'cust-001',
+            'customer': {'account_code': 'CUS01', 'account_name': 'Customer One'},
+            'customer_type': 'CUSTOMER',
+            'quotation_currency_id': 'ccy-usd',
+            'currency': {'currency_id': 'USD'},
+            'rate_to_base': 1,
+            'rate_to_local': 1,
+          });
+      when(() => mockRepo.getQuotationLines(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            quotationNo: any(named: 'quotationNo'),
+            quotationDate: any(named: 'quotationDate'),
+          )).thenAnswer((_) async => [
+            {
+              'serial_no': 1,
+              'product_id': 'prod-001',
+              'product': {'product_code': 'WID-A', 'product_name': 'Widget A'},
+              'uom_id': 'uom-001',
+              'uom': {'description': 'Piece'},
+              'uom_conversion_factor': 1.0,
+              'base_qty': 10.0,
+              'converted_qty': 0.0,
+              'rate': 25.0,
+              'discount_percent': 0,
+              'tax_group_id': null,
+              'item_description': '',
+              'barcode': null,
+            },
+          ]);
+      when(() => mockRepo.getQuotationCharges(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            quotationNo: any(named: 'quotationNo'),
+            quotationDate: any(named: 'quotationDate'),
+          )).thenAnswer((_) async => <Map<String, dynamic>>[]);
+    }
+
+    testWidgets('loads the source quotation header + line, freezing rate/discount but leaving qty editable', (tester) async {
+      stubQuotationSource();
+
+      await pumpApp(
+        tester,
+        const SalesOrderEntryScreen(
+          newOrderMode: 'AGAINST_QUOTATION',
+          sourceQuotationNo: 'SQ-001',
+          sourceQuotationDate: '2026-07-01',
+        ),
+        overrides: overrides(),
+        session: testSession(),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      // order_no is only assigned on Save -- still an unsaved draft, but
+      // tagged with its AGAINST_QUOTATION source.
+      expect(find.text('New Sales Order'), findsOneWidget);
+      expect(find.text('Unsaved draft'), findsOneWidget);
+      expect(find.text('From SQ-001'), findsOneWidget);
+
+      // Customer + currency carried over from the quotation header, both
+      // locked (read-only Customer field / disabled Currency dropdown)
+      // since customerLocked/currencyField's own `editable` both check
+      // _isAgainstQuotation.
+      expect(find.text('[CUS01] Customer One'), findsOneWidget);
+      expect(find.text('USD'), findsOneWidget);
+
+      // Line — _buildQuotationLineRow's own title carries a numeric prefix
+      // ('1. ...'), a DIFFERENT string from the read-only Product field's
+      // own bare value text, so both can be asserted unambiguously without
+      // scoping.
+      expect(find.text('1. [WID-A] Widget A'), findsOneWidget);
+      expect(find.text('[WID-A] Widget A'), findsOneWidget); // read-only Product field value
+      expect(find.text('Piece'), findsOneWidget); // read-only Unit field value
+
+      // "Qty to Convert" defaults to the FULL remaining (base_qty -
+      // converted_qty = 10.0 - 0.0), and is genuinely editable (unlike
+      // rate/discount) — see _OrderLineRow's own comment on why
+      // qtyPackCtrl is repurposed as this single field in this mode.
+      expect(find.text('10.0'), findsOneWidget); // "Qty to Convert" TextFormField
+      expect(find.text('10.00'), findsOneWidget); // "of" read-only remaining, toStringAsFixed(2)
+      expect(find.text('25.00'), findsOneWidget); // "Rate (frozen)" read-only, row.rate.toStringAsFixed(2)
+      // discount_percent is 0 on this line, so 'Disc % (frozen)' doesn't render at all.
+      expect(find.text('Disc % (frozen)'), findsNothing);
+    });
+
+    testWidgets('saving sends the frozen rate/discount and the (editable) converted qty, tagged with the source quotation', (tester) async {
+      stubQuotationSource();
+      when(() => mockRepo.save(
+            header: any(named: 'header'),
+            lines: any(named: 'lines'),
+            charges: any(named: 'charges'),
+            userId: any(named: 'userId'),
+          )).thenAnswer((_) async => 'SO-100');
+      when(() => mockRepo.cacheOrderLocally(
+            effectiveOrderNo: any(named: 'effectiveOrderNo'),
+            header: any(named: 'header'),
+            lines: any(named: 'lines'),
+            charges: any(named: 'charges'),
+          )).thenAnswer((_) async {});
+
+      await pumpApp(
+        tester,
+        const SalesOrderEntryScreen(
+          newOrderMode: 'AGAINST_QUOTATION',
+          sourceQuotationNo: 'SQ-001',
+          sourceQuotationDate: '2026-07-01',
+        ),
+        overrides: overrides(),
+        session: testSession(),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Save Draft'));
+      await _pumpBriefly(tester);
+
+      final captured = verify(() => mockRepo.save(
+            header: captureAny(named: 'header'),
+            lines: captureAny(named: 'lines'),
+            charges: any(named: 'charges'),
+            userId: any(named: 'userId'),
+          )).captured;
+      final header = captured[0] as Map<String, dynamic>;
+      final lines = captured[1] as List<Map<String, dynamic>>;
+
+      expect(header['order_mode'], 'AGAINST_QUOTATION');
+      expect(header['source_quotation_no'], 'SQ-001');
+      expect(header['source_quotation_date'], '2026-07-01');
+      expect(header['customer_id'], 'cust-001');
+      expect(header['order_currency_id'], 'ccy-usd');
+      expect(header['location_id'], 'loc-001');
+
+      expect(lines, hasLength(1));
+      final line = lines.first;
+      expect(line['product_id'], 'prod-001');
+      expect(line['qty_pack'], 10.0); // the (editable) "Qty to Convert" value, defaulted to the full remaining
+      expect(line['qty_loose'], 0); // no meaning in this mode -- forced 0
+      expect(line['base_qty'], 10.0);
+      expect(line['rate'], 25.0); // frozen, verbatim from the quotation line
+      expect(line['discount_percent'], 0.0); // frozen, verbatim from the quotation line
+      expect(line['source_quotation_line_serial'], 1);
+
+      expect(find.text('Sales Order SO-100 saved.'), findsOneWidget);
+    });
+  });
 }

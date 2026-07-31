@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/utils/app_number_format.dart';
 import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/sales/domain/repositories/sales_invoice_repository.dart';
 import 'package:sakal/features/sales/presentation/providers/sales_invoice_providers.dart';
@@ -545,6 +546,147 @@ void main() {
       expect(find.text('[WID-A] Widget A'), findsOneWidget);
       final rateField = fieldInCard('Rate', () => find.byType(TextFormField));
       expect(tester.widget<TextFormField>(rateField).controller!.text, '42.50');
+    });
+  });
+
+  // AGAINST_QUOTATION mode — every prior Sales Invoice test batch (Phase 5)
+  // deliberately exercised DIRECT mode only. Unlike Sales Order (whose mode
+  // is chosen entirely on the LIST screen, with no in-screen picker at
+  // all), Sales Invoice's own mode selector AND its quotation/order picker
+  // dialog both live on THIS screen (the 2026-07-18 UI pass moved them
+  // here — see _pickQuotation/_onModeSegmentChanged) — so this is a
+  // genuine "drive the SegmentedButton, then tap a real picker dialog"
+  // interaction test, not just constructing the widget with a pre-set
+  // mode/source param the way the Sales Order test above has to.
+  group('AGAINST_QUOTATION mode — switching via the SegmentedButton and picking a source quotation', () {
+    // Same helper as the group above, redefined locally per this file's
+    // own established convention (each group owns its copy).
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(
+                of: find.byWidgetPredicate((w) =>
+                    w is RichText &&
+                    (w.text.toPlainText().trim().toUpperCase() == label.toUpperCase() ||
+                        w.text.toPlainText().trim().toUpperCase() == '${label.toUpperCase()} *')),
+                matching: find.byType(SakalFieldCard),
+              ).first,
+          matching: matcher(),
+        );
+
+    testWidgets('picking a quotation from the dialog switches to CREDIT and consolidates its line, frozen and read-only', (tester) async {
+      when(() => mockRepo.getInvoiceableQuotations(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+          )).thenAnswer((_) async => [
+            {
+              'quotation_no': 'SQ-001',
+              'quotation_date': '2026-07-01',
+              'customer': {'account_code': 'CUS01', 'account_name': 'Customer One'},
+              'customer_type': 'CUSTOMER',
+              'status': 'APPROVED',
+              'grand_total': 250.0,
+            },
+          ]);
+      when(() => mockRepo.getQuotationHeader(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            quotationNo: any(named: 'quotationNo'),
+            quotationDate: any(named: 'quotationDate'),
+          )).thenAnswer((_) async => {
+            'customer_id': 'cust-001',
+            'customer': {'account_code': 'CUS01', 'account_name': 'Customer One'},
+            'quotation_currency_id': 'ccy-usd',
+            'currency': {'currency_id': 'USD'},
+            'rate_to_base': 1,
+            'rate_to_local': 1,
+          });
+      when(() => mockRepo.getQuotationLines(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            quotationNo: any(named: 'quotationNo'),
+            quotationDate: any(named: 'quotationDate'),
+          )).thenAnswer((_) async => [
+            {
+              'serial_no': 1,
+              'product_id': 'prod-001',
+              'product': {'product_code': 'WID-A', 'product_name': 'Widget A', 'tracking_type': 'NONE'},
+              'uom_id': 'uom-001',
+              'uom': {'description': 'Piece'},
+              'uom_conversion_factor': 1.0,
+              'base_qty': 10.0,
+              'rate': 25.0,
+              'discount_percent': 0.0,
+              'tax_group_id': null,
+              'tax_group': null,
+              'item_description': '',
+              'barcode': null,
+            },
+          ]);
+      when(() => mockRepo.getQuotationCharges(
+            clientId: any(named: 'clientId'),
+            companyId: any(named: 'companyId'),
+            quotationNo: any(named: 'quotationNo'),
+            quotationDate: any(named: 'quotationDate'),
+          )).thenAnswer((_) async => <Map<String, dynamic>>[]);
+
+      await pumpApp(tester, const SalesInvoiceEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      // Starts in DIRECT + CASH — the screen's own default for a brand-new
+      // invoice (_init()'s own else-branch when no newInvoiceMode is passed).
+      expect(find.text('Cash Sale'), findsOneWidget);
+
+      await tester.tap(find.text('Against Quotation'));
+      await tester.pumpAndSettle();
+
+      // _hasUnsavedWork is false at this point (the auto-seeded blank line
+      // has no product yet, remarks are empty), so _confirmDiscardIfDirty()
+      // returns immediately and _pickQuotation()'s own SimpleDialog shows
+      // straight away, listing the fixture quotation.
+      expect(find.text('Select a Sales Quotation'), findsOneWidget);
+      expect(find.text('SQ-001'), findsOneWidget);
+      await tester.tap(find.text('SQ-001'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      // _loadFromQuotation always forces a CREDIT sale and carries the
+      // source's own customer/currency verbatim; the picked doc number now
+      // shows as a Chip next to the mode selector (dialog is closed, so
+      // this is the only remaining match).
+      expect(find.text('Credit Sale'), findsOneWidget);
+      expect(find.text('SQ-001'), findsOneWidget);
+      expect(find.text('[CUS01] Customer One'), findsOneWidget); // read-only Customer field
+      expect(find.text('USD'), findsOneWidget); // read-only Currency field
+
+      // Line — re-derived server-side from the source quotation, copied
+      // verbatim: product/qty land correctly, and Rate is genuinely
+      // disabled (frozen), not merely visually similar to a normal field.
+      // Product duplicates onto BOTH the mobile card's own title (no
+      // numeric prefix on THIS screen, unlike Sales Order's own
+      // '${idx+1}. ...' convention) AND the read-only Product field's own
+      // value — scoped to the Product-labelled card specifically to avoid
+      // over/under-counting either one.
+      expect(fieldInCard('Product', () => find.text('[WID-A] Widget A')), findsOneWidget);
+      // showLooseQty is forced off for an against-source line, so the
+      // label is the bare 'Quantity', not 'Qty Pack'.
+      expect(fieldInCard('Quantity', () => find.text('10.0')), findsOneWidget);
+      expect(fieldInCard('Tax', () => find.text('—')), findsOneWidget); // no tax_group_id on this line
+
+      final rateField = fieldInCard('Rate', () => find.byType(TextFormField));
+      final rateWidget = tester.widget<TextFormField>(rateField);
+      // Rate renders through SakalFormattedNumberField, whose own display
+      // controller shows a GROUPED/rounded value, not the raw controller
+      // text (same distinction the DIRECT+CREDIT interaction test above
+      // relies on for its own Rate-field assertion) — computed here via
+      // the actual production formatter rather than hardcoding a guess at
+      // its exact output.
+      expect(rateWidget.controller!.text, AppNumberFormat.rate(25.0, decimalPlaces: 2, numberFormatStyle: 'INTERNATIONAL'));
+      expect(rateWidget.enabled, false); // frozen — never editable in this mode
+
+      // Charges card is present but explicitly read-only in this mode (the
+      // server copies the source document's own charges verbatim
+      // regardless of what's shown here).
+      expect(find.text('Charges (carried forward from source — read-only)'), findsOneWidget);
     });
   });
 }
