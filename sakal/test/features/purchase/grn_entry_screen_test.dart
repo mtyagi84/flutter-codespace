@@ -30,7 +30,7 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 /// Text/Text.rich — find.text()/find.textContaining() don't reliably match
 /// a bare RichText, so match directly against the TextSpan's own plain text.
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
-      (w) => w is RichText && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
+      (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
 
 void main() {
@@ -625,11 +625,16 @@ void main() {
 
       await runAgainstPoWizard(tester);
 
+      // The wizard's own consolidation step already queued an 'Added N
+      // line(s)…' SnackBar via the same ScaffoldMessenger — by default it
+      // queues a second SnackBar behind the first rather than replacing it,
+      // so 'Draft saved — GRN-002' would otherwise sit unseen behind it for
+      // that SnackBar's full ~4s duration. Clear the queue first so Save
+      // Draft's own SnackBar shows immediately.
+      ScaffoldMessenger.of(tester.element(find.byType(GrnEntryScreen))).clearSnackBars();
+      await tester.pump();
+
       await tester.tap(find.text('Save Draft'));
-      // The Against-PO wizard leaves extra queued async work (candidate/
-      // batch loading) ahead of this save — the default 5-pump budget isn't
-      // always enough for the save+cache chain to resolve and the SnackBar
-      // to actually appear; match the wizard's own longer pump budget.
       await _pumpBriefly(tester, times: 10);
 
       final captured = verify(() => mockRepo.save(

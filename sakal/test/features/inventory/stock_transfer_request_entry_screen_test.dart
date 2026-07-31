@@ -38,7 +38,7 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 /// built this way. Matching directly against the RichText's own
 /// `TextSpan.toPlainText()` sidesteps that ambiguity entirely.
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
-      (w) => w is RichText && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
+      (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
 
 void main() {

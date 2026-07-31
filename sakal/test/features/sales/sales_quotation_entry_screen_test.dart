@@ -39,7 +39,7 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 /// label) legitimately returns more than one match; assert the exact
 /// count in that case rather than findsOneWidget.
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
-      (w) => w is RichText && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
+      (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
 
 void main() {

@@ -33,7 +33,7 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 /// Text/Text.rich — find.text()/find.textContaining() don't reliably match
 /// a bare RichText, so match directly against the TextSpan's own plain text.
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
-      (w) => w is RichText && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
+      (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
 
 void main() {
@@ -341,6 +341,17 @@ void main() {
             productId: any(named: 'productId'),
           )).thenAnswer((_) async => {'cost_price': 45.0, 'cost_price_specific': null});
 
+      // The Product options overlay renders right at the default ~600px-
+      // tall test viewport's bottom edge once a line card is already on
+      // screen above it — its own outer TapRegion barrier then wins the
+      // hit-test over the specific option Text beneath it. RawAutocomplete's
+      // overlay is positioned via CompositedTransformFollower (screen-
+      // absolute), so it lives outside any Scrollable an ensureVisible()
+      // could act on — a taller viewport is the actual fix.
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
       await pumpApp(tester, const PriceMasterEntryScreen(), overrides: overrides(), session: testSession());
       await tester.pumpAndSettle();
 
@@ -358,10 +369,6 @@ void main() {
 
       expect(find.text('[WID-A] Widget A'), findsOneWidget);
 
-      // The overlay option can render below the default ~600px-tall test
-      // viewport — ensureVisible scrolls it into the actual hit-testable
-      // area first.
-      await tester.ensureVisible(find.text('[WID-A] Widget A'));
       await tester.tap(find.text('[WID-A] Widget A'));
       // The Product field carries `key: ValueKey('${row.hashCode}-${row.productDisplay}')`
       // — selecting a product changes productDisplay, forcing a remount;

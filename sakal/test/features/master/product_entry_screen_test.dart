@@ -31,8 +31,12 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 /// SakalFieldCard renders its label as a raw RichText, not wrapped in
 /// Text/Text.rich — find.text()/find.textContaining() don't reliably match
 /// a bare RichText, so match directly against the TextSpan's own plain text.
+/// Restricted to single-line RichTexts (every real SakalFieldCard label is
+/// `maxLines: 1, overflow: ellipsis`) so a long wrapping helper/description
+/// sentence that happens to contain the same word (e.g. "...its own barcode
+/// for scanning.") is never mistaken for a real field label.
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
-      (w) => w is RichText && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
+      (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
 
 void main() {

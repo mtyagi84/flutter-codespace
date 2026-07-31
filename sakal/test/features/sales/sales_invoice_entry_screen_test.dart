@@ -34,7 +34,7 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 /// Text/Text.rich — find.text()/find.textContaining() don't reliably match
 /// a bare RichText, so match directly against the TextSpan's own plain text.
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
-      (w) => w is RichText && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
+      (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
 
 void main() {
@@ -173,7 +173,7 @@ void main() {
       // (Responsive.isMobile, <600px) — the default ~800px test viewport
       // hits the desktop row layout instead, which has no title text at
       // all, so assert on the always-present Product field label instead.
-      expect(_findFieldLabel('PRODUCT'), findsOneWidget);
+      expect(_findFieldLabel('PRODUCT *'), findsOneWidget);
 
       // Charges: always present and always editable for a new DIRECT
       // invoice, regardless of whether any charge types are configured —
@@ -335,7 +335,10 @@ void main() {
       // qtyLooseCtrl AND discountPctCtrl both show '0.0' from this fixture's
       // qty_loose/discount_percent, both defaulting to 0.
       expect(find.text('0.0'), findsNWidgets(2));
-      expect(find.text('25.0'), findsOneWidget); // rateCtrl
+      // Rate renders through SakalFormattedNumberField (AppNumberFormat.rate),
+      // not the raw controller text — USD's rate_decimal_places=2 formats
+      // the fixture's 25.0 as '25.00'.
+      expect(find.text('25.00'), findsOneWidget); // rateCtrl
       expect(find.text('—'), findsOneWidget); // Tax field — no tax_group_id on this line
       expect(find.text('250.00'), findsOneWidget); // Amount — baseQty(10) * rate(25), no tax/discount/charges
 
@@ -540,7 +543,7 @@ void main() {
       // (Responsive.isMobile, <600px); the default ~800px test viewport
       // hits the desktop row layout, which has no title text at all, so
       // assert on the always-present Product field instead.
-      expect(_findFieldLabel('PRODUCT'), findsOneWidget);
+      expect(_findFieldLabel('PRODUCT *'), findsOneWidget);
 
       final productField = fieldInCard('Product', () => find.byType(TextFormField));
       await tester.enterText(productField, 'Widget');
@@ -654,7 +657,17 @@ void main() {
       // invoice (_init()'s own else-branch when no newInvoiceMode is passed).
       expect(find.text('Cash Sale'), findsOneWidget);
 
-      await tester.tap(find.text('Against Quotation'));
+      // The 3-segment Mode SegmentedButton (Direct/Against Quotation/Against
+      // Order) sits in the same Wrap row as the 2-segment Sale Type button
+      // — at the default ~800px test width the hit-test framework can
+      // report the tap offset as landing on an ink/overlay layer rather
+      // than this segment's own gesture region; ensureVisible + an explicit
+      // settle pump first, and warnIfMissed:false since the pointer event
+      // is still delivered at the computed offset regardless of the
+      // (frequently-false-positive) warning.
+      await tester.ensureVisible(find.text('Against Quotation'));
+      await tester.pump();
+      await tester.tap(find.text('Against Quotation'), warnIfMissed: false);
       await tester.pumpAndSettle();
 
       // _hasUnsavedWork is false at this point (the auto-seeded blank line
