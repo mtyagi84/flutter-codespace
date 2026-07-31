@@ -929,20 +929,23 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
     crossAxisAlignment: CrossAxisAlignment.center,
     mainAxisSize: MainAxisSize.min,
     children: [
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(_quotationNo != null ? 'Sales Quotation · $_quotationNo' : 'New Sales Quotation',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-        const SizedBox(height: 2),
-        Row(children: [
-          _status != 'DRAFT' || _quotationNo != null
-              ? _statusChip(_isExpired ? 'EXPIRED' : _status)
-              : const Text('Unsaved draft', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          if (_quotationNo != null) ...[
-            const SizedBox(width: 8),
-            PendingSyncBadge(documentType: 'SALES_QUOTATION', documentId: _quotationNo!),
-          ],
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_quotationNo != null ? 'Sales Quotation · $_quotationNo' : 'New Sales Quotation',
+              overflow: TextOverflow.ellipsis, maxLines: 1,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+          const SizedBox(height: 2),
+          Row(children: [
+            _status != 'DRAFT' || _quotationNo != null
+                ? _statusChip(_isExpired ? 'EXPIRED' : _status)
+                : const Text('Unsaved draft', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            if (_quotationNo != null) ...[
+              const SizedBox(width: 8),
+              PendingSyncBadge(documentType: 'SALES_QUOTATION', documentId: _quotationNo!),
+            ],
+          ]),
         ]),
-      ]),
+      ),
     ],
   );
 

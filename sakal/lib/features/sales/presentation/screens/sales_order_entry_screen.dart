@@ -1207,22 +1207,25 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     crossAxisAlignment: CrossAxisAlignment.center,
     mainAxisSize: MainAxisSize.min,
     children: [
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(_orderNo != null ? 'Sales Order · $_orderNo' : 'New Sales Order',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-        const SizedBox(height: 2),
-        Row(children: [
-          _orderNo != null ? _statusChip(_status) : const Text('Unsaved draft', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          if (_isAgainstQuotation) ...[
-            const SizedBox(width: 8),
-            Text('From $_sourceQuotationNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          ],
-          if (_orderNo != null) ...[
-            const SizedBox(width: 8),
-            PendingSyncBadge(documentType: 'SALES_ORDER', documentId: _orderNo!),
-          ],
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_orderNo != null ? 'Sales Order · $_orderNo' : 'New Sales Order',
+              overflow: TextOverflow.ellipsis, maxLines: 1,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+          const SizedBox(height: 2),
+          Row(children: [
+            _orderNo != null ? _statusChip(_status) : const Text('Unsaved draft', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            if (_isAgainstQuotation) ...[
+              const SizedBox(width: 8),
+              Text('From $_sourceQuotationNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            ],
+            if (_orderNo != null) ...[
+              const SizedBox(width: 8),
+              PendingSyncBadge(documentType: 'SALES_ORDER', documentId: _orderNo!),
+            ],
+          ]),
         ]),
-      ]),
+      ),
     ],
   );
 
