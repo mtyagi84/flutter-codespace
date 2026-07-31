@@ -1751,20 +1751,23 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
         crossAxisAlignment: CrossAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(_invoiceNo != null ? 'Quick Invoice · $_invoiceNo' : 'New Quick Invoice',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-            const SizedBox(height: 2),
-            Row(children: [
-              _invoiceNo != null ? _statusChip(_status) : const Text('Unsaved', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              const SizedBox(width: 8),
-              Text(_saleType == 'CASH' ? 'Cash Sale' : 'Credit Sale', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              if (_sourceQuotationNo != null) ...[const SizedBox(width: 8), Text('From $_sourceQuotationNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))],
-              if (_sourceOrderNo != null) ...[const SizedBox(width: 8), Text('From $_sourceOrderNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))],
-              if (_invoiceNo != null) ...[const SizedBox(width: 8), PendingSyncBadge(documentType: 'SALES_INVOICE', documentId: _invoiceNo!)],
-              if (_deliveryStatus != null) ...[const SizedBox(width: 8), _deliveryStatusBadge()!],
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(_invoiceNo != null ? 'Quick Invoice · $_invoiceNo' : 'New Quick Invoice',
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+              const SizedBox(height: 2),
+              Wrap(spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                _invoiceNo != null ? _statusChip(_status) : const Text('Unsaved', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                Text(_saleType == 'CASH' ? 'Cash Sale' : 'Credit Sale', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                if (_sourceQuotationNo != null) Text('From $_sourceQuotationNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                if (_sourceOrderNo != null) Text('From $_sourceOrderNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                if (_invoiceNo != null) PendingSyncBadge(documentType: 'SALES_INVOICE', documentId: _invoiceNo!),
+                if (_deliveryStatus != null) _deliveryStatusBadge()!,
+              ]),
             ]),
-          ]),
+          ),
         ],
       );
 

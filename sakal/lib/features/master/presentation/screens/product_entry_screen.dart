@@ -608,23 +608,29 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
     crossAxisAlignment: CrossAxisAlignment.center,
     mainAxisSize: MainAxisSize.min,
     children: [
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _isNew ? 'New Product' : _nameCtrl.text.isNotEmpty
-                ? _nameCtrl.text
-                : 'Edit Product',
-            style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary),
-          ),
-          const Text('Product Master',
-              style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary)),
-        ],
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _isNew ? 'New Product' : _nameCtrl.text.isNotEmpty
+                  ? _nameCtrl.text
+                  : 'Edit Product',
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary),
+            ),
+            const Text('Product Master',
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary)),
+          ],
+        ),
       ),
     ],
   );
