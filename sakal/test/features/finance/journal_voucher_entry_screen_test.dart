@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/finance/data/models/finance_voucher_model.dart';
 import 'package:sakal/features/finance/domain/repositories/finance_voucher_repository.dart';
 import 'package:sakal/features/finance/presentation/providers/finance_voucher_providers.dart';
@@ -311,6 +312,75 @@ void main() {
       expect(crLine['line_remarks'], 'Rent income line');
 
       expect(find.text('Journal Voucher JV-001 saved.'), findsOneWidget);
+    });
+  });
+
+  // Every prior JV test (Phase 5 + this file's own resume-flow tests)
+  // deliberately excluded driving FinanceAccountPicker (built on
+  // SakalAutocomplete) through real user interaction — this group types
+  // into the auto-added first line's own Account field, picks a real
+  // option from the rendered overlay, and confirms the selection lands.
+  // Unlike GRN's own `_searchField<T>` (a plain Text row per option),
+  // FinanceAccountPicker's optionBuilder renders Code/Name/Parent-Group as
+  // three SEPARATE Text widgets (see finance_account_picker.dart's own
+  // optionRow) — there is no single combined "[code] name" string to
+  // find.text() against inside the overlay, only after a real selection
+  // sets the field's own text via displayStringForOption. So the overlay
+  // assertion below matches the account NAME column alone, and the
+  // post-selection assertion matches the field's own combined text.
+  group('Account picker interaction (real search + select) on a line', () {
+    // Same exact-match helper as GRN's own pilot (see that file's own
+    // comment) — a bare "Account" substring query would otherwise be
+    // ambiguous with a future field on this screen, but exact-match keeps
+    // this consistent with every other file in this rollout.
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(
+                of: find.byWidgetPredicate((w) =>
+                    w is RichText &&
+                    (w.text.toPlainText().trim().toUpperCase() == label.toUpperCase() ||
+                        w.text.toPlainText().trim().toUpperCase() == '${label.toUpperCase()} *')),
+                matching: find.byType(SakalFieldCard),
+              ).first,
+          matching: matcher(),
+        );
+
+    testWidgets(
+        "typing into the first line's Account field shows the matching option, and selecting it fills the field, Parent Group, and Currency",
+        (tester) async {
+      await pumpApp(tester, const JournalVoucherEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      // _addLine() runs synchronously in initState() — there's always
+      // exactly one blank line to search within on a brand-new JV.
+      final accountField = fieldInCard('Account', () => find.byType(TextFormField));
+      await tester.enterText(accountField, 'Office');
+      // FinanceAccountPicker's own _search() filters the already-loaded
+      // accountsProvider list synchronously — pumpAndSettle just lets
+      // RawAutocomplete's OverlayEntry render the filtered options.
+      await tester.pumpAndSettle();
+
+      // The overlay's optionRow renders code/name/parent as three separate
+      // Text widgets — the account NAME is the unique, findable one (only
+      // 'Office Rent' contains 'office'; 'Rent Received' does not).
+      expect(find.text('Office Rent'), findsOneWidget);
+
+      await tester.tap(find.text('Office Rent'));
+      await tester.pumpAndSettle();
+
+      // _onAccountSelected sets row.accountId/accountDisplay/parentName/
+      // accountCurrency — the field's own displayed text (combined "[code]
+      // name" via FinanceAccountPicker.displayString) is set internally by
+      // RawAutocomplete itself as part of processing the selection, before
+      // widget.onSelected (i.e. _onAccountSelected) even runs.
+      expect(find.text('[EXP-101] Office Rent'), findsOneWidget);
+      // Parent Group and Currency are plain readonly SakalFieldCards driven
+      // by row.parentName/row.accountCurrency — they rebuild on every
+      // setState with no remount/key gotcha, unlike the FormField-family
+      // Account picker itself. accountCurrency ('USD') == _baseCcy so
+      // _refreshLinePartyRate short-circuits with no exchange-rate fetch
+      // needed — no extra repository stub required for this test.
+      expect(find.text('Expenses'), findsOneWidget);
+      expect(find.text('USD'), findsOneWidget);
     });
   });
 }

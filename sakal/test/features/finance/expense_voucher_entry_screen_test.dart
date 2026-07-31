@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/finance/domain/repositories/expense_voucher_repository.dart';
 import 'package:sakal/features/finance/presentation/providers/expense_voucher_providers.dart';
 import 'package:sakal/features/finance/presentation/screens/expense_voucher_entry_screen.dart';
@@ -254,6 +255,76 @@ void main() {
       expect(line['line_remarks'], 'Monthly bill');
 
       expect(find.text('Expense Voucher EXV-001 saved.'), findsOneWidget);
+    });
+  });
+
+  // Every prior Expense Voucher test deliberately excluded driving
+  // FinanceAccountPicker through real user interaction — this group
+  // drives both of this screen's own pickers: the header Supplier field,
+  // and the auto-added first line's own Expense Account field. Same
+  // FinanceAccountPicker three-separate-Text-widgets overlay shape as
+  // Journal/Contra Voucher (see finance_account_picker.dart's optionRow).
+  group('Supplier + Expense Account picker interaction (real search + select)', () {
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(
+                of: find.byWidgetPredicate((w) =>
+                    w is RichText &&
+                    (w.text.toPlainText().trim().toUpperCase() == label.toUpperCase() ||
+                        w.text.toPlainText().trim().toUpperCase() == '${label.toUpperCase()} *')),
+                matching: find.byType(SakalFieldCard),
+              ).first,
+          matching: matcher(),
+        );
+
+    testWidgets('typing into the Supplier field shows the matching option, and tapping it selects the supplier', (tester) async {
+      await pumpApp(tester, const ExpenseVoucherEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      final supplierField = fieldInCard('Supplier', () => find.byType(TextFormField));
+      await tester.enterText(supplierField, 'Test');
+      await tester.pumpAndSettle();
+
+      // FinanceAccountPicker's optionRow renders Code/Name/Parent as
+      // separate Text widgets — the account NAME is the unique findable
+      // one (this fixture's only Supplier-natured account).
+      expect(find.text('Test Supplier'), findsOneWidget);
+
+      await tester.tap(find.text('Test Supplier'));
+      // FinanceAccountPicker here carries `key: ValueKey(_supplierDisplay)`
+      // (see _buildHeaderSection) — selecting changes _supplierDisplay,
+      // forcing a remount; pumpAndSettle lets that finish.
+      await tester.pumpAndSettle();
+
+      // _onSupplierSelected sets _supplierId/_supplierDisplay — this
+      // fixture's account has no 'rim_currencies' key at all, so the
+      // auto-currency-fetch branch inside _onSupplierSelected is skipped
+      // entirely (no repository stub needed), leaving the field's own
+      // displayed text the simplest observable proof.
+      expect(find.text('[SUP-001] Test Supplier'), findsOneWidget);
+    });
+
+    testWidgets("typing into the first line's Expense Account field shows the matching option, and selecting it fills the line",
+        (tester) async {
+      await pumpApp(tester, const ExpenseVoucherEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      // _addLine() runs synchronously in initState() — a brand-new
+      // Expense Voucher always starts with exactly one blank line.
+      final expenseAccountField = fieldInCard('Expense Account', () => find.byType(TextFormField));
+      await tester.enterText(expenseAccountField, 'Electric');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Electricity Expense'), findsOneWidget);
+
+      await tester.tap(find.text('Electricity Expense'));
+      await tester.pumpAndSettle();
+
+      // _onLineAccountSelected sets row.accountId/accountDisplay; this
+      // fixture's account has no default_tax_group_id, so the
+      // auto-suggest Tax Group branch is skipped, and with no tax group
+      // on any line, _refreshTaxPreview() short-circuits before making
+      // any repository call (groupIds.isEmpty) — no extra stub needed.
+      expect(find.text('[EXP-01] Electricity Expense'), findsOneWidget);
     });
   });
 }

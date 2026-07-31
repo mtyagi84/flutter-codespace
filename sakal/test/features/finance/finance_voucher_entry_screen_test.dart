@@ -7,6 +7,7 @@ import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/providers/session_provider.dart';
 import 'package:sakal/core/router/route_names.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/finance/data/models/finance_voucher_model.dart';
 import 'package:sakal/features/finance/domain/repositories/finance_voucher_repository.dart';
 import 'package:sakal/features/finance/presentation/providers/finance_voucher_providers.dart';
@@ -360,6 +361,113 @@ void main() {
       expect(acctLine['line_remarks'], 'Line remark A');
 
       expect(find.text('Draft saved — CRV-001'), findsOneWidget);
+    });
+  });
+
+  // Every prior test in this file deliberately excluded driving this
+  // screen's own account pickers through real user interaction. Unlike
+  // Journal/Contra/Expense Voucher (all built on the shared
+  // FinanceAccountPicker), this screen's own `_buildAccountSearch()`
+  // helper is a raw SakalAutocomplete with its own bespoke optionBuilder
+  // (Column of [combined "[code] name" Text, optional parent-name
+  // subtitle Text]) — the fixture accounts here carry no 'parent' key, so
+  // only the FIRST Text renders per option, and it already IS the full
+  // combined display string. That makes the overlay assertion below match
+  // GRN's own pilot shape (a single find.text() for the whole string),
+  // not Journal/Contra Voucher's split-into-three-Texts shape — confirmed
+  // by reading _buildAccountSearch's optionBuilder directly, not assumed.
+  group('Cash Account + Customer picker interaction (real search + select)', () {
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(
+                of: find.byWidgetPredicate((w) =>
+                    w is RichText &&
+                    (w.text.toPlainText().trim().toUpperCase() == label.toUpperCase() ||
+                        w.text.toPlainText().trim().toUpperCase() == '${label.toUpperCase()} *')),
+                matching: find.byType(SakalFieldCard),
+              ).first,
+          matching: matcher(),
+        );
+
+    testWidgets('typing into the Cash Account field shows the matching option, and selecting it fills the field and Currency',
+        (tester) async {
+      // _onCashBankSelected always calls _fetchRatesForTrans(), which
+      // fetches the LOCAL rate (trans→FC) unconditionally once the trans
+      // and local currencies differ — this fixture's local currency ('FC')
+      // differs from trans ('USD' once selected), so a real repository
+      // call happens and needs a stub (unlike Journal Voucher's own
+      // fixture, where accountCurrency == baseCcy short-circuits it).
+      when(() => mockRepo.fetchExchangeRate(
+            companyId: any(named: 'companyId'),
+            locationId: any(named: 'locationId'),
+            fromCurrency: any(named: 'fromCurrency'),
+            toCurrency: any(named: 'toCurrency'),
+            rateDate: any(named: 'rateDate'),
+          )).thenAnswer((_) async => 1.0);
+
+      await pumpApp(
+        tester,
+        const FinanceVoucherEntryScreen(initialVoucherType: 'CRV'),
+        overrides: overrides(),
+        session: testSession(),
+      );
+      await tester.pumpAndSettle();
+
+      final cashAccountField = fieldInCard('Cash Account', () => find.byType(TextFormField));
+      await tester.enterText(cashAccountField, 'Cash');
+      await tester.pumpAndSettle();
+
+      expect(find.text('[CASH-01] Cash In Hand'), findsOneWidget);
+
+      await tester.tap(find.text('[CASH-01] Cash In Hand'));
+      // _buildAccountSearch's SakalAutocomplete carries `key:
+      // ValueKey(keyValue ?? selectedId ?? 'none')` — selecting changes
+      // _cashBankId, forcing a remount; pumpAndSettle lets that finish.
+      await tester.pumpAndSettle();
+
+      // _onCashBankSelected sets _cashBankId/_transCurrency — the field's
+      // own displayed text plus the readonly Currency field (from '—' to
+      // 'USD') are the simplest observable proof the selection landed.
+      expect(find.text('[CASH-01] Cash In Hand'), findsOneWidget);
+      expect(find.text('USD'), findsOneWidget);
+    });
+
+    testWidgets('typing into the Customer field shows the matching option, and selecting it loads pending bills for that party',
+        (tester) async {
+      when(() => mockRepo.getPendingBills(
+            companyId: any(named: 'companyId'),
+            locationId: any(named: 'locationId'),
+            accountId: any(named: 'accountId'),
+          )).thenAnswer((_) async => []);
+
+      await pumpApp(
+        tester,
+        const FinanceVoucherEntryScreen(initialVoucherType: 'CRV'),
+        overrides: overrides(),
+        session: testSession(),
+      );
+      await tester.pumpAndSettle();
+
+      // Against Bill is the default mode for a brand-new voucher; CRV is a
+      // receipt voucher, so the party field is labeled 'Customer' (already
+      // confirmed by the existing blank-form test above).
+      final customerField = fieldInCard('Customer', () => find.byType(TextFormField));
+      await tester.enterText(customerField, 'Test');
+      await tester.pumpAndSettle();
+
+      expect(find.text('[CUS-01] Test Customer'), findsOneWidget);
+
+      await tester.tap(find.text('[CUS-01] Test Customer'));
+      await tester.pumpAndSettle();
+
+      // _onPartySelected sets _partyId/_partyName and (since !_isOnAccount
+      // by default) calls _loadPendingBills() — trans and party currency
+      // both resolve to 'USD' here (no cash account picked in this test),
+      // so _fetchCrossRate short-circuits with no fetchExchangeRate stub
+      // needed. No bills configured in this fixture, so the empty-bills
+      // message is the simplest observable proof the whole pick→fetch
+      // chain actually ran, not just the field text.
+      expect(find.text('[CUS-01] Test Customer'), findsOneWidget);
+      expect(find.text('No pending bills found for this party.'), findsOneWidget);
     });
   });
 }

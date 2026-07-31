@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/finance/data/models/finance_voucher_model.dart';
 import 'package:sakal/features/finance/domain/repositories/finance_voucher_repository.dart';
 import 'package:sakal/features/finance/presentation/providers/finance_voucher_providers.dart';
@@ -317,6 +318,69 @@ void main() {
       expect(toLine['line_remarks'], 'Deposit');
 
       expect(find.text('Contra Voucher CTR-001 saved.'), findsOneWidget);
+    });
+  });
+
+  // Contra Voucher's own FROM/TO account pickers are each a
+  // FinanceAccountPicker instance (unlike Journal Voucher's line grid, this
+  // screen has exactly one FROM block and one TO block, built by the same
+  // _buildAccountBlock() helper) — driven here the same way as JV's own
+  // pilot above: type a partial name, tap the rendered option (rendered as
+  // separate Code/Name/Parent Text widgets, not one combined string), and
+  // confirm the field's own combined text updates afterward.
+  group('FROM account picker interaction (real search + select)', () {
+    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+          of: find.ancestor(
+                of: find.byWidgetPredicate((w) =>
+                    w is RichText &&
+                    (w.text.toPlainText().trim().toUpperCase() == label.toUpperCase() ||
+                        w.text.toPlainText().trim().toUpperCase() == '${label.toUpperCase()} *')),
+                matching: find.byType(SakalFieldCard),
+              ).first,
+          matching: matcher(),
+        );
+
+    testWidgets('typing into the FROM Account field shows the matching option, and selecting it fills the field and Currency',
+        (tester) async {
+      // _onFromSelected always calls _refreshBaseLocalRates(), which fetches
+      // the LOCAL rate (fromCurrency→FC) unconditionally once the two
+      // differ — this fixture's fromCurrency ('USD') equals baseCcy so the
+      // BASE-rate half short-circuits, but localCcy ('FC') differs, so a
+      // real repository call happens and needs a stub.
+      when(() => mockRepo.fetchExchangeRate(
+            companyId: any(named: 'companyId'),
+            locationId: any(named: 'locationId'),
+            fromCurrency: any(named: 'fromCurrency'),
+            toCurrency: any(named: 'toCurrency'),
+            rateDate: any(named: 'rateDate'),
+          )).thenAnswer((_) async => 1.0);
+
+      await pumpApp(tester, const ContraVoucherEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+
+      // Two "Account" fields exist on this screen (FROM block, then TO
+      // block, in that widget-tree order) — .first resolves to the FROM
+      // block's own, since _buildTransferRow() builds fromBlock before
+      // toBlock.
+      final fromAccountField = fieldInCard('Account', () => find.byType(TextFormField));
+      await tester.enterText(fromAccountField, 'Petty');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Petty Cash'), findsOneWidget);
+
+      await tester.tap(find.text('Petty Cash'));
+      // FinanceAccountPicker here is built with `key: ValueKey(accountDisplay)`
+      // (see _buildAccountBlock) — selecting changes _fromAccountDisplay,
+      // forcing a remount; pumpAndSettle lets that finish.
+      await tester.pumpAndSettle();
+
+      // _onFromSelected sets _fromAccountId/_fromAccountDisplay/_fromCurrency
+      // — the field's own displayed text and the FROM block's own readonly
+      // Currency field (from '—' to 'USD') are the simplest observable
+      // proof the selection landed. The TO block's own Currency field is
+      // still unselected ('—'), so 'USD' stays unique.
+      expect(find.text('[CASH-01] Petty Cash'), findsOneWidget);
+      expect(find.text('USD'), findsOneWidget);
     });
   });
 }
