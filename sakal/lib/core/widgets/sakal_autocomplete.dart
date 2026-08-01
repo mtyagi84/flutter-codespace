@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../theme/app_colors.dart';
+import '../utils/responsive.dart';
 
 /// Shared searchable-picker field (product/customer/account/etc.) built on
 /// [RawAutocomplete], adding Up/Down-arrow highlight navigation and
@@ -140,6 +140,53 @@ class _SakalAutocompleteState<T extends Object> extends State<SakalAutocomplete<
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _highlighted.value = optionsList.isEmpty ? -1 : 0;
         });
+
+        final isMobile = Responsive.isMobile(context);
+        if (isMobile) {
+          final viewInsetsBottom = MediaQuery.of(context).viewInsets.bottom;
+          final screenHeight = MediaQuery.sizeOf(context).height;
+          final availableHeight = (screenHeight - viewInsetsBottom - 120).clamp(140.0, 320.0);
+
+          return Align(
+            alignment: Alignment.bottomLeft,
+            child: Padding(
+              padding: EdgeInsets.only(bottom: viewInsetsBottom + 8),
+              child: Material(
+                elevation: 8,
+                borderRadius: BorderRadius.circular(8),
+                color: AppColors.surface,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: availableHeight,
+                    minWidth: MediaQuery.sizeOf(context).width - 32,
+                  ),
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: _highlighted,
+                    builder: (context, highlightedIndex, _) => ListView.builder(
+                      padding: EdgeInsets.zero,
+                      shrinkWrap: true,
+                      itemCount: optionsList.length,
+                      itemBuilder: (context, idx) {
+                        final option = optionsList[idx];
+                        final isHighlighted = idx == highlightedIndex;
+                        return InkWell(
+                          onTap: () => onSelected(option),
+                          child: Container(
+                            color: isHighlighted ? AppColors.primary.withValues(alpha: 0.12) : null,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            child: widget.optionBuilder?.call(context, option, isHighlighted) ??
+                                Text(widget.displayStringForOption(option), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
         return Align(
           alignment: Alignment.topLeft,
           child: Material(

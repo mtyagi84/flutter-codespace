@@ -93,7 +93,7 @@ class SakalFieldCard extends ConsumerStatefulWidget {
     filled: false,
     isDense: true,
     isCollapsed: true,
-    contentPadding: EdgeInsets.zero,
+    contentPadding: EdgeInsets.symmetric(horizontal: 2),
   );
 
   /// The value/input text style every editable field's own `child` should

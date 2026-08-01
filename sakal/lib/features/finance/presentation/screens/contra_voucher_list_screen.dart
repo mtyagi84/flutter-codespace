@@ -7,6 +7,7 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
@@ -139,39 +140,86 @@ class _ContraVoucherListScreenState extends ConsumerState<ContraVoucherListScree
         const Divider(height: 20),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-          child: Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            SizedBox(
-              width: 160,
-              child: SakalFieldCard(
-                label: 'Status', editable: true,
-                child: DropdownButtonFormField<bool?>(
-                  initialValue: _filterPosted,
-                  isExpanded: true, isDense: true, itemHeight: null,
-                  decoration: SakalFieldCard.bareDecoration,
-                  items: const [
-                    DropdownMenuItem(value: null, child: Text('All Status')),
-                    DropdownMenuItem(value: false, child: Text('Draft')),
-                    DropdownMenuItem(value: true, child: Text('Posted')),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isMobile = Responsive.isMobile(context);
+              if (isMobile) {
+                return Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SakalFieldCard(
+                            label: 'Status', editable: true,
+                            child: DropdownButtonFormField<bool?>(
+                              initialValue: _filterPosted,
+                              isExpanded: true, isDense: true, itemHeight: null,
+                              decoration: SakalFieldCard.bareDecoration,
+                              items: const [
+                                DropdownMenuItem(value: null, child: Text('All Status')),
+                                DropdownMenuItem(value: false, child: Text('Draft')),
+                                DropdownMenuItem(value: true, child: Text('Posted')),
+                              ],
+                              onChanged: (v) { setState(() => _filterPosted = v); _load(); },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _load, tooltip: 'Refresh', color: AppColors.primary),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    SakalFieldCard(
+                      label: 'Search', editable: true,
+                      child: TextField(
+                        controller: _searchCtrl,
+                        decoration: SakalFieldCard.bareDecoration.copyWith(
+                          hintText: 'Search voucher no / remarks…',
+                          suffixIcon: _searchText.isNotEmpty ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear, padding: EdgeInsets.zero, constraints: const BoxConstraints()) : null,
+                        ),
+                      ),
+                    ),
                   ],
-                  onChanged: (v) { setState(() => _filterPosted = v); _load(); },
-                ),
-              ),
-            ),
-            SizedBox(
-              width: 280,
-              child: SakalFieldCard(
-                label: 'Search', editable: true,
-                child: TextField(
-                  controller: _searchCtrl,
-                  decoration: SakalFieldCard.bareDecoration.copyWith(
-                    hintText: 'Search voucher no / remarks…',
-                    suffixIcon: _searchText.isNotEmpty ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear, padding: EdgeInsets.zero, constraints: const BoxConstraints()) : null,
+                );
+              }
+              return Row(
+                children: [
+                  SizedBox(
+                    width: 180,
+                    child: SakalFieldCard(
+                      label: 'Status', editable: true,
+                      child: DropdownButtonFormField<bool?>(
+                        initialValue: _filterPosted,
+                        isExpanded: true, isDense: true, itemHeight: null,
+                        decoration: SakalFieldCard.bareDecoration,
+                        items: const [
+                          DropdownMenuItem(value: null, child: Text('All Status')),
+                          DropdownMenuItem(value: false, child: Text('Draft')),
+                          DropdownMenuItem(value: true, child: Text('Posted')),
+                        ],
+                        onChanged: (v) { setState(() => _filterPosted = v); _load(); },
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            ),
-            IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _load, tooltip: 'Refresh', color: AppColors.primary),
-          ]),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SakalFieldCard(
+                      label: 'Search', editable: true,
+                      child: TextField(
+                        controller: _searchCtrl,
+                        decoration: SakalFieldCard.bareDecoration.copyWith(
+                          hintText: 'Search voucher no / remarks…',
+                          suffixIcon: _searchText.isNotEmpty ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear, padding: EdgeInsets.zero, constraints: const BoxConstraints()) : null,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _load, tooltip: 'Refresh', color: AppColors.primary),
+                ],
+              );
+            },
+          ),
         ),
         Expanded(
           child: SakalAdaptiveList<FinanceVoucherHeader>(
