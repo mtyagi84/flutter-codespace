@@ -195,110 +195,137 @@ class _FinanceVoucherListScreenState
         // ── Filter bar ────────────────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final fromField = SakalFieldCard(
+                label: 'From', editable: true,
+                child: InkWell(
+                  onTap: () => _pickDate(_fromDate, (d) => setState(() => _fromDate = d)),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(_displayDate(_fmtDate(_fromDate)),
+                        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider))),
+                  ),
+                ),
+              );
 
-              // Date range
-              SizedBox(
-                width: 140,
-                child: SakalFieldCard(
-                  label: 'From', editable: true,
-                  child: InkWell(
-                    onTap: () => _pickDate(_fromDate, (d) => setState(() => _fromDate = d)),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(_displayDate(_fmtDate(_fromDate)),
-                          style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider))),
+              final toField = SakalFieldCard(
+                label: 'To', editable: true,
+                child: InkWell(
+                  onTap: () => _pickDate(_toDate, (d) => setState(() => _toDate = d)),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(_displayDate(_fmtDate(_toDate)),
+                        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider))),
+                  ),
+                ),
+              );
+
+              final typeField = SakalFieldCard(
+                label: 'Type', editable: true,
+                child: DropdownButtonFormField<String?>(
+                  initialValue: _filterType,
+                  isExpanded: true, isDense: true, itemHeight: null,
+                  decoration: SakalFieldCard.bareDecoration,
+                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('All Types')),
+                    ..._types.map((t) => DropdownMenuItem(
+                      value: t,
+                      child: Text('$t — ${_typeLabels[t]}'),
+                    )),
+                  ],
+                  onChanged: (v) { setState(() => _filterType = v); _load(); },
+                ),
+              );
+
+              final statusField = SakalFieldCard(
+                label: 'Status', editable: true,
+                child: DropdownButtonFormField<bool?>(
+                  initialValue: _filterPosted,
+                  isExpanded: true, isDense: true, itemHeight: null,
+                  decoration: SakalFieldCard.bareDecoration,
+                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+                  items: const [
+                    DropdownMenuItem(value: null, child: Text('All Status')),
+                    DropdownMenuItem(value: false, child: Text('Drafts')),
+                    DropdownMenuItem(value: true, child: Text('Posted')),
+                  ],
+                  onChanged: (v) { setState(() => _filterPosted = v); _load(); },
+                ),
+              );
+
+              final searchField = SakalFieldCard(
+                label: 'Search', editable: true,
+                child: TextField(
+                  controller: _searchCtrl,
+                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+                  decoration: SakalFieldCard.bareDecoration.copyWith(
+                    hintText: 'Trans no / remarks…',
+                    hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+                    suffixIcon: _searchText.isNotEmpty
+                        ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear, padding: EdgeInsets.zero, constraints: const BoxConstraints())
+                        : null,
+                  ),
+                ),
+              );
+
+              if (isMobile) {
+                return Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: fromField),
+                        const SizedBox(width: 8),
+                        Expanded(child: toField),
+                      ],
                     ),
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: 140,
-                child: SakalFieldCard(
-                  label: 'To', editable: true,
-                  child: InkWell(
-                    onTap: () => _pickDate(_toDate, (d) => setState(() => _toDate = d)),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(_displayDate(_fmtDate(_toDate)),
-                          style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider))),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(child: typeField),
+                        const SizedBox(width: 8),
+                        Expanded(child: statusField),
+                      ],
                     ),
-                  ),
-                ),
-              ),
-
-              // Type filter
-              SizedBox(
-                width: 180,
-                child: SakalFieldCard(
-                  label: 'Type', editable: true,
-                  child: DropdownButtonFormField<String?>(
-                    initialValue: _filterType,
-                    isExpanded: true, isDense: true, itemHeight: null,
-                    decoration: SakalFieldCard.bareDecoration,
-                    style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
-                    items: [
-                      const DropdownMenuItem(value: null, child: Text('All Types')),
-                      ..._types.map((t) => DropdownMenuItem(
-                        value: t,
-                        child: Text('$t — ${_typeLabels[t]}'),
-                      )),
-                    ],
-                    onChanged: (v) { setState(() => _filterType = v); _load(); },
-                  ),
-                ),
-              ),
-
-              // Status filter
-              SizedBox(
-                width: 150,
-                child: SakalFieldCard(
-                  label: 'Status', editable: true,
-                  child: DropdownButtonFormField<bool?>(
-                    initialValue: _filterPosted,
-                    isExpanded: true, isDense: true, itemHeight: null,
-                    decoration: SakalFieldCard.bareDecoration,
-                    style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
-                    items: const [
-                      DropdownMenuItem(value: null, child: Text('All Status')),
-                      DropdownMenuItem(value: false, child: Text('Drafts')),
-                      DropdownMenuItem(value: true, child: Text('Posted')),
-                    ],
-                    onChanged: (v) { setState(() => _filterPosted = v); _load(); },
-                  ),
-                ),
-              ),
-
-              // Search
-              SizedBox(
-                width: 220,
-                child: SakalFieldCard(
-                  label: 'Search', editable: true,
-                  child: TextField(
-                    controller: _searchCtrl,
-                    style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
-                    decoration: SakalFieldCard.bareDecoration.copyWith(
-                      hintText: 'Trans no / remarks…',
-                      hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
-                      suffixIcon: _searchText.isNotEmpty
-                          ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear, padding: EdgeInsets.zero, constraints: const BoxConstraints())
-                          : null,
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(child: searchField),
+                        const SizedBox(width: 6),
+                        IconButton(
+                          icon: const Icon(Icons.refresh, size: 20),
+                          onPressed: _load,
+                          tooltip: 'Refresh',
+                          color: AppColors.primary,
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-              ),
+                  ],
+                );
+              }
 
-              IconButton(
-                icon: const Icon(Icons.refresh, size: 20),
-                onPressed: _load,
-                tooltip: 'Refresh',
-                color: AppColors.primary,
-              ),
-            ],
+              return Row(
+                children: [
+                  SizedBox(width: 140, child: fromField),
+                  const SizedBox(width: 8),
+                  SizedBox(width: 140, child: toField),
+                  const SizedBox(width: 8),
+                  SizedBox(width: 160, child: typeField),
+                  const SizedBox(width: 8),
+                  SizedBox(width: 140, child: statusField),
+                  const SizedBox(width: 8),
+                  Expanded(child: searchField),
+                  const SizedBox(width: 6),
+                  IconButton(
+                    icon: const Icon(Icons.refresh, size: 20),
+                    onPressed: _load,
+                    tooltip: 'Refresh',
+                    color: AppColors.primary,
+                  ),
+                ],
+              );
+            },
           ),
         ),
 
