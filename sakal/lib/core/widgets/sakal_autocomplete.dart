@@ -108,8 +108,47 @@ class _SakalAutocompleteState<T extends Object> extends State<SakalAutocomplete<
     return KeyEventResult.ignored;
   }
 
+  Future<void> _openMobilePicker(BuildContext context) async {
+    final selection = await showModalBottomSheet<T>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _MobileAutocompleteSheet<T>(
+        title: widget.decoration.labelText ?? widget.decoration.hintText ?? 'Option',
+        initialQuery: _controller.text,
+        optionsBuilder: widget.optionsBuilder,
+        displayStringForOption: widget.displayStringForOption,
+        optionBuilder: widget.optionBuilder,
+      ),
+    );
+
+    if (selection != null) {
+      _controller.text = widget.displayStringForOption(selection);
+      widget.onSelected(selection);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isMobile = Responsive.isMobile(context);
+
+    if (isMobile) {
+      return InkWell(
+        onTap: widget.enabled ? () => _openMobilePicker(context) : null,
+        child: IgnorePointer(
+          child: TextFormField(
+            controller: _controller,
+            enabled: widget.enabled,
+            style: widget.style,
+            decoration: widget.decoration.copyWith(
+              suffixIcon: const Icon(Icons.arrow_drop_down, size: 20, color: AppColors.primary),
+            ),
+            onChanged: widget.onChanged,
+          ),
+        ),
+      );
+    }
+
     return RawAutocomplete<T>(
       textEditingController: _controller,
       focusNode: _focusNode,
@@ -134,59 +173,9 @@ class _SakalAutocompleteState<T extends Object> extends State<SakalAutocomplete<
         final optionsList = options.toList();
         _optionsCount = optionsList.length;
         _selectHighlighted = (i) => onSelected(optionsList[i]);
-        // A fresh options list always starts with the first item
-        // highlighted (not unhighlighted) — lets a fast typist hit Enter
-        // immediately after typing without an extra Down-arrow press,
-        // matching familiar search-box UX.
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _highlighted.value = optionsList.isEmpty ? -1 : 0;
         });
-
-        final isMobile = Responsive.isMobile(context);
-        if (isMobile) {
-          final viewInsetsBottom = MediaQuery.of(context).viewInsets.bottom;
-          final screenHeight = MediaQuery.sizeOf(context).height;
-          final availableHeight = (screenHeight - viewInsetsBottom - 120).clamp(140.0, 320.0);
-
-          return Align(
-            alignment: Alignment.bottomLeft,
-            child: Padding(
-              padding: EdgeInsets.only(bottom: viewInsetsBottom + 8),
-              child: Material(
-                elevation: 8,
-                borderRadius: BorderRadius.circular(8),
-                color: AppColors.surface,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: availableHeight,
-                    minWidth: MediaQuery.sizeOf(context).width - 32,
-                  ),
-                  child: ValueListenableBuilder<int>(
-                    valueListenable: _highlighted,
-                    builder: (context, highlightedIndex, _) => ListView.builder(
-                      padding: EdgeInsets.zero,
-                      shrinkWrap: true,
-                      itemCount: optionsList.length,
-                      itemBuilder: (context, idx) {
-                        final option = optionsList[idx];
-                        final isHighlighted = idx == highlightedIndex;
-                        return InkWell(
-                          onTap: () => onSelected(option),
-                          child: Container(
-                            color: isHighlighted ? AppColors.primary.withValues(alpha: 0.12) : null,
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            child: widget.optionBuilder?.call(context, option, isHighlighted) ??
-                                Text(widget.displayStringForOption(option), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }
 
         return Align(
           alignment: Alignment.topLeft,
@@ -220,6 +209,123 @@ class _SakalAutocompleteState<T extends Object> extends State<SakalAutocomplete<
           ),
         );
       },
+    );
+  }
+}
+
+class _MobileAutocompleteSheet<T extends Object> extends StatefulWidget {
+  final String title;
+  final String initialQuery;
+  final AutocompleteOptionsBuilder<T> optionsBuilder;
+  final String Function(T option) displayStringForOption;
+  final Widget Function(BuildContext context, T option, bool isHighlighted)? optionBuilder;
+
+  const _MobileAutocompleteSheet({
+    required this.title,
+    required this.initialQuery,
+    required this.optionsBuilder,
+    required this.displayStringForOption,
+    this.optionBuilder,
+  });
+
+  @override
+  State<_MobileAutocompleteSheet<T>> createState() => _MobileAutocompleteSheetState<T>();
+}
+
+class _MobileAutocompleteSheetState<T extends Object> extends State<_MobileAutocompleteSheet<T>> {
+  late final TextEditingController _searchCtrl;
+  List<T> _filtered = [];
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl = TextEditingController(text: widget.initialQuery);
+    _runSearch(widget.initialQuery);
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _runSearch(String query) async {
+    setState(() => _loading = true);
+    final results = await widget.optionsBuilder(TextEditingValue(text: query));
+    if (mounted) {
+      setState(() {
+        _filtered = results.toList();
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.85,
+      padding: EdgeInsets.only(bottom: bottomInset),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 8),
+          Container(width: 36, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+            child: Row(
+              children: [
+                Expanded(child: Text(widget.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.primary))),
+                IconButton(icon: const Icon(Icons.close, size: 20), onPressed: () => Navigator.pop(context)),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
+              controller: _searchCtrl,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Search…',
+                prefixIcon: const Icon(Icons.search, size: 18),
+                suffixIcon: _searchCtrl.text.isNotEmpty
+                    ? IconButton(icon: const Icon(Icons.clear, size: 16), onPressed: () { _searchCtrl.clear(); _runSearch(''); })
+                    : null,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onChanged: (v) => _runSearch(v),
+            ),
+          ),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _filtered.isEmpty
+                    ? const Center(child: Text('No matching items found', style: TextStyle(color: AppColors.textSecondary)))
+                    : ListView.separated(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        itemCount: _filtered.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
+                        itemBuilder: (context, idx) {
+                          final option = _filtered[idx];
+                          return InkWell(
+                            onTap: () => Navigator.pop(context, option),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              child: widget.optionBuilder?.call(context, option, false) ??
+                                  Text(widget.displayStringForOption(option), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
     );
   }
 }
