@@ -1680,6 +1680,8 @@ class _FinanceVoucherEntryScreenState
       child: TextFormField(controller: line.remarksCtrl, enabled: !locked, decoration: bare, style: style),
     );
 
+    final isMobile = Responsive.isMobile(context);
+
     return SakalLineItemCard(
       title: line.accountName ?? 'Line ${i + 1}',
       onDelete: (!locked && _accountLines.length > 1)
@@ -1690,12 +1692,33 @@ class _FinanceVoucherEntryScreenState
               setState(() {});
             }
           : null,
-      fields: [
-        SizedBox(width: 240, child: accountField),
-        SizedBox(width: 140, child: amountField),
-        SizedBox(width: 140, height: 56, child: partyAmountField),
-        SizedBox(width: 200, child: remarksField),
-      ],
+      fields: isMobile
+          ? [
+              accountField,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: amountField),
+                  const SizedBox(width: 8),
+                  Expanded(child: SizedBox(height: 56, child: partyAmountField)),
+                ],
+              ),
+              remarksField,
+            ]
+          : [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 4, child: accountField),
+                  const SizedBox(width: 8),
+                  SizedBox(width: 150, child: amountField),
+                  const SizedBox(width: 8),
+                  SizedBox(width: 150, height: 56, child: partyAmountField),
+                  const SizedBox(width: 8),
+                  Expanded(flex: 3, child: remarksField),
+                ],
+              ),
+            ],
     );
   }
 

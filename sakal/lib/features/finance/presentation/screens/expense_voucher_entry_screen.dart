@@ -830,109 +830,137 @@ class _ExpenseVoucherEntryScreenState extends ConsumerState<ExpenseVoucherEntryS
   }
 
   Widget _buildLineCard(_ExpenseLineRow row, int index) {
+    final isMobile = Responsive.isMobile(context);
+    final accountField = SakalFieldCard(
+      label: 'Expense Account',
+      required: true,
+      editable: !_locked,
+      child: FinanceAccountPicker(
+        key: ValueKey(row.accountDisplay),
+        accounts: _expenseAccounts,
+        initialValue: row.accountDisplay.isEmpty ? null : row.accountDisplay,
+        enabled: !_locked,
+        focusNode: row.accountFocusNode,
+        decoration: SakalFieldCard.bareDecoration,
+        onSelected: (a) => _onLineAccountSelected(row, a),
+      ),
+    );
+
+    final amountField = SakalFieldCard(
+      label: 'Amount',
+      required: true,
+      editable: !_locked,
+      numeric: true,
+      child: TextFormField(
+        controller: row.amountCtrl,
+        focusNode: row.amountFocusNode,
+        enabled: !_locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,4}'))],
+        decoration: SakalFieldCard.bareDecoration,
+        textAlign: TextAlign.right,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+
+    final taxGroupField = SakalFieldCard(
+      label: 'Tax Group (optional)',
+      editable: !_locked,
+      child: Row(children: [
+        Expanded(
+          child: DropdownButtonFormField<String>(
+            key: ValueKey(row.taxGroupId),
+            initialValue: row.taxGroupId,
+            isExpanded: true, isDense: true, itemHeight: null,
+            decoration: SakalFieldCard.bareDecoration,
+            items: [
+              const DropdownMenuItem(value: null, child: Text('None')),
+              ..._taxGroups.map((g) => DropdownMenuItem(value: g['id'] as String, child: Text('${g['group_code']}', overflow: TextOverflow.ellipsis))),
+            ],
+            onChanged: _locked
+                ? null
+                : (v) {
+                    if (v == null) {
+                      _clearLineTaxGroup(row);
+                    } else {
+                      final match = _taxGroups.firstWhere((g) => g['id'] == v, orElse: () => const {});
+                      if (match.isNotEmpty) _onLineTaxGroupSelected(row, match);
+                    }
+                  },
+          ),
+        ),
+      ]),
+    );
+
+    final remarksField = SakalFieldCard(
+      label: 'Remarks',
+      editable: !_locked,
+      child: TextFormField(
+        controller: row.remarksCtrl,
+        enabled: !_locked,
+        decoration: SakalFieldCard.bareDecoration,
+        textInputAction: index < _lines.length - 1 ? TextInputAction.next : TextInputAction.done,
+        onFieldSubmitted: (_) {
+          if (index < _lines.length - 1) {
+            _lines[index + 1].accountFocusNode.requestFocus();
+          } else {
+            row.addButtonFocusNode.requestFocus();
+          }
+        },
+      ),
+    );
+
+    final actionButtons = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (!_locked)
+          IconButton(focusNode: row.addButtonFocusNode, icon: const Icon(Icons.add_circle_outline, size: 20, color: AppColors.primary), tooltip: 'Add line', onPressed: _addLine),
+        if (!_locked && _lines.length > 1) IconButton(icon: const Icon(Icons.close, size: 18, color: AppColors.negative), tooltip: 'Remove line', onPressed: () => _removeLine(row)),
+      ],
+    );
+
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          SizedBox(
-            width: 300,
-            child: SakalFieldCard(
-              label: 'Expense Account',
-              required: true,
-              editable: !_locked,
-              child: FinanceAccountPicker(
-                key: ValueKey(row.accountDisplay),
-                accounts: _expenseAccounts,
-                initialValue: row.accountDisplay.isEmpty ? null : row.accountDisplay,
-                enabled: !_locked,
-                focusNode: row.accountFocusNode,
-                decoration: SakalFieldCard.bareDecoration,
-                onSelected: (a) => _onLineAccountSelected(row, a),
-              ),
-            ),
-          ),
-          SizedBox(
-            width: 130,
-            child: SakalFieldCard(
-              label: 'Amount',
-              required: true,
-              editable: !_locked,
-              numeric: true,
-              child: TextFormField(
-                controller: row.amountCtrl,
-                focusNode: row.amountFocusNode,
-                enabled: !_locked,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,4}'))],
-                decoration: SakalFieldCard.bareDecoration,
-                textAlign: TextAlign.right,
-                onChanged: (_) => setState(() {}),
-              ),
-            ),
-          ),
-          SizedBox(
-            width: 220,
-            child: SakalFieldCard(
-              label: 'Tax Group (optional)',
-              editable: !_locked,
-              child: Row(children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    // Same external-change gotcha as the header Currency
-                    // dropdown above — this value is also auto-suggested
-                    // from the account's own default_tax_group_id in
-                    // _onLineAccountSelected, not only via this dropdown's
-                    // own onChanged.
-                    key: ValueKey(row.taxGroupId),
-                    initialValue: row.taxGroupId,
-                    isExpanded: true, isDense: true, itemHeight: null,
-                    decoration: SakalFieldCard.bareDecoration,
-                    items: [
-                      const DropdownMenuItem(value: null, child: Text('None')),
-                      ..._taxGroups.map((g) => DropdownMenuItem(value: g['id'] as String, child: Text('${g['group_code']}', overflow: TextOverflow.ellipsis))),
+        child: isMobile
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  accountField,
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(child: amountField),
+                      const SizedBox(width: 8),
+                      Expanded(child: taxGroupField),
                     ],
-                    onChanged: _locked
-                        ? null
-                        : (v) {
-                            if (v == null) {
-                              _clearLineTaxGroup(row);
-                            } else {
-                              final match = _taxGroups.firstWhere((g) => g['id'] == v, orElse: () => const {});
-                              if (match.isNotEmpty) _onLineTaxGroupSelected(row, match);
-                            }
-                          },
                   ),
-                ),
-              ]),
-            ),
-          ),
-          SizedBox(
-            width: 200,
-            child: SakalFieldCard(
-              label: 'Remarks',
-              editable: !_locked,
-              child: TextFormField(
-                controller: row.remarksCtrl,
-                enabled: !_locked,
-                decoration: SakalFieldCard.bareDecoration,
-                textInputAction: index < _lines.length - 1 ? TextInputAction.next : TextInputAction.done,
-                onFieldSubmitted: (_) {
-                  if (index < _lines.length - 1) {
-                    _lines[index + 1].accountFocusNode.requestFocus();
-                  } else {
-                    row.addButtonFocusNode.requestFocus();
-                  }
-                },
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(child: remarksField),
+                      const SizedBox(width: 4),
+                      actionButtons,
+                    ],
+                  ),
+                ],
+              )
+            : Row(
+                children: [
+                  Expanded(flex: 4, child: accountField),
+                  const SizedBox(width: 8),
+                  SizedBox(width: 140, child: amountField),
+                  const SizedBox(width: 8),
+                  SizedBox(width: 180, child: taxGroupField),
+                  const SizedBox(width: 8),
+                  Expanded(flex: 3, child: remarksField),
+                  const SizedBox(width: 4),
+                  actionButtons,
+                ],
               ),
-            ),
-          ),
-          if (!_locked)
-            IconButton(focusNode: row.addButtonFocusNode, icon: const Icon(Icons.add_circle_outline, size: 20, color: AppColors.primary), tooltip: 'Add line', onPressed: _addLine),
-          if (!_locked && _lines.length > 1) IconButton(icon: const Icon(Icons.close, size: 18, color: AppColors.negative), tooltip: 'Remove line', onPressed: () => _removeLine(row)),
-        ]),
       ),
     );
   }
