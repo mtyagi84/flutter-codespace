@@ -626,6 +626,7 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
       if (_members.isNotEmpty) ReorderableListView(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
+        // ignore: deprecated_member_use
         onReorder: (oldIndex, newIndex) {
           setState(() {
             if (newIndex > oldIndex) newIndex -= 1;
