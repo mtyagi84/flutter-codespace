@@ -626,8 +626,9 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
       if (_members.isNotEmpty) ReorderableListView(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        onReorderItem: (oldIndex, newIndex) {
+        onReorder: (oldIndex, newIndex) {
           setState(() {
+            if (newIndex > oldIndex) newIndex -= 1;
             final item = _members.removeAt(oldIndex);
             _members.insert(newIndex, item);
             _renumber();
