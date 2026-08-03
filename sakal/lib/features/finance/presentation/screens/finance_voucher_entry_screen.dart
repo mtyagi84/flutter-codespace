@@ -1692,33 +1692,47 @@ class _FinanceVoucherEntryScreenState
               setState(() {});
             }
           : null,
-      fields: isMobile
-          ? [
-              accountField,
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: amountField),
-                  const SizedBox(width: 8),
-                  Expanded(child: SizedBox(height: 56, child: partyAmountField)),
-                ],
-              ),
-              remarksField,
-            ]
-          : [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(flex: 4, child: accountField),
-                  const SizedBox(width: 8),
-                  SizedBox(width: 150, child: amountField),
-                  const SizedBox(width: 8),
-                  SizedBox(width: 150, height: 56, child: partyAmountField),
-                  const SizedBox(width: 8),
-                  Expanded(flex: 3, child: remarksField),
-                ],
-              ),
-            ],
+      // fields: renders inside a Wrap (see SakalLineItemCard) — a Row with
+      // Expanded children placed there directly (the previous code here)
+      // is a pattern used nowhere else across ~19 other SakalLineItemCard
+      // call sites in the app, all of which wrap each field in a fixed- or
+      // double.infinity-width SizedBox instead. body: sits in the card's
+      // own plain Column, which gives a genuinely bounded width, so the
+      // full-width flex layout goes there instead — the same fix
+      // expense_voucher_entry_screen.dart's own _buildLineCard already
+      // applies (it dropped Wrap entirely for its own full-width fields).
+      // This also fixes accountField/remarksField never actually reaching
+      // 100% width in the old mobile branch (passed bare, no SizedBox —
+      // a Wrap child doesn't stretch to fill available width on its own).
+      fields: isMobile ? [SizedBox(width: double.infinity, child: accountField)] : const [],
+      body: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: amountField),
+                    const SizedBox(width: 8),
+                    Expanded(child: SizedBox(height: 56, child: partyAmountField)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                remarksField,
+              ],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 4, child: accountField),
+                const SizedBox(width: 8),
+                SizedBox(width: 150, child: amountField),
+                const SizedBox(width: 8),
+                SizedBox(width: 150, height: 56, child: partyAmountField),
+                const SizedBox(width: 8),
+                Expanded(flex: 3, child: remarksField),
+              ],
+            ),
     );
   }
 
