@@ -9,6 +9,7 @@ import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/paged_list_controller.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
@@ -152,6 +153,33 @@ class _JournalVoucherListScreenState extends ConsumerState<JournalVoucherListScr
   @override
   Widget build(BuildContext context) {
     final rows = _controller.items;
+    final isMobile = Responsive.isMobile(context);
+
+    final statusField = SakalFieldCard(
+      label: 'Status', editable: true,
+      child: DropdownButtonFormField<bool?>(
+        initialValue: _filterPosted,
+        isExpanded: true, isDense: true, itemHeight: null,
+        decoration: SakalFieldCard.bareDecoration,
+        items: const [
+          DropdownMenuItem(value: null, child: Text('All Status')),
+          DropdownMenuItem(value: false, child: Text('Draft')),
+          DropdownMenuItem(value: true, child: Text('Posted')),
+        ],
+        onChanged: (v) { setState(() => _filterPosted = v); _load(); },
+      ),
+    );
+    final searchField = SakalFieldCard(
+      label: 'Search', editable: true,
+      child: TextField(
+        controller: _searchCtrl,
+        decoration: SakalFieldCard.bareDecoration.copyWith(
+          hintText: 'Search voucher no / remarks…',
+          suffixIcon: _searchText.isNotEmpty ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear, padding: EdgeInsets.zero, constraints: const BoxConstraints()) : null,
+        ),
+      ),
+    );
+    final refreshButton = IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _load, tooltip: 'Refresh', color: AppColors.primary);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,39 +194,23 @@ class _JournalVoucherListScreenState extends ConsumerState<JournalVoucherListScr
         const Divider(height: 20),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-          child: Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            SizedBox(
-              width: 160,
-              child: SakalFieldCard(
-                label: 'Status', editable: true,
-                child: DropdownButtonFormField<bool?>(
-                  initialValue: _filterPosted,
-                  isExpanded: true, isDense: true, itemHeight: null,
-                  decoration: SakalFieldCard.bareDecoration,
-                  items: const [
-                    DropdownMenuItem(value: null, child: Text('All Status')),
-                    DropdownMenuItem(value: false, child: Text('Draft')),
-                    DropdownMenuItem(value: true, child: Text('Posted')),
-                  ],
-                  onChanged: (v) { setState(() => _filterPosted = v); _load(); },
-                ),
-              ),
-            ),
-            SizedBox(
-              width: 280,
-              child: SakalFieldCard(
-                label: 'Search', editable: true,
-                child: TextField(
-                  controller: _searchCtrl,
-                  decoration: SakalFieldCard.bareDecoration.copyWith(
-                    hintText: 'Search voucher no / remarks…',
-                    suffixIcon: _searchText.isNotEmpty ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear, padding: EdgeInsets.zero, constraints: const BoxConstraints()) : null,
-                  ),
-                ),
-              ),
-            ),
-            IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _load, tooltip: 'Refresh', color: AppColors.primary),
-          ]),
+          // A Wrap here doesn't stretch a field to fill leftover row space
+          // (see sakal_field_row.dart's own doc comment for this exact
+          // gap) — Status alone on its own mobile row would leave a large
+          // empty gap to its right. Plain Row/Column instead.
+          child: isMobile
+              ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  statusField,
+                  const SizedBox(height: 8),
+                  Row(children: [Expanded(child: searchField), const SizedBox(width: 6), refreshButton]),
+                ])
+              : Row(children: [
+                  SizedBox(width: 160, child: statusField),
+                  const SizedBox(width: 12),
+                  Expanded(child: searchField),
+                  const SizedBox(width: 6),
+                  refreshButton,
+                ]),
         ),
         Expanded(
           child: SakalAdaptiveList<FinanceVoucherHeader>(

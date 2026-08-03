@@ -14,6 +14,7 @@ import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_reciprocal_rate_field.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
@@ -684,7 +685,7 @@ class _ExpenseVoucherEntryScreenState extends ConsumerState<ExpenseVoucherEntryS
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_error!, style: const TextStyle(color: AppColors.negative))),
                     if (_actionError != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_actionError!, style: const TextStyle(color: AppColors.negative))),
-                    _buildHeaderSection(),
+                    _buildHeaderSection(isMobile),
                     const SizedBox(height: 20),
                     _buildLinesSection(),
                   ]),
@@ -716,91 +717,84 @@ class _ExpenseVoucherEntryScreenState extends ConsumerState<ExpenseVoucherEntryS
     ];
   }
 
-  Widget _buildHeaderSection() {
-    return Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.start, children: [
-      SizedBox(width: 200, child: SakalFieldCard.readOnly(label: 'Voucher No', value: _transNo ?? '—')),
-      SizedBox(
-        width: 170,
-        child: InkWell(onTap: !_locked ? _pickDate : null, child: SakalFieldCard.readOnly(label: 'Voucher Date', value: _displayDate(_transDate))),
+  Widget _buildHeaderSection(bool isMobile) {
+    final voucherNoField = SakalFieldCard.readOnly(label: 'Voucher No', value: _transNo ?? '—');
+    final voucherDateField = InkWell(onTap: !_locked ? _pickDate : null, child: SakalFieldCard.readOnly(label: 'Voucher Date', value: _displayDate(_transDate)));
+    final supplierField = SakalFieldCard(
+      label: 'Supplier',
+      required: true,
+      editable: !_locked,
+      child: FinanceAccountPicker(
+        key: ValueKey(_supplierDisplay),
+        accounts: _supplierAccounts,
+        initialValue: _supplierDisplay.isEmpty ? null : _supplierDisplay,
+        enabled: !_locked,
+        focusNode: _supplierFocusNode,
+        decoration: SakalFieldCard.bareDecoration,
+        onSelected: _onSupplierSelected,
       ),
-      SizedBox(
-        width: 300,
-        child: SakalFieldCard(
-          label: 'Supplier',
-          required: true,
-          editable: !_locked,
-          child: FinanceAccountPicker(
-            key: ValueKey(_supplierDisplay),
-            accounts: _supplierAccounts,
-            initialValue: _supplierDisplay.isEmpty ? null : _supplierDisplay,
-            enabled: !_locked,
-            focusNode: _supplierFocusNode,
-            decoration: SakalFieldCard.bareDecoration,
-            onSelected: _onSupplierSelected,
-          ),
-        ),
+    );
+    final currencyField = SakalFieldCard(
+      label: 'Currency',
+      required: true,
+      editable: !_locked,
+      child: DropdownButtonFormField<String>(
+        // key: ValueKey(_currencyId) — this dropdown's value changes both
+        // via its own onChanged AND externally (_onSupplierSelected
+        // auto-picks the supplier's default currency); a FormField's
+        // initialValue is only read once at first build, so without a
+        // changing key the external path wouldn't visually update it —
+        // same gotcha already caught and fixed twice this session for
+        // SakalAutocomplete (Contra/Expense Voucher account pickers).
+        key: ValueKey(_currencyId),
+        initialValue: _currencyId,
+        isExpanded: true, isDense: true, itemHeight: null,
+        decoration: SakalFieldCard.bareDecoration,
+        items: _currencies.map((c) => DropdownMenuItem(value: c['id'] as String, child: Text(c['currency_id'] as String))).toList(),
+        onChanged: _locked
+            ? null
+            : (v) {
+                final match = _currencies.firstWhere((c) => c['id'] == v, orElse: () => const {});
+                if (match.isNotEmpty) _onCurrencySelected(match);
+              },
       ),
-      SizedBox(
-        width: 160,
-        child: SakalFieldCard(
-          label: 'Currency',
-          required: true,
-          editable: !_locked,
-          child: DropdownButtonFormField<String>(
-            // key: ValueKey(_currencyId) — this dropdown's value changes both
-            // via its own onChanged AND externally (_onSupplierSelected
-            // auto-picks the supplier's default currency); a FormField's
-            // initialValue is only read once at first build, so without a
-            // changing key the external path wouldn't visually update it —
-            // same gotcha already caught and fixed twice this session for
-            // SakalAutocomplete (Contra/Expense Voucher account pickers).
-            key: ValueKey(_currencyId),
-            initialValue: _currencyId,
-            isExpanded: true, isDense: true, itemHeight: null,
-            decoration: SakalFieldCard.bareDecoration,
-            items: _currencies.map((c) => DropdownMenuItem(value: c['id'] as String, child: Text(c['currency_id'] as String))).toList(),
-            onChanged: _locked
-                ? null
-                : (v) {
-                    final match = _currencies.firstWhere((c) => c['id'] == v, orElse: () => const {});
-                    if (match.isNotEmpty) _onCurrencySelected(match);
-                  },
-          ),
-        ),
-      ),
+    );
+    final billNoField = SakalFieldCard(
+      label: 'Bill No', required: true, editable: !_locked,
+      child: TextFormField(controller: _billNoCtrl, enabled: !_locked, decoration: SakalFieldCard.bareDecoration),
+    );
+    final billDateField = InkWell(
+      onTap: !_locked
+          ? () async {
+              final d = await showDatePicker(context: context, initialDate: _billDate ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
+              if (d != null) setState(() => _billDate = d);
+            }
+          : null,
+      child: SakalFieldCard.readOnly(label: 'Bill Date', value: _billDate != null ? _displayDate(_billDate) : '—'),
+    );
+    final remarksField = SakalFieldCard(label: 'Remarks', editable: !_locked, child: TextFormField(controller: _remarksCtrl, enabled: !_locked, decoration: SakalFieldCard.bareDecoration));
+
+    // Rate fields only appear once a cross-currency voucher currency is
+    // picked — 0, 1, or 2 of them depending on how base/local/voucher
+    // currencies relate, so this row is built dynamically and skipped
+    // entirely when empty rather than reserving fixed slots for it.
+    final rateFields = <Widget>[
       if (_currencyCode.isNotEmpty && _currencyCode != _baseCcy)
-        SizedBox(
-          width: 200,
-          child: SakalFieldCard(label: '1 $_currencyCode = ? $_baseCcy', editable: !_locked, numeric: true, child: SakalReciprocalRateField(controller: _baseRateCtrl, enabled: !_locked, onChanged: (_) => setState(() {}))),
-        ),
+        SakalFieldCard(label: '1 $_currencyCode = ? $_baseCcy', editable: !_locked, numeric: true, child: SakalReciprocalRateField(controller: _baseRateCtrl, enabled: !_locked, onChanged: (_) => setState(() {}))),
       if (_currencyCode.isNotEmpty && _currencyCode != _localCcy && _localCcy != _baseCcy)
-        SizedBox(
-          width: 200,
-          child: SakalFieldCard(label: '1 $_currencyCode = ? $_localCcy', editable: !_locked, numeric: true, child: SakalReciprocalRateField(controller: _localRateCtrl, enabled: !_locked, onChanged: (_) => setState(() {}))),
-        ),
-      SizedBox(
-        width: 180,
-        child: SakalFieldCard(
-          label: 'Bill No', required: true, editable: !_locked,
-          child: TextFormField(controller: _billNoCtrl, enabled: !_locked, decoration: SakalFieldCard.bareDecoration),
-        ),
-      ),
-      SizedBox(
-        width: 170,
-        child: InkWell(
-          onTap: !_locked
-              ? () async {
-                  final d = await showDatePicker(context: context, initialDate: _billDate ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
-                  if (d != null) setState(() => _billDate = d);
-                }
-              : null,
-          child: SakalFieldCard.readOnly(label: 'Bill Date', value: _billDate != null ? _displayDate(_billDate) : '—'),
-        ),
-      ),
-      SizedBox(
-        width: 320,
-        child: SakalFieldCard(label: 'Remarks', editable: !_locked, child: TextFormField(controller: _remarksCtrl, enabled: !_locked, decoration: SakalFieldCard.bareDecoration)),
-      ),
+        SakalFieldCard(label: '1 $_currencyCode = ? $_localCcy', editable: !_locked, numeric: true, child: SakalReciprocalRateField(controller: _localRateCtrl, enabled: !_locked, onChanged: (_) => setState(() {}))),
+    ];
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      SakalFieldRow(isMobile: isMobile, children: [voucherNoField, voucherDateField, supplierField]),
+      const SizedBox(height: 12),
+      SakalFieldRow(isMobile: isMobile, children: [currencyField, billNoField, billDateField]),
+      if (rateFields.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        SakalFieldRow(isMobile: isMobile, children: rateFields),
+      ],
+      const SizedBox(height: 12),
+      SakalFieldRow(isMobile: isMobile, children: [remarksField]),
     ]);
   }
 

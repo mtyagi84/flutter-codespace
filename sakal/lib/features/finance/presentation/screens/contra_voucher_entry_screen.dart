@@ -14,6 +14,7 @@ import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_reciprocal_rate_field.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
@@ -768,7 +769,7 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_error!, style: const TextStyle(color: AppColors.negative))),
                     if (_actionError != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_actionError!, style: const TextStyle(color: AppColors.negative))),
-                    _buildHeaderMeta(),
+                    _buildHeaderMeta(isMobile),
                     const SizedBox(height: 16),
                     _buildTransferRow(isMobile),
                     const SizedBox(height: 12),
@@ -812,39 +813,39 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
     ];
   }
 
-  Widget _buildHeaderMeta() {
-    return Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.start, children: [
-      SizedBox(width: 200, child: SakalFieldCard.readOnly(label: 'Voucher No', value: _transNo ?? '—')),
-      SizedBox(
-        width: 170,
-        child: InkWell(onTap: !_locked ? _pickDate : null, child: SakalFieldCard.readOnly(label: 'Voucher Date', value: _displayDate(_transDate))),
-      ),
+  Widget _buildHeaderMeta(bool isMobile) {
+    final voucherNoField = SakalFieldCard.readOnly(label: 'Voucher No', value: _transNo ?? '—');
+    final voucherDateField = InkWell(onTap: !_locked ? _pickDate : null, child: SakalFieldCard.readOnly(label: 'Voucher Date', value: _displayDate(_transDate)));
+    final refNoField = SakalFieldCard(label: 'Reference No', editable: !_locked, child: TextFormField(controller: _refNoCtrl, enabled: !_locked, decoration: SakalFieldCard.bareDecoration));
+    final refDateField = InkWell(
+      onTap: !_locked
+          ? () async {
+              final d = await showDatePicker(context: context, initialDate: _refDate ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
+              if (d != null) setState(() => _refDate = d);
+            }
+          : null,
+      child: SakalFieldCard.readOnly(label: 'Reference Date', value: _refDate != null ? _displayDate(_refDate) : '—'),
+    );
+
+    // Rate fields only appear once a cross-currency FROM account is picked
+    // — 0, 1, or 2 of them depending on how base/local/from currencies
+    // relate, so this row is built dynamically and skipped entirely when
+    // empty rather than reserving fixed slots for it.
+    final rateFields = <Widget>[
       if (_fromCurrency.isNotEmpty && _fromCurrency != _baseCcy)
-        SizedBox(
-          width: 200,
-          child: SakalFieldCard(label: '1 $_fromCurrency = ? $_baseCcy', editable: !_locked, numeric: true, child: SakalReciprocalRateField(controller: _baseRateCtrl, enabled: !_locked, onChanged: (_) => setState(() {}))),
-        ),
+        SakalFieldCard(label: '1 $_fromCurrency = ? $_baseCcy', editable: !_locked, numeric: true, child: SakalReciprocalRateField(controller: _baseRateCtrl, enabled: !_locked, onChanged: (_) => setState(() {}))),
       if (_fromCurrency.isNotEmpty && _fromCurrency != _localCcy && _localCcy != _baseCcy)
-        SizedBox(
-          width: 200,
-          child: SakalFieldCard(label: '1 $_fromCurrency = ? $_localCcy', editable: !_locked, numeric: true, child: SakalReciprocalRateField(controller: _localRateCtrl, enabled: !_locked, onChanged: (_) => setState(() {}))),
-        ),
-      SizedBox(
-        width: 180,
-        child: SakalFieldCard(label: 'Reference No', editable: !_locked, child: TextFormField(controller: _refNoCtrl, enabled: !_locked, decoration: SakalFieldCard.bareDecoration)),
-      ),
-      SizedBox(
-        width: 170,
-        child: InkWell(
-          onTap: !_locked
-              ? () async {
-                  final d = await showDatePicker(context: context, initialDate: _refDate ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
-                  if (d != null) setState(() => _refDate = d);
-                }
-              : null,
-          child: SakalFieldCard.readOnly(label: 'Reference Date', value: _refDate != null ? _displayDate(_refDate) : '—'),
-        ),
-      ),
+        SakalFieldCard(label: '1 $_fromCurrency = ? $_localCcy', editable: !_locked, numeric: true, child: SakalReciprocalRateField(controller: _localRateCtrl, enabled: !_locked, onChanged: (_) => setState(() {}))),
+    ];
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      SakalFieldRow(isMobile: isMobile, children: [voucherNoField, voucherDateField]),
+      if (rateFields.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        SakalFieldRow(isMobile: isMobile, children: rateFields),
+      ],
+      const SizedBox(height: 12),
+      SakalFieldRow(isMobile: isMobile, children: [refNoField, refDateField]),
     ]);
   }
 
