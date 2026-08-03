@@ -16,6 +16,7 @@ import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
 
 /// Mutable working copy of a [PrintTableColumn] — the immutable model has no
 /// in-place setters, and the designer edits one field at a time via setState.
@@ -500,57 +501,53 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
   }
 
   Widget _buildSettingsCard(bool isMobile) {
+    final nameField = TextFormField(
+      controller: _nameCtrl,
+      decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10), labelText: 'Template Name'),
+    );
+    final docTypeField = DropdownButtonFormField<String>(
+      decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10), labelText: 'Document Type'),
+      isExpanded: true,
+      initialValue: _documentType,
+      items: PrintFieldRegistry.documentTypes
+          .map((d) => DropdownMenuItem(value: d, child: Text(PrintFieldRegistry.documentTypeLabel(d))))
+          .toList(),
+      onChanged: _templateId != null
+          ? null
+          : (v) { if (v != null) setState(() { _documentType = v; _selectedElementId = null; }); },
+    );
+    final paperProfileField = DropdownButtonFormField<PaperProfile>(
+      decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10), labelText: 'Paper Profile'),
+      isExpanded: true,
+      initialValue: _paperProfile,
+      items: PaperProfile.values
+          .map((p) => DropdownMenuItem(value: p, child: Text(_paperProfileLabel(p))))
+          .toList(),
+      onChanged: (v) { if (v != null) setState(() => _paperProfile = v); },
+    );
+    final defaultCheckboxRow = Row(mainAxisSize: MainAxisSize.min, children: [
+      Checkbox(value: _isDefault, onChanged: (v) => setState(() => _isDefault = v ?? false)),
+      const Text('Set as default for this document type', style: TextStyle(fontSize: 13)),
+    ]);
+
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Wrap(
-          spacing: 16,
-          runSpacing: 12,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            SizedBox(
-              width: isMobile ? double.infinity : 260,
-              child: TextFormField(
-                controller: _nameCtrl,
-                decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10), labelText: 'Template Name'),
-              ),
-            ),
-            SizedBox(
-              width: 180,
-              child: DropdownButtonFormField<String>(
-                decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10), labelText: 'Document Type'),
-                isExpanded: true,
-                initialValue: _documentType,
-                items: PrintFieldRegistry.documentTypes
-                    .map((d) => DropdownMenuItem(value: d, child: Text(PrintFieldRegistry.documentTypeLabel(d))))
-                    .toList(),
-                onChanged: _templateId != null
-                    ? null
-                    : (v) { if (v != null) setState(() { _documentType = v; _selectedElementId = null; }); },
-              ),
-            ),
-            SizedBox(
-              width: 200,
-              child: DropdownButtonFormField<PaperProfile>(
-                decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10), labelText: 'Paper Profile'),
-                isExpanded: true,
-                initialValue: _paperProfile,
-                items: PaperProfile.values
-                    .map((p) => DropdownMenuItem(value: p, child: Text(_paperProfileLabel(p))))
-                    .toList(),
-                onChanged: (v) { if (v != null) setState(() => _paperProfile = v); },
-              ),
-            ),
-            Row(mainAxisSize: MainAxisSize.min, children: [
-              Checkbox(value: _isDefault, onChanged: (v) => setState(() => _isDefault = v ?? false)),
-              const Text('Set as default for this document type', style: TextStyle(fontSize: 13)),
-            ]),
-          ],
-        ),
+        // A Wrap here doesn't stretch a field to fill leftover row space
+        // (see sakal_field_row.dart's own doc comment) — the Document
+        // Type / Paper Profile dropdowns stayed pinned to their fixed
+        // pixel width on mobile instead of filling the row. SakalFieldRow
+        // instead. The "Set as default" checkbox is chip-style content,
+        // not a fill-width field, so it stays outside the field row.
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SakalFieldRow(isMobile: isMobile, children: [nameField, docTypeField, paperProfileField]),
+          const SizedBox(height: 12),
+          defaultCheckboxRow,
+        ]),
       ),
     );
   }

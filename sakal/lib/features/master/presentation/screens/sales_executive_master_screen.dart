@@ -246,9 +246,12 @@ class _SalesExecutiveMasterScreenState extends ConsumerState<SalesExecutiveMaste
         const Divider(height: 20),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-          child: Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            SizedBox(
-              width: 280,
+          // A Wrap here doesn't stretch a field to fill leftover row space
+          // (see sakal_field_row.dart's own doc comment) — on mobile the
+          // fixed-width Search field would leave a large empty gap to its
+          // right. Plain Row with Expanded instead.
+          child: Row(children: [
+            Expanded(
               child: SakalFieldCard(
                 label: 'Search', editable: true,
                 child: TextField(
@@ -264,6 +267,7 @@ class _SalesExecutiveMasterScreenState extends ConsumerState<SalesExecutiveMaste
                 ),
               ),
             ),
+            const SizedBox(width: 6),
             IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _load, tooltip: 'Refresh', color: AppColors.primary),
           ]),
         ),

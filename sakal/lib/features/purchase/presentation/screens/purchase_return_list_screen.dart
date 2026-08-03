@@ -6,6 +6,7 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
@@ -111,6 +112,37 @@ class _PurchaseReturnListScreenState extends ConsumerState<PurchaseReturnListScr
     final session   = ref.watch(sessionProvider);
     final isOffline = session?.offlineMode ?? false;
     final rows = _filtered;
+    final isMobile = Responsive.isMobile(context);
+
+    final statusField = SakalFieldCard(
+      label: 'Status', editable: true,
+      child: DropdownButtonFormField<String?>(
+        initialValue: _filterStatus,
+        isExpanded: true, isDense: true, itemHeight: null,
+        decoration: SakalFieldCard.bareDecoration,
+        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+        items: [
+          const DropdownMenuItem(value: null, child: Text('All Status')),
+          ..._statusColors.keys.map((s) => DropdownMenuItem(value: s, child: Text(_statusLabel(s)))),
+        ],
+        onChanged: (v) { setState(() => _filterStatus = v); _load(); },
+      ),
+    );
+    final searchField = SakalFieldCard(
+      label: 'Search', editable: true,
+      child: TextField(
+        controller: _searchCtrl,
+        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+        decoration: SakalFieldCard.bareDecoration.copyWith(
+          hintText: 'Search return no / supplier / reason…',
+          hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+          suffixIcon: _searchText.isNotEmpty
+              ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear, padding: EdgeInsets.zero, constraints: const BoxConstraints())
+              : null,
+        ),
+      ),
+    );
+    final refreshButton = IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _load, tooltip: 'Refresh', color: AppColors.primary);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,43 +169,23 @@ class _PurchaseReturnListScreenState extends ConsumerState<PurchaseReturnListScr
 
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-          child: Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            SizedBox(
-              width: 160,
-              child: SakalFieldCard(
-                label: 'Status', editable: true,
-                child: DropdownButtonFormField<String?>(
-                  initialValue: _filterStatus,
-                  isExpanded: true, isDense: true, itemHeight: null,
-                  decoration: SakalFieldCard.bareDecoration,
-                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('All Status')),
-                    ..._statusColors.keys.map((s) => DropdownMenuItem(value: s, child: Text(_statusLabel(s)))),
-                  ],
-                  onChanged: (v) { setState(() => _filterStatus = v); _load(); },
-                ),
-              ),
-            ),
-            SizedBox(
-              width: 280,
-              child: SakalFieldCard(
-                label: 'Search', editable: true,
-                child: TextField(
-                  controller: _searchCtrl,
-                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
-                  decoration: SakalFieldCard.bareDecoration.copyWith(
-                    hintText: 'Search return no / supplier / reason…',
-                    hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
-                    suffixIcon: _searchText.isNotEmpty
-                        ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear, padding: EdgeInsets.zero, constraints: const BoxConstraints())
-                        : null,
-                  ),
-                ),
-              ),
-            ),
-            IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _load, tooltip: 'Refresh', color: AppColors.primary),
-          ]),
+          // A Wrap here doesn't stretch a field to fill leftover row space
+          // (see sakal_field_row.dart's own doc comment) — Status alone on
+          // its own mobile row would leave a large empty gap to its right.
+          // Plain Row/Column instead.
+          child: isMobile
+              ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  statusField,
+                  const SizedBox(height: 8),
+                  Row(children: [Expanded(child: searchField), const SizedBox(width: 6), refreshButton]),
+                ])
+              : Row(children: [
+                  SizedBox(width: 160, child: statusField),
+                  const SizedBox(width: 12),
+                  Expanded(child: searchField),
+                  const SizedBox(width: 6),
+                  refreshButton,
+                ]),
         ),
 
         Expanded(
