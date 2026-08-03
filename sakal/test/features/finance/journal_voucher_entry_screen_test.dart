@@ -438,8 +438,11 @@ void main() {
       expect(find.byType(BottomSheet), findsOneWidget);
 
       // The sheet owns its own separate search TextField — not the outer
-      // field, which stays IgnorePointer'd throughout.
-      await tester.enterText(find.byType(TextField), 'Office');
+      // field, which stays IgnorePointer'd throughout. A bare
+      // find.byType(TextField) also matches every other on-screen
+      // TextFormField's own internal TextField (TextFormField is built on
+      // top of TextField), so this must be scoped to inside the sheet.
+      await tester.enterText(find.descendant(of: find.byType(BottomSheet), matching: find.byType(TextField)), 'Office');
       await tester.pumpAndSettle();
       expect(find.text('Office Rent'), findsOneWidget);
       expect(find.text('Rent Received'), findsNothing);
@@ -489,6 +492,7 @@ void main() {
       // (in its own existing addPostFrameCallback) requests focus on that
       // row's accountFocusNode, which the fix under test turns into
       // opening the sheet, with no tap on the new field itself.
+      await tester.ensureVisible(find.byTooltip('Add line'));
       await tester.tap(find.byTooltip('Add line'));
       // The focus-chaining fix schedules its own addPostFrameCallback
       // chain (unfocus, then open the sheet) on top of _addLine()'s own —

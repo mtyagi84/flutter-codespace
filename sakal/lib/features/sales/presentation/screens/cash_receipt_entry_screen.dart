@@ -779,15 +779,15 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
                 Row(children: [Expanded(child: balanceLocalField), const SizedBox(width: 8), Expanded(child: applyField)]),
               ])
             : Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-                SizedBox(width: 160, child: billLabel),
+                Expanded(child: billLabel),
                 const SizedBox(width: 12),
-                SizedBox(width: 150, child: balancePartyField),
+                Expanded(child: balancePartyField),
                 const SizedBox(width: 12),
-                SizedBox(width: 150, child: balanceBaseField),
+                Expanded(child: balanceBaseField),
                 const SizedBox(width: 12),
-                SizedBox(width: 150, child: balanceLocalField),
+                Expanded(child: balanceLocalField),
                 const SizedBox(width: 12),
-                SizedBox(width: 160, child: applyField),
+                Expanded(child: applyField),
               ]),
       ),
     );
