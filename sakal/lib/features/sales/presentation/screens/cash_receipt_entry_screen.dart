@@ -16,6 +16,7 @@ import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../domain/repositories/cash_receipt_repository.dart';
@@ -606,72 +607,65 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
       );
 
   Widget _buildPrefillSection() {
-    return Wrap(spacing: 12, runSpacing: 12, children: [
-      SizedBox(width: 220, child: SakalFieldCard.readOnly(label: 'Location', value: _locationName ?? '—')),
-      SizedBox(width: 260, child: SakalFieldCard.readOnly(label: 'Local Cash Account', value: _localCashAccountDisplay ?? '—')),
-      SizedBox(width: 260, child: SakalFieldCard.readOnly(label: 'Base Cash Account', value: _baseCashAccountDisplay ?? '—')),
-      SizedBox(
-        width: 180,
-        child: InkWell(
-          onTap: (_status == 'DRAFT') ? _pickDate : null,
-          child: SakalFieldCard.readOnly(label: 'Receipt Date', value: _displayDate(_receiptDate)),
-        ),
-      ),
+    final isMobile = Responsive.isMobile(context);
+    final locationField = SakalFieldCard.readOnly(label: 'Location', value: _locationName ?? '—');
+    final localCashField = SakalFieldCard.readOnly(label: 'Local Cash Account', value: _localCashAccountDisplay ?? '—');
+    final baseCashField = SakalFieldCard.readOnly(label: 'Base Cash Account', value: _baseCashAccountDisplay ?? '—');
+    final dateField = InkWell(
+      onTap: (_status == 'DRAFT') ? _pickDate : null,
+      child: SakalFieldCard.readOnly(label: 'Receipt Date', value: _displayDate(_receiptDate)),
+    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      SakalFieldRow(isMobile: isMobile, children: [locationField, dateField]),
+      const SizedBox(height: 12),
+      SakalFieldRow(isMobile: isMobile, children: [localCashField, baseCashField]),
     ]);
   }
 
   Widget _buildCashHeaderSection(bool locked) {
-    return Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.start, children: [
-      SizedBox(
-        width: 220,
-        child: SakalFieldCard(
-          label: 'Cash Received (Local${_localCcy != null ? ' — $_localCcy' : ''})',
-          editable: !locked,
-          numeric: true,
-          child: TextFormField(
-            controller: _localAmountCtrl,
-            enabled: !locked,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,4}'))],
-            decoration: SakalFieldCard.bareDecoration,
-            textAlign: TextAlign.right,
-            onChanged: (_) => setState(() {}),
-          ),
-        ),
+    final isMobile = Responsive.isMobile(context);
+    final localAmountField = SakalFieldCard(
+      label: 'Cash Received (Local${_localCcy != null ? ' — $_localCcy' : ''})',
+      editable: !locked,
+      numeric: true,
+      child: TextFormField(
+        controller: _localAmountCtrl,
+        enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,4}'))],
+        decoration: SakalFieldCard.bareDecoration,
+        textAlign: TextAlign.right,
+        onChanged: (_) => setState(() {}),
       ),
-      SizedBox(
-        width: 220,
-        child: SakalFieldCard(
-          label: 'Cash Received (Base${_baseCcy != null ? ' — $_baseCcy' : ''})',
-          editable: !locked,
-          numeric: true,
-          child: TextFormField(
-            controller: _baseAmountCtrl,
-            enabled: !locked,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,4}'))],
-            decoration: SakalFieldCard.bareDecoration,
-            textAlign: TextAlign.right,
-            onChanged: (_) => setState(() {}),
-          ),
-        ),
+    );
+    final baseAmountField = SakalFieldCard(
+      label: 'Cash Received (Base${_baseCcy != null ? ' — $_baseCcy' : ''})',
+      editable: !locked,
+      numeric: true,
+      child: TextFormField(
+        controller: _baseAmountCtrl,
+        enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,4}'))],
+        decoration: SakalFieldCard.bareDecoration,
+        textAlign: TextAlign.right,
+        onChanged: (_) => setState(() {}),
       ),
-      SizedBox(
-        width: 220,
-        child: SakalFieldCard.readOnly(
-          label: 'Total Receipt (Local Equivalent)',
-          value: AppNumberFormat.amount(_headerTotalLocal, _numberFormat),
-          numeric: true,
-        ),
-      ),
-      SizedBox(
-        width: 320,
-        child: SakalFieldCard(
-          label: 'Remarks',
-          editable: !locked,
-          child: TextFormField(controller: _remarksCtrl, enabled: !locked, decoration: SakalFieldCard.bareDecoration),
-        ),
-      ),
+    );
+    final totalField = SakalFieldCard.readOnly(
+      label: 'Total Receipt (Local Equivalent)',
+      value: AppNumberFormat.amount(_headerTotalLocal, _numberFormat),
+      numeric: true,
+    );
+    final remarksField = SakalFieldCard(
+      label: 'Remarks',
+      editable: !locked,
+      child: TextFormField(controller: _remarksCtrl, enabled: !locked, decoration: SakalFieldCard.bareDecoration),
+    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      SakalFieldRow(isMobile: isMobile, children: [localAmountField, baseAmountField, totalField]),
+      const SizedBox(height: 12),
+      SakalFieldRow(isMobile: isMobile, children: [remarksField]),
     ]);
   }
 
@@ -719,69 +713,82 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
   }
 
   Widget _buildBillCard(_BillRow bill, int index, bool locked) {
+    final isMobile = Responsive.isMobile(context);
+    final billLabel = Text('${bill.invBillNo}\n${bill.invBillDate}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600));
+    final balancePartyField = SakalFieldCard.readOnly(
+      label: 'Balance (${bill.partyCurrency})',
+      value: AppNumberFormat.amount(bill.balancePartyCcy, _numberFormat),
+      numeric: true,
+      height: 56,
+    );
+    final balanceBaseField = SakalFieldCard.readOnly(
+      label: 'Balance (${_baseCcy ?? 'Base'})',
+      value: AppNumberFormat.amount(bill.balanceBaseCcy, _numberFormat),
+      numeric: true,
+      height: 56,
+    );
+    final balanceLocalField = SakalFieldCard.readOnly(
+      label: 'Balance (${_localCcy ?? 'Local'})',
+      value: AppNumberFormat.amount(bill.balanceLocalCcy, _numberFormat),
+      numeric: true,
+      height: 56,
+    );
+    final applyField = SakalFieldCard(
+      label: 'Apply (${_localCcy ?? 'Local'})',
+      editable: !locked,
+      numeric: true,
+      height: 56,
+      child: TextFormField(
+        controller: bill.applyCtrl,
+        focusNode: bill.applyFocusNode,
+        enabled: !locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,4}'))],
+        decoration: SakalFieldCard.bareDecoration,
+        textAlign: TextAlign.right,
+        textInputAction: index < _bills.length - 1 ? TextInputAction.next : TextInputAction.done,
+        onChanged: (_) => setState(() {}),
+        onFieldSubmitted: (_) {
+          if (index < _bills.length - 1) {
+            _bills[index + 1].applyFocusNode.requestFocus();
+          } else {
+            FocusScope.of(context).unfocus();
+          }
+        },
+      ),
+    );
+
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          SizedBox(width: 160, child: Text('${bill.invBillNo}\n${bill.invBillDate}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
-          SizedBox(
-            width: 150,
-            child: SakalFieldCard.readOnly(
-              label: 'Balance (${bill.partyCurrency})',
-              value: AppNumberFormat.amount(bill.balancePartyCcy, _numberFormat),
-              numeric: true,
-              height: 56,
-            ),
-          ),
-          SizedBox(
-            width: 150,
-            child: SakalFieldCard.readOnly(
-              label: 'Balance (${_baseCcy ?? 'Base'})',
-              value: AppNumberFormat.amount(bill.balanceBaseCcy, _numberFormat),
-              numeric: true,
-              height: 56,
-            ),
-          ),
-          SizedBox(
-            width: 150,
-            child: SakalFieldCard.readOnly(
-              label: 'Balance (${_localCcy ?? 'Local'})',
-              value: AppNumberFormat.amount(bill.balanceLocalCcy, _numberFormat),
-              numeric: true,
-              height: 56,
-            ),
-          ),
-          SizedBox(
-            width: 160,
-            child: SakalFieldCard(
-              label: 'Apply (${_localCcy ?? 'Local'})',
-              editable: !locked,
-              numeric: true,
-              height: 56,
-              child: TextFormField(
-                controller: bill.applyCtrl,
-                focusNode: bill.applyFocusNode,
-                enabled: !locked,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,4}'))],
-                decoration: SakalFieldCard.bareDecoration,
-                textAlign: TextAlign.right,
-                textInputAction: index < _bills.length - 1 ? TextInputAction.next : TextInputAction.done,
-                onChanged: (_) => setState(() {}),
-                onFieldSubmitted: (_) {
-                  if (index < _bills.length - 1) {
-                    _bills[index + 1].applyFocusNode.requestFocus();
-                  } else {
-                    FocusScope.of(context).unfocus();
-                  }
-                },
-              ),
-            ),
-          ),
-        ]),
+        // A Wrap of fixed-width fields leaves an empty gap on mobile (see
+        // sakal_field_row.dart's own doc comment) — the bill label isn't a
+        // SakalFieldCard so it doesn't fit SakalFieldRow's shape; stacked
+        // manually instead, matching the same isMobile-conditional
+        // Row/Column recipe used on every other filter/header Wrap in this
+        // batch. Desktop keeps the original fixed-width Row layout.
+        child: isMobile
+            ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                billLabel,
+                const SizedBox(height: 8),
+                Row(children: [Expanded(child: balancePartyField), const SizedBox(width: 8), Expanded(child: balanceBaseField)]),
+                const SizedBox(height: 8),
+                Row(children: [Expanded(child: balanceLocalField), const SizedBox(width: 8), Expanded(child: applyField)]),
+              ])
+            : Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                SizedBox(width: 160, child: billLabel),
+                const SizedBox(width: 12),
+                SizedBox(width: 150, child: balancePartyField),
+                const SizedBox(width: 12),
+                SizedBox(width: 150, child: balanceBaseField),
+                const SizedBox(width: 12),
+                SizedBox(width: 150, child: balanceLocalField),
+                const SizedBox(width: 12),
+                SizedBox(width: 160, child: applyField),
+              ]),
       ),
     );
   }

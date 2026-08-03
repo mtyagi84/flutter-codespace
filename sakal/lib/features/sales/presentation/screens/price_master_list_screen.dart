@@ -9,6 +9,7 @@ import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
@@ -139,6 +140,95 @@ class _PriceMasterListScreenState extends ConsumerState<PriceMasterListScreen>
     final session   = ref.watch(sessionProvider);
     final isOffline = session?.offlineMode ?? false;
     final rows = _filtered;
+    final isMobile = Responsive.isMobile(context);
+
+    final typeField = SakalFieldCard(
+      label: 'Type', editable: true,
+      child: DropdownButtonFormField<String?>(
+        initialValue: _filterPriceType,
+        isExpanded: true, isDense: true, itemHeight: null,
+        decoration: SakalFieldCard.bareDecoration,
+        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+        items: const [
+          DropdownMenuItem(value: null, child: Text('All Types')),
+          DropdownMenuItem(value: 'GENERIC', child: Text('Generic')),
+          DropdownMenuItem(value: 'CUSTOMER', child: Text('Customer-Specific')),
+        ],
+        onChanged: (v) { setState(() => _filterPriceType = v); _load(); },
+      ),
+    );
+    final statusField = SakalFieldCard(
+      label: 'Status', editable: true,
+      child: DropdownButtonFormField<String?>(
+        initialValue: _filterStatus,
+        isExpanded: true, isDense: true, itemHeight: null,
+        decoration: SakalFieldCard.bareDecoration,
+        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+        items: const [
+          DropdownMenuItem(value: null, child: Text('All Status')),
+          DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
+          DropdownMenuItem(value: 'APPROVED', child: Text('Approved')),
+        ],
+        onChanged: (v) { setState(() => _filterStatus = v); _load(); },
+      ),
+    );
+    final locationField = SakalFieldCard(
+      label: 'Location', editable: true,
+      child: DropdownButtonFormField<String?>(
+        initialValue: _filterLocationId,
+        isExpanded: true, isDense: true, itemHeight: null,
+        decoration: SakalFieldCard.bareDecoration,
+        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+        items: [
+          const DropdownMenuItem(value: null, child: Text('All Locations')),
+          ..._locations.map((l) => DropdownMenuItem(
+              value: l['id'] as String,
+              child: Text(l['location_name'] as String))),
+        ],
+        onChanged: (v) { setState(() => _filterLocationId = v); _load(); },
+      ),
+    );
+    final effFromField = SakalFieldCard(
+      label: 'Eff. From', editable: true,
+      child: InkWell(
+        onTap: () => _pickEffFilterDate(_effFrom, (d) => setState(() => _effFrom = d)),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(_effFrom != null ? _displayDate(_fmtDate(_effFrom!)) : 'Any',
+              style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider))),
+        ),
+      ),
+    );
+    final effToField = SakalFieldCard(
+      label: 'Eff. To', editable: true,
+      child: InkWell(
+        onTap: () => _pickEffFilterDate(_effTo, (d) => setState(() => _effTo = d)),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(_effTo != null ? _displayDate(_fmtDate(_effTo!)) : 'Any',
+              style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider))),
+        ),
+      ),
+    );
+    final clearDateButton = (_effFrom != null || _effTo != null)
+        ? IconButton(icon: const Icon(Icons.clear, size: 16), tooltip: 'Clear date filter',
+            onPressed: () => setState(() { _effFrom = null; _effTo = null; }))
+        : null;
+    final searchField = SakalFieldCard(
+      label: 'Search', editable: true,
+      child: TextField(
+        controller: _searchCtrl,
+        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+        decoration: SakalFieldCard.bareDecoration.copyWith(
+          hintText: 'Entry no / customer…',
+          hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
+          suffixIcon: _searchText.isNotEmpty
+              ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear, padding: EdgeInsets.zero, constraints: const BoxConstraints())
+              : null,
+        ),
+      ),
+    );
+    final refreshButton = IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _load, tooltip: 'Refresh', color: AppColors.primary);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -162,112 +252,42 @@ class _PriceMasterListScreenState extends ConsumerState<PriceMasterListScreen>
         const Divider(height: 20),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-          child: Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            SizedBox(
-              width: 150,
-              child: SakalFieldCard(
-                label: 'Type', editable: true,
-                child: DropdownButtonFormField<String?>(
-                  initialValue: _filterPriceType,
-                  isExpanded: true, isDense: true, itemHeight: null,
-                  decoration: SakalFieldCard.bareDecoration,
-                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
-                  items: const [
-                    DropdownMenuItem(value: null, child: Text('All Types')),
-                    DropdownMenuItem(value: 'GENERIC', child: Text('Generic')),
-                    DropdownMenuItem(value: 'CUSTOMER', child: Text('Customer-Specific')),
-                  ],
-                  onChanged: (v) { setState(() => _filterPriceType = v); _load(); },
-                ),
-              ),
-            ),
-            SizedBox(
-              width: 140,
-              child: SakalFieldCard(
-                label: 'Status', editable: true,
-                child: DropdownButtonFormField<String?>(
-                  initialValue: _filterStatus,
-                  isExpanded: true, isDense: true, itemHeight: null,
-                  decoration: SakalFieldCard.bareDecoration,
-                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
-                  items: const [
-                    DropdownMenuItem(value: null, child: Text('All Status')),
-                    DropdownMenuItem(value: 'DRAFT', child: Text('Draft')),
-                    DropdownMenuItem(value: 'APPROVED', child: Text('Approved')),
-                  ],
-                  onChanged: (v) { setState(() => _filterStatus = v); _load(); },
-                ),
-              ),
-            ),
-            SizedBox(
-              width: 180,
-              child: SakalFieldCard(
-                label: 'Location', editable: true,
-                child: DropdownButtonFormField<String?>(
-                  initialValue: _filterLocationId,
-                  isExpanded: true, isDense: true, itemHeight: null,
-                  decoration: SakalFieldCard.bareDecoration,
-                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('All Locations')),
-                    ..._locations.map((l) => DropdownMenuItem(
-                        value: l['id'] as String,
-                        child: Text(l['location_name'] as String))),
-                  ],
-                  onChanged: (v) { setState(() => _filterLocationId = v); _load(); },
-                ),
-              ),
-            ),
-            SizedBox(
-              width: 140,
-              child: SakalFieldCard(
-                label: 'Eff. From', editable: true,
-                child: InkWell(
-                  onTap: () => _pickEffFilterDate(_effFrom, (d) => setState(() => _effFrom = d)),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(_effFrom != null ? _displayDate(_fmtDate(_effFrom!)) : 'Any',
-                        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider))),
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(
-              width: 140,
-              child: SakalFieldCard(
-                label: 'Eff. To', editable: true,
-                child: InkWell(
-                  onTap: () => _pickEffFilterDate(_effTo, (d) => setState(() => _effTo = d)),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(_effTo != null ? _displayDate(_fmtDate(_effTo!)) : 'Any',
-                        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider))),
-                  ),
-                ),
-              ),
-            ),
-            if (_effFrom != null || _effTo != null)
-              IconButton(icon: const Icon(Icons.clear, size: 16), tooltip: 'Clear date filter',
-                  onPressed: () => setState(() { _effFrom = null; _effTo = null; })),
-            SizedBox(
-              width: 260,
-              child: SakalFieldCard(
-                label: 'Search', editable: true,
-                child: TextField(
-                  controller: _searchCtrl,
-                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
-                  decoration: SakalFieldCard.bareDecoration.copyWith(
-                    hintText: 'Entry no / customer…',
-                    hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
-                    suffixIcon: _searchText.isNotEmpty
-                        ? IconButton(icon: const Icon(Icons.clear, size: 14), onPressed: _searchCtrl.clear, padding: EdgeInsets.zero, constraints: const BoxConstraints())
-                        : null,
-                  ),
-                ),
-              ),
-            ),
-            IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _load, tooltip: 'Refresh', color: AppColors.primary),
-          ]),
+          // Wrap doesn't stretch a fixed-width field to fill leftover row
+          // space (see sakal_field_row.dart's own doc comment) — with 5+
+          // filter fields here, an isMobile-conditional Row/Column grouping
+          // (same recipe as finance_voucher_list_screen.dart's own
+          // multi-field filter bar) replaces it instead.
+          child: isMobile
+              ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Row(children: [Expanded(child: typeField), const SizedBox(width: 8), Expanded(child: statusField)]),
+                  const SizedBox(height: 8),
+                  locationField,
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    Expanded(child: effFromField),
+                    const SizedBox(width: 8),
+                    Expanded(child: effToField),
+                    if (clearDateButton != null) ...[const SizedBox(width: 4), clearDateButton],
+                  ]),
+                  const SizedBox(height: 8),
+                  Row(children: [Expanded(child: searchField), const SizedBox(width: 6), refreshButton]),
+                ])
+              : Row(children: [
+                  SizedBox(width: 150, child: typeField),
+                  const SizedBox(width: 8),
+                  SizedBox(width: 140, child: statusField),
+                  const SizedBox(width: 8),
+                  SizedBox(width: 180, child: locationField),
+                  const SizedBox(width: 8),
+                  SizedBox(width: 140, child: effFromField),
+                  const SizedBox(width: 8),
+                  SizedBox(width: 140, child: effToField),
+                  if (clearDateButton != null) ...[const SizedBox(width: 4), clearDateButton],
+                  const SizedBox(width: 8),
+                  Expanded(child: searchField),
+                  const SizedBox(width: 6),
+                  refreshButton,
+                ]),
         ),
         Expanded(
           child: SakalAdaptiveList(
