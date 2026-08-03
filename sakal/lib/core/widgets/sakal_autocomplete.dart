@@ -71,16 +71,44 @@ class _SakalAutocompleteState<T extends Object> extends State<SakalAutocomplete<
   late final FocusNode _focusNode;
   late final bool _ownsFocusNode;
 
+  // On mobile, the field itself is IgnorePointer-wrapped (see build()) so
+  // a caller's `.requestFocus()` on an externally-supplied focusNode — the
+  // "add a line -> jump straight into its field" keyboard-chaining pattern
+  // several screens use — has no tap to fall back on. This listener turns
+  // "gained focus, on mobile" into "open the picker sheet", the mobile
+  // equivalent of real keyboard focus. Guarded against reopening itself
+  // when the sheet's own route closes and focus tries to fall back here.
+  bool _mobileSheetBusy = false;
+
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.initialValue?.text ?? '');
     _ownsFocusNode = widget.focusNode == null;
     _focusNode = widget.focusNode ?? FocusNode();
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    if (!mounted || !_focusNode.hasFocus || _mobileSheetBusy) return;
+    if (!Responsive.isMobile(context)) return; // desktop: RawAutocomplete owns real focus, no-op
+    _mobileSheetBusy = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Clear focus BEFORE opening — otherwise, when the sheet's route
+      // pops, Flutter tries to restore focus to whatever had it before
+      // the route was pushed (this same node), which would re-fire this
+      // listener and reopen the sheet in an infinite loop.
+      _focusNode.unfocus();
+      _openMobilePicker(context).whenComplete(() {
+        if (mounted) _mobileSheetBusy = false;
+      });
+    });
   }
 
   @override
   void dispose() {
+    _focusNode.removeListener(_onFocusChange);
     _highlighted.dispose();
     _controller.dispose();
     if (_ownsFocusNode) _focusNode.dispose();
@@ -138,6 +166,7 @@ class _SakalAutocompleteState<T extends Object> extends State<SakalAutocomplete<
         child: IgnorePointer(
           child: TextFormField(
             controller: _controller,
+            focusNode: _focusNode,
             enabled: widget.enabled,
             style: widget.style,
             decoration: widget.decoration.copyWith(

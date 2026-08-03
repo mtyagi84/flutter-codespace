@@ -30,6 +30,21 @@ Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
 
+/// Locates a field's own input widget by finding the SakalFieldCard whose
+/// label RichText exactly matches (with or without the required " *"
+/// suffix), then descending into it. Hoisted to file scope so both the
+/// desktop and mobile Account-picker interaction groups can share it.
+Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
+      of: find.ancestor(
+            of: find.byWidgetPredicate((w) =>
+                w is RichText &&
+                (w.text.toPlainText().trim().toUpperCase() == label.toUpperCase() ||
+                    w.text.toPlainText().trim().toUpperCase() == '${label.toUpperCase()} *')),
+            matching: find.byType(SakalFieldCard),
+          ).first,
+      matching: matcher(),
+    );
+
 void main() {
   late MockFinanceVoucherRepository mockRepo;
 
@@ -331,21 +346,6 @@ void main() {
   // assertion below matches the account NAME column alone, and the
   // post-selection assertion matches the field's own combined text.
   group('Account picker interaction (real search + select) on a line', () {
-    // Same exact-match helper as GRN's own pilot (see that file's own
-    // comment) — a bare "Account" substring query would otherwise be
-    // ambiguous with a future field on this screen, but exact-match keeps
-    // this consistent with every other file in this rollout.
-    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
-          of: find.ancestor(
-                of: find.byWidgetPredicate((w) =>
-                    w is RichText &&
-                    (w.text.toPlainText().trim().toUpperCase() == label.toUpperCase() ||
-                        w.text.toPlainText().trim().toUpperCase() == '${label.toUpperCase()} *')),
-                matching: find.byType(SakalFieldCard),
-              ).first,
-          matching: matcher(),
-        );
-
     testWidgets(
         "typing into the first line's Account field shows the matching option, and selecting it fills the field, Parent Group, and Currency",
         (tester) async {
@@ -383,6 +383,134 @@ void main() {
       // needed — no extra repository stub required for this test.
       expect(find.text('Expenses'), findsOneWidget);
       expect(find.text('USD'), findsOneWidget);
+    });
+  });
+
+  // SakalAutocomplete forks its whole rendering path on Responsive.isMobile
+  // (a plain MediaQuery width < 600 check) — a showModalBottomSheet picker
+  // instead of RawAutocomplete's inline overlay, so the keyboard can never
+  // cover it. Before this file's own group below, NO test anywhere in the
+  // suite rendered a SakalAutocomplete-using screen below 600px width, so
+  // this whole code path (plus the focus-chaining fix that makes
+  // `.requestFocus()` open the sheet on mobile — see sakal_autocomplete.dart's
+  // own _onFocusChange) had zero coverage.
+  group('Mobile picker (bottom sheet)', () {
+    // JournalVoucherEntryScreen's own initState() calls _addLine()
+    // synchronously, and _addLine() always requests focus on the new
+    // line's own accountFocusNode — on mobile that's exactly the
+    // focus-chaining fix under test, so the seed line's sheet auto-opens
+    // on the very first pumpAndSettle() of every test in this group.
+    Future<void> pumpMobile(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(375, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await pumpApp(tester, const JournalVoucherEntryScreen(), overrides: overrides(), session: testSession());
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets(
+        'the seed line\'s Account field auto-opens the bottom sheet via focus-chaining on load; '
+        'closing it and tapping the field manually reopens it; searching filters, and selecting closes '
+        'the sheet with the result showing in the field',
+        (tester) async {
+      await pumpMobile(tester);
+
+      // Focus-chaining fix: _addLine()'s own row.accountFocusNode.requestFocus()
+      // (unchanged, pre-existing code) now opens the picker sheet on mobile
+      // instead of silently doing nothing.
+      expect(find.byType(BottomSheet), findsOneWidget);
+
+      // Only one line exists yet, so the "Remove line" button (which also
+      // uses Icons.close, gated on _lines.length > 1) isn't in the tree —
+      // this close icon is unambiguously the sheet's own.
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+
+      // Manually tapping the field (an InkWell wrapping an IgnorePointer'd
+      // TextFormField on mobile — warnIfMissed:false since the tap
+      // legitimately lands on the ancestor InkWell, not the TextFormField
+      // itself, which IgnorePointer deliberately excludes from hit-testing)
+      // reopens the same sheet.
+      final accountField = fieldInCard('Account', () => find.byType(TextFormField));
+      await tester.tap(accountField, warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsOneWidget);
+
+      // The sheet owns its own separate search TextField — not the outer
+      // field, which stays IgnorePointer'd throughout.
+      await tester.enterText(find.byType(TextField), 'Office');
+      await tester.pumpAndSettle();
+      expect(find.text('Office Rent'), findsOneWidget);
+      expect(find.text('Rent Received'), findsNothing);
+
+      await tester.tap(find.text('Office Rent'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.text('[EXP-101] Office Rent'), findsOneWidget);
+    });
+
+    testWidgets(
+        "FinanceAccountPicker's code/name/parent columns render inside the mobile sheet without a layout overflow",
+        (tester) async {
+      await pumpMobile(tester);
+
+      // Seed line's sheet is already open (focus-chaining) — optionBuilder
+      // (FinanceAccountPicker's 3-column optionRow: fixed-width code +
+      // Expanded name + Expanded parent) renders identically on mobile,
+      // just wrapped in the sheet's own Padding instead of the desktop
+      // overlay's Container. At 375px width this is the narrowest this
+      // layout has ever actually been exercised.
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      expect(find.text('Office Rent'), findsOneWidget);
+      expect(find.text('Expenses'), findsOneWidget); // parent group, line 1
+      expect(find.text('Rent Received'), findsOneWidget);
+      expect(find.text('Income'), findsOneWidget); // parent group, line 2
+    });
+
+    testWidgets(
+        'tapping "Add line" auto-opens the new line\'s picker via focus-chaining with no tap on its field, '
+        'and selecting an option does not reopen the sheet afterwards',
+        (tester) async {
+      await pumpMobile(tester);
+
+      // Dismiss the seed line's own auto-opened sheet first — at this
+      // point there's still only one line, so Icons.close is unambiguous.
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+
+      // The real "Add line" button _addLine() uses in production — not a
+      // raw FocusNode reach-around — so this exercises the exact same
+      // chain a real user's tap does: _addLine() adds a second row, then
+      // (in its own existing addPostFrameCallback) requests focus on that
+      // row's accountFocusNode, which the fix under test turns into
+      // opening the sheet, with no tap on the new field itself.
+      await tester.tap(find.byTooltip('Add line'));
+      // The focus-chaining fix schedules its own addPostFrameCallback
+      // chain (unfocus, then open the sheet) on top of _addLine()'s own —
+      // a couple of explicit pumps first gives every scheduled frame a
+      // chance to run before pumpAndSettle does its final settle pass.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(BottomSheet), findsOneWidget);
+
+      await tester.tap(find.text('Office Rent'));
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+
+      // Regression guard for the reopen-loop risk: _focusNode.unfocus() is
+      // called BEFORE the sheet opens specifically so nothing tries to
+      // restore focus to it once the sheet's route pops — confirm the
+      // sheet genuinely stays closed after further settling, not just
+      // closed at the instant of the assertion above.
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(BottomSheet), findsNothing);
     });
   });
 }
