@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../errors/error_presenter.dart';
+import '../providers/master_cache_providers.dart';
 import '../providers/session_provider.dart';
 import '../theme/app_colors.dart';
 import '../utils/app_logger.dart';
@@ -96,9 +97,12 @@ class _ReportScreenState extends ConsumerState<ReportScreen> with ScreenPermissi
       }
       final exportRows = prepareGroupedExportRows(bundle, rows);
       final totalsRow = bundle.isGrouped ? controller.groupedGrandTotal : controller.totals;
+      final session = ref.read(sessionProvider);
+      final company = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
       await ReportPdfExport.export(
         definition: bundle.definition, columns: bundle.columns, rows: exportRows,
-        filterSummary: _buildFilterSummary(), totalsRow: totalsRow);
+        filterSummary: _buildFilterSummary(), totalsRow: totalsRow,
+        company: company, printedByName: session?.fullName ?? '—', printedOn: DateTime.now());
     } catch (e, st) {
       AppLogger.error('ReportScreenExportPdf', e, st);
       if (mounted) setState(() => _actionError = ErrorPresenter.format(e, action: 'export this report to PDF'));

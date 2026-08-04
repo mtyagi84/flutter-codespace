@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -10,8 +11,18 @@ import 'report_repository.dart';
 /// `Printing.sharePdf()`/`layoutPdf()` dispatch `PrintEngine` already uses
 /// (see `lib/core/printing/print_engine.dart`) rather than routing through
 /// `PrintTemplate`/`PrintElement`, which is document-layout-centric and
-/// too heavy for a report's simple paginated table (title + filter
-/// summary + table + page footer).
+/// too heavy for a report's simple paginated table.
+///
+/// Header/footer follow a standard report letterhead (user-specified):
+/// left = company logo, falling back to company name + address when no
+/// logo is set (`ric_companies.logo`, base64 — same column/decode
+/// (`pw.MemoryImage(base64Decode(...))`) every other document's print
+/// template already uses, via `companyDetailsProvider`); right = report
+/// heading + applied filters (covers "at least Period" — actually every
+/// applied filter, not just date range, since ReportFilterBar's labels
+/// already describe themselves). Footer: Printed By / Printed On (left,
+/// genuinely new — no prior "who generated this printout" concept
+/// existed anywhere in the print engine) / Page X of Y (right).
 ///
 /// v1 note: generation runs synchronously on the UI isolate, not via
 /// `compute()`. `max_export_rows` (see ReportRepository.fetchAllForExport)
@@ -26,6 +37,9 @@ class ReportPdfExport {
     required List<ReportRow> rows,
     required Map<String, String> filterSummary,
     ReportRow? totalsRow,
+    required Map<String, dynamic> company,
+    required String printedByName,
+    required DateTime printedOn,
   }) async {
     final doc = pw.Document();
     final visibleColumns = columns.where((c) => c.defaultVisible).toList();
@@ -56,17 +70,8 @@ class ReportPdfExport {
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4.landscape,
-        header: (context) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-          pw.Text(definition.reportName, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
-          if (filterSummary.isNotEmpty)
-            pw.Text(filterSummary.entries.map((e) => '${e.key}: ${e.value}').join('   |   '),
-                style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
-          pw.SizedBox(height: 8),
-        ]),
-        footer: (context) => pw.Align(
-          alignment: pw.Alignment.centerRight,
-          child: pw.Text('Page ${context.pageNumber} of ${context.pagesCount}', style: const pw.TextStyle(fontSize: 8)),
-        ),
+        header: (context) => _buildHeader(company, definition.reportName, filterSummary),
+        footer: (context) => _buildFooter(context, printedByName, printedOn),
         build: (context) => [
           pw.TableHelper.fromTextArray(
             headers: visibleColumns.map((c) => c.label).toList(),
@@ -96,6 +101,68 @@ class ReportPdfExport {
     } else {
       await Printing.sharePdf(bytes: bytes, filename: filename);
     }
+  }
+
+  static pw.Widget _buildHeader(Map<String, dynamic> company, String reportName, Map<String, String> filterSummary) {
+    pw.MemoryImage? logo;
+    final logoB64 = company['logo'] as String?;
+    if (logoB64 != null && logoB64.isNotEmpty) {
+      try {
+        logo = pw.MemoryImage(base64Decode(logoB64));
+      } catch (_) {
+        logo = null; // malformed/corrupt logo data — fall back to name+address, never crash the export
+      }
+    }
+
+    final leftBlock = logo != null
+        ? pw.Image(logo, width: 130, height: 55, fit: pw.BoxFit.contain)
+        : pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            pw.Text('${company['company_name'] ?? ''}', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+            if ('${company['address'] ?? ''}'.isNotEmpty)
+              pw.Text('${company['address']}', style: const pw.TextStyle(fontSize: 8)),
+            if ('${company['city_name'] ?? ''}'.isNotEmpty)
+              pw.Text('${company['city_name']}', style: const pw.TextStyle(fontSize: 8)),
+          ]);
+
+    final rightBlock = pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
+      pw.Text(reportName, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+      if (filterSummary.isNotEmpty)
+        pw.Padding(
+          padding: const pw.EdgeInsets.only(top: 3),
+          child: pw.Text(
+            filterSummary.entries.map((e) => '${e.key}: ${e.value}').join('   |   '),
+            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+            textAlign: pw.TextAlign.right,
+          ),
+        ),
+    ]);
+
+    return pw.Column(children: [
+      pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+        pw.Expanded(child: leftBlock),
+        pw.Expanded(child: pw.Align(alignment: pw.Alignment.topRight, child: rightBlock)),
+      ]),
+      pw.SizedBox(height: 6),
+      pw.Divider(thickness: 1, color: PdfColors.grey400),
+      pw.SizedBox(height: 6),
+    ]);
+  }
+
+  static pw.Widget _buildFooter(pw.Context context, String printedByName, DateTime printedOn) => pw.Column(children: [
+        pw.Divider(thickness: 0.5, color: PdfColors.grey400),
+        pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+          pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            pw.Text('Printed By: $printedByName', style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700)),
+            pw.Text('Printed On: ${_fmtDateTime(printedOn)}', style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700)),
+          ]),
+          pw.Text('Page ${context.pageNumber} of ${context.pagesCount}', style: const pw.TextStyle(fontSize: 8)),
+        ]),
+      ]);
+
+  static String _fmtDateTime(DateTime dt) {
+    final d = dt.toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
   }
 
   static String _cellText(ReportColumn c, ReportRow row) {
