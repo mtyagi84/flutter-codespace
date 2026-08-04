@@ -1521,7 +1521,11 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
           documentType: 'SALES_INVOICE',
           documentId: localId,
           endpoint: '/rpc/fn_save_sales_invoice',
-          payload: {'p_header': header, 'p_lines': lines, 'p_charges': charges, 'p_batches': batches, 'p_serials': serials, 'p_user_id': session.userId},
+          // p_enforce_cost_check: false — no live database to check cost
+          // history against on an offline device (see migration 121's
+          // header comment). fn_approve_sales_invoice (migration 122) is
+          // the real safety net once this DRAFT is reviewed online.
+          payload: {'p_header': header, 'p_lines': lines, 'p_charges': charges, 'p_batches': batches, 'p_serials': serials, 'p_user_id': session.userId, 'p_enforce_cost_check': false},
         );
         await ds.cacheInvoiceLocally(effectiveInvoiceNo: localId, header: header, lines: lines);
         if (mounted) {

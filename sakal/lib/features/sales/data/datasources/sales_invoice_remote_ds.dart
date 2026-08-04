@@ -824,6 +824,15 @@ class SalesInvoiceRemoteDs {
       'p_batches': batches,
       'p_serials': serials,
       'p_user_id': userId,
+      // Online save — cost-price availability (rule 5) is fully enforced
+      // here. The offline-queued path (sales_invoice_entry_screen.dart's
+      // own literal payload, built when session.offlineMode is true)
+      // passes false instead, since there's no live database to check
+      // cost history against on an offline device — see migration 121's
+      // header comment for the full reasoning and the Approve-time
+      // safety net (migration 122) that catches it for real once an
+      // offline-originated DRAFT is reviewed online.
+      'p_enforce_cost_check': true,
     });
     return res.data as String;
   }
