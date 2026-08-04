@@ -67,23 +67,46 @@ class ReportPdfExport {
       }));
     }
 
+    // Dynamic orientation: sum the same default_width values the on-screen
+    // grid seeds its columns with (a pixel-ish proxy, not exact PDF points,
+    // but a reasonable signal for "how wide is this table") — a handful of
+    // narrow columns fits portrait fine; most reports with 6+ columns need
+    // landscape. 700 is a conservative cutover (roughly 4-5 typical columns).
+    final totalColumnWidth = visibleColumns.fold<double>(0, (sum, c) => sum + (c.defaultWidth ?? 140));
+    final pageFormat = totalColumnWidth <= 700 ? PdfPageFormat.a4 : PdfPageFormat.a4.landscape;
+
     doc.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4.landscape,
-        header: (context) => _buildHeader(company, definition.reportName, filterSummary),
+        pageFormat: pageFormat,
+        header: (context) => _buildHeader(company, definition.reportName, filterSummary, context.pageNumber),
         footer: (context) => _buildFooter(context, printedByName, printedOn),
         build: (context) => [
-          pw.TableHelper.fromTextArray(
-            headers: visibleColumns.map((c) => c.label).toList(),
-            data: dataRows,
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9, color: PdfColors.white),
-            headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
-            cellStyle: const pw.TextStyle(fontSize: 8),
-            cellAlignments: {
-              for (var i = 0; i < visibleColumns.length; i++)
-                i: visibleColumns[i].isNumeric ? pw.Alignment.centerRight : pw.Alignment.centerLeft,
-            },
-          ),
+          if (rows.isEmpty)
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(vertical: 24),
+              child: pw.Text('No records found for the selected filters.',
+                  style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+            )
+          else
+            pw.TableHelper.fromTextArray(
+              headers: visibleColumns.map((c) => c.label).toList(),
+              data: dataRows,
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9, color: PdfColors.white),
+              headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
+              cellStyle: const pw.TextStyle(fontSize: 8),
+              // Proportional to each column's own on-screen default_width,
+              // so the printed table's column ratios roughly match what the
+              // user sees on the report screen instead of the library's own
+              // even/content-based auto-sizing.
+              columnWidths: {
+                for (var i = 0; i < visibleColumns.length; i++)
+                  i: pw.FlexColumnWidth(visibleColumns[i].defaultWidth ?? 140),
+              },
+              cellAlignments: {
+                for (var i = 0; i < visibleColumns.length; i++)
+                  i: visibleColumns[i].isNumeric ? pw.Alignment.centerRight : pw.Alignment.centerLeft,
+              },
+            ),
         ],
       ),
     );
@@ -103,7 +126,8 @@ class ReportPdfExport {
     }
   }
 
-  static pw.Widget _buildHeader(Map<String, dynamic> company, String reportName, Map<String, String> filterSummary) {
+  static pw.Widget _buildHeader(
+      Map<String, dynamic> company, String reportName, Map<String, String> filterSummary, int pageNumber) {
     pw.MemoryImage? logo;
     final logoB64 = company['logo'] as String?;
     if (logoB64 != null && logoB64.isNotEmpty) {
@@ -126,7 +150,10 @@ class ReportPdfExport {
 
     final rightBlock = pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
       pw.Text(reportName, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
-      if (filterSummary.isNotEmpty)
+      // Filter/parameter line only on page 1 — saves space on longer
+      // reports; the company block + report heading still repeat on
+      // every page (a normal letterhead), just not the parameter list.
+      if (pageNumber == 1 && filterSummary.isNotEmpty)
         pw.Padding(
           padding: const pw.EdgeInsets.only(top: 3),
           child: pw.Text(
