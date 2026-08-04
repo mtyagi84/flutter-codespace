@@ -222,6 +222,9 @@ class ReportBundle {
   });
 
   bool get isGrouped => groupLevels.isNotEmpty;
+  bool get isTabular => definition.isTabular;
+  bool get isMatrix => definition.isMatrix;
+  bool get isHierarchical => definition.isHierarchical;
   List<ReportColumn> get visibleColumns => columns.where((c) => c.defaultVisible).toList();
   List<ReportColumn> get aggregateColumns => columns.where((c) => c.aggregateFn != null).toList();
 }

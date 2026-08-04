@@ -89,9 +89,9 @@ class SakalReportMatrixTable extends StatelessWidget {
                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 10.5)),
                 ),
               )),
-          SizedBox(
+          const SizedBox(
             width: _dimensionColWidth,
-            child: const Padding(
+            child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
               child: Text('TOTAL', textAlign: TextAlign.right,
                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 10.5)),
