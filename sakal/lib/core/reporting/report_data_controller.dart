@@ -32,10 +32,17 @@ class ReportGroupNode {
 /// PagedListController (see core/utils/paged_list_controller.dart) — this
 /// class owns no error presentation or rebuild triggering of its own.
 class ReportDataController {
-  ReportDataController({required this.repository, required this.bundle});
+  ReportDataController({
+    required this.repository,
+    required this.bundle,
+    required this.clientId,
+    required this.companyId,
+  });
 
   final ReportRepository repository;
   final ReportBundle bundle;
+  final String clientId;
+  final String companyId;
 
   String? sortColumn;
   String? sortDir; // ASC | DESC
@@ -75,7 +82,8 @@ class ReportDataController {
         await _loadAllForMatrix();
       } else {
         await _loadFirstPage();
-        totals = await repository.fetchTotals(bundle: bundle, filterValues: filterValues);
+        totals = await repository.fetchTotals(
+            bundle: bundle, clientId: clientId, companyId: companyId, filterValues: filterValues);
       }
     } finally {
       isLoading = false;
@@ -90,6 +98,8 @@ class ReportDataController {
   Future<void> _loadAllForMatrix() async {
     final page = await repository.fetchPage(
       bundle: bundle,
+      clientId: clientId,
+      companyId: companyId,
       filterValues: filterValues,
       sortColumn: sortColumn,
       sortDir: sortDir,
@@ -121,6 +131,8 @@ class ReportDataController {
   Future<void> _loadFirstPage() async {
     final page = await repository.fetchPage(
       bundle: bundle,
+      clientId: clientId,
+      companyId: companyId,
       filterValues: filterValues,
       sortColumn: sortColumn,
       sortDir: sortDir,
@@ -140,6 +152,8 @@ class ReportDataController {
     try {
       final page = await repository.fetchPage(
         bundle: bundle,
+        clientId: clientId,
+        companyId: companyId,
         filterValues: filterValues,
         sortColumn: sortColumn,
         sortDir: sortDir,
@@ -158,7 +172,8 @@ class ReportDataController {
 
   Future<void> _loadRootGroups() async {
     final level1 = bundle.groupLevels.first;
-    final rows = await repository.fetchGroupSummary(bundle: bundle, level: level1, filterValues: filterValues);
+    final rows = await repository.fetchGroupSummary(
+        bundle: bundle, clientId: clientId, companyId: companyId, level: level1, filterValues: filterValues);
     rootGroups = rows
         .map((r) => ReportGroupNode(
               summaryRow: r,
@@ -177,6 +192,8 @@ class ReportDataController {
         final nextLevel = bundle.groupLevels[nextLevelIdx];
         final rows = await repository.fetchGroupSummary(
           bundle: bundle,
+          clientId: clientId,
+          companyId: companyId,
           level: nextLevel,
           filterValues: filterValues,
           ancestorKeys: node.ancestorKeys,
@@ -191,6 +208,8 @@ class ReportDataController {
       } else {
         final page = await repository.fetchPage(
           bundle: bundle,
+          clientId: clientId,
+          companyId: companyId,
           filterValues: filterValues,
           sortColumn: sortColumn,
           sortDir: sortDir,
@@ -214,6 +233,8 @@ class ReportDataController {
     try {
       final page = await repository.fetchPage(
         bundle: bundle,
+        clientId: clientId,
+        companyId: companyId,
         filterValues: filterValues,
         sortColumn: sortColumn,
         sortDir: sortDir,

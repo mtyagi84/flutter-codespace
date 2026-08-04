@@ -178,10 +178,8 @@ class ReportPdfExport {
   static pw.Widget _buildFooter(pw.Context context, String printedByName, DateTime printedOn) => pw.Column(children: [
         pw.Divider(thickness: 0.5, color: PdfColors.grey400),
         pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-          pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-            pw.Text('Printed By: $printedByName', style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700)),
-            pw.Text('Printed On: ${_fmtDateTime(printedOn)}', style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700)),
-          ]),
+          pw.Text('Printed By: $printedByName   |   Printed On: ${_fmtDateTime(printedOn)}',
+              style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700)),
           pw.Text('Page ${context.pageNumber} of ${context.pagesCount}', style: const pw.TextStyle(fontSize: 8)),
         ]),
       ]);

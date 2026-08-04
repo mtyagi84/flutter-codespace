@@ -86,6 +86,8 @@ class ReportRepository {
   /// group's own summary_source_object (same shape, different target).
   Future<ReportPage> fetchPage({
     required ReportBundle bundle,
+    required String clientId,
+    required String companyId,
     required Map<String, dynamic> filterValues,
     String? sortColumn,
     String? sortDir,
@@ -102,6 +104,18 @@ class ReportRepository {
     final path = sourceType == 'FUNCTION' ? '/rpc/$sourceObject' : '/$sourceObject';
 
     final params = _buildFilterParams(bundle.filters, filterValues, sourceType);
+    // Every report-backing FUNCTION requires p_client_id/p_company_id as
+    // its first two (non-default) arguments — a GET-style RPC call never
+    // gets these from RLS/JWT automatically the way a VIEW does (a VIEW
+    // runs with invoker rights so the base table's own auth_rw_<table>
+    // policy scopes it for free; a STABLE function's own WHERE clause has
+    // to be told explicitly). Missing this produced exactly the "no
+    // matches were found in the schema cache" error PostgREST gives when
+    // no overload matches the supplied argument set.
+    if (sourceType == 'FUNCTION') {
+      params['p_client_id'] = clientId;
+      params['p_company_id'] = companyId;
+    }
     if (extraParams != null) params.addAll(extraParams);
     params['select'] = '*';
     params['limit'] = '$limit';
@@ -151,12 +165,16 @@ class ReportRepository {
   /// as a VIEW, which would have silently ignored every filter.)
   Future<ReportRow?> fetchTotals({
     required ReportBundle bundle,
+    required String clientId,
+    required String companyId,
     required Map<String, dynamic> filterValues,
   }) async {
     final totalsObject = bundle.definition.totalsSourceObject;
     if (totalsObject == null) return null;
     final page = await fetchPage(
       bundle: bundle,
+      clientId: clientId,
+      companyId: companyId,
       filterValues: filterValues,
       limit: 1,
       offset: 0,
@@ -186,12 +204,16 @@ class ReportRepository {
   /// report's own summary functions, before either one ever ran.
   Future<List<ReportRow>> fetchGroupSummary({
     required ReportBundle bundle,
+    required String clientId,
+    required String companyId,
     required ReportGroupLevel level,
     required Map<String, dynamic> filterValues,
     Map<String, String> ancestorKeys = const {},
   }) async {
     final page = await fetchPage(
       bundle: bundle,
+      clientId: clientId,
+      companyId: companyId,
       filterValues: filterValues,
       sortColumn: level.groupLabelColumn,
       sortDir: 'ASC',
@@ -211,6 +233,8 @@ class ReportRepository {
   /// attempting an unbounded export.
   Future<List<ReportRow>?> fetchAllForExport({
     required ReportBundle bundle,
+    required String clientId,
+    required String companyId,
     required Map<String, dynamic> filterValues,
     String? sortColumn,
     String? sortDir,
@@ -218,6 +242,8 @@ class ReportRepository {
     final cap = bundle.definition.maxExportRows;
     final page = await fetchPage(
       bundle: bundle,
+      clientId: clientId,
+      companyId: companyId,
       filterValues: filterValues,
       sortColumn: sortColumn,
       sortDir: sortDir,
@@ -249,8 +275,8 @@ class ReportRepository {
         final from = value['from'];
         final to = value['to'];
         if (isFunction) {
-          if (from != null) params['${f.paramTarget}_from'] = _fmt(from);
-          if (to != null) params['${f.paramTarget}_to'] = _fmt(to);
+          if (from != null) params['p_${f.paramTarget}_from'] = _fmt(from);
+          if (to != null) params['p_${f.paramTarget}_to'] = _fmt(to);
         } else {
           final conditions = <String>[];
           if (from != null) conditions.add('gte.${_fmt(from)}');
@@ -261,7 +287,7 @@ class ReportRepository {
       }
 
       if (isFunction) {
-        params[f.paramTarget] = _fmt(value);
+        params['p_${f.paramTarget}'] = _fmt(value);
         continue;
       }
 

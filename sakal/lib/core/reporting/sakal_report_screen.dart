@@ -57,7 +57,8 @@ class _ReportScreenState extends ConsumerState<ReportScreen> with ScreenPermissi
     try {
       final bundle = await _repository.fetchBundle(
         reportKey: widget.reportKey, clientId: session.clientId, companyId: session.companyId);
-      final controller = ReportDataController(repository: _repository, bundle: bundle);
+      final controller = ReportDataController(
+          repository: _repository, bundle: bundle, clientId: session.clientId, companyId: session.companyId);
       await controller.init();
       if (!mounted) return;
       setState(() { _bundle = bundle; _controller = controller; _loading = false; });
@@ -89,7 +90,8 @@ class _ReportScreenState extends ConsumerState<ReportScreen> with ScreenPermissi
     try {
       final bundle = _bundle!, controller = _controller!;
       final rows = await _repository.fetchAllForExport(
-        bundle: bundle, filterValues: controller.filterValues,
+        bundle: bundle, clientId: controller.clientId, companyId: controller.companyId,
+        filterValues: controller.filterValues,
         sortColumn: controller.sortColumn, sortDir: controller.sortDir);
       if (rows == null) {
         setState(() => _actionError = 'This report has more than ${bundle.definition.maxExportRows} rows — narrow your filters and try again.');
@@ -126,7 +128,8 @@ class _ReportScreenState extends ConsumerState<ReportScreen> with ScreenPermissi
         return;
       }
       final rows = await _repository.fetchAllForExport(
-        bundle: bundle, filterValues: controller.filterValues,
+        bundle: bundle, clientId: controller.clientId, companyId: controller.companyId,
+        filterValues: controller.filterValues,
         sortColumn: controller.sortColumn, sortDir: controller.sortDir);
       if (rows == null) {
         setState(() => _actionError = 'This report has more than ${bundle.definition.maxExportRows} rows — narrow your filters and try again.');
