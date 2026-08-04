@@ -124,6 +124,13 @@ class RouteNames {
   static const String profitLoss     = '/finance/profit-loss';
   static const String balanceSheet   = '/finance/balance-sheet';
 
+  // Reporting Engine — ONE parameterized route serves every report; a
+  // report's own ric_master_menus row points its screen_name at
+  // reportPath(reportKey) so no new route/screen is needed per report.
+  // See sakal/docs/reporting_engine_design.md.
+  static const String report = '/reports/:reportKey';
+  static String reportPath(String reportKey) => '/reports/$reportKey';
+
   // Offline sync — shown once after online login when pending docs exist
   static const String sync = '/sync';
 }

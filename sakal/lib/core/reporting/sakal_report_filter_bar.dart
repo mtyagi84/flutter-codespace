@@ -1,0 +1,223 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import '../network/dio_client.dart';
+import '../theme/app_colors.dart';
+import 'report_models.dart';
+
+/// Generic filter bar, built entirely from a report's own declared
+/// [ReportFilter] rows — the shared widget the reporting engine needed
+/// and nothing in the app had before (see
+/// sakal/docs/reporting_engine_design.md). Renders the right input per
+/// [ReportFilter.filterType], collects values into a
+/// `Map<String,dynamic>` keyed by `filterKey`, and calls [onApply].
+///
+/// TEXT filters debounce (~350ms) rather than re-running the report on
+/// every keystroke; every other filter type applies immediately on
+/// change — same convention noted in the design doc.
+class SakalReportFilterBar extends StatefulWidget {
+  final List<ReportFilter> filters;
+  final Map<String, dynamic> initialValues;
+  final ValueChanged<Map<String, dynamic>> onApply;
+
+  const SakalReportFilterBar({
+    super.key,
+    required this.filters,
+    required this.initialValues,
+    required this.onApply,
+  });
+
+  @override
+  State<SakalReportFilterBar> createState() => _SakalReportFilterBarState();
+}
+
+class _SakalReportFilterBarState extends State<SakalReportFilterBar> {
+  late Map<String, dynamic> _values;
+  Timer? _debounce;
+  final Map<String, List<Map<String, dynamic>>> _lookupOptionsCache = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _values = Map<String, dynamic>.from(widget.initialValues);
+    for (final f in widget.filters) {
+      if (f.filterType == 'DROPDOWN_LOOKUP' || f.filterType == 'ACCOUNT_PICKER' || f.filterType == 'PRODUCT_PICKER') {
+        _loadLookupOptions(f);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadLookupOptions(ReportFilter f) async {
+    if (f.lookupSource == null) return;
+    try {
+      final res = await DioClient.instance.get('/${f.lookupSource}', queryParameters: {
+        'select': 'id,${f.lookupLabelColumn ?? 'name'}',
+        'order': '${f.lookupLabelColumn ?? 'name'}.asc',
+      });
+      if (!mounted) return;
+      setState(() => _lookupOptionsCache[f.filterKey] = List<Map<String, dynamic>>.from(res.data as List));
+    } catch (_) {
+      // A broken lookup filter degrades to "no options" rather than
+      // blocking the rest of the filter bar / the report itself.
+    }
+  }
+
+  void _set(String key, dynamic value, {bool debounce = false}) {
+    if (debounce) {
+      _debounce?.cancel();
+      _debounce = Timer(const Duration(milliseconds: 350), () {
+        setState(() => _values[key] = value);
+        widget.onApply(_values);
+      });
+      return;
+    }
+    setState(() => _values[key] = value);
+    widget.onApply(_values);
+  }
+
+  Future<void> _pickDate(String key, {required bool isFrom}) async {
+    final current = _values[key] as Map<String, DateTime>? ?? {};
+    final initial = (isFrom ? current['from'] : current['to']) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null) return;
+    final updated = {...current, if (isFrom) 'from': picked else 'to': picked};
+    _set(key, updated);
+  }
+
+  String _fmtDate(DateTime? d) =>
+      d == null ? 'Any' : '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.filters.isEmpty) return const SizedBox.shrink();
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: widget.filters.map(_buildField).toList(),
+    );
+  }
+
+  Widget _buildField(ReportFilter f) {
+    switch (f.filterType) {
+      case 'DATE_RANGE':
+        final range = _values[f.filterKey] as Map<String, DateTime>?;
+        return SizedBox(
+          width: 320,
+          child: Row(children: [
+            Expanded(
+              child: InkWell(
+                onTap: () => _pickDate(f.filterKey, isFrom: true),
+                child: InputDecorator(
+                  decoration: InputDecoration(labelText: '${f.label} From', isDense: true, border: const OutlineInputBorder()),
+                  child: Text(_fmtDate(range?['from'])),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: InkWell(
+                onTap: () => _pickDate(f.filterKey, isFrom: false),
+                child: InputDecorator(
+                  decoration: InputDecoration(labelText: '${f.label} To', isDense: true, border: const OutlineInputBorder()),
+                  child: Text(_fmtDate(range?['to'])),
+                ),
+              ),
+            ),
+          ]),
+        );
+
+      case 'DATE':
+        final value = _values[f.filterKey] as DateTime?;
+        return SizedBox(
+          width: 160,
+          child: InkWell(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context, initialDate: value ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
+              if (picked != null) _set(f.filterKey, picked);
+            },
+            child: InputDecorator(
+              decoration: InputDecoration(labelText: f.label, isDense: true, border: const OutlineInputBorder()),
+              child: Text(_fmtDate(value)),
+            ),
+          ),
+        );
+
+      case 'DROPDOWN_STATIC':
+        final options = f.staticOptions ?? const [];
+        return SizedBox(
+          width: 180,
+          child: DropdownButtonFormField<String?>(
+            initialValue: _values[f.filterKey] as String?,
+            isExpanded: true, isDense: true, itemHeight: null,
+            decoration: InputDecoration(labelText: f.label, border: const OutlineInputBorder()),
+            items: [
+              const DropdownMenuItem(value: null, child: Text('All')),
+              ...options.map((o) => DropdownMenuItem(value: o['value'] as String, child: Text(o['label'] as String))),
+            ],
+            onChanged: (v) => _set(f.filterKey, v),
+          ),
+        );
+
+      case 'DROPDOWN_LOOKUP':
+      case 'ACCOUNT_PICKER':
+      case 'PRODUCT_PICKER':
+        final options = _lookupOptionsCache[f.filterKey] ?? const [];
+        final labelCol = f.lookupLabelColumn ?? 'name';
+        return SizedBox(
+          width: 220,
+          child: DropdownButtonFormField<String?>(
+            initialValue: _values[f.filterKey] as String?,
+            isExpanded: true, isDense: true, itemHeight: null,
+            decoration: InputDecoration(labelText: f.label, border: const OutlineInputBorder()),
+            items: [
+              const DropdownMenuItem(value: null, child: Text('All')),
+              ...options.map((o) => DropdownMenuItem(value: o['id'] as String, child: Text('${o[labelCol]}'))),
+            ],
+            onChanged: (v) => _set(f.filterKey, v),
+          ),
+        );
+
+      case 'BOOLEAN':
+        return SizedBox(
+          width: 160,
+          child: DropdownButtonFormField<bool?>(
+            initialValue: _values[f.filterKey] as bool?,
+            isExpanded: true, isDense: true, itemHeight: null,
+            decoration: InputDecoration(labelText: f.label, border: const OutlineInputBorder()),
+            items: const [
+              DropdownMenuItem(value: null, child: Text('All')),
+              DropdownMenuItem(value: true, child: Text('Yes')),
+              DropdownMenuItem(value: false, child: Text('No')),
+            ],
+            onChanged: (v) => _set(f.filterKey, v),
+          ),
+        );
+
+      case 'TEXT':
+      default:
+        return SizedBox(
+          width: 220,
+          child: TextFormField(
+            initialValue: _values[f.filterKey] as String?,
+            decoration: InputDecoration(
+              labelText: f.label, isDense: true, border: const OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
+            ),
+            onChanged: (v) => _set(f.filterKey, v.isEmpty ? null : v, debounce: true),
+          ),
+        );
+    }
+  }
+}

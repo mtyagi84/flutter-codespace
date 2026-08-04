@@ -6,6 +6,7 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/sync_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
+import '../reporting/sakal_report_screen.dart';
 import '../../features/setup/presentation/screens/company_screen.dart';
 import '../../features/setup/presentation/screens/cities_screen.dart';
 import '../../features/setup/presentation/screens/countries_screen.dart';
@@ -523,6 +524,10 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.trialBalance, builder: (c, s) => const _Placeholder('Trial Balance')),
         GoRoute(path: RouteNames.profitLoss,   builder: (c, s) => const _Placeholder('Profit & Loss')),
         GoRoute(path: RouteNames.balanceSheet, builder: (c, s) => const _Placeholder('Balance Sheet')),
+        GoRoute(
+          path: RouteNames.report,
+          builder: (c, s) => ReportScreen(reportKey: s.pathParameters['reportKey']!),
+        ),
       ],
     ),
 
