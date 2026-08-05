@@ -54,6 +54,7 @@ class _SakalReportTableState extends State<SakalReportTable> {
   late Set<String> _hiddenColumns;
   final ScrollController _hHeaderController = ScrollController();
   final ScrollController _hBodyController = ScrollController();
+  final ScrollController _vBodyController = ScrollController();
   bool _syncingScroll = false;
 
   static const double _minColumnWidth = 70;
@@ -79,6 +80,7 @@ class _SakalReportTableState extends State<SakalReportTable> {
   void dispose() {
     _hHeaderController.dispose();
     _hBodyController.dispose();
+    _vBodyController.dispose();
     super.dispose();
   }
 
@@ -223,12 +225,17 @@ class _SakalReportTableState extends State<SakalReportTable> {
         }
         return false;
       },
-      child: ListView.builder(
-        itemCount: widget.controller.items.length + (widget.controller.isLoadingMore ? 1 : 0),
-        itemBuilder: (context, i) {
-          if (i >= widget.controller.items.length) return _loadingRow();
-          return _buildDataRow(widget.controller.items[i], indent: 0);
-        },
+      child: Scrollbar(
+        controller: _vBodyController,
+        thumbVisibility: true,
+        child: ListView.builder(
+          controller: _vBodyController,
+          itemCount: widget.controller.items.length + (widget.controller.isLoadingMore ? 1 : 0),
+          itemBuilder: (context, i) {
+            if (i >= widget.controller.items.length) return _loadingRow();
+            return _buildDataRow(widget.controller.items[i], indent: 0);
+          },
+        ),
       ),
     );
   }
@@ -252,14 +259,19 @@ class _SakalReportTableState extends State<SakalReportTable> {
 
     walk(widget.controller.rootGroups, 0);
 
-    return ListView.builder(
-      itemCount: items.length,
-      itemBuilder: (context, i) {
-        final item = items[i];
-        if (item.groupNode != null) return _buildGroupHeaderRow(item.groupNode!, item.indent);
-        if (item.loadMoreNode != null) return _buildLoadMoreDetailRow(item.loadMoreNode!, item.indent);
-        return _buildDataRow(item.detailRow!, indent: item.indent);
-      },
+    return Scrollbar(
+      controller: _vBodyController,
+      thumbVisibility: true,
+      child: ListView.builder(
+        controller: _vBodyController,
+        itemCount: items.length,
+        itemBuilder: (context, i) {
+          final item = items[i];
+          if (item.groupNode != null) return _buildGroupHeaderRow(item.groupNode!, item.indent);
+          if (item.loadMoreNode != null) return _buildLoadMoreDetailRow(item.loadMoreNode!, item.indent);
+          return _buildDataRow(item.detailRow!, indent: item.indent);
+        },
+      ),
     );
   }
 

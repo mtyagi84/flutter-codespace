@@ -97,77 +97,88 @@ class _SakalReportFilterBarState extends State<SakalReportFilterBar> {
   String _fmtDate(DateTime? d) =>
       d == null ? 'Any' : '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+  // Relative weight within a row — DATE_RANGE is really two sub-fields
+  // side by side, so it needs roughly double a plain field's width to look
+  // right; everything else is treated as equal.
+  double _flexFor(ReportFilter f) => f.filterType == 'DATE_RANGE' ? 2.0 : 1.0;
+
   @override
   Widget build(BuildContext context) {
     if (widget.filters.isEmpty) return const SizedBox.shrink();
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: widget.filters.map(_buildField).toList(),
-    );
+    const spacing = 12.0;
+    const minFieldWidth = 200.0;
+    return LayoutBuilder(builder: (context, constraints) {
+      // How many "units" fit per row at a sane minimum width, then size
+      // every field as a share of whatever's actually available — fields
+      // fill the row edge-to-edge instead of leaving dead space to the
+      // right, and still wrap onto a new row on a narrow/tablet screen.
+      final totalWidth = constraints.maxWidth.isFinite ? constraints.maxWidth : 1000.0;
+      final totalUnits = widget.filters.fold<double>(0, (s, f) => s + _flexFor(f));
+      final unitsPerRow = (totalWidth / minFieldWidth).clamp(1.0, totalUnits == 0 ? 1.0 : totalUnits);
+      final unitWidth = (totalWidth - (unitsPerRow.floor() - 1).clamp(0, 999) * spacing) / unitsPerRow;
+
+      return Wrap(
+        spacing: spacing,
+        runSpacing: spacing,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: widget.filters
+            .map((f) => SizedBox(width: unitWidth * _flexFor(f) + (spacing * (_flexFor(f) - 1)), child: _buildField(f)))
+            .toList(),
+      );
+    });
   }
 
   Widget _buildField(ReportFilter f) {
     switch (f.filterType) {
       case 'DATE_RANGE':
         final range = _values[f.filterKey] as Map<String, DateTime>?;
-        return SizedBox(
-          width: 320,
-          child: Row(children: [
-            Expanded(
-              child: InkWell(
-                onTap: () => _pickDate(f.filterKey, isFrom: true),
-                child: InputDecorator(
-                  decoration: InputDecoration(labelText: '${f.label} From', isDense: true, border: const OutlineInputBorder()),
-                  child: Text(_fmtDate(range?['from'])),
-                ),
+        return Row(children: [
+          Expanded(
+            child: InkWell(
+              onTap: () => _pickDate(f.filterKey, isFrom: true),
+              child: InputDecorator(
+                decoration: InputDecoration(labelText: '${f.label} From', isDense: true, border: const OutlineInputBorder()),
+                child: Text(_fmtDate(range?['from'])),
               ),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: InkWell(
-                onTap: () => _pickDate(f.filterKey, isFrom: false),
-                child: InputDecorator(
-                  decoration: InputDecoration(labelText: '${f.label} To', isDense: true, border: const OutlineInputBorder()),
-                  child: Text(_fmtDate(range?['to'])),
-                ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: InkWell(
+              onTap: () => _pickDate(f.filterKey, isFrom: false),
+              child: InputDecorator(
+                decoration: InputDecoration(labelText: '${f.label} To', isDense: true, border: const OutlineInputBorder()),
+                child: Text(_fmtDate(range?['to'])),
               ),
             ),
-          ]),
-        );
+          ),
+        ]);
 
       case 'DATE':
         final value = _values[f.filterKey] as DateTime?;
-        return SizedBox(
-          width: 160,
-          child: InkWell(
-            onTap: () async {
-              final picked = await showDatePicker(
-                context: context, initialDate: value ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
-              if (picked != null) _set(f.filterKey, picked);
-            },
-            child: InputDecorator(
-              decoration: InputDecoration(labelText: f.label, isDense: true, border: const OutlineInputBorder()),
-              child: Text(_fmtDate(value)),
-            ),
+        return InkWell(
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context, initialDate: value ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
+            if (picked != null) _set(f.filterKey, picked);
+          },
+          child: InputDecorator(
+            decoration: InputDecoration(labelText: f.label, isDense: true, border: const OutlineInputBorder()),
+            child: Text(_fmtDate(value)),
           ),
         );
 
       case 'DROPDOWN_STATIC':
         final options = f.staticOptions ?? const [];
-        return SizedBox(
-          width: 180,
-          child: DropdownButtonFormField<String?>(
-            initialValue: _values[f.filterKey] as String?,
-            isExpanded: true, isDense: true, itemHeight: null,
-            decoration: InputDecoration(labelText: f.label, border: const OutlineInputBorder()),
-            items: [
-              const DropdownMenuItem(value: null, child: Text('All')),
-              ...options.map((o) => DropdownMenuItem(value: o['value'] as String, child: Text(o['label'] as String))),
-            ],
-            onChanged: (v) => _set(f.filterKey, v),
-          ),
+        return DropdownButtonFormField<String?>(
+          initialValue: _values[f.filterKey] as String?,
+          isExpanded: true, isDense: true, itemHeight: null,
+          decoration: InputDecoration(labelText: f.label, border: const OutlineInputBorder()),
+          items: [
+            const DropdownMenuItem(value: null, child: Text('All')),
+            ...options.map((o) => DropdownMenuItem(value: o['value'] as String, child: Text(o['label'] as String))),
+          ],
+          onChanged: (v) => _set(f.filterKey, v),
         );
 
       case 'DROPDOWN_LOOKUP':
@@ -175,48 +186,39 @@ class _SakalReportFilterBarState extends State<SakalReportFilterBar> {
       case 'PRODUCT_PICKER':
         final options = _lookupOptionsCache[f.filterKey] ?? const [];
         final labelCol = f.lookupLabelColumn ?? 'name';
-        return SizedBox(
-          width: 220,
-          child: DropdownButtonFormField<String?>(
-            initialValue: _values[f.filterKey] as String?,
-            isExpanded: true, isDense: true, itemHeight: null,
-            decoration: InputDecoration(labelText: f.label, border: const OutlineInputBorder()),
-            items: [
-              const DropdownMenuItem(value: null, child: Text('All')),
-              ...options.map((o) => DropdownMenuItem(value: o['id'] as String, child: Text('${o[labelCol]}'))),
-            ],
-            onChanged: (v) => _set(f.filterKey, v),
-          ),
+        return DropdownButtonFormField<String?>(
+          initialValue: _values[f.filterKey] as String?,
+          isExpanded: true, isDense: true, itemHeight: null,
+          decoration: InputDecoration(labelText: f.label, border: const OutlineInputBorder()),
+          items: [
+            const DropdownMenuItem(value: null, child: Text('All')),
+            ...options.map((o) => DropdownMenuItem(value: o['id'] as String, child: Text('${o[labelCol]}'))),
+          ],
+          onChanged: (v) => _set(f.filterKey, v),
         );
 
       case 'BOOLEAN':
-        return SizedBox(
-          width: 160,
-          child: DropdownButtonFormField<bool?>(
-            initialValue: _values[f.filterKey] as bool?,
-            isExpanded: true, isDense: true, itemHeight: null,
-            decoration: InputDecoration(labelText: f.label, border: const OutlineInputBorder()),
-            items: const [
-              DropdownMenuItem(value: null, child: Text('All')),
-              DropdownMenuItem(value: true, child: Text('Yes')),
-              DropdownMenuItem(value: false, child: Text('No')),
-            ],
-            onChanged: (v) => _set(f.filterKey, v),
-          ),
+        return DropdownButtonFormField<bool?>(
+          initialValue: _values[f.filterKey] as bool?,
+          isExpanded: true, isDense: true, itemHeight: null,
+          decoration: InputDecoration(labelText: f.label, border: const OutlineInputBorder()),
+          items: const [
+            DropdownMenuItem(value: null, child: Text('All')),
+            DropdownMenuItem(value: true, child: Text('Yes')),
+            DropdownMenuItem(value: false, child: Text('No')),
+          ],
+          onChanged: (v) => _set(f.filterKey, v),
         );
 
       case 'TEXT':
       default:
-        return SizedBox(
-          width: 220,
-          child: TextFormField(
-            initialValue: _values[f.filterKey] as String?,
-            decoration: InputDecoration(
-              labelText: f.label, isDense: true, border: const OutlineInputBorder(),
-              prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
-            ),
-            onChanged: (v) => _set(f.filterKey, v.isEmpty ? null : v, debounce: true),
+        return TextFormField(
+          initialValue: _values[f.filterKey] as String?,
+          decoration: InputDecoration(
+            labelText: f.label, isDense: true, border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
           ),
+          onChanged: (v) => _set(f.filterKey, v.isEmpty ? null : v, debounce: true),
         );
     }
   }

@@ -69,6 +69,13 @@ class _ReportScreenState extends ConsumerState<ReportScreen> with ScreenPermissi
     }
   }
 
+  // Date-only, no time-of-day component — filter values are DateTime
+  // objects (always midnight, but '$dateTime' still prints the full
+  // "2026-06-01 00:00:00.000"). Also sidesteps the PDF font not covering
+  // the en-dash glyph (rendered as a broken box) by using plain "to".
+  String _fmtFilterDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
   Map<String, String> _buildFilterSummary() {
     final bundle = _bundle!, controller = _controller!;
     final summary = <String, String>{};
@@ -76,8 +83,9 @@ class _ReportScreenState extends ConsumerState<ReportScreen> with ScreenPermissi
       final v = controller.filterValues[f.filterKey];
       if (v == null) continue;
       if (v is Map && f.isDateRange) {
-        final from = v['from'], to = v['to'];
-        summary[f.label] = '${from ?? 'Any'} – ${to ?? 'Any'}';
+        final from = v['from'] as DateTime?;
+        final to = v['to'] as DateTime?;
+        summary[f.label] = '${from != null ? _fmtFilterDate(from) : 'Any'} to ${to != null ? _fmtFilterDate(to) : 'Any'}';
       } else {
         summary[f.label] = '$v';
       }
