@@ -131,6 +131,12 @@ SELECT
     (l.charge_amount * h.rate_to_base)     AS charge_amount,
     (l.landed_amount * h.rate_to_base)     AS landed_amount,
     l.base_amount                          AS final_amount,    -- reuse the stored, actually-posted value — never recompute
+    -- coalesce(...,0): cost_price is nullable (pre-121 historical invoices
+    -- never had it resolved) — NULL * anything = NULL in Postgres, exactly
+    -- like Oracle's NVL gap, so an un-coalesced cost_value would silently
+    -- vanish from any downstream SUM() instead of reading as a visible 0.
+    (coalesce(l.cost_price, 0) * h.rate_to_base) AS cost_price,
+    (l.base_qty * coalesce(l.cost_price, 0) * h.rate_to_base) AS cost_value,
     l.price_source,
     l.price_override_reason,
     l.price_source_entry_no,
@@ -223,14 +229,32 @@ SELECT
     (-1 * rl.qty_loose)                    AS qty_loose,
     (-1 * rl.base_qty)                     AS base_qty,
     (rl.rate * rh.rate_to_base)            AS rate,            -- unit rate stays positive, same as every S row
-    NULL::numeric(6,2)                     AS discount_percent,
-    NULL::numeric(18,4)                    AS discount_amount, -- no discount concept on a return line
+    -- rid_sales_return_lines has no discount_amount column at all — but the
+    -- discount WAS taken back: gross/tax/final are each independently
+    -- prorated from the invoice line's own gross/tax/final (see
+    -- sales_return_entry_screen.dart's fraction/grossAmount/taxAmount/
+    -- finalAmount getters), and the invoice line satisfies
+    -- final = gross - discount + tax (sales_invoice_entry_screen.dart:1242-
+    -- 1245) — an identity preserved under proportional scaling. So the
+    -- discount amount is recoverable as gross + tax - final; there's simply
+    -- no column to read it FROM directly, unlike every other amount here.
+    (CASE WHEN rl.gross_amount <> 0
+          THEN (rl.gross_amount + rl.tax_amount - rl.final_amount) / rl.gross_amount * 100
+          ELSE 0 END)                      AS discount_percent,
+    (-1 * (rl.gross_amount + rl.tax_amount - rl.final_amount) * rh.rate_to_base) AS discount_amount,
     NULL::uuid                             AS discount_given_by,
     (-1 * rl.gross_amount  * rh.rate_to_base) AS gross_amount,
     (-1 * rl.tax_amount    * rh.rate_to_base) AS tax_amount,
     (-1 * rl.charge_amount * rh.rate_to_base) AS charge_amount,
     (-1 * rl.landed_amount * rh.rate_to_base) AS landed_amount,
     (-1 * rl.final_amount  * rh.rate_to_base) AS final_amount, -- no stored base_amount on return lines — must compute
+    -- rh.rate_to_base IS the original invoice's own rate_to_base — copied
+    -- verbatim onto the return header at fn_save_sales_return time
+    -- (099_sales_return.sql line ~399) and never re-derived, so this is
+    -- already historically symmetric with what fn_approve_sales_return
+    -- actually reverses, no separate join back to rih_sales_invoices needed.
+    (coalesce(rl.cost_price, 0) * rh.rate_to_base) AS cost_price,
+    (-1 * rl.base_qty * coalesce(rl.cost_price, 0) * rh.rate_to_base) AS cost_value,
     NULL::text                             AS price_source,
     NULL::text                             AS price_override_reason,
     NULL::text                             AS price_source_entry_no,
@@ -335,6 +359,8 @@ SELECT
     (l.charge_amount * h.rate_to_local)    AS charge_amount,
     (l.landed_amount * h.rate_to_local)    AS landed_amount,
     l.local_amount                         AS final_amount,    -- reuse the stored, actually-posted value — never recompute
+    (coalesce(l.cost_price, 0) * h.rate_to_local) AS cost_price,
+    (l.base_qty * coalesce(l.cost_price, 0) * h.rate_to_local) AS cost_value,
     l.price_source,
     l.price_override_reason,
     l.price_source_entry_no,
@@ -424,14 +450,18 @@ SELECT
     (-1 * rl.qty_loose)                    AS qty_loose,
     (-1 * rl.base_qty)                     AS base_qty,
     (rl.rate * rh.rate_to_local)           AS rate,
-    NULL::numeric(6,2)                     AS discount_percent,
-    NULL::numeric(18,4)                    AS discount_amount,
+    (CASE WHEN rl.gross_amount <> 0
+          THEN (rl.gross_amount + rl.tax_amount - rl.final_amount) / rl.gross_amount * 100
+          ELSE 0 END)                      AS discount_percent,
+    (-1 * (rl.gross_amount + rl.tax_amount - rl.final_amount) * rh.rate_to_local) AS discount_amount,
     NULL::uuid                             AS discount_given_by,
     (-1 * rl.gross_amount  * rh.rate_to_local) AS gross_amount,
     (-1 * rl.tax_amount    * rh.rate_to_local) AS tax_amount,
     (-1 * rl.charge_amount * rh.rate_to_local) AS charge_amount,
     (-1 * rl.landed_amount * rh.rate_to_local) AS landed_amount,
     (-1 * rl.final_amount  * rh.rate_to_local) AS final_amount,
+    (coalesce(rl.cost_price, 0) * rh.rate_to_local) AS cost_price,
+    (-1 * rl.base_qty * coalesce(rl.cost_price, 0) * rh.rate_to_local) AS cost_value,
     NULL::text                             AS price_source,
     NULL::text                             AS price_override_reason,
     NULL::text                             AS price_source_entry_no,
