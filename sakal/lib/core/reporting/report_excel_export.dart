@@ -1,10 +1,32 @@
 import 'dart:typed_data';
 import 'package:excel/excel.dart' as xls;
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'report_export_helpers.dart';
 import 'report_matrix_pivot.dart';
 import 'report_models.dart';
 import 'report_repository.dart';
+import 'web_download.dart';
+
+/// Saves the finished workbook bytes to disk. On web this bypasses
+/// FilePicker.platform.saveFile() (its File System Access API path is
+/// timing-sensitive to the activation window of the ORIGINAL button
+/// click — see web_download_web.dart) in favor of a plain Blob+anchor
+/// download, which has no such restriction. Every other platform is
+/// unchanged.
+Future<void> _saveWorkbookBytes(List<int> bytes, String filename, String dialogTitle) async {
+  if (kIsWeb) {
+    downloadBytesOnWeb(bytes, filename);
+    return;
+  }
+  await FilePicker.platform.saveFile(
+    dialogTitle: dialogTitle,
+    fileName: filename,
+    bytes: Uint8List.fromList(bytes),
+    type: FileType.custom,
+    allowedExtensions: ['xlsx'],
+  );
+}
 
 /// Excel export for any report. Uses the exact same
 /// `xls.Excel.createExcel()` -> `sheet.appendRow()` -> `workbook.encode()`
@@ -65,13 +87,7 @@ class ReportExcelExport {
     final bytes = workbook.encode();
     if (bytes == null) return;
     final filename = '${definition.reportKey.toLowerCase()}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
-    await FilePicker.platform.saveFile(
-      dialogTitle: 'Save ${definition.reportName}',
-      fileName: filename,
-      bytes: Uint8List.fromList(bytes),
-      type: FileType.custom,
-      allowedExtensions: ['xlsx'],
-    );
+    await _saveWorkbookBytes(bytes, filename, 'Save ${definition.reportName}');
   }
 
   /// MATRIX-report export — writes the already-pivoted wide shape (row
@@ -127,13 +143,7 @@ class ReportExcelExport {
     final bytes = workbook.encode();
     if (bytes == null) return;
     final filename = '${definition.reportKey.toLowerCase()}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
-    await FilePicker.platform.saveFile(
-      dialogTitle: 'Save ${definition.reportName}',
-      fileName: filename,
-      bytes: Uint8List.fromList(bytes),
-      type: FileType.custom,
-      allowedExtensions: ['xlsx'],
-    );
+    await _saveWorkbookBytes(bytes, filename, 'Save ${definition.reportName}');
   }
 
   static String _cellText(ReportColumn c, ReportRow row) {
