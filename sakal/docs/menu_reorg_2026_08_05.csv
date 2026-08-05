@@ -1,0 +1,83 @@
+action,feature_code,feature_name,screen_name,note,proposed_module,proposed_group_code,proposed_group_name,proposed_group_serial,proposed_item_serial
+KEEP,AD-CMP,Company Setup,/setup/company,,Settings,AD-SETG,System Setup,0,0
+KEEP,AD-LOC,Location Setup,/setup/locations,,Settings,AD-SETG,System Setup,0,1
+KEEP,AD-CUR,Currency Setup,/setup/currencies,,Settings,AD-SETG,System Setup,0,2
+KEEP,AD-PDC,Period Close,/setup/period-close,,Settings,AD-SETG,System Setup,0,3
+KEEP,AD-BDC,Backdated Entry Control,/setup/backdated-entry-control,,Settings,AD-SETG,System Setup,0,4
+KEEP,AD-QIS,Quick Invoice Setup,/setup/quick-invoice-setup,,Settings,AD-SETG,System Setup,0,5
+KEEP,AD-CNT,Country Setup,/setup/countries,found live in Current_master.csv - not in old fn_seed_client_modules.sql at all,Settings,AD-SETG,System Setup,0,6
+KEEP,AD-DIV,Country Divisions,/setup/divisions,found live - was never in fn_seed_client_modules.sql,Settings,AD-SETG,System Setup,0,7
+KEEP,AD-CIT,Cities,/setup/cities,found live - was never in fn_seed_client_modules.sql; fixed feature_name capitalization,Settings,AD-SETG,System Setup,0,8
+KEEP,AD-PDT,Print Templates,/setup/print-templates,found live - was never in fn_seed_client_modules.sql,Settings,AD-SETG,System Setup,0,9
+KEEP,AD-ACT,Accounting Setup,/setup/accounting,found live - was never in fn_seed_client_modules.sql; fixed feature_name typo (was "Accouting Setup"),Settings,AD-SETG,System Setup,0,10
+KEEP,MST-CMN,Common Masters,/master/common-masters,shared/cross-module - no single owning business module,Settings,AD-SETG,System Setup,0,11
+KEEP,AD-PAYTERM,Payment Terms,/master/payment-terms,shared - used by both Sales Order and PO,Settings,AD-SETG,System Setup,0,12
+DISCARD,AD-M001,Common Masters,/master/common-masters,duplicate of MST-CMN - same screen,,,,,
+KEEP,AD-USR,User Management,/setup/users,,Settings,AD-USMG,User Management,1,0
+KEEP,AD-PRM,User Permissions,/setup/permissions,,Settings,AD-USMG,User Management,1,1
+KEEP,AD-ULS,User Location Setup,/setup/user-location-access,found live - was never in fn_seed_client_modules.sql,Settings,AD-USMG,User Management,1,2
+KEEP,AD-MST,Master Menu,/setup/master-menu,found live - was NOT actually missing as I earlier assumed; already exists as a Supabase-only patch,Settings,AD-USMG,User Management,1,3
+DISCARD,AD-MN,Setup Master Menu,/setup/locations,stray/buggy row - name says Master Menu but screen_name is /setup/locations (mismatched),,,,,
+KEEP,MST-CUST,Customer Master,/master/customers,,Settings,SL-MST,Sales Masters,2,0
+KEEP,SL-PRC,Price Master,/sales/price-master,,Settings,SL-MST,Sales Masters,2,1
+KEEP,SL-EXE,Sales Executives,/sales/sales-executives,,Settings,SL-MST,Sales Masters,2,2
+KEEP,MST-SUPP,Supplier Master,/master/suppliers,,Settings,PR-MST,Purchase Masters,3,0
+KEEP,MST-PRD,Product Master,/master/products,,Settings,IN-MST,Inventory Masters,4,0
+DISCARD,AD-PRL,Product List,/master/products,duplicate of MST-PRD - same screen,,,,,
+KEEP,MST-ITC,Item Categories,/master/item-categories,,Settings,IN-MST,Inventory Masters,4,1
+DISCARD,AD-ICS,Product Category Master,/master/item-categories,duplicate of MST-ITC - same screen,,,,,
+KEEP,AD-PCS,Product Category Level Setup,/setup/category-levels,found live - was never in fn_seed_client_modules.sql,Settings,IN-MST,Inventory Masters,4,2
+KEEP,AD-PGS,Product Flag Types,/setup/product-flag-types,found live - was never in fn_seed_client_modules.sql; fixed feature_name (was "Product Transaction Permission" - name did not match screen),Settings,IN-MST,Inventory Masters,4,3
+KEEP,IN-DCA,Consumption Area Setup,/inventory/department-consumption-areas,moved from Inventory's own Setup group,Settings,IN-MST,Inventory Masters,4,4
+KEEP,MST-COA,Chart of Accounts,/master/accounts,,Settings,FN-MST,Finance Masters,5,0
+DISCARD,AC-COA,Chart of Account,/master/accounts,duplicate of MST-COA - same screen (also wrong prefix AC- not AD-),,,,,
+KEEP,MST-TAX,Tax Master,/master/tax-master,,Settings,FN-MST,Finance Masters,5,1
+DISCARD,AD-TXS,Tax Master,/master/tax-master,duplicate of MST-TAX - same screen,,,,,
+KEEP,MST-TXG,Tax Groups,/master/tax-groups,,Settings,FN-MST,Finance Masters,5,2
+DISCARD,AD-TXG,Tax Groups,/master/tax-groups,duplicate of MST-TXG - same screen,,,,,
+KEEP,MST-ALS,Account Link Setup,/master/account-link-setup,,Settings,FN-MST,Finance Masters,5,3
+DISCARD,AD-ALS,Account Link Setup,/master/account-link-setup,duplicate of MST-ALS - same screen,,,,,
+KEEP,MST-IAL,Item Account Links,/master/item-account-links,,Settings,FN-MST,Finance Masters,5,4
+DISCARD,AD-IAL,Item/Product Account Linking,/master/item-account-links,duplicate of MST-IAL - same screen,,,,,
+KEEP,MST-CHG,Additional Charges,/master/additional-charges,fundamentally a GL/charge-accounting concept - same reasoning as Tax Master,Settings,FN-MST,Finance Masters,5,5
+DISCARD,AD-ADM,Additional Chanrges,/master/additional-charges,duplicate of MST-CHG - same screen (also has a typo),,,,,
+KEEP,FN-EX,Exchange Rates,/finance/exchange-rates,found live - was never in fn_seed_client_modules.sql,Settings,FN-MST,Finance Masters,5,6
+DISCARD,AD-PRC,Period Close Settings,/setup/period-close,duplicate of AD-PDC - same screen,,,,,
+DISCARD,AD-BKE,Back Dated Entry Settings,/setup/backdated-entry-control,duplicate of AD-BDC - same screen,,,,,
+KEEP,SL-QUO,Sales Quotation,/sales/quotations,,Sales,SL-TXN,Transactions,0,0
+KEEP,SL-SO,Sales Order,/sales/orders,,Sales,SL-TXN,Transactions,0,1
+KEEP,SL-INV,Sales Invoice,/sales/invoices,,Sales,SL-TXN,Transactions,0,2
+KEEP,SL-INR,Pending Approvals,/sales/pending-approvals,,Sales,SL-TXN,Transactions,0,3
+KEEP,SL-RET,Sales Return,/sales/returns,,Sales,SL-TXN,Transactions,0,4
+KEEP,SL-DEL,Sales Delivery,/sales/deliveries,,Sales,SL-TXN,Transactions,0,5
+KEEP,SL-RCP,Cash Receipt,/sales/receipts,,Sales,SL-TXN,Transactions,0,6
+KEEP,SL-RPT-REG,Sales Register,/reports/SALES_REGISTER,not in Current_master.csv export - migration 127 likely not run yet at export time; still part of intended final structure,Sales,SL-RPT,Reports,1,0
+KEEP,PR-PO,Purchase Order,/purchase/orders,BUG FIX: live DB has this pointing at /purchase/order-entry - a route that no longer exists in app_router.dart at all (verified via grep - zero matches). Corrected to /purchase/orders (the real list screen) matching the Menu-to-List-to-Entry convention,Purchase,PR-TXN,Transactions,0,0
+DISCARD,PR-POL,Purchase Orders,/purchase/orders,duplicate of (corrected) PR-PO - same screen,,,,,
+DISCARD,PR-GRE,GRN Entry,/purchase/grn-entry,dead route - /purchase/grn-entry does not exist in app_router.dart at all (verified via grep - zero matches),,,,,
+KEEP,PR-GRN,Goods Receipt,/purchase/grn,,Purchase,PR-TXN,Transactions,0,1
+DISCARD,PR-GRL,GRN List,/purchase/grn,duplicate of PR-GRN - same screen,,,,,
+KEEP,PR-INV,Purchase Invoice,/purchase/invoices,,Purchase,PR-TXN,Transactions,0,2
+KEEP,PR-RET,Purchase Return,/purchase/returns,,Purchase,PR-TXN,Transactions,0,3
+KEEP,PR-PAY,Supplier Payment,/purchase/payments,,Purchase,PR-TXN,Transactions,0,4
+KEEP,IN-STK,Stock List,/inventory/stock,,Inventory,IN-OPS,Transactions,0,0
+KEEP,IN-TRF,Stock Transfer,/inventory/transfers,,Inventory,IN-OPS,Transactions,0,1
+KEEP,IN-ADJ,Stock Adjustment,/inventory/adjustments,,Inventory,IN-OPS,Transactions,0,2
+KEEP,IN-MRQ,Material Requisition,/inventory/requisitions,,Inventory,IN-OPS,Transactions,0,3
+KEEP,IN-MIS,Material Issue,/inventory/material-issue,,Inventory,IN-OPS,Transactions,0,4
+KEEP,IN-STR,Stock Transfer Request,/inventory/stock-transfer-requests,,Inventory,IN-OPS,Transactions,0,5
+KEEP,IN-SRC,Stock Receipt,/inventory/stock-receipts,,Inventory,IN-OPS,Transactions,0,6
+KEEP,IN-OPN,Opening Stock,/inventory/opening-stock,,Inventory,IN-OPS,Transactions,0,7
+KEEP,IN-CNT,Stock Count,/inventory/stock-count,,Inventory,IN-OPS,Transactions,0,8
+KEEP,IN-CNR,Stock Count Review,/inventory/stock-count-review,,Inventory,IN-OPS,Transactions,0,9
+KEEP,IN-RPT-SBM,Stock Balance by Location,/reports/STOCK_BALANCE_MATRIX,,Inventory,IN-RPT,Reports,1,0
+KEEP,FN-JRN,Journal Entry,/finance/journal,,Finance,FN-TXN,Transactions,0,0
+KEEP,FN-CTR,Contra Voucher,/finance/contra,,Finance,FN-TXN,Transactions,0,1
+KEEP,FN-EXP,Expense Voucher,/finance/expense-vouchers,,Finance,FN-TXN,Transactions,0,2
+KEEP,FN-CBK,Cash Book,/finance/cashbook,,Finance,FN-TXN,Transactions,0,3
+KEEP,FN-PRV,Payment/Receipt Voucher,/finance/voucher-list,,Finance,FN-TXN,Transactions,0,4
+KEEP,FN-TRB,Trial Balance,/finance/trial-balance,,Finance,FN-RPT,Reports,1,0
+KEEP,FN-PNL,Profit & Loss,/finance/profit-loss,,Finance,FN-RPT,Reports,1,1
+KEEP,FN-BSH,Balance Sheet,/finance/balance-sheet,,Finance,FN-RPT,Reports,1,2
+KEEP,FN-RPT-PBR,Pending Bills Register,/reports/PENDING_BILLS_REGISTER,,Finance,FN-RPT,Reports,1,3
+KEEP,FN-RPT-PBG,Pending Bills by Customer,/reports/PENDING_BILLS_BY_CUSTOMER,,Finance,FN-RPT,Reports,1,4
