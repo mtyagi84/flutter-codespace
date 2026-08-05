@@ -78,7 +78,14 @@
 -- bypass tenant scoping.
 -- ============================================================
 
-CREATE OR REPLACE VIEW v_sales_details_base AS
+-- DROP + CREATE, not CREATE OR REPLACE: Postgres refuses to REPLACE a
+-- view when a column's data type changes (42P16 "cannot change data type
+-- of view column"), which this view will keep tripping while its column
+-- set is still being reviewed/iterated on with the user. Nothing else in
+-- the schema references these views yet (brand new, no dependents), so
+-- DROP is safe.
+DROP VIEW IF EXISTS v_sales_details_base;
+CREATE VIEW v_sales_details_base AS
 -- ---------------------------------------------------------------
 -- Sales Invoice lines (record_type = 'S')
 -- ---------------------------------------------------------------
@@ -240,7 +247,7 @@ SELECT
     -- no column to read it FROM directly, unlike every other amount here.
     (CASE WHEN rl.gross_amount <> 0
           THEN (rl.gross_amount + rl.tax_amount - rl.final_amount) / rl.gross_amount * 100
-          ELSE 0 END)                      AS discount_percent,
+          ELSE 0 END)::numeric(6,2)        AS discount_percent,
     (-1 * (rl.gross_amount + rl.tax_amount - rl.final_amount) * rh.rate_to_base) AS discount_amount,
     NULL::uuid                             AS discount_given_by,
     (-1 * rl.gross_amount  * rh.rate_to_base) AS gross_amount,
@@ -309,7 +316,8 @@ GRANT SELECT ON v_sales_details_base TO anon, authenticated, service_role;
 -- rid_sales_invoice_lines.local_amount (not base_amount) for an S row's
 -- final_amount.
 -- ============================================================
-CREATE OR REPLACE VIEW v_sales_details_local AS
+DROP VIEW IF EXISTS v_sales_details_local;
+CREATE VIEW v_sales_details_local AS
 SELECT
     'S'::text                              AS record_type,
     h.client_id,
@@ -452,7 +460,7 @@ SELECT
     (rl.rate * rh.rate_to_local)           AS rate,
     (CASE WHEN rl.gross_amount <> 0
           THEN (rl.gross_amount + rl.tax_amount - rl.final_amount) / rl.gross_amount * 100
-          ELSE 0 END)                      AS discount_percent,
+          ELSE 0 END)::numeric(6,2)        AS discount_percent,
     (-1 * (rl.gross_amount + rl.tax_amount - rl.final_amount) * rh.rate_to_local) AS discount_amount,
     NULL::uuid                             AS discount_given_by,
     (-1 * rl.gross_amount  * rh.rate_to_local) AS gross_amount,
