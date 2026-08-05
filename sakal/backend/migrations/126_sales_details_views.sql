@@ -76,6 +76,20 @@
 -- precedent (020_pending_bills_view.sql) — RLS denies by default for
 -- any role with no matching policy, so granting SELECT to anon does not
 -- bypass tenant scoping.
+--
+-- 2026-08-05 follow-up additions (same session, still pre-launch):
+-- 7. gross_profit/gross_profit_percent = final_amount - cost_value (and
+--    that difference / final_amount * 100) on every leg — the whole
+--    reason cost_price/cost_value were added.
+-- 8. Location-access scoping: every leg's WHERE clause also checks
+--    ric_user_location_access (029) for the current JWT's user_id — zero
+--    active rows for that user = unrestricted (sees every company
+--    location); any active rows = limited to exactly that set. Baked
+--    into the shared views (not left to each report) so every future
+--    sales report inherits it automatically, same reasoning as the
+--    status='APPROVED' footgun note above. First real consumer of this
+--    table anywhere in the schema (previously only read/written by the
+--    Setup -> User Location Access admin screen).
 -- ============================================================
 
 -- DROP + CREATE, not CREATE OR REPLACE: Postgres refuses to REPLACE a
@@ -144,6 +158,10 @@ SELECT
     -- vanish from any downstream SUM() instead of reading as a visible 0.
     (coalesce(l.cost_price, 0) * h.rate_to_base) AS cost_price,
     (l.base_qty * coalesce(l.cost_price, 0) * h.rate_to_base) AS cost_value,
+    (l.base_amount - (l.base_qty * coalesce(l.cost_price, 0) * h.rate_to_base)) AS gross_profit,
+    (CASE WHEN l.base_amount <> 0
+          THEN (l.base_amount - (l.base_qty * coalesce(l.cost_price, 0) * h.rate_to_base)) / l.base_amount * 100
+          ELSE 0 END)::numeric(6,2) AS gross_profit_percent,
     l.price_source,
     l.price_override_reason,
     l.price_source_entry_no,
@@ -189,6 +207,23 @@ LEFT JOIN rim_users           sp   ON sp.id   = h.sales_person_id
 LEFT JOIN rim_currencies      cur  ON cur.id  = h.invoice_currency_id
 LEFT JOIN rim_tax_groups      tg   ON tg.id   = l.tax_group_id
 WHERE h.is_deleted = false AND l.is_deleted = false
+  AND (
+      -- ric_user_location_access (029) scopes which locations a user is
+      -- RESTRICTED to -- zero active rows for this user means unrestricted
+      -- (sees every company location); any active rows limit them to
+      -- exactly that set. Nothing else in the schema enforces this table
+      -- today (no screen's location picker, no JWT claim) -- this is the
+      -- first real consumer, applied here so every future sales report
+      -- built on this shared view inherits it automatically.
+      NOT EXISTS (SELECT 1 FROM ric_user_location_access ula
+                  WHERE ula.user_id = (current_setting('request.jwt.claims', true)::json->>'user_id')::uuid
+                    AND ula.client_id = h.client_id AND ula.company_id = h.company_id
+                    AND ula.is_active = true AND ula.is_deleted = false)
+      OR h.location_id IN (SELECT ula.location_id FROM ric_user_location_access ula
+                            WHERE ula.user_id = (current_setting('request.jwt.claims', true)::json->>'user_id')::uuid
+                              AND ula.client_id = h.client_id AND ula.company_id = h.company_id
+                              AND ula.is_active = true AND ula.is_deleted = false)
+  )
 
 UNION ALL
 
@@ -262,6 +297,10 @@ SELECT
     -- actually reverses, no separate join back to rih_sales_invoices needed.
     (coalesce(rl.cost_price, 0) * rh.rate_to_base) AS cost_price,
     (-1 * rl.base_qty * coalesce(rl.cost_price, 0) * rh.rate_to_base) AS cost_value,
+    ((-1 * rl.final_amount * rh.rate_to_base) - (-1 * rl.base_qty * coalesce(rl.cost_price, 0) * rh.rate_to_base)) AS gross_profit,
+    (CASE WHEN rl.final_amount <> 0
+          THEN ((-1 * rl.final_amount * rh.rate_to_base) - (-1 * rl.base_qty * coalesce(rl.cost_price, 0) * rh.rate_to_base)) / (-1 * rl.final_amount * rh.rate_to_base) * 100
+          ELSE 0 END)::numeric(6,2) AS gross_profit_percent,
     NULL::text                             AS price_source,
     NULL::text                             AS price_override_reason,
     NULL::text                             AS price_source_entry_no,
@@ -305,7 +344,17 @@ LEFT JOIN rim_common_masters  uom  ON uom.id  = rl.uom_id
 LEFT JOIN ric_locations       loc  ON loc.id  = rh.location_id
 LEFT JOIN rim_currencies      cur  ON cur.id  = rh.return_currency_id
 LEFT JOIN rim_tax_groups      tg   ON tg.id   = rl.tax_group_id
-WHERE rh.is_deleted = false AND rl.is_deleted = false;
+WHERE rh.is_deleted = false AND rl.is_deleted = false
+  AND (
+      NOT EXISTS (SELECT 1 FROM ric_user_location_access ula
+                  WHERE ula.user_id = (current_setting('request.jwt.claims', true)::json->>'user_id')::uuid
+                    AND ula.client_id = rh.client_id AND ula.company_id = rh.company_id
+                    AND ula.is_active = true AND ula.is_deleted = false)
+      OR rh.location_id IN (SELECT ula.location_id FROM ric_user_location_access ula
+                             WHERE ula.user_id = (current_setting('request.jwt.claims', true)::json->>'user_id')::uuid
+                               AND ula.client_id = rh.client_id AND ula.company_id = rh.company_id
+                               AND ula.is_active = true AND ula.is_deleted = false)
+  );
 
 GRANT SELECT ON v_sales_details_base TO anon, authenticated, service_role;
 
@@ -369,6 +418,10 @@ SELECT
     l.local_amount                         AS final_amount,    -- reuse the stored, actually-posted value — never recompute
     (coalesce(l.cost_price, 0) * h.rate_to_local) AS cost_price,
     (l.base_qty * coalesce(l.cost_price, 0) * h.rate_to_local) AS cost_value,
+    (l.local_amount - (l.base_qty * coalesce(l.cost_price, 0) * h.rate_to_local)) AS gross_profit,
+    (CASE WHEN l.local_amount <> 0
+          THEN (l.local_amount - (l.base_qty * coalesce(l.cost_price, 0) * h.rate_to_local)) / l.local_amount * 100
+          ELSE 0 END)::numeric(6,2) AS gross_profit_percent,
     l.price_source,
     l.price_override_reason,
     l.price_source_entry_no,
@@ -414,6 +467,16 @@ LEFT JOIN rim_users           sp   ON sp.id   = h.sales_person_id
 LEFT JOIN rim_currencies      cur  ON cur.id  = h.invoice_currency_id
 LEFT JOIN rim_tax_groups      tg   ON tg.id   = l.tax_group_id
 WHERE h.is_deleted = false AND l.is_deleted = false
+  AND (
+      NOT EXISTS (SELECT 1 FROM ric_user_location_access ula
+                  WHERE ula.user_id = (current_setting('request.jwt.claims', true)::json->>'user_id')::uuid
+                    AND ula.client_id = h.client_id AND ula.company_id = h.company_id
+                    AND ula.is_active = true AND ula.is_deleted = false)
+      OR h.location_id IN (SELECT ula.location_id FROM ric_user_location_access ula
+                            WHERE ula.user_id = (current_setting('request.jwt.claims', true)::json->>'user_id')::uuid
+                              AND ula.client_id = h.client_id AND ula.company_id = h.company_id
+                              AND ula.is_active = true AND ula.is_deleted = false)
+  )
 
 UNION ALL
 
@@ -470,6 +533,10 @@ SELECT
     (-1 * rl.final_amount  * rh.rate_to_local) AS final_amount,
     (coalesce(rl.cost_price, 0) * rh.rate_to_local) AS cost_price,
     (-1 * rl.base_qty * coalesce(rl.cost_price, 0) * rh.rate_to_local) AS cost_value,
+    ((-1 * rl.final_amount * rh.rate_to_local) - (-1 * rl.base_qty * coalesce(rl.cost_price, 0) * rh.rate_to_local)) AS gross_profit,
+    (CASE WHEN rl.final_amount <> 0
+          THEN ((-1 * rl.final_amount * rh.rate_to_local) - (-1 * rl.base_qty * coalesce(rl.cost_price, 0) * rh.rate_to_local)) / (-1 * rl.final_amount * rh.rate_to_local) * 100
+          ELSE 0 END)::numeric(6,2) AS gross_profit_percent,
     NULL::text                             AS price_source,
     NULL::text                             AS price_override_reason,
     NULL::text                             AS price_source_entry_no,
@@ -513,6 +580,16 @@ LEFT JOIN rim_common_masters  uom  ON uom.id  = rl.uom_id
 LEFT JOIN ric_locations       loc  ON loc.id  = rh.location_id
 LEFT JOIN rim_currencies      cur  ON cur.id  = rh.return_currency_id
 LEFT JOIN rim_tax_groups      tg   ON tg.id   = rl.tax_group_id
-WHERE rh.is_deleted = false AND rl.is_deleted = false;
+WHERE rh.is_deleted = false AND rl.is_deleted = false
+  AND (
+      NOT EXISTS (SELECT 1 FROM ric_user_location_access ula
+                  WHERE ula.user_id = (current_setting('request.jwt.claims', true)::json->>'user_id')::uuid
+                    AND ula.client_id = rh.client_id AND ula.company_id = rh.company_id
+                    AND ula.is_active = true AND ula.is_deleted = false)
+      OR rh.location_id IN (SELECT ula.location_id FROM ric_user_location_access ula
+                             WHERE ula.user_id = (current_setting('request.jwt.claims', true)::json->>'user_id')::uuid
+                               AND ula.client_id = rh.client_id AND ula.company_id = rh.company_id
+                               AND ula.is_active = true AND ula.is_deleted = false)
+  );
 
 GRANT SELECT ON v_sales_details_local TO anon, authenticated, service_role;

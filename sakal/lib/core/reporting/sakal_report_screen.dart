@@ -92,7 +92,8 @@ class _ReportScreenState extends ConsumerState<ReportScreen> with ScreenPermissi
       final rows = await _repository.fetchAllForExport(
         bundle: bundle, clientId: controller.clientId, companyId: controller.companyId,
         filterValues: controller.filterValues,
-        sortColumn: controller.sortColumn, sortDir: controller.sortDir);
+        sortColumn: controller.sortColumn, sortDir: controller.sortDir,
+        sourceObjectOverride: controller.currencyMode == 'LOCAL' ? bundle.definition.sourceObjectLocal : null);
       if (rows == null) {
         setState(() => _actionError = 'This report has more than ${bundle.definition.maxExportRows} rows — narrow your filters and try again.');
         return;
@@ -130,7 +131,8 @@ class _ReportScreenState extends ConsumerState<ReportScreen> with ScreenPermissi
       final rows = await _repository.fetchAllForExport(
         bundle: bundle, clientId: controller.clientId, companyId: controller.companyId,
         filterValues: controller.filterValues,
-        sortColumn: controller.sortColumn, sortDir: controller.sortDir);
+        sortColumn: controller.sortColumn, sortDir: controller.sortDir,
+        sourceObjectOverride: controller.currencyMode == 'LOCAL' ? bundle.definition.sourceObjectLocal : null);
       if (rows == null) {
         setState(() => _actionError = 'This report has more than ${bundle.definition.maxExportRows} rows — narrow your filters and try again.');
         return;
@@ -189,6 +191,24 @@ class _ReportScreenState extends ConsumerState<ReportScreen> with ScreenPermissi
           child: Text(_actionError!, style: const TextStyle(color: AppColors.negative, fontSize: 12)),
         ),
       const Divider(height: 20),
+      if (bundle.definition.hasCurrencyToggle)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+          child: Row(children: [
+            const Text('Currency: ', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'BASE', label: Text('Base')),
+                ButtonSegment(value: 'LOCAL', label: Text('Local')),
+              ],
+              selected: {controller.currencyMode},
+              onSelectionChanged: (s) async {
+                await controller.setCurrencyMode(s.first);
+                if (mounted) setState(() {});
+              },
+            ),
+          ]),
+        ),
       Padding(
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
         child: SakalReportFilterBar(

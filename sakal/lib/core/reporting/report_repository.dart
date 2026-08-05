@@ -168,8 +168,9 @@ class ReportRepository {
     required String clientId,
     required String companyId,
     required Map<String, dynamic> filterValues,
+    String? totalsSourceObjectOverride,
   }) async {
-    final totalsObject = bundle.definition.totalsSourceObject;
+    final totalsObject = totalsSourceObjectOverride ?? bundle.definition.totalsSourceObject;
     if (totalsObject == null) return null;
     final page = await fetchPage(
       bundle: bundle,
@@ -238,6 +239,7 @@ class ReportRepository {
     required Map<String, dynamic> filterValues,
     String? sortColumn,
     String? sortDir,
+    String? sourceObjectOverride,
   }) async {
     final cap = bundle.definition.maxExportRows;
     final page = await fetchPage(
@@ -249,6 +251,7 @@ class ReportRepository {
       sortDir: sortDir,
       limit: cap + 1,
       offset: 0,
+      sourceObjectOverride: sourceObjectOverride,
     );
     if (page.rows.length > cap) return null;
     return page.rows;

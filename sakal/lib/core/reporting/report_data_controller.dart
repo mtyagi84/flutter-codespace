@@ -48,6 +48,13 @@ class ReportDataController {
   String? sortDir; // ASC | DESC
   Map<String, dynamic> filterValues = {};
 
+  // 'BASE' | 'LOCAL' — only meaningful when bundle.definition.hasCurrencyToggle.
+  // Scoped to TABULAR/MATRIX (the report shapes this report's own fetch
+  // methods below cover) — grouped-tree fetches (_loadRootGroups/
+  // expandNode/loadMoreDetailForNode) deliberately don't consult this yet,
+  // see report_models.dart's ReportDefinition.sourceObjectLocal doc.
+  String currencyMode = 'BASE';
+
   bool isLoading = false;
   ReportRow? totals;
 
@@ -62,6 +69,18 @@ class ReportDataController {
   List<ReportGroupNode> rootGroups = [];
 
   int get pageSize => bundle.definition.defaultPageSize;
+
+  // null when currencyMode == 'BASE' (fetchPage/fetchTotals/
+  // fetchAllForExport already fall back to the definition's own default
+  // object when no override is given, so 'BASE' needs no override at all).
+  String? get _sourceOverride => currencyMode == 'LOCAL' ? bundle.definition.sourceObjectLocal : null;
+  String? get _totalsOverride => currencyMode == 'LOCAL' ? bundle.definition.totalsSourceObjectLocal : null;
+
+  Future<void> setCurrencyMode(String mode) async {
+    if (currencyMode == mode) return;
+    currencyMode = mode;
+    await refresh();
+  }
 
   Future<void> init() async {
     sortColumn = bundle.definition.defaultSortColumn;
@@ -83,7 +102,8 @@ class ReportDataController {
       } else {
         await _loadFirstPage();
         totals = await repository.fetchTotals(
-            bundle: bundle, clientId: clientId, companyId: companyId, filterValues: filterValues);
+            bundle: bundle, clientId: clientId, companyId: companyId, filterValues: filterValues,
+            totalsSourceObjectOverride: _totalsOverride);
       }
     } finally {
       isLoading = false;
@@ -105,6 +125,7 @@ class ReportDataController {
       sortDir: sortDir,
       limit: _matrixSafetyCap,
       offset: 0,
+      sourceObjectOverride: _sourceOverride,
     );
     items = page.rows;
     hasMore = false;
@@ -139,6 +160,7 @@ class ReportDataController {
       limit: pageSize,
       offset: 0,
       wantCount: true,
+      sourceObjectOverride: _sourceOverride,
     );
     items = page.rows;
     totalCount = page.totalCount;
@@ -159,6 +181,7 @@ class ReportDataController {
         sortDir: sortDir,
         limit: pageSize,
         offset: _offset,
+        sourceObjectOverride: _sourceOverride,
       );
       items = [...items, ...page.rows];
       _offset += page.rows.length;

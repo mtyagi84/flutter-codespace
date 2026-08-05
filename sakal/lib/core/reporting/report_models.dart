@@ -19,6 +19,14 @@ class ReportDefinition {
   final bool useExactCount;
   final int maxExportRows;
   final String? totalsSourceObject;
+  // Nullable Base/Local currency-toggle pair (migration 127) — when
+  // sourceObjectLocal is set, the report has a same-shape twin object (same
+  // column names) in the other currency, and the screen shows a Currency
+  // toggle instead of forcing a second report_key. TABULAR/MATRIX only —
+  // grouped reports would need ric_report_group_levels to carry its own
+  // local variant per level too, deliberately not built yet.
+  final String? sourceObjectLocal;
+  final String? totalsSourceObjectLocal;
   final bool isActive;
 
   const ReportDefinition({
@@ -37,6 +45,8 @@ class ReportDefinition {
     required this.useExactCount,
     required this.maxExportRows,
     this.totalsSourceObject,
+    this.sourceObjectLocal,
+    this.totalsSourceObjectLocal,
     required this.isActive,
   });
 
@@ -56,12 +66,15 @@ class ReportDefinition {
         useExactCount: j['use_exact_count'] as bool? ?? true,
         maxExportRows: (j['max_export_rows'] as num?)?.toInt() ?? 100000,
         totalsSourceObject: j['totals_source_object'] as String?,
+        sourceObjectLocal: j['source_object_local'] as String?,
+        totalsSourceObjectLocal: j['totals_source_object_local'] as String?,
         isActive: j['is_active'] as bool? ?? true,
       );
 
   bool get isTabular => reportType == 'TABULAR';
   bool get isMatrix => reportType == 'MATRIX';
   bool get isHierarchical => reportType == 'HIERARCHICAL';
+  bool get hasCurrencyToggle => sourceObjectLocal != null;
 }
 
 class ReportColumn {
