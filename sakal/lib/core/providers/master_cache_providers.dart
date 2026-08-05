@@ -231,6 +231,7 @@ final companyDetailsProvider = FutureProvider<Map<String, dynamic>?>((ref) async
     'id':     'eq.${session.companyId}',
     'select': 'company_name,address,landline_no,email,country,'
               'state_name,city_name,pin_zip_code,website,logo,'
+              'logo_width_inch,logo_height_inch,'
               'tax_1_label,tax_1_value,tax_2_label,tax_2_value,'
               'tax_3_label,tax_3_value,tax_4_label,tax_4_value',
     'limit':  '1',

@@ -25,6 +25,13 @@ class PdfCanvasRenderer {
 
     final visible = template.elements
         .where((el) => el.showWhen == null || el.showWhen!.evaluate(document))
+        // An image element (in practice, always the logo) with no bound
+        // value must not reserve its row's flex slot — otherwise a company
+        // with no logo still gets a blank gap where it would have sat, and
+        // the sibling element (company name/address) doesn't actually
+        // start from the left margin the way it visually should. See
+        // ric_companies.logo_width_inch/logo_height_inch (migration 125).
+        .where((el) => el.type != PrintElementType.image || _hasImageValue(el, document))
         .toList();
 
     final rowsByY = <double, List<PrintElement>>{};
@@ -77,8 +84,18 @@ class PdfCanvasRenderer {
         final b64 = resolveScalar(document, el.bind ?? '') as String?;
         if (b64 == null || b64.isEmpty) return pw.SizedBox();
         try {
+          // Company-level logo_width_inch/logo_height_inch (ric_companies,
+          // migration 125) override this element's own w/h — the physical
+          // print size of a company's logo is a company-wide setting, not
+          // a per-template one, so every document type shares it. Every
+          // image element in this codebase is the logo (bind
+          // 'company.logo'), so no per-element opt-out is needed.
+          final company = document['company'] as Map<String, dynamic>? ?? const {};
+          final widthIn  = (company['logo_width_inch']  as num?)?.toDouble() ?? 1.0;
+          final heightIn = (company['logo_height_inch'] as num?)?.toDouble() ?? 1.0;
           return pw.SizedBox(
-            height: el.h * PdfPageFormat.mm,
+            width: widthIn * 25.4 * PdfPageFormat.mm,
+            height: heightIn * 25.4 * PdfPageFormat.mm,
             child: pw.Image(pw.MemoryImage(base64Decode(b64)),
                 fit: pw.BoxFit.contain, alignment: pw.Alignment.centerLeft),
           );
@@ -126,6 +143,11 @@ class PdfCanvasRenderer {
           ),
         );
     }
+  }
+
+  static bool _hasImageValue(PrintElement el, Map<String, dynamic> document) {
+    final b64 = resolveScalar(document, el.bind ?? '') as String?;
+    return b64 != null && b64.isNotEmpty;
   }
 
   static pw.Widget _table(PrintElement el, Map<String, dynamic> document) {

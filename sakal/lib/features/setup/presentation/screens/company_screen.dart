@@ -49,6 +49,13 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
   String? _watermarkBase64;
   String? _stampBase64;
 
+  // Logo physical print size, in inches — shared by the Reporting Engine's
+  // PDF header AND the document Print Engine (PO/GRN/Invoices/Vouchers),
+  // both of which read ric_companies.logo_width_inch/logo_height_inch
+  // instead of a hardcoded per-template size.
+  final _logoWidthCtrl  = TextEditingController(text: '1');
+  final _logoHeightCtrl = TextEditingController(text: '1');
+
   // Product coding settings
   bool _enableBarcode    = false;
   bool _enablePartNumber = false;
@@ -100,6 +107,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
     for (final c in _currencyDecimalCtrls.values) {
       c.dispose();
     }
+    _logoWidthCtrl.dispose(); _logoHeightCtrl.dispose();
     super.dispose();
   }
 
@@ -162,6 +170,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
     _logoBase64      = d['logo']               as String?;
     _watermarkBase64 = d['company_watermark']   as String?;
     _stampBase64     = d['company_stamp']       as String?;
+    _logoWidthCtrl.text  = '${d['logo_width_inch']  ?? 1}';
+    _logoHeightCtrl.text = '${d['logo_height_inch'] ?? 1}';
     _enableBarcode    = d['enable_barcode']     as bool? ?? false;
     _enablePartNumber = d['enable_part_number'] as bool? ?? false;
     _interLocationModel = d['inter_location_model'] as String? ?? 'SIMPLE';
@@ -231,6 +241,8 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
           'tax_4_label':       _tax4LabelCtrl.text.trim(),
           'tax_4_value':       _tax4ValueCtrl.text.trim(),
           'logo':               _logoBase64,
+          'logo_width_inch':    double.tryParse(_logoWidthCtrl.text.trim()) ?? 1.0,
+          'logo_height_inch':   double.tryParse(_logoHeightCtrl.text.trim()) ?? 1.0,
           'company_watermark':  _watermarkBase64,
           'company_stamp':      _stampBase64,
           if (!_hasProducts) 'enable_barcode':     _enableBarcode,
@@ -1055,13 +1067,51 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
   // ── Section: Company Images ───────────────────────────────────────────────
 
   Widget _buildImages() {
-    final logo = _ImagePicker(
-      label: 'Company Logo',
-      hint: '(printed at top of documents)',
-      base64: _logoBase64,
-      onPick: () => _pickImage('logo'),
-      onClear: () => _clearImage('logo'),
-    );
+    final logo = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _ImagePicker(
+        label: 'Company Logo',
+        hint: '(printed at top of documents)',
+        base64: _logoBase64,
+        onPick: () => _pickImage('logo'),
+        onClear: () => _clearImage('logo'),
+      ),
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(
+          child: TextFormField(
+            controller: _logoWidthCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(), isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              labelText: 'Logo Width (in)',
+            ),
+            validator: (v) {
+              final n = double.tryParse(v ?? '');
+              if (n == null || n <= 0 || n > 5) return '0-5';
+              return null;
+            },
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: TextFormField(
+            controller: _logoHeightCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(), isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              labelText: 'Logo Height (in)',
+            ),
+            validator: (v) {
+              final n = double.tryParse(v ?? '');
+              if (n == null || n <= 0 || n > 5) return '0-5';
+              return null;
+            },
+          ),
+        ),
+      ]),
+    ]);
     final watermark = _ImagePicker(
       label: 'Watermark',
       hint: '(background on document pages)',

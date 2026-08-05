@@ -138,15 +138,35 @@ class ReportPdfExport {
       }
     }
 
-    final leftBlock = logo != null
-        ? pw.Image(logo, width: 130, height: 55, fit: pw.BoxFit.contain)
-        : pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-            pw.Text('${company['company_name'] ?? ''}', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
-            if ('${company['address'] ?? ''}'.isNotEmpty)
-              pw.Text('${company['address']}', style: const pw.TextStyle(fontSize: 8)),
-            if ('${company['city_name'] ?? ''}'.isNotEmpty)
-              pw.Text('${company['city_name']}', style: const pw.TextStyle(fontSize: 8)),
-          ]);
+    // Logo AND company name/address print together (logo left, details to
+    // its right) whenever a logo is set — never one replacing the other.
+    // With no logo, details start from the leftmost edge (no reserved gap).
+    // Logo print size is a company-wide setting (ric_companies.
+    // logo_width_inch/logo_height_inch, migration 125), the same one the
+    // document Print Engine's canvas renderer reads — not a size local to
+    // this report header.
+    final detailsColumn = pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+      pw.Text('${company['company_name'] ?? ''}', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+      if ('${company['address'] ?? ''}'.isNotEmpty)
+        pw.Text('${company['address']}', style: const pw.TextStyle(fontSize: 8)),
+      if ('${company['city_name'] ?? ''}'.isNotEmpty)
+        pw.Text('${company['city_name']}', style: const pw.TextStyle(fontSize: 8)),
+    ]);
+
+    pw.Widget leftBlock = detailsColumn;
+    if (logo != null) {
+      final widthIn = (company['logo_width_inch'] as num?)?.toDouble() ?? 1.0;
+      final heightIn = (company['logo_height_inch'] as num?)?.toDouble() ?? 1.0;
+      leftBlock = pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
+        pw.SizedBox(
+          width: widthIn * 25.4 * PdfPageFormat.mm,
+          height: heightIn * 25.4 * PdfPageFormat.mm,
+          child: pw.Image(logo, fit: pw.BoxFit.contain, alignment: pw.Alignment.centerLeft),
+        ),
+        pw.SizedBox(width: 10),
+        detailsColumn,
+      ]);
+    }
 
     final rightBlock = pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
       pw.Text(reportName, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
