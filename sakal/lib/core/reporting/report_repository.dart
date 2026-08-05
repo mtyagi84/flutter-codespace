@@ -97,6 +97,17 @@ class ReportRepository {
     String? sourceObjectOverride,
     String? sourceTypeOverride,
     bool wantCount = false,
+    // false for a fetch whose target object has a DIFFERENT column shape
+    // than the report's main detail feed (fetchTotals — always exactly one
+    // row, sorting is meaningless anyway) — otherwise this method falls
+    // back to bundle.definition.defaultSortColumn, which is only ever
+    // guaranteed to exist on the DETAIL feed's own columns. Applying it to
+    // an unrelated aggregate FUNCTION's result (e.g. fn_pending_bills_totals,
+    // whose RETURNS TABLE has no trans_date at all) makes PostgREST try to
+    // ORDER BY a column that doesn't exist on that function's row type,
+    // surfaced as "column record.<col> does not exist" — caught live
+    // testing the pilots for real.
+    bool applyDefaultSort = true,
   }) async {
     final def = bundle.definition;
     final sourceObject = sourceObjectOverride ?? def.sourceObject;
@@ -120,7 +131,7 @@ class ReportRepository {
     params['select'] = '*';
     params['limit'] = '$limit';
     params['offset'] = '$offset';
-    final col = sortColumn ?? def.defaultSortColumn;
+    final col = sortColumn ?? (applyDefaultSort ? def.defaultSortColumn : null);
     final dir = (sortDir ?? def.defaultSortDir ?? 'ASC').toLowerCase();
     if (col != null) params['order'] = '$col.$dir';
 
@@ -181,6 +192,7 @@ class ReportRepository {
       offset: 0,
       sourceObjectOverride: totalsObject,
       sourceTypeOverride: 'FUNCTION',
+      applyDefaultSort: false,
     );
     return page.rows.isEmpty ? null : page.rows.first;
   }
