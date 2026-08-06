@@ -112,8 +112,11 @@ final appRouter = GoRouter(
   // Lets ScreenHeaderMixin (screen_header.dart) know when a screen becomes
   // visible again after a pushed screen on top of it is popped, so it can
   // re-post its own title instead of leaving the popped screen's title
-  // stuck in the shared TopBar.
-  navigatorObservers: [routeObserver],
+  // stuck in the shared TopBar. GoRouter's own constructor param for this
+  // is `observers`, not Flutter's Navigator-widget-style
+  // `navigatorObservers` — verified against the pinned go_router-14.8.1
+  // source after flutter analyze caught the first (wrong) name.
+  observers: [routeObserver],
   redirect: (context, state) {
     final loc       = state.matchedLocation;
     final hasClient = LocalStorage.clientNo != null;
