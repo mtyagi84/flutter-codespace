@@ -125,9 +125,8 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
                 await _showSwitchCompanyDialog(context, ref, session!);
               } else if (val == 'density') {
                 ref.read(isCompactDensityProvider.notifier).state = !ref.read(isCompactDensityProvider);
-              } else if (val.startsWith('theme_')) {
-                ref.read(themePresetProvider.notifier).state =
-                    ThemePreset.values.byName(val.substring('theme_'.length));
+              } else if (val == 'open_theme') {
+                await _showThemePicker(context, ref);
               } else if (val == 'logout') {
                 ref.read(sessionProvider.notifier).state = null;
                 ref.read(menuProvider.notifier).state    = [];
@@ -213,7 +212,19 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
                   Text(ref.read(isCompactDensityProvider) ? 'Comfortable Rows' : 'Dense Rows'),
                 ]),
               ),
-              ..._buildThemeMenuItems(ref),
+              PopupMenuItem(
+                value: 'open_theme',
+                child: Row(children: [
+                  Container(
+                    width: 14, height: 14,
+                    decoration: BoxDecoration(color: activePreset.primary, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 10),
+                  Text('Theme: ${activePreset.label}'),
+                  const Spacer(),
+                  const Icon(Icons.chevron_right, size: 16, color: AppColors.textSecondary),
+                ]),
+              ),
               const PopupMenuDivider(),
               const PopupMenuItem(
                 value: 'switch_company',
@@ -279,30 +290,47 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
     );
   }
 
-  // Theme preset rows for the avatar popup menu — same visual shape (color
-  // dot + label + checkmark on the active preset) the old standalone
-  // palette-icon dropdown used, just spliced into the one shared menu
-  // instead of a second persistent AppBar icon.
-  List<PopupMenuEntry<String>> _buildThemeMenuItems(WidgetRef ref) {
+  // Theme picker — collapsed to a single "Theme: <current>" row in the
+  // avatar menu (per user request, initially collapsed rather than
+  // showing all 4 presets inline every time the menu opens); tapping it
+  // opens this small dialog with the actual choices. Same AlertDialog
+  // pattern already used for Switch Company, deliberately not a nested/
+  // expanding PopupMenuItem — PopupMenuButton's own items close the whole
+  // menu on tap by default, and keeping one open to expand in place needs
+  // meaningfully more custom state-management machinery than this.
+  Future<void> _showThemePicker(BuildContext context, WidgetRef ref) async {
     final active = ref.read(themePresetProvider);
-    return ThemePreset.values.map((preset) {
-      final config = ThemePresetConfig.all[preset]!;
-      return PopupMenuItem<String>(
-        value: 'theme_${preset.name}',
-        child: Row(children: [
-          Container(
-            width: 14, height: 14,
-            decoration: BoxDecoration(color: config.primary, shape: BoxShape.circle),
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Choose Theme'),
+        content: SizedBox(
+          width: 280,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: ThemePreset.values.map((preset) {
+              final config = ThemePresetConfig.all[preset]!;
+              return ListTile(
+                dense: true,
+                leading: Container(
+                  width: 16, height: 16,
+                  decoration: BoxDecoration(color: config.primary, shape: BoxShape.circle),
+                ),
+                title: Text(config.label),
+                trailing: preset == active ? const Icon(Icons.check, color: AppColors.positive) : null,
+                onTap: () {
+                  ref.read(themePresetProvider.notifier).state = preset;
+                  Navigator.of(dialogContext).pop();
+                },
+              );
+            }).toList(),
           ),
-          const SizedBox(width: 10),
-          Text(config.label),
-          if (preset == active) ...[
-            const Spacer(),
-            const Icon(Icons.check, size: 16, color: AppColors.positive),
-          ],
-        ]),
-      );
-    }).toList();
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Close')),
+        ],
+      ),
+    );
   }
 
   // Screen-registered title (+ optional subtitle/status badge), replacing

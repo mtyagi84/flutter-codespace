@@ -2075,9 +2075,11 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     message: _printing ? 'Preparing PDF…' : 'Print / Save as PDF',
     child: IconButton(
       icon: _printing
-          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.sidebarText))
           : const Icon(Icons.print_outlined),
-      color: AppColors.primary,
+      // sidebarText, not primary — see the same fix + rationale in
+      // sales_quotation_entry_screen.dart's _buildPrintButton().
+      color: AppColors.sidebarText,
       onPressed: _printing ? null : _printGrn,
     ),
   );

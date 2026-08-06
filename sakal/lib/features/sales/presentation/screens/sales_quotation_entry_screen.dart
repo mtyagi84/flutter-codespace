@@ -874,9 +874,13 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
     message: _printing ? 'Preparing PDF…' : 'Print / Save as PDF',
     child: IconButton(
       icon: _printing
-          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.sidebarText))
           : const Icon(Icons.print_outlined),
-      color: AppColors.primary,
+      // sidebarText, not primary — this button now lives in the shared
+      // TopBar's own dark actions row (moved there via ScreenHeaderMixin),
+      // not the light body area it used to sit in; AppColors.primary is a
+      // dark navy that blended into the equally-dark bar, invisible.
+      color: AppColors.sidebarText,
       onPressed: _printing ? null : _printQuotation,
     ),
   );
