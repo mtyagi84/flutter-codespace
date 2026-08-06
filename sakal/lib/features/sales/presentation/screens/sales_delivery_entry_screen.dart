@@ -21,6 +21,7 @@ import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/sales_delivery_repository.dart';
 import '../providers/sales_delivery_providers.dart';
 
@@ -1147,11 +1148,32 @@ class _SalesDeliveryEntryScreenState extends ConsumerState<SalesDeliveryEntryScr
           else if (_lines.isEmpty)
             const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No lines yet — pick an invoice above.',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
-          else
+          else ...[
+            if (!isMobile) _buildLinesHeader(showLooseQty),
             ..._lines.map((row) => _buildLineCard(row, locked, showLooseQty, isMobile)),
+          ],
         ]),
       ),
     );
+  }
+
+  // Header row for the desktop line-items table — same SizedBox widths as
+  // _buildLineCard's own desktop Row below, so the dark SakalTableHeaderBar
+  // lines up column-for-column with the data underneath.
+  Widget _buildLinesHeader(bool showLooseQty) {
+    return SakalTableHeaderBar(cells: [
+      SizedBox(width: 220, child: SakalTableHeaderBar.label('Product')),
+      const SizedBox(width: 8),
+      SizedBox(width: 90, child: SakalTableHeaderBar.label('Pending')),
+      const SizedBox(width: 8),
+      SizedBox(width: 70, child: SakalTableHeaderBar.label('Unit')),
+      const SizedBox(width: 8),
+      SizedBox(width: 130, child: SakalTableHeaderBar.label('Barcode')),
+      const SizedBox(width: 8),
+      SizedBox(width: 110, child: SakalTableHeaderBar.label(showLooseQty ? 'Delivery Qty Pack' : 'Delivery Qty')),
+      if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 110, child: SakalTableHeaderBar.label('Delivery Qty Loose'))],
+      const SizedBox(width: 40), // reserves the delete-icon column's width
+    ]);
   }
 
   Widget _buildLineCard(_SDLineRow row, bool locked, bool showLooseQty, bool isMobile) {
@@ -1159,6 +1181,9 @@ class _SalesDeliveryEntryScreenState extends ConsumerState<SalesDeliveryEntryScr
     const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
+    final productField = SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? '—' : row.productDisplay);
+    final pendingField = SakalFieldCard.readOnly(
+        label: 'Pending', value: '${row.pendingQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}');
     final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
     final barcodeField = SakalFieldCard.readOnly(label: 'Barcode', value: (row.barcode?.isNotEmpty ?? false) ? row.barcode! : '—');
     final qtyPackField = SakalFieldCard(
@@ -1179,20 +1204,62 @@ class _SalesDeliveryEntryScreenState extends ConsumerState<SalesDeliveryEntryScr
         onChanged: (_) { setState(() {}); if (row.isBatchTracked || row.isSerialTracked) _autoAllocateFefo(row); },
       ),
     );
+    final batchSerialBody = row.isBatchTracked || row.isSerialTracked
+        ? _buildBatchSerialEditor(row, locked, isMobile)
+        : const SizedBox.shrink();
 
-    return SakalLineItemCard(
-      title: row.productDisplay.isEmpty ? 'Line' : row.productDisplay,
-      subtitle: 'Pending ${row.pendingQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}',
-      onDelete: locked ? null : () => _removeLine(row),
-      fields: [
-        SizedBox(width: 70, height: 56, child: unitField),
-        SizedBox(width: 130, height: 56, child: barcodeField),
-        SizedBox(width: 110, child: qtyPackField),
-        if (showLooseQty) SizedBox(width: 110, child: qtyLooseField),
-      ],
-      body: row.isBatchTracked || row.isSerialTracked
-          ? _buildBatchSerialEditor(row, locked, isMobile)
-          : const SizedBox.shrink(),
+    if (isMobile) {
+      // 2-column grid for secondary fields instead of a loose Wrap.
+      final secondaryFields = <Widget>[
+        unitField,
+        barcodeField,
+        qtyPackField,
+        if (showLooseQty) qtyLooseField,
+      ];
+      final pairedRows = <Widget>[];
+      for (var i = 0; i < secondaryFields.length; i += 2) {
+        pairedRows.add(SakalFieldRow(
+          isMobile: true,
+          children: secondaryFields.sublist(i, (i + 2).clamp(0, secondaryFields.length)),
+        ));
+        if (i + 2 < secondaryFields.length) pairedRows.add(const SizedBox(height: 8));
+      }
+      return SakalLineItemCard(
+        title: row.productDisplay.isEmpty ? 'Line' : row.productDisplay,
+        subtitle: 'Pending ${row.pendingQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}',
+        onDelete: locked ? null : () => _removeLine(row),
+        fields: const [],
+        body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          ...pairedRows,
+          if (row.isBatchTracked || row.isSerialTracked) ...[const SizedBox(height: 8), batchSerialBody],
+        ]),
+      );
+    }
+
+    // Desktop — a continuous row under _buildLinesHeader's dark bar, same
+    // left-to-right column order/widths as that header.
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(width: 220, height: 56, child: productField),
+          const SizedBox(width: 8),
+          SizedBox(width: 90, height: 56, child: pendingField),
+          const SizedBox(width: 8),
+          SizedBox(width: 70, height: 56, child: unitField),
+          const SizedBox(width: 8),
+          SizedBox(width: 130, height: 56, child: barcodeField),
+          const SizedBox(width: 8),
+          SizedBox(width: 110, child: qtyPackField),
+          if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 110, child: qtyLooseField)],
+          SizedBox(
+            width: 40,
+            child: locked ? null : IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line'),
+          ),
+        ]),
+        if (row.isBatchTracked || row.isSerialTracked) Padding(padding: const EdgeInsets.only(top: 8), child: batchSerialBody),
+      ]),
     );
   }
 

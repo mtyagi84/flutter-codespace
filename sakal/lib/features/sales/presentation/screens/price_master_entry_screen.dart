@@ -22,6 +22,7 @@ import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/price_master_repository.dart';
 import '../providers/price_master_providers.dart';
 
@@ -773,7 +774,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
                     if (_actionError != null) ...[_errorBanner(_actionError!), const SizedBox(height: 16)],
                     _buildHeaderCard(locked, isMobile, showScan),
                     const SizedBox(height: 16),
-                    _buildLinesCard(locked),
+                    _buildLinesCard(locked, isMobile),
                   ]),
                 ),
         ),
@@ -1004,10 +1005,35 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
     );
   }
 
-  Widget _buildLinesCard(bool locked) {
+  // Header row for the desktop line-items table — same SizedBox widths as
+  // the per-line desktop Row below, so the dark SakalTableHeaderBar lines
+  // up column-for-column with the data underneath.
+  Widget _buildLinesHeader(bool showBelowCostReason) {
+    return SakalTableHeaderBar(cells: [
+      SizedBox(width: 220, child: SakalTableHeaderBar.label('Product')),
+      const SizedBox(width: 8),
+      SizedBox(width: 140, child: SakalTableHeaderBar.label('UOM')),
+      const SizedBox(width: 8),
+      SizedBox(width: 100, child: SakalTableHeaderBar.label('Cost Price')),
+      const SizedBox(width: 8),
+      SizedBox(width: 90, child: SakalTableHeaderBar.label('Margin %')),
+      const SizedBox(width: 8),
+      SizedBox(width: 110, child: SakalTableHeaderBar.label('Selling Price')),
+      if (showBelowCostReason) ...[const SizedBox(width: 8), SizedBox(width: 180, child: SakalTableHeaderBar.label('Below-Cost Reason'))],
+      const SizedBox(width: 8),
+      SizedBox(width: 90, child: SakalTableHeaderBar.label('Incl. Tax')),
+      const SizedBox(width: 40), // reserves the delete-icon column's width
+    ]);
+  }
+
+  Widget _buildLinesCard(bool locked, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
     const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
+    // Whether ANY line currently requires a below-cost reason — computed
+    // once so the header (fixed columns) and every row stay column-aligned
+    // instead of drifting per-line.
+    final showBelowCostReason = _lines.any((r) => r.isBelowCost);
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -1022,7 +1048,8 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
           if (_lines.isEmpty)
             const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No lines yet — add a product or scan a barcode.',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
-          else
+          else ...[
+            if (!isMobile) _buildLinesHeader(showBelowCostReason),
             ..._lines.asMap().entries.map((entry) {
               final idx = entry.key;
               final row = entry.value;
@@ -1102,28 +1129,78 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
                 ),
                 const Text('Incl. Tax', style: TextStyle(fontSize: 12)),
               ]);
+              final scannedTag = (row.barcode != null && row.barcode!.isNotEmpty)
+                  ? Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.qr_code, size: 14, color: AppColors.textSecondary),
+                      const SizedBox(width: 4),
+                      Text('Scanned: ${row.barcode}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                    ])
+                  : null;
 
-              return SakalLineItemCard(
-                title: '${idx + 1}. ${row.productDisplay.isEmpty ? 'New Line' : row.productDisplay}',
-                onDelete: locked ? null : () => _removeLine(row),
-                fields: [
-                  SizedBox(width: 220, child: productField),
-                  SizedBox(width: 140, height: 56, child: uomField),
-                  SizedBox(width: 100, child: costPriceField),
-                  SizedBox(width: 90, child: marginField),
-                  SizedBox(width: 110, child: sellingPriceField),
-                  if (row.isBelowCost) SizedBox(width: 180, height: 56, child: belowCostReasonField),
-                  taxInclusiveField,
-                ],
-                footer: (row.barcode != null && row.barcode!.isNotEmpty)
-                    ? Row(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(Icons.qr_code, size: 14, color: AppColors.textSecondary),
-                        const SizedBox(width: 4),
-                        Text('Scanned: ${row.barcode}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                      ])
-                    : null,
+              if (isMobile) {
+                // 2-column grid for secondary fields instead of a loose Wrap.
+                final secondaryFields = <Widget>[
+                  uomField,
+                  costPriceField,
+                  marginField,
+                  sellingPriceField,
+                  if (row.isBelowCost) belowCostReasonField,
+                ];
+                final pairedRows = <Widget>[];
+                for (var i = 0; i < secondaryFields.length; i += 2) {
+                  pairedRows.add(SakalFieldRow(
+                    isMobile: true,
+                    children: secondaryFields.sublist(i, (i + 2).clamp(0, secondaryFields.length)),
+                  ));
+                  if (i + 2 < secondaryFields.length) pairedRows.add(const SizedBox(height: 8));
+                }
+                return SakalLineItemCard(
+                  title: '${idx + 1}. ${row.productDisplay.isEmpty ? 'New Line' : row.productDisplay}',
+                  onDelete: locked ? null : () => _removeLine(row),
+                  fields: const [],
+                  body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    productField,
+                    const SizedBox(height: 8),
+                    ...pairedRows,
+                    const SizedBox(height: 8),
+                    taxInclusiveField,
+                  ]),
+                  footer: scannedTag,
+                );
+              }
+
+              // Desktop — a continuous row under _buildLinesHeader's dark
+              // bar, same left-to-right column order/widths as that header.
+              return Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    SizedBox(width: 220, child: productField),
+                    const SizedBox(width: 8),
+                    SizedBox(width: 140, height: 56, child: uomField),
+                    const SizedBox(width: 8),
+                    SizedBox(width: 100, child: costPriceField),
+                    const SizedBox(width: 8),
+                    SizedBox(width: 90, child: marginField),
+                    const SizedBox(width: 8),
+                    SizedBox(width: 110, child: sellingPriceField),
+                    if (showBelowCostReason) ...[
+                      const SizedBox(width: 8),
+                      SizedBox(width: 180, height: 56, child: row.isBelowCost ? belowCostReasonField : const SizedBox.shrink()),
+                    ],
+                    const SizedBox(width: 8),
+                    SizedBox(width: 90, height: 56, child: taxInclusiveField),
+                    SizedBox(
+                      width: 40,
+                      child: locked ? null : IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line'),
+                    ),
+                  ]),
+                  if (scannedTag != null) Padding(padding: const EdgeInsets.only(top: 6), child: scannedTag),
+                ]),
               );
             }),
+          ],
         ]),
       ),
     );
