@@ -22,6 +22,7 @@ import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../../master/data/models/item_category_model.dart';
 import '../../../master/data/models/product_model.dart';
 import '../../../master/presentation/providers/item_categories_providers.dart';
@@ -615,7 +616,7 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
                         ),
                       ))
                     else
-                      _buildLinesCard(locked, showLooseQty, showScan),
+                      _buildLinesCard(locked, showLooseQty, showScan, isMobile),
                   ]),
                 ),
         ),
@@ -759,7 +760,7 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
     );
   }
 
-  Widget _buildLinesCard(bool locked, bool showLooseQty, bool showScan) {
+  Widget _buildLinesCard(bool locked, bool showLooseQty, bool showScan, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
     const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
@@ -803,12 +804,13 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
             SizedBox(width: 240, child: searchField),
           ]),
           const SizedBox(height: 10),
+          if (!isMobile) _buildLinesHeader(showLooseQty),
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 600),
             child: ListView.builder(
               controller: _scrollController,
               itemCount: rows.length,
-              itemBuilder: (context, i) => _buildWorksheetRow(rows[i], locked, showLooseQty),
+              itemBuilder: (context, i) => _buildWorksheetRow(rows[i], locked, showLooseQty, isMobile),
             ),
           ),
         ]),
@@ -816,7 +818,25 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
     );
   }
 
-  Widget _buildWorksheetRow(_WorksheetRow row, bool locked, bool showLooseQty) {
+  // Header row for the desktop worksheet table — same widths as
+  // _buildWorksheetRow's own desktop Row below, so the dark
+  // SakalTableHeaderBar lines up column-for-column with the data
+  // underneath. Template: sales_invoice_entry_screen.dart's
+  // _buildLineItemsHeader / grn_entry_screen.dart's _buildLinesHeader.
+  Widget _buildLinesHeader(bool showLooseQty) {
+    return SakalTableHeaderBar(cells: [
+      const SizedBox(width: 28),
+      const SizedBox(width: 8),
+      Expanded(flex: 3, child: SakalTableHeaderBar.label('Product')),
+      const SizedBox(width: 8),
+      SizedBox(width: 90, child: SakalTableHeaderBar.label('Unit')),
+      const SizedBox(width: 8),
+      SizedBox(width: 120, child: SakalTableHeaderBar.label(showLooseQty ? 'Qty Pack' : 'Quantity')),
+      if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 120, child: SakalTableHeaderBar.label('Qty Loose'))],
+    ]);
+  }
+
+  Widget _buildWorksheetRow(_WorksheetRow row, bool locked, bool showLooseQty, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
     const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
@@ -844,27 +864,76 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
       ),
     );
 
-    final card = SakalLineItemCard(
-      title: '[${row.productCode}] ${row.productName}',
-      subtitle: isTracked
-          ? (row.isBatchTracked
-              ? '${row.batches.length} batch(es) — total ${row.baseQty.toStringAsFixed(2)}'
-              : '${row.serials.length} serial(s)')
-          : null,
-      trailingHeaderAction: Icon(
-        row.isCounted ? Icons.check_circle : Icons.radio_button_unchecked,
-        size: 18,
-        color: row.isCounted ? Colors.white : Colors.white54,
-      ),
-      fields: isTracked
-          ? const []
-          : [
-              SizedBox(width: 90, child: unitField),
-              SizedBox(width: 120, child: qtyPackField),
-              if (showLooseQty) SizedBox(width: 120, child: qtyLooseField),
+    final trackedSubtitle = isTracked
+        ? (row.isBatchTracked
+            ? '${row.batches.length} batch(es) — total ${row.baseQty.toStringAsFixed(2)}'
+            : '${row.serials.length} serial(s)')
+        : null;
+    final body = isTracked ? _buildBatchSerialEditor(row, locked, showLooseQty) : null;
+
+    final Widget content;
+    if (isMobile) {
+      content = SakalLineItemCard(
+        title: '[${row.productCode}] ${row.productName}',
+        subtitle: trackedSubtitle,
+        trailingHeaderAction: Icon(
+          row.isCounted ? Icons.check_circle : Icons.radio_button_unchecked,
+          size: 18,
+          color: row.isCounted ? Colors.white : Colors.white54,
+        ),
+        fields: isTracked
+            ? const []
+            : [
+                SizedBox(width: 90, child: unitField),
+                SizedBox(width: 120, child: qtyPackField),
+                if (showLooseQty) SizedBox(width: 120, child: qtyLooseField),
+              ],
+        body: body,
+      );
+    } else {
+      // Desktop — a continuous row under _buildLinesHeader's dark bar, same
+      // left-to-right column order/widths as that header so the two stay
+      // pixel-aligned (see the "Line-items grid" mandatory pattern in
+      // CLAUDE.md). A tracked line's Unit/Qty cells are blanked (never
+      // populated) rather than omitted, so later columns don't shift — the
+      // batch/serial editor renders as extra body content below the row
+      // instead, same convention as GRN/Sales Invoice's own extraBody.
+      content = Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            SizedBox(
+              width: 28,
+              child: Icon(
+                row.isCounted ? Icons.check_circle : Icons.radio_button_unchecked,
+                size: 18,
+                color: row.isCounted ? AppColors.positive : AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 3,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                Text('[${row.productCode}] ${row.productName}',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
+                if (trackedSubtitle != null)
+                  Text(trackedSubtitle, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+              ]),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(width: 90, child: isTracked ? const SizedBox.shrink() : unitField),
+            const SizedBox(width: 8),
+            SizedBox(width: 120, child: isTracked ? const SizedBox.shrink() : qtyPackField),
+            if (showLooseQty) ...[
+              const SizedBox(width: 8),
+              SizedBox(width: 120, child: isTracked ? const SizedBox.shrink() : qtyLooseField),
             ],
-      body: isTracked ? _buildBatchSerialEditor(row, locked, showLooseQty) : null,
-    );
+          ]),
+          if (body != null) Padding(padding: const EdgeInsets.only(top: 8), child: body),
+        ]),
+      );
+    }
 
     return Container(
       key: row.rowKey,
@@ -873,7 +942,7 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
       decoration: row.highlighted
           ? BoxDecoration(border: Border.all(color: AppColors.secondary, width: 2), borderRadius: BorderRadius.circular(12))
           : null,
-      child: card,
+      child: content,
     );
   }
 
