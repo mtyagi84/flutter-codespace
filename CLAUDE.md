@@ -306,6 +306,36 @@ Every entry screen places its primary action buttons (`Save Draft`, `Approve`, `
 Template: `lib/features/purchase/presentation/screens/purchase_order_entry_screen.dart`.
 This supersedes the earlier bottom-of-form placement used by Finance Voucher Entry — retrofit older screens opportunistically, don't leave the two conventions coexisting long-term.
 
+### Row & Column layout distribution — every screen, mandatory self-check
+A bare `Row(children: [...])` with 2+ children and no `Expanded`/`Flexible`/`Wrap` fallback overflows at narrow widths — the single recurring layout bug in this app (found live 2026-08-06 on a `SegmentedButton` + label pair, and at several other `SegmentedButton` sites app-wide). Pick one of exactly two implementations: `SakalFieldRow` (`core/widgets/sakal_field_row.dart`) for a small fixed field set that should compress via `Expanded(flex:)`; `SakalReflowRow` (`core/widgets/sakal_reflow_row.dart`) for a larger/variable field set (e.g. a filter bar) that must reflow onto new rows via `Wrap` instead of leaving dead trailing space. A small inline cluster that isn't a field grid (a label + one control) just needs a plain `Wrap` — never a bare `Row`.
+Separately: **no `CrossAxisAlignment` value except `stretch` widens a `Column`'s children to fill available width** — `start` and Flutter's actual default (`center`) both just position each child at its own intrinsic width, so a `Card`/`Container` dropped into a non-stretch `Column` silently shrink-wraps (found live on `backdated_entry_control_screen.dart` — a settings `Card` collapsed to a fraction of the screen). Default every entry/settings-screen body `Column` to `crossAxisAlignment: CrossAxisAlignment.stretch`.
+**Mandatory self-check** (hard gate, same as Pack/Loose/Barcode below — run it, don't just remember the rule): grep the changed file for `Row(` and confirm every 2+-child match is `Expanded`/`Flexible`-wrapped, built via `SakalFieldRow`/`SakalReflowRow`, or a deliberate `Wrap`; grep for `Card(`/`Container(` as a direct `Column` child and confirm that `Column` is `stretch`.
+Full decision table + rationale: `sakal/docs/design_system_guide.md` §4.1.
+
+### Screen header — single unified AppBar, never a duplicate content-level title block
+Every screen registers its title (+ optional subtitle/doc-number, + optional status badge, + optional per-document trailing action like Print) with the shared `TopBar` via `ScreenHeaderMixin<T>` (`lib/core/layout/screen_header.dart`) — never build a separate title `Column`/`Row` as the first element of the scrollable body; that duplicates the existing chrome bar and wastes ~80-100px of vertical space (confirmed live 2026-08-06 on Quick Invoice Setup / Sales Quotation / GRN at 440px).
+```dart
+class _MyScreenState extends ConsumerState<MyScreen>
+    with ScreenPermissionMixin<MyScreen>, ScreenHeaderMixin<MyScreen> {
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+    title: _docNo != null ? 'My Document · $_docNo' : 'New My Document',
+    subtitle: _docNo == null ? 'Unsaved draft' : null,
+    badgeText: _status != 'DRAFT' ? _status : null,
+    badgeColor: _status == 'APPROVED' ? AppColors.positive : AppColors.secondary,
+    actions: _docNo != null ? [_buildPrintButton()] : const [],
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    refreshScreenHeader(); // call every build — header must track current state
+    return ...; // body starts directly with real content, no title block
+  }
+}
+```
+Global, app-wide preferences (Theme, Density) live ONLY in the `TopBar`'s avatar popup menu — never as a persistent per-screen `actions:` icon. A **multi-button** action row (Save + Approve + Send + Accept/Reject, etc. — anything where 2+ buttons can show at once) stays as a slim `Wrap`-based row in the body, NOT in `TopBar.actions` — the AppBar's own actions row has no reflow mechanism, so stuffing several buttons there risks reintroducing the exact overflow bug this pattern exists to prevent. A single icon action (Print) is safe to put in `TopBar.actions` directly.
+**Rollout status**: mechanism built + proven on 4 screens (Quick Invoice Setup, Sales Quotation list/entry, GRN entry) 2026-08-06. The large majority of screens are NOT yet migrated (additive/opt-in — `TopBar` falls back to its pre-existing company-name/blank title when no screen has registered a header) — migrate opportunistically, same rollout shape as `SakalAdaptiveList`/`SakalAutocomplete`. Template: `grn_entry_screen.dart`.
+
 ### Print / PDF support (every entry screen that produces a saved document)
 Every transaction document a user can save (PO, GRN, Purchase Invoice, Purchase Return, Material Requisition, Material Issue, Stock Transfer Request, Stock Transfer, Stock Receipt, Finance Voucher, ...) must be printable. The underlying system (`lib/core/printing/` — `PrintEngine`, `PrintTemplate`/`PrintElement`, `PrintFieldRegistry`) is fully generic; adding print support to a new module is additive-only, never a change to the engine:
 1. `print_field_registry.dart` — add the module's scalar fields, table name(s), row fields to all 4 switches (`scalarFields`, `tableNames`, `rowFields`, `documentTypeLabel`) and to the `documentTypes` list.
@@ -395,7 +425,7 @@ This exact class of bug (Pack/Loose/Barcode gating silently missing on a new scr
 Before considering a new entry/list screen pair done, check all six:
 1. **Permissions** — `ScreenPermissionMixin`, `canAdd`/`canEdit`/`canApprove` gate the right buttons.
 2. **Security** — RLS policy follows the `auth_rw_<table>` convention, no permissive dev-style policy.
-3. **Responsiveness** — `SakalAdaptiveList` on the list screen, mobile/desktop branches on the entry screen.
+3. **Responsiveness** — `SakalAdaptiveList` on the list screen, mobile/desktop branches on the entry screen, PLUS the "Row & Column layout distribution" mandatory self-check above (no bare multi-child `Row`, `Column` bodies use `stretch`).
 4. **Offline support** — Drift local cache + `<module>_local_ds.dart` + `SyncEngine` enqueue on save; Approve stays online-only.
 5. **Print support** — see above.
 6. **Company-configurable line fields** — `showLooseQty`/`showBarcode` gating on every product/item line, PLUS the full **MANDATORY pre-completion self-check** above (run it, don't just remember it).

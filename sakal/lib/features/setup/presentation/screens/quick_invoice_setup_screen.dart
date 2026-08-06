@@ -2,11 +2,11 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/sakal_autocomplete.dart';
 
@@ -26,9 +26,18 @@ class QuickInvoiceSetupScreen extends ConsumerStatefulWidget {
 }
 
 class _QuickInvoiceSetupScreenState extends ConsumerState<QuickInvoiceSetupScreen>
-    with ScreenPermissionMixin<QuickInvoiceSetupScreen> {
+    with ScreenPermissionMixin<QuickInvoiceSetupScreen>, ScreenHeaderMixin<QuickInvoiceSetupScreen> {
   @override
   String get screenName => '/setup/quick-invoice-setup';
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final showButtons = !_loadingSetup && _selectedUserId != null && !_locked && (canAdd || canEdit);
+    return ScreenHeaderInfo(
+      title: 'Quick Invoice Setup',
+      actions: showButtons ? [Padding(padding: const EdgeInsets.only(right: 8), child: _buildActionButtons())] : const [],
+    );
+  }
 
   List<Map<String, dynamic>> _users = [];
   List<Map<String, dynamic>> _salesExecutives = [];
@@ -207,33 +216,17 @@ class _QuickInvoiceSetupScreenState extends ConsumerState<QuickInvoiceSetupScree
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = Responsive.isMobile(context);
-    final showButtons = !_loadingSetup && _selectedUserId != null && !_locked && (canAdd || canEdit);
+    // Header (title + Save button) is registered with the shared TopBar
+    // via ScreenHeaderMixin, not rendered here as body content — see the
+    // "Screen header" mandatory pattern in CLAUDE.md. Called every build
+    // so it always reflects current state (_loadingSetup/_selectedUserId/
+    // _locked/_saving all affect whether the Save button shows).
+    refreshScreenHeader();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: isMobile
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _buildTitleBlock(),
-                  if (showButtons) ...[
-                    const SizedBox(height: 10),
-                    Row(children: [_buildActionButtons()]),
-                  ],
-                ])
-              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(child: _buildTitleBlock()),
-                  if (showButtons) _buildActionButtons(),
-                ]),
-        ),
-        const Divider(height: 20),
-        Expanded(
-          child: _loadingUsers
-              ? const Center(child: CircularProgressIndicator())
-              : SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
+    return _loadingUsers
+        ? const Center(child: CircularProgressIndicator())
+        : SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 640),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -321,14 +314,8 @@ class _QuickInvoiceSetupScreenState extends ConsumerState<QuickInvoiceSetupScree
                   ],
                 ]),
               ),
-            ),
-        ),
-      ],
-    );
+            );
   }
-
-  Widget _buildTitleBlock() => const Text('Quick Invoice Setup',
-      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary));
 
   Widget _buildActionButtons() => FilledButton.icon(
         onPressed: (_locked || _saving) ? null : _save,

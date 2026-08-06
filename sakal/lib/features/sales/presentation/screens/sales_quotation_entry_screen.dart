@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -100,8 +101,33 @@ class SalesQuotationEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryScreen>
-    with ScreenPermissionMixin<SalesQuotationEntryScreen> {
+    with ScreenPermissionMixin<SalesQuotationEntryScreen>, ScreenHeaderMixin<SalesQuotationEntryScreen> {
   @override String get screenName => RouteNames.salesQuotations;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final badge = _status != 'DRAFT' || _quotationNo != null ? (_isExpired ? 'EXPIRED' : _status) : null;
+    return ScreenHeaderInfo(
+      title: _quotationNo != null ? 'Sales Quotation · $_quotationNo' : 'New Sales Quotation',
+      subtitle: badge == null ? 'Unsaved draft' : null,
+      badgeText: badge?.replaceAll('_', ' '),
+      badgeColor: badge == null ? null : _statusColor(badge),
+      trailingBadge: _quotationNo != null
+          ? PendingSyncBadge(documentType: 'SALES_QUOTATION', documentId: _quotationNo!)
+          : null,
+      actions: _quotationNo != null ? [_buildPrintButton()] : const [],
+    );
+  }
+
+  Color _statusColor(String status) => switch (status) {
+        'DRAFT' => AppColors.badgeDraft,
+        'APPROVED' => AppColors.positive,
+        'SENT' => AppColors.secondary,
+        'ACCEPTED' => AppColors.positive,
+        'REJECTED' => AppColors.negative,
+        'EXPIRED' => AppColors.textSecondary,
+        _ => AppColors.positive,
+      };
 
   SalesQuotationRepository get _ds => ref.read(salesQuotationRepositoryProvider);
 
@@ -889,28 +915,25 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
     final showAcceptReject = !isOffline && _status == 'SENT' && canEdit;
     final locked       = _status != 'DRAFT';
 
+    // Title/subtitle/status-badge/Print now live in the shared TopBar via
+    // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. The
+    // Save/Approve/Send/Accept/Reject action buttons deliberately stay
+    // here as a slim body row rather than also moving into the TopBar's
+    // actions: up to 3 can be visible at once (e.g. Accept+Reject), and
+    // the AppBar's actions row has no reflow mechanism the way this
+    // existing Wrap does — moving them would risk reintroducing an
+    // overflow on exactly the class of bug this session fixed elsewhere.
+    refreshScreenHeader();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: isMobile
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _buildTitleBlock(),
-                  const SizedBox(height: 10),
-                  Row(children: [
-                    if (_quotationNo != null) _buildPrintButton(),
-                    _buildActionButtons(canSave: canSave, showApprove: showApprove, showSend: showSend, showAcceptReject: showAcceptReject),
-                  ]),
-                ])
-              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(child: _buildTitleBlock()),
-                  if (_quotationNo != null) _buildPrintButton(),
-                  _buildActionButtons(canSave: canSave, showApprove: showApprove, showSend: showSend, showAcceptReject: showAcceptReject),
-                ]),
-        ),
-        const Divider(height: 20),
+        if (canSave || showApprove || showSend || showAcceptReject)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+            child: _buildActionButtons(canSave: canSave, showApprove: showApprove, showSend: showSend, showAcceptReject: showAcceptReject),
+          ),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
@@ -933,46 +956,6 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
     );
   }
 
-  Widget _buildTitleBlock() => Row(
-    crossAxisAlignment: CrossAxisAlignment.center,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(_quotationNo != null ? 'Sales Quotation · $_quotationNo' : 'New Sales Quotation',
-              overflow: TextOverflow.ellipsis, maxLines: 1,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-          const SizedBox(height: 2),
-          Row(children: [
-            _status != 'DRAFT' || _quotationNo != null
-                ? _statusChip(_isExpired ? 'EXPIRED' : _status)
-                : const Text('Unsaved draft', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            if (_quotationNo != null) ...[
-              const SizedBox(width: 8),
-              PendingSyncBadge(documentType: 'SALES_QUOTATION', documentId: _quotationNo!),
-            ],
-          ]),
-        ]),
-      ),
-    ],
-  );
-
-  Widget _statusChip(String status) {
-    final color = switch (status) {
-      'DRAFT'     => AppColors.badgeDraft,
-      'APPROVED'  => AppColors.positive,
-      'SENT'      => AppColors.secondary,
-      'ACCEPTED'  => AppColors.positive,
-      'REJECTED'  => AppColors.negative,
-      'EXPIRED'   => AppColors.textSecondary,
-      _           => AppColors.positive,
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(4)),
-      child: Text(status.replaceAll('_', ' '), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
-    );
-  }
 
   Widget _buildActionButtons({
     required bool canSave, required bool showApprove, required bool showSend, required bool showAcceptReject,

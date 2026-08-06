@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/master_type_keys.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -155,10 +156,23 @@ class GrnEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
-    with ScreenPermissionMixin<GrnEntryScreen> {
+    with ScreenPermissionMixin<GrnEntryScreen>, ScreenHeaderMixin<GrnEntryScreen> {
   // Same key as the list screen — entry screen is not itself a menu item,
   // per the shared ERP navigation pattern (Menu -> List -> Entry).
   @override String get screenName => RouteNames.goodsReceipt;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final locked = _status != 'DRAFT';
+    return ScreenHeaderInfo(
+      title: _grnNo != null ? 'Goods Receipt · $_grnNo' : 'New Goods Receipt',
+      subtitle: locked ? null : (_grnNo != null ? 'Draft' : 'Unsaved draft'),
+      badgeText: locked ? _status : null,
+      badgeColor: locked ? (_status == 'APPROVED' ? AppColors.positive : AppColors.secondary) : null,
+      trailingBadge: _grnNo != null ? PendingSyncBadge(documentType: 'GRN', documentId: _grnNo!) : null,
+      actions: _grnNo != null ? [_buildPrintButton()] : const [],
+    );
+  }
 
   GrnRepository get _ds => ref.read(grnRepositoryProvider);
 
@@ -1266,32 +1280,22 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     final showApprove  = _status == 'DRAFT' && !isOffline && canApprove && _grnNo != null;
     final locked       = _status != 'DRAFT';
 
+    // Title/subtitle/status-badge/Print now live in the shared TopBar via
+    // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. Save/
+    // Approve stay here as a slim body row (same reasoning as Sales
+    // Quotation Entry's own migration).
+    refreshScreenHeader();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
 
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: isMobile
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _buildTitleBlock(locked),
-                  if (_grnNo != null || canSave || showApprove) ...[
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      if (_grnNo != null) _buildPrintButton(),
-                      if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
-                    ]),
-                  ],
-                ])
-              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(child: _buildTitleBlock(locked)),
-                  if (_grnNo != null) _buildPrintButton(),
-                  if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
-                ]),
-        ),
-
-        const Divider(height: 20),
+        if (canSave || showApprove)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+            child: _buildActionButtons(canSave: canSave, canApprove: showApprove),
+          ),
 
         Expanded(
           child: _loading
@@ -1325,42 +1329,6 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     );
   }
 
-  // In-content back button, additive to TopBar's own corner arrow — see
-  // design_system_guide.md §5.2.
-  Widget _buildTitleBlock(bool locked) => Row(
-    crossAxisAlignment: CrossAxisAlignment.center,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(_grnNo != null ? 'Goods Receipt · $_grnNo' : 'New Goods Receipt',
-              overflow: TextOverflow.ellipsis, maxLines: 1,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-          const SizedBox(height: 2),
-          if (locked)
-            _statusChip(_status)
-          else
-            Row(children: [
-              Text(_grnNo != null ? 'Draft' : 'Unsaved draft',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              if (_grnNo != null) ...[
-                const SizedBox(width: 8),
-                PendingSyncBadge(documentType: 'GRN', documentId: _grnNo!),
-              ],
-            ]),
-        ]),
-      ),
-    ],
-  );
-
-  Widget _statusChip(String status) {
-    final color = status == 'APPROVED' ? AppColors.positive : AppColors.secondary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(4)),
-      child: Text(status, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
-    );
-  }
 
   Widget _errorBanner(String msg, {VoidCallback? onRetry}) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -2114,14 +2082,17 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     ),
   );
 
-  Widget _buildActionButtons({required bool canSave, required bool canApprove}) => Row(children: [
+  // Wrap, not Row — a bare Row with 2 buttons has no shrink/reflow
+  // strategy (see the "Row & Column layout distribution" mandatory
+  // pattern in CLAUDE.md); this was a latent instance of exactly that bug
+  // class, fixed while this screen was already being touched.
+  Widget _buildActionButtons({required bool canSave, required bool canApprove}) => Wrap(spacing: 12, runSpacing: 8, children: [
     if (canSave) FilledButton(
       onPressed: _saving ? null : () => _saveDraft(),
       child: _saving
           ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
           : const Text('Save Draft'),
     ),
-    if (canSave && canApprove) const SizedBox(width: 12),
     if (canApprove) FilledButton(
       onPressed: _approving ? null : _approveGrn,
       style: FilledButton.styleFrom(backgroundColor: AppColors.secondary),

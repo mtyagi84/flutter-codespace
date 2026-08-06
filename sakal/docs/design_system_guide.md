@@ -203,6 +203,52 @@ branch at the 600px mobile line (no tablet-specific field-stacking mode)
 oversight. Revisit if a form-heavy screen still feels cramped in the
 tablet zone specifically.
 
+### 4.1 Row & Column field distribution — the universal rule
+
+Found live 2026-08-06 testing the Sales Register report + Backdated Entry
+Control at real mobile widths: a `SegmentedButton` overflowing at 263px,
+a filter bar leaving dead trailing space, and a settings `Card` shrunk to
+a fraction of the screen with a dead gray gap beside it. All three are the
+same root cause on two different axes — **a multi-child `Row`/`Column`
+with no explicit sizing strategy defaults to "don't stretch," not "fill
+available space."** Fixed once here as two rules; every future screen
+picks from this table instead of re-deriving it.
+
+**Rule 1 — any `Row` with 2+ children needs a shrink/reflow strategy.**
+A bare `Row(children: [...])` with no `Expanded`/`Flexible` and no `Wrap`
+is the #1 recurring overflow bug in this app (it broke a
+`Row(children: [Text(...), SegmentedButton(...)])` at 263px, and the same
+shape exists at several other `SegmentedButton` call sites app-wide).
+Pick exactly one of:
+
+| Situation | Mechanism | Widget |
+|---|---|---|
+| Small, fixed field set that should compress/share width proportionally, wrapping to a full-width `Column` only below the mobile breakpoint | `Row` + `Expanded(flex: N)` per child | `SakalFieldRow` (§3.2) |
+| Larger/variable-count field set (e.g. a filter bar) that must reflow onto new rows with no wasted trailing space | `LayoutBuilder` computing per-field pixel width from available width ÷ weighted units, feeding `Wrap` | `SakalReflowRow` (`core/widgets/sakal_reflow_row.dart`) — `SakalReflowRow(children:, flexWeights:)`; `flexWeights` is optional, parallel to `children`, defaults to equal weight. See `sakal_report_filter_bar.dart` for the reference usage (a `DATE_RANGE` filter gets weight `2.0`, everything else `1.0`) |
+| A small inline cluster that isn't a field grid at all (a label + one control) | Plain `Wrap` directly | n/a — see the Currency toggle fix in `sakal_report_screen.dart` |
+
+**Rule 2 — `Column` doesn't stretch children either.** No
+`CrossAxisAlignment` value except `stretch` widens a `Column`'s children
+to fill available width — `start` and Flutter's actual default (`center`)
+both just size+position each child at its own intrinsic width. A
+`Card`/`Container`/panel with no explicit width, dropped into a
+non-stretch `Column`, silently shrink-wraps (confirmed live on
+`backdated_entry_control_screen.dart`: a settings `Card` collapsed to its
+own content width, leaving a dead gray gap at 440px). **Default every
+entry/settings-screen body `Column` to `crossAxisAlignment: CrossAxisAlignment.stretch`**
+— fixes every current and future child at once, rather than requiring
+each one to separately remember `SizedBox(width: double.infinity)`.
+
+**Mandatory self-check** (same "hard gate, not a suggestion" format as
+CLAUDE.md's own Pack/Loose/Barcode check — run it, don't just remember
+the rule): before calling a screen done, grep the changed file —
+- `Row(` — every match with 2+ children is either wrapped in
+  `Expanded`/`Flexible`, built via `SakalFieldRow`/`SakalReflowRow`, or is
+  a deliberate `Wrap`. No bare multi-child `Row` survives.
+- `Card(` / `Container(` as a direct child of a `Column` — confirm that
+  `Column` uses `crossAxisAlignment: CrossAxisAlignment.stretch` (or the
+  specific child is explicitly `width: double.infinity`).
+
 ---
 
 ## 5. Navigation chrome
@@ -213,6 +259,41 @@ Themed to `activePreset.primary` (was pure white) — every child
 updated for contrast against a dark bar; the user avatar specifically
 uses `activePreset.secondary` (not `.primary`, which would make it blend
 into the now-same-color bar).
+
+**Unified screen header (2026-08-06)** — before this, `TopBar`'s title
+slot only ever showed the company name (desktop only, blank on mobile);
+every screen had to build its own separate title block as body content to
+show its own name, stacking under the icon-only bar and wasting ~140-180px
+(15-19% of a 956px mobile viewport) before any real content appeared,
+confirmed live on Quick Invoice Setup, Sales Quotation, and GRN at 440px.
+Fixed via `ScreenHeaderMixin<T>` (`core/layout/screen_header.dart`) — a
+screen overrides `buildScreenHeader()` returning a `ScreenHeaderInfo`
+(title/subtitle/badge/trailing-badge/actions) and calls
+`refreshScreenHeader()` on every `build()`; `TopBar` reads the shared
+`screenHeaderProvider` and renders it in place of the old company-name
+title, switching back to the old fallback automatically for any
+not-yet-migrated screen (purely additive rollout, same shape as
+`SakalAdaptiveList`/`SakalAutocomplete`). Global preferences (Theme,
+Density — previously two persistent `actions:` icons) moved into the
+avatar popup menu, freeing that space and giving app-wide settings one
+consistent home regardless of which screen is showing.
+**Mechanism gotcha, worth understanding before extending this**: a screen
+covered by a pushed route stays mounted (never disposes, never rebuilds)
+while covered — so a naive "set header in `initState`, clear in `dispose`"
+would leave the pushed screen's header stuck after popping back, since the
+revealed screen's `initState` never re-runs. `ScreenHeaderMixin` solves
+this with `RouteObserver`/`RouteAware.didPopNext()` (registered on
+GoRouter's own `navigatorObservers` in `app_router.dart`) — the revealed
+screen is explicitly told when it becomes visible again and re-posts its
+own header at that exact moment. Any future change to this mechanism
+needs to preserve that hook, not just the happy-path set/read.
+**Mandatory pattern**: see CLAUDE.md's "Screen header" entry — this is
+enforced there, not just documented here.
+**Rollout status**: proven on 4 screens (2026-08-06); the rest of the app
+is unmigrated and unaffected (falls back to old behavior). See CLAUDE.md
+for the exact template and the multi-button-actions caveat (a Save+Approve
+row stays in the body as a `Wrap`, not `TopBar.actions`, since the AppBar's
+actions row has no reflow mechanism).
 
 ### 5.2 Back button
 `TopBar`'s `leading` slot shows a back arrow (`context.pop()`) whenever

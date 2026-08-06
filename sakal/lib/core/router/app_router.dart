@@ -97,6 +97,7 @@ import '../../features/finance/presentation/screens/expense_voucher_list_screen.
 import '../layout/app_shell.dart';
 import '../layout/group_landing_screen.dart';
 import '../providers/session_provider.dart';
+import '../layout/screen_header.dart' show routeObserver;
 import '../services/local_storage.dart';
 import 'route_names.dart';
 
@@ -108,6 +109,11 @@ final appRouter = GoRouter(
   initialLocation: RouteNames.landing,
   refreshListenable: sessionNotifier,
   debugLogDiagnostics: true,
+  // Lets ScreenHeaderMixin (screen_header.dart) know when a screen becomes
+  // visible again after a pushed screen on top of it is popped, so it can
+  // re-post its own title instead of leaving the popped screen's title
+  // stuck in the shared TopBar.
+  navigatorObservers: [routeObserver],
   redirect: (context, state) {
     final loc       = state.matchedLocation;
     final hasClient = LocalStorage.clientNo != null;

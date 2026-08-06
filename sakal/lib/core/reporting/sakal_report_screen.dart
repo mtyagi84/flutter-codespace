@@ -167,7 +167,17 @@ class _ReportScreenState extends ConsumerState<ReportScreen> with ScreenPermissi
     final session = ref.watch(sessionProvider);
     final numberFormat = session?.numberFormat ?? 'INTERNATIONAL';
 
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    // CustomScrollView, not a plain Column+Expanded — the header block
+    // below (title, currency toggle, filter bar) has no fixed height (the
+    // filter bar reflows onto more rows at narrow widths), so a
+    // non-scrolling Column can overflow vertically at narrow+short
+    // viewports with no way to recover. SliverFillRemaining still gives
+    // the table its usual "fill remaining space, scroll internally" sizing
+    // in the common case, but the whole page can scroll as a unit instead
+    // of hard-erroring if the header ever grows taller than the viewport.
+    return CustomScrollView(slivers: [
+      SliverToBoxAdapter(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
         child: Row(children: [
@@ -202,20 +212,30 @@ class _ReportScreenState extends ConsumerState<ReportScreen> with ScreenPermissi
       if (bundle.definition.hasCurrencyToggle)
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-          child: Row(children: [
-            const Text('Currency: ', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'BASE', label: Text('Base')),
-                ButtonSegment(value: 'LOCAL', label: Text('Local')),
-              ],
-              selected: {controller.currencyMode},
-              onSelectionChanged: (s) async {
-                await controller.setCurrencyMode(s.first);
-                if (mounted) setState(() {});
-              },
-            ),
-          ]),
+          // Wrap, not a bare Row — a Row with 2+ children and no
+          // Expanded/Flexible has no shrink strategy and overflows at
+          // narrow widths (found live at 263px: "RIGHT OVERFLOWED BY 10
+          // PIXELS"). This is the small-inline-cluster case (a label + one
+          // control), not a field grid, so neither SakalFieldRow nor
+          // SakalReflowRow applies — Wrap alone is enough here.
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            children: [
+              const Text('Currency: ', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'BASE', label: Text('Base')),
+                  ButtonSegment(value: 'LOCAL', label: Text('Local')),
+                ],
+                selected: {controller.currencyMode},
+                onSelectionChanged: (s) async {
+                  await controller.setCurrencyMode(s.first);
+                  if (mounted) setState(() {});
+                },
+              ),
+            ],
+          ),
         ),
       Padding(
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
@@ -228,10 +248,13 @@ class _ReportScreenState extends ConsumerState<ReportScreen> with ScreenPermissi
           },
         ),
       ),
+        ]),
+      ),
       if (controller.isLoading)
-        const Expanded(child: Center(child: CircularProgressIndicator()))
+        const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
       else
-        Expanded(
+        SliverFillRemaining(
+          hasScrollBody: true,
           child: bundle.isMatrix
               ? SakalReportMatrixTable(bundle: bundle, rows: controller.items, numberFormat: numberFormat)
               : SakalReportTable(

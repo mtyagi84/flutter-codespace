@@ -13,6 +13,7 @@ import '../theme/theme_presets.dart';
 import '../utils/responsive.dart';
 import '../widgets/master_data_sync_indicator.dart';
 import '../widgets/sync_status_indicator.dart';
+import 'screen_header.dart';
 
 class TopBar extends ConsumerWidget implements PreferredSizeWidget {
   final GlobalKey<ScaffoldState>? scaffoldKey;
@@ -36,6 +37,12 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
     // top-level, sidebar/drawer-navigated screen), the leading icon stays
     // the existing menu/collapse toggle unchanged.
     final canPop = context.canPop();
+    // A screen using ScreenHeaderMixin registers its own title here — see
+    // screen_header.dart. Null for every screen not yet migrated (the
+    // large majority — this is an additive, opt-in mechanism, see the
+    // "Screen header" mandatory pattern in CLAUDE.md), which keeps the
+    // existing company-name/blank behavior below unchanged for them.
+    final header = ref.watch(screenHeaderProvider);
 
     // Themed to match the sidebar (activePreset.primary) rather than pure
     // white, per explicit request — every child styled below assuming a
@@ -77,31 +84,32 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
       // Simplest correct fix on mobile is to not compete for that space at
       // all (the drawer/sidebar already carries company context there);
       // desktop keeps the title but now truncates instead of overflowing.
-      title: mobile
-          ? null
-          : Row(
-              children: [
-                const Icon(Icons.business_outlined,
-                    size: 15, color: AppColors.sidebarText),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    session?.companyName ?? '',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 13,
-                        color: AppColors.sidebarText,
-                        fontWeight: FontWeight.w500),
-                  ),
+      title: header != null
+          ? _buildScreenTitle(header)
+          : mobile
+              ? null
+              : Row(
+                  children: [
+                    const Icon(Icons.business_outlined,
+                        size: 15, color: AppColors.sidebarText),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        session?.companyName ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.sidebarText,
+                            fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
       actions: [
         const MasterDataSyncIndicator(),
         const SyncStatusIndicator(),
-        _buildDensityToggle(ref),
-        _buildThemeDropdown(ref),
+        ...?header?.actions,
         Padding(
           padding: const EdgeInsets.only(right: 8),
           child: PopupMenuButton<String>(
@@ -115,6 +123,11 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
                 context.go(RouteNames.appLogs);
               } else if (val == 'switch_company') {
                 await _showSwitchCompanyDialog(context, ref, session!);
+              } else if (val == 'density') {
+                ref.read(isCompactDensityProvider.notifier).state = !ref.read(isCompactDensityProvider);
+              } else if (val.startsWith('theme_')) {
+                ref.read(themePresetProvider.notifier).state =
+                    ThemePreset.values.byName(val.substring('theme_'.length));
               } else if (val == 'logout') {
                 ref.read(sessionProvider.notifier).state = null;
                 ref.read(menuProvider.notifier).state    = [];
@@ -183,6 +196,25 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
                 ),
               ),
               const PopupMenuDivider(),
+              // Global, app-wide preferences — never a persistent
+              // per-screen AppBar icon (see the "Screen header" mandatory
+              // pattern in CLAUDE.md). Read via ref.read, not ref.watch —
+              // this list is only (re)built each time the menu opens, not
+              // reactively while it's showing, same as the rest of this
+              // itemBuilder closure.
+              PopupMenuItem(
+                value: 'density',
+                child: Row(children: [
+                  Icon(
+                    ref.read(isCompactDensityProvider) ? Icons.view_comfortable_outlined : Icons.view_compact_outlined,
+                    size: 16, color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(ref.read(isCompactDensityProvider) ? 'Comfortable Rows' : 'Dense Rows'),
+                ]),
+              ),
+              ..._buildThemeMenuItems(ref),
+              const PopupMenuDivider(),
               const PopupMenuItem(
                 value: 'switch_company',
                 child: Row(
@@ -247,47 +279,71 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
     );
   }
 
-  // Row-density toggle — Dense (40px rows) vs Comfortable (54px rows).
-  // Consumers that want to react to it read isCompactDensityProvider
-  // themselves (e.g. Sales Invoice's list screen); this button only flips
-  // the shared state.
-  Widget _buildDensityToggle(WidgetRef ref) {
-    final isCompact = ref.watch(isCompactDensityProvider);
-    return IconButton(
-      icon: Icon(
-        isCompact ? Icons.view_comfortable_outlined : Icons.view_compact_outlined,
-        color: AppColors.sidebarText,
-        size: 20,
-      ),
-      tooltip: isCompact ? 'Switch to Comfortable rows' : 'Switch to Dense rows',
-      onPressed: () => ref.read(isCompactDensityProvider.notifier).state = !isCompact,
-    );
+  // Theme preset rows for the avatar popup menu — same visual shape (color
+  // dot + label + checkmark on the active preset) the old standalone
+  // palette-icon dropdown used, just spliced into the one shared menu
+  // instead of a second persistent AppBar icon.
+  List<PopupMenuEntry<String>> _buildThemeMenuItems(WidgetRef ref) {
+    final active = ref.read(themePresetProvider);
+    return ThemePreset.values.map((preset) {
+      final config = ThemePresetConfig.all[preset]!;
+      return PopupMenuItem<String>(
+        value: 'theme_${preset.name}',
+        child: Row(children: [
+          Container(
+            width: 14, height: 14,
+            decoration: BoxDecoration(color: config.primary, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 10),
+          Text(config.label),
+          if (preset == active) ...[
+            const Spacer(),
+            const Icon(Icons.check, size: 16, color: AppColors.positive),
+          ],
+        ]),
+      );
+    }).toList();
   }
 
-  Widget _buildThemeDropdown(WidgetRef ref) {
-    final active = ref.watch(themePresetProvider);
-    return PopupMenuButton<ThemePreset>(
-      tooltip: 'Switch theme',
-      icon: const Icon(Icons.palette_outlined, color: AppColors.sidebarText, size: 20),
-      onSelected: (preset) => ref.read(themePresetProvider.notifier).state = preset,
-      itemBuilder: (_) => ThemePreset.values.map((preset) {
-        final config = ThemePresetConfig.all[preset]!;
-        return PopupMenuItem(
-          value: preset,
-          child: Row(children: [
-            Container(
-              width: 14, height: 14,
-              decoration: BoxDecoration(color: config.primary, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 10),
-            Text(config.label),
-            if (preset == active) ...[
-              const Spacer(),
-              const Icon(Icons.check, size: 16, color: AppColors.positive),
+  // Screen-registered title (+ optional subtitle/status badge), replacing
+  // the company-name title entirely once a screen opts in via
+  // ScreenHeaderMixin — see screen_header.dart.
+  Widget _buildScreenTitle(ScreenHeaderInfo header) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(header.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+        if (header.subtitle != null || header.badgeText != null)
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            if (header.subtitle != null)
+              Flexible(
+                child: Text(header.subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11, color: AppColors.sidebarText)),
+              ),
+            if (header.badgeText != null) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: (header.badgeColor ?? AppColors.positive).withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(header.badgeText!,
+                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: header.badgeColor ?? AppColors.positive)),
+              ),
+            ],
+            if (header.trailingBadge != null) ...[
+              const SizedBox(width: 6),
+              header.trailingBadge!,
             ],
           ]),
-        );
-      }).toList(),
+      ],
     );
   }
 

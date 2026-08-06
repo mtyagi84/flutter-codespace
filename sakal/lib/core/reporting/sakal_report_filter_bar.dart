@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../network/dio_client.dart';
 import '../theme/app_colors.dart';
+import '../widgets/sakal_reflow_row.dart';
 import 'report_models.dart';
 
 /// Generic filter bar, built entirely from a report's own declared
@@ -105,27 +106,10 @@ class _SakalReportFilterBarState extends State<SakalReportFilterBar> {
   @override
   Widget build(BuildContext context) {
     if (widget.filters.isEmpty) return const SizedBox.shrink();
-    const spacing = 12.0;
-    const minFieldWidth = 200.0;
-    return LayoutBuilder(builder: (context, constraints) {
-      // How many "units" fit per row at a sane minimum width, then size
-      // every field as a share of whatever's actually available — fields
-      // fill the row edge-to-edge instead of leaving dead space to the
-      // right, and still wrap onto a new row on a narrow/tablet screen.
-      final totalWidth = constraints.maxWidth.isFinite ? constraints.maxWidth : 1000.0;
-      final totalUnits = widget.filters.fold<double>(0, (s, f) => s + _flexFor(f));
-      final unitsPerRow = (totalWidth / minFieldWidth).clamp(1.0, totalUnits == 0 ? 1.0 : totalUnits);
-      final unitWidth = (totalWidth - (unitsPerRow.floor() - 1).clamp(0, 999) * spacing) / unitsPerRow;
-
-      return Wrap(
-        spacing: spacing,
-        runSpacing: spacing,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: widget.filters
-            .map((f) => SizedBox(width: unitWidth * _flexFor(f) + (spacing * (_flexFor(f) - 1)), child: _buildField(f)))
-            .toList(),
-      );
-    });
+    return SakalReflowRow(
+      flexWeights: widget.filters.map(_flexFor).toList(),
+      children: widget.filters.map(_buildField).toList(),
+    );
   }
 
   Widget _buildField(ReportFilter f) {

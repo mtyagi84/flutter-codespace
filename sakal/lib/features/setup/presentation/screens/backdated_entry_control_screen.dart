@@ -157,8 +157,14 @@ class _BackdatedEntryControlScreenState extends ConsumerState<BackdatedEntryCont
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 900),
+          // stretch, not start — start (and Flutter's actual Column
+          // default, center) only size+position each child at its own
+          // intrinsic width, never widen it. The settings Card below has
+          // no explicit width, so under `start` it shrank to its own
+          // content width, leaving a dead gray gap on the right at every
+          // viewport narrower than 900px (confirmed live at 440px).
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Save button belongs top-right next to the title on every
               // entry screen (mandatory placement convention) — it was
