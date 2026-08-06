@@ -48,6 +48,16 @@ final screenHeaderProvider = StateProvider<ScreenHeaderInfo?>((ref) => null);
 /// disposes, never rebuilds) while it's covered.
 final routeObserver = RouteObserver<PageRoute<dynamic>>();
 
+/// Tracks which [ScreenHeaderMixin] instance most recently posted to
+/// [screenHeaderProvider] — module-level, not a Riverpod provider, since
+/// it only ever needs to be compared, never watched/rebuilt-on. See the
+/// dispose()/ownership note below for why this exists: a screen that's
+/// merely covered by a pushed route stays mounted (never disposes) while
+/// covered, so a naive "always clear on dispose" would let a *later*-
+/// disposing covered screen wrongly wipe out whatever the *currently
+/// active* screen already posted.
+Object? _screenHeaderOwner;
+
 /// Mixin for any screen that wants its title/subtitle/badge/actions shown
 /// in the shared TopBar. Override [buildScreenHeader]; call
 /// [refreshScreenHeader] whenever screen state that affects the header
@@ -56,16 +66,25 @@ final routeObserver = RouteObserver<PageRoute<dynamic>>();
 mixin ScreenHeaderMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> implements RouteAware {
   ScreenHeaderInfo buildScreenHeader();
 
+  // Cached once rather than re-read via `ref` at dispose time — `ref` is
+  // not safe to use once a widget is mid-disposal, but a plain
+  // StateController object obtained earlier stays safely usable for the
+  // app's lifetime (the provider itself never gets disposed).
+  StateController<ScreenHeaderInfo?>? _headerController;
+
   void refreshScreenHeader() {
+    _headerController ??= ref.read(screenHeaderProvider.notifier);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(screenHeaderProvider.notifier).state = buildScreenHeader();
+      _screenHeaderOwner = this;
+      _headerController!.state = buildScreenHeader();
     });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _headerController ??= ref.read(screenHeaderProvider.notifier);
     final route = ModalRoute.of(context);
     if (route is PageRoute) routeObserver.subscribe(this, route);
     refreshScreenHeader();
@@ -74,6 +93,18 @@ mixin ScreenHeaderMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> im
   @override
   void dispose() {
     routeObserver.unsubscribe(this);
+    // Only clear if this screen is still the current owner — real bug,
+    // fixed 2026-08-06: an earlier version of this mixin never cleared on
+    // dispose at all (to dodge exactly the race described above), which
+    // left the TopBar stuck showing a screen's title forever after
+    // navigating away (via context.go(), a genuine dispose, not a
+    // push/pop cover) to a screen that doesn't use this mixin. The
+    // ownership check makes both cases safe at once — see
+    // design_system_guide.md §5.1 for the full trace of both scenarios.
+    if (identical(_screenHeaderOwner, this)) {
+      _screenHeaderOwner = null;
+      _headerController?.state = null;
+    }
     super.dispose();
   }
 

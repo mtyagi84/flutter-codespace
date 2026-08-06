@@ -146,6 +146,14 @@ Mobile counterpart of 3.3 — dark-headed card (title/subtitle + optional
 trailing action + optional delete) over a `Wrap` of `fields`, with room
 for `body` (e.g. batch/serial allocation) and `footer`.
 
+**Enforcement**: 3.3 (desktop) + 3.4 (mobile) describe the intended *shape*
+of a line-items grid, but describing it here alone wasn't enough —
+`sales_quotation_entry_screen.dart` and `grn_entry_screen.dart` both used
+3.4 unconditionally on desktop too until fixed 2026-08-06. The mandatory,
+enforced version of this pattern (with the grep self-check) lives in
+CLAUDE.md's "Line-items grid" entry — read that before building a new
+line-items screen, not just this section.
+
 ### 3.5 `SakalFinancialSummaryCard`
 The solid-preset-color totals block. `SakalFinancialSummaryCard({rows: [SakalSummaryRow(...)], total, currencyCode, eyebrow, totalLabel})`.
 Reads `session.numberFormat` and the active theme preset internally.
@@ -287,6 +295,27 @@ GoRouter's own `navigatorObservers` in `app_router.dart`) — the revealed
 screen is explicitly told when it becomes visible again and re-posts its
 own header at that exact moment. Any future change to this mechanism
 needs to preserve that hook, not just the happy-path set/read.
+**Real regression, fixed 2026-08-06**: the mechanism's first version took
+the above reasoning one step further and never cleared the header on
+`dispose()` at all — reasoning that clearing unconditionally could let a
+*merely-covered* screen's late `dispose()` wrongly wipe out whatever the
+*newly revealed* screen had already re-posted via `didPopNext()`. That
+extra caution created a real, live bug: navigating away via `context.go()`
+(a genuine dispose, not a push/pop cover — e.g. Sales Quotation Entry →
+Backdated Entry Control via the sidebar) left the TopBar stuck showing
+the old screen's title forever, since nothing ever cleared it and the new
+screen doesn't use this mixin. Fixed with an ownership token
+(`_screenHeaderOwner`, module-level, in `screen_header.dart`) — every
+`refreshScreenHeader()` claims ownership, and `dispose()` only clears the
+header if it's still the current owner (i.e. nothing else has claimed it
+since). This correctly resolves both scenarios at once: a late-disposing
+covered screen's `dispose()` becomes a no-op once `didPopNext()` has
+already handed ownership to the revealed screen; a screen that's
+genuinely leaving with nothing else claiming the header correctly clears
+it, letting `TopBar` fall back to its default title. Any future change to
+this mechanism must preserve the ownership check, not just the
+`RouteObserver` hook above — losing either one reintroduces one of these
+two bugs.
 **Mandatory pattern**: see CLAUDE.md's "Screen header" entry — this is
 enforced there, not just documented here.
 **Rollout status**: proven on 4 screens (2026-08-06); the rest of the app

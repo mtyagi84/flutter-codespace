@@ -948,7 +948,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
                     if (_actionError != null) ...[_errorBanner(_actionError!), const SizedBox(height: 16)],
                     _buildHeaderCard(locked, isMobile),
                     const SizedBox(height: 16),
-                    _buildLinesCard(locked, showLooseQty, showBarcode),
+                    _buildLinesCard(locked, showLooseQty, showBarcode, isMobile),
                     const SizedBox(height: 16),
                     _buildChargesCard(locked, isMobile),
                     const SizedBox(height: 16),
@@ -1181,10 +1181,44 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
     );
   }
 
-  Widget _buildLinesCard(bool locked, bool showLooseQty, bool showBarcode) {
+  // Header row for the desktop line-items table — built with the EXACT
+  // same SizedBox/Expanded widths as _buildLinesCard's own desktop Row
+  // per line below, so the dark SakalTableHeaderBar lines up column-for-
+  // column with the data underneath. Template: sales_invoice_entry_screen
+  // .dart's _buildLineItemsHeader/_buildLineTile (the original correct
+  // implementation this was ported from).
+  Widget _buildLinesHeader(bool showLooseQty, bool showBarcode, bool showConverted) {
+    return SakalTableHeaderBar(cells: [
+      SizedBox(width: 240, child: SakalTableHeaderBar.label('Product')),
+      if (showBarcode) ...[const SizedBox(width: 8), SizedBox(width: 110, child: SakalTableHeaderBar.label('Barcode'))],
+      const SizedBox(width: 8),
+      SizedBox(width: 70, child: SakalTableHeaderBar.label('Unit')),
+      const SizedBox(width: 8),
+      SizedBox(width: 90, child: SakalTableHeaderBar.label(showLooseQty ? 'Qty Pack' : 'Quantity')),
+      if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 90, child: SakalTableHeaderBar.label('Qty Loose'))],
+      const SizedBox(width: 8),
+      SizedBox(width: 100, child: SakalTableHeaderBar.label('Rate')),
+      const SizedBox(width: 8),
+      SizedBox(width: 80, child: SakalTableHeaderBar.label('Disc %')),
+      const SizedBox(width: 8),
+      SizedBox(width: 170, child: SakalTableHeaderBar.label('Tax Group')),
+      const SizedBox(width: 8),
+      SizedBox(width: 100, child: SakalTableHeaderBar.label('Amount')),
+      const SizedBox(width: 8),
+      SizedBox(width: 110, child: SakalTableHeaderBar.label('Landed')),
+      if (showConverted) ...[const SizedBox(width: 8), SizedBox(width: 110, child: SakalTableHeaderBar.label('Converted'))],
+      const SizedBox(width: 40), // reserves the delete-icon column's width
+    ]);
+  }
+
+  Widget _buildLinesCard(bool locked, bool showLooseQty, bool showBarcode, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
     const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
+    // Whether ANY line currently has a converted quantity — computed once
+    // so the header (fixed columns) and every row (some may individually
+    // be 0) stay column-aligned instead of drifting per-line.
+    final showConverted = _lines.any((r) => r.convertedQty > 0);
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -1199,7 +1233,8 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
           if (_lines.isEmpty)
             const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No lines yet — add a product.',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
-          else
+          else ...[
+            if (!isMobile) _buildLinesHeader(showLooseQty, showBarcode, showConverted),
             ..._lines.asMap().entries.map((entry) {
               final idx = entry.key;
               final row = entry.value;
@@ -1282,25 +1317,88 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
               final amountField = SakalFieldCard.readOnly(label: 'Amount', value: row.finalAmount.toStringAsFixed(2), numeric: true);
               final landedField = SakalFieldCard.readOnly(label: 'Landed', value: row.landedAmount.toStringAsFixed(2), numeric: true);
 
-              return SakalLineItemCard(
-                title: '${idx + 1}. ${row.productDisplay.isEmpty ? 'New Line' : row.productDisplay}',
-                onDelete: locked ? null : () => _removeLine(row),
-                fields: [
+              if (isMobile) {
+                // 2-column grid instead of a loose Wrap — predictable
+                // pairing (qty+rate, disc+tax, ...) instead of however the
+                // fields happen to wrap, reusing SakalFieldRow (already
+                // built for exactly "N children, mobile-first equal
+                // split") rather than a new layout primitive. Chunked
+                // rather than hand-paired so it stays correct regardless
+                // of which optional fields (barcode/qty loose/converted)
+                // are present for this particular line.
+                final secondaryFields = <Widget>[
+                  if (showBarcode) barcodeField,
+                  unitField,
+                  qtyPackField,
+                  if (showLooseQty) qtyLooseField,
+                  rateField,
+                  discField,
+                  taxGroupField,
+                  amountField,
+                  landedField,
+                  if (row.convertedQty > 0)
+                    SakalFieldCard.readOnly(label: 'Converted', value: row.convertedQty.toStringAsFixed(2), numeric: true),
+                ];
+                final pairedRows = <Widget>[];
+                for (var i = 0; i < secondaryFields.length; i += 2) {
+                  pairedRows.add(SakalFieldRow(
+                    isMobile: true,
+                    children: secondaryFields.sublist(i, (i + 2).clamp(0, secondaryFields.length)),
+                  ));
+                  if (i + 2 < secondaryFields.length) pairedRows.add(const SizedBox(height: 8));
+                }
+                return SakalLineItemCard(
+                  title: '${idx + 1}. ${row.productDisplay.isEmpty ? 'New Line' : row.productDisplay}',
+                  onDelete: locked ? null : () => _removeLine(row),
+                  fields: const [],
+                  body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    productField,
+                    const SizedBox(height: 8),
+                    ...pairedRows,
+                  ]),
+                );
+              }
+
+              // Desktop — a continuous row under _buildLinesHeader's dark
+              // bar, same left-to-right column order/widths as that header
+              // so the two stay pixel-aligned (see the "Line-items grid"
+              // mandatory pattern in CLAUDE.md).
+              return Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   SizedBox(width: 240, child: productField),
-                  if (showBarcode) SizedBox(width: 110, child: barcodeField),
+                  if (showBarcode) ...[const SizedBox(width: 8), SizedBox(width: 110, child: barcodeField)],
+                  const SizedBox(width: 8),
                   SizedBox(width: 70, height: 56, child: unitField),
+                  const SizedBox(width: 8),
                   SizedBox(width: 90, child: qtyPackField),
-                  if (showLooseQty) SizedBox(width: 90, child: qtyLooseField),
+                  if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 90, child: qtyLooseField)],
+                  const SizedBox(width: 8),
                   SizedBox(width: 100, child: rateField),
+                  const SizedBox(width: 8),
                   SizedBox(width: 80, child: discField),
+                  const SizedBox(width: 8),
                   SizedBox(width: 170, height: 56, child: taxGroupField),
+                  const SizedBox(width: 8),
                   SizedBox(width: 100, height: 56, child: amountField),
+                  const SizedBox(width: 8),
                   SizedBox(width: 110, height: 56, child: landedField),
-                  if (row.convertedQty > 0) SizedBox(width: 110, height: 56,
-                      child: SakalFieldCard.readOnly(label: 'Converted', value: row.convertedQty.toStringAsFixed(2), numeric: true)),
-                ],
+                  if (showConverted) ...[
+                    const SizedBox(width: 8),
+                    SizedBox(width: 110, height: 56,
+                        child: row.convertedQty > 0
+                            ? SakalFieldCard.readOnly(label: 'Converted', value: row.convertedQty.toStringAsFixed(2), numeric: true)
+                            : const SizedBox.shrink()),
+                  ],
+                  SizedBox(
+                    width: 40,
+                    child: locked ? null : IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line'),
+                  ),
+                ]),
               );
             }),
+          ],
         ]),
       ),
     );
