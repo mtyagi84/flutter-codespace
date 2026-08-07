@@ -1022,7 +1022,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
       SizedBox(width: 110, child: SakalTableHeaderBar.label('Selling Price')),
       if (showBelowCostReason) ...[const SizedBox(width: 8), SizedBox(width: 180, child: SakalTableHeaderBar.label('Below-Cost Reason'))],
       const SizedBox(width: 8),
-      SizedBox(width: 110, child: SakalTableHeaderBar.label('Incl. Tax')),
+      SizedBox(width: 130, child: SakalTableHeaderBar.label('Incl. Tax')),
       const SizedBox(width: 40), // reserves the delete-icon column's width
     ]);
   }
@@ -1114,11 +1114,19 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
                 ),
               );
               final taxInclusiveField = Row(mainAxisSize: MainAxisSize.min, children: [
-                Checkbox(
-                  value: row.isTaxInclusive,
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  onChanged: locked ? null : (v) => setState(() => row.isTaxInclusive = v ?? false),
+                // A fixed-size SizedBox forces the Checkbox into a tight
+                // 24x24 layout box regardless of platform/theme tap-target
+                // defaults — visualDensity/materialTapTargetSize alone
+                // still left enough slack to overflow the column at some
+                // font scales (real bug caught live 2026-08-07).
+                SizedBox(
+                  width: 24, height: 24,
+                  child: Checkbox(
+                    value: row.isTaxInclusive,
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    onChanged: locked ? null : (v) => setState(() => row.isTaxInclusive = v ?? false),
+                  ),
                 ),
                 const SizedBox(width: 4),
                 const Text('Incl. Tax', style: TextStyle(fontSize: 12)),
@@ -1184,7 +1192,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
                       SizedBox(width: 180, height: 56, child: row.isBelowCost ? belowCostReasonField : const SizedBox.shrink()),
                     ],
                     const SizedBox(width: 8),
-                    SizedBox(width: 110, height: 56, child: taxInclusiveField),
+                    SizedBox(width: 130, height: 56, child: taxInclusiveField),
                     SizedBox(
                       width: 40,
                       child: locked ? null : IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line'),
