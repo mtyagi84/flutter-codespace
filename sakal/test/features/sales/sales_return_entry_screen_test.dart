@@ -35,6 +35,19 @@ Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
 
+/// Forces a viewport narrower than the app's 600px mobile breakpoint —
+/// flutter_test's own default (~800x600) falls on the DESKTOP side of that
+/// threshold, so the Lines section's isMobile branch (SakalLineItemCard,
+/// whose subtitle concatenates "Invoiced X · Remaining Y" into one string —
+/// the desktop row instead shows those as two separate fields) would
+/// otherwise never render; some tests were written against that mobile-card
+/// shape.
+void _useMobileViewport(WidgetTester tester) {
+  tester.view.physicalSize = const Size(400, 1600);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 void main() {
   late MockSalesReturnRepository mockRepo;
 
@@ -210,6 +223,7 @@ void main() {
 
     testWidgets('loads and displays every field from the saved header, invoice, and untracked line', (tester) async {
       stubExistingDraft();
+      _useMobileViewport(tester);
 
       await pumpApp(
         tester,

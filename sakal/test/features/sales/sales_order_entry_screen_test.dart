@@ -42,6 +42,20 @@ Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
 
+/// Forces a viewport narrower than the app's 600px mobile breakpoint —
+/// flutter_test's own default (~800x600) falls on the DESKTOP side of that
+/// threshold, so the Lines section's isMobile branch (SakalLineItemCard,
+/// whose title carries the '${idx+1}. ...' numeric prefix — the desktop row
+/// never renders that prefixed string, only the bare product value) would
+/// otherwise never render; these tests were written against that
+/// mobile-card shape. Tall enough (1600) that autocomplete overlays / below-
+/// the-fold content still build.
+void _useMobileViewport(WidgetTester tester) {
+  tester.view.physicalSize = const Size(400, 1600);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 void main() {
   late MockSalesOrderRepository mockRepo;
 
@@ -280,6 +294,7 @@ void main() {
 
     testWidgets('loads and displays every field from the saved header and line', (tester) async {
       stubExistingDraft();
+      _useMobileViewport(tester);
 
       await pumpApp(
         tester,
@@ -444,17 +459,19 @@ void main() {
             },
           ]);
 
-      // By this point in the flow (Customer already picked + a line card
-      // already on screen), the Product field sits low enough that its
-      // options overlay renders right at the default ~600px-tall test
-      // viewport's bottom edge — the overlay's own outer TapRegion barrier
-      // then wins the hit-test over the specific option Text beneath it.
+      // Needs BOTH a narrow width (<600px, to reach the isMobile branch —
+      // this test asserts '1. New Line'/'1. [WID-A] Widget A', text that
+      // only SakalLineItemCard renders) AND extra height: by this point in
+      // the flow (Customer already picked + a line card already on
+      // screen), the Product field sits low enough that its options
+      // overlay renders right at the default ~600px-tall test viewport's
+      // bottom edge — the overlay's own outer TapRegion barrier then wins
+      // the hit-test over the specific option Text beneath it.
       // RawAutocomplete's overlay is positioned via CompositedTransformFollower
       // (screen-absolute), so it lives outside any Scrollable an
       // ensureVisible() could act on — a taller viewport is the actual fix.
-      tester.view.physicalSize = const Size(800, 1400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+      // _useMobileViewport's Size(400, 1600) satisfies both needs at once.
+      _useMobileViewport(tester);
 
       await pumpApp(tester, const SalesOrderEntryScreen(), overrides: overrides(), session: testSession());
       await tester.pumpAndSettle();
@@ -553,6 +570,7 @@ void main() {
 
     testWidgets('loads the source quotation header + line, freezing rate/discount but leaving qty editable', (tester) async {
       stubQuotationSource();
+      _useMobileViewport(tester);
 
       await pumpApp(
         tester,

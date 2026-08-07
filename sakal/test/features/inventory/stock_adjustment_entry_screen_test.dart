@@ -21,6 +21,18 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
   }
 }
 
+/// Line items now branch on `Responsive.isMobile` (<600px) — the default
+/// flutter_test viewport (~800x600) is BELOW the app's 1024px desktop
+/// breakpoint used elsewhere but ABOVE this feature's own 600px threshold,
+/// so lines render on the DESKTOP branch there. Tests that need the mobile
+/// `SakalLineItemCard` branch specifically (e.g. its own title text) must
+/// force a narrow viewport.
+void _useMobileViewport(WidgetTester tester) {
+  tester.view.physicalSize = const Size(400, 1600);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
@@ -242,6 +254,12 @@ void main() {
     }
 
     testWidgets('typing into the Product field shows the matching option, and tapping it selects the product on a "+" line', (tester) async {
+      // This test's final assertion counts 2 occurrences of the product's
+      // display text — one from the field itself, one from the
+      // SakalLineItemCard's own title (this screen's title has no index
+      // prefix, so it exact-matches) — which only renders on the mobile
+      // branch.
+      _useMobileViewport(tester);
       stubProductSearch();
       // _refreshSystemQty runs (unawaited) as soon as a product lands on
       // the row — advisory only (wrapped in its own try/catch on the

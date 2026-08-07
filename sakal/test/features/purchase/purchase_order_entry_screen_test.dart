@@ -27,6 +27,18 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
   }
 }
 
+/// The line-items grid renders as a mobile SakalLineItemCard (title
+/// "N. <product>") below 600px, and a desktop table row above it — the
+/// flutter_test default viewport (~800x600) is above 600 but below this
+/// app's own 1024px desktop breakpoint elsewhere, so it lands on the
+/// desktop branch by default. Tests asserting the mobile-only card title
+/// text need to force a narrower viewport before pumping.
+void _useMobileViewport(WidgetTester tester) {
+  tester.view.physicalSize = const Size(400, 1600);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 /// SakalFieldCard renders its label as a raw RichText, not wrapped in
 /// Text/Text.rich — find.text()/find.textContaining() don't reliably match
 /// a bare RichText, so match directly against the TextSpan's own plain text.
@@ -122,6 +134,7 @@ void main() {
   group('New (blank) purchase order', () {
     testWidgets('renders the blank form with all key fields, one auto-added blank line, and the charges/payment-terms sections',
         (tester) async {
+      _useMobileViewport(tester); // asserts '1. New Line' — the mobile-only SakalLineItemCard title
       await pumpApp(tester, const PurchaseOrderEntryScreen(), overrides: overrides(), session: testSession());
       await tester.pumpAndSettle();
 
@@ -253,6 +266,7 @@ void main() {
 
     testWidgets('loads and displays every field from the saved header and line', (tester) async {
       stubExistingDraft();
+      _useMobileViewport(tester); // asserts '1. [WID-A] Widget A' — the mobile-only SakalLineItemCard title
 
       await pumpApp(
         tester,
@@ -432,6 +446,7 @@ void main() {
             locationId: any(named: 'locationId'),
           )).thenAnswer((_) async => {'current_stock': 0.0, 'reorder_level': 0.0});
 
+      _useMobileViewport(tester); // asserts '1. New Line' / '1. [WID-A] Widget A' — the mobile-only SakalLineItemCard title
       await pumpApp(tester, const PurchaseOrderEntryScreen(), overrides: overrides(), session: testSession());
       await tester.pumpAndSettle();
 
