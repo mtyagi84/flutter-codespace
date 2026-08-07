@@ -1022,7 +1022,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
       SizedBox(width: 110, child: SakalTableHeaderBar.label('Selling Price')),
       if (showBelowCostReason) ...[const SizedBox(width: 8), SizedBox(width: 180, child: SakalTableHeaderBar.label('Below-Cost Reason'))],
       const SizedBox(width: 8),
-      SizedBox(width: 130, child: SakalTableHeaderBar.label('Incl. Tax')),
+      SizedBox(width: 150, child: SakalTableHeaderBar.label('Incl. Tax')),
       const SizedBox(width: 40), // reserves the delete-icon column's width
     ]);
   }
@@ -1192,7 +1192,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
                       SizedBox(width: 180, height: 56, child: row.isBelowCost ? belowCostReasonField : const SizedBox.shrink()),
                     ],
                     const SizedBox(width: 8),
-                    SizedBox(width: 130, height: 56, child: taxInclusiveField),
+                    SizedBox(width: 150, height: 56, child: taxInclusiveField),
                     SizedBox(
                       width: 40,
                       child: locked ? null : IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line'),
