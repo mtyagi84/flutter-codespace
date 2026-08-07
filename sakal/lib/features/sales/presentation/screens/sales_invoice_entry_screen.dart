@@ -1752,27 +1752,27 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     );
   }
 
-  Widget _buildTitleBlock() => Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+  // A plain Column (not a Row wrapping a single Column child) — a Row gives
+  // a non-flex child unbounded main-axis width, so the Text below never
+  // wraps and silently overflows on a narrow phone. See CLAUDE.md's "Row &
+  // Column layout distribution" rule; real bug caught live 2026-08-07.
+  Widget _buildTitleBlock() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(_invoiceNo != null ? 'Quick Invoice · $_invoiceNo' : 'New Quick Invoice',
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-              const SizedBox(height: 2),
-              Wrap(spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                _invoiceNo != null ? _statusChip(_status) : const Text('Unsaved', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                Text(_saleType == 'CASH' ? 'Cash Sale' : 'Credit Sale', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                if (_sourceQuotationNo != null) Text('From $_sourceQuotationNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                if (_sourceOrderNo != null) Text('From $_sourceOrderNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                if (_invoiceNo != null) PendingSyncBadge(documentType: 'SALES_INVOICE', documentId: _invoiceNo!),
-                if (_deliveryStatus != null) _deliveryStatusBadge()!,
-              ]),
-            ]),
-          ),
+          Text(_invoiceNo != null ? 'Quick Invoice · $_invoiceNo' : 'New Quick Invoice',
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+          const SizedBox(height: 2),
+          Wrap(spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            _invoiceNo != null ? _statusChip(_status) : const Text('Unsaved', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            Text(_saleType == 'CASH' ? 'Cash Sale' : 'Credit Sale', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            if (_sourceQuotationNo != null) Text('From $_sourceQuotationNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            if (_sourceOrderNo != null) Text('From $_sourceOrderNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            if (_invoiceNo != null) PendingSyncBadge(documentType: 'SALES_INVOICE', documentId: _invoiceNo!),
+            if (_deliveryStatus != null) _deliveryStatusBadge()!,
+          ]),
         ],
       );
 

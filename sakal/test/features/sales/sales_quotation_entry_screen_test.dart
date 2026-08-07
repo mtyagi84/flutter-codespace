@@ -308,7 +308,10 @@ void main() {
 
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Approve'), findsNothing); // canApprove defaults false from the harness's empty menuProvider
-      expect(find.byIcon(Icons.print_outlined), findsOneWidget); // a saved quotation is printable
+      // The print button lives in ScreenHeaderInfo.actions (rendered by
+      // TopBar, which pumpApp() never mounts) rather than inline in the
+      // body — assert on the posted header data instead of find.byIcon.
+      expect(header?.actions.length, 1); // a saved quotation is printable
     });
 
     testWidgets('editing remarks and saving calls the repository with the updated payload', (tester) async {

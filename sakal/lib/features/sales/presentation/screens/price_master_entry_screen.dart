@@ -793,13 +793,13 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
               overflow: TextOverflow.ellipsis, maxLines: 1,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
           const SizedBox(height: 2),
-          Row(children: [
+          // Wrap, not Row — a status chip + PendingSyncBadge with no
+          // Expanded/Flexible fallback overflows at narrow widths. See
+          // CLAUDE.md's "Row & Column layout distribution" rule.
+          Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 4, children: [
             _status == 'APPROVED' ? _statusChip() : Text(_entryNo != null ? 'Draft' : 'Unsaved draft',
                 style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            if (_entryNo != null) ...[
-              const SizedBox(width: 8),
-              PendingSyncBadge(documentType: 'PRICE_MASTER', documentId: _entryNo!),
-            ],
+            if (_entryNo != null) PendingSyncBadge(documentType: 'PRICE_MASTER', documentId: _entryNo!),
           ]),
         ]),
       ),
@@ -1022,7 +1022,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
       SizedBox(width: 110, child: SakalTableHeaderBar.label('Selling Price')),
       if (showBelowCostReason) ...[const SizedBox(width: 8), SizedBox(width: 180, child: SakalTableHeaderBar.label('Below-Cost Reason'))],
       const SizedBox(width: 8),
-      SizedBox(width: 90, child: SakalTableHeaderBar.label('Incl. Tax')),
+      SizedBox(width: 110, child: SakalTableHeaderBar.label('Incl. Tax')),
       const SizedBox(width: 40), // reserves the delete-icon column's width
     ]);
   }
@@ -1116,8 +1116,11 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
               final taxInclusiveField = Row(mainAxisSize: MainAxisSize.min, children: [
                 Checkbox(
                   value: row.isTaxInclusive,
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   onChanged: locked ? null : (v) => setState(() => row.isTaxInclusive = v ?? false),
                 ),
+                const SizedBox(width: 4),
                 const Text('Incl. Tax', style: TextStyle(fontSize: 12)),
               ]);
               final scannedTag = (row.barcode != null && row.barcode!.isNotEmpty)
@@ -1181,7 +1184,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
                       SizedBox(width: 180, height: 56, child: row.isBelowCost ? belowCostReasonField : const SizedBox.shrink()),
                     ],
                     const SizedBox(width: 8),
-                    SizedBox(width: 90, height: 56, child: taxInclusiveField),
+                    SizedBox(width: 110, height: 56, child: taxInclusiveField),
                     SizedBox(
                       width: 40,
                       child: locked ? null : IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line'),

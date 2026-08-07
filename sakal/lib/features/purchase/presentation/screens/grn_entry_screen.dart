@@ -1531,8 +1531,10 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            const Text('Purchase Orders', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-            const Spacer(),
+            const Expanded(
+              child: Text('Purchase Orders', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                  overflow: TextOverflow.ellipsis),
+            ),
             if (!locked)
               TextButton.icon(
                 onPressed: _consolidating ? null : _addMorePos,

@@ -1213,29 +1213,23 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     );
   }
 
-  Widget _buildTitleBlock() => Row(
-    crossAxisAlignment: CrossAxisAlignment.center,
+  // A plain Column (not a Row wrapping a single Column child) — a Row gives
+  // a non-flex child unbounded main-axis width, so the Text below never
+  // wraps and silently overflows on a narrow phone. See CLAUDE.md's "Row &
+  // Column layout distribution" rule; real bug caught live 2026-08-07.
+  Widget _buildTitleBlock() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
     mainAxisSize: MainAxisSize.min,
     children: [
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(_orderNo != null ? 'Sales Order · $_orderNo' : 'New Sales Order',
-              overflow: TextOverflow.ellipsis, maxLines: 1,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-          const SizedBox(height: 2),
-          Row(children: [
-            _orderNo != null ? _statusChip(_status) : const Text('Unsaved draft', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            if (_isAgainstQuotation) ...[
-              const SizedBox(width: 8),
-              Text('From $_sourceQuotationNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            ],
-            if (_orderNo != null) ...[
-              const SizedBox(width: 8),
-              PendingSyncBadge(documentType: 'SALES_ORDER', documentId: _orderNo!),
-            ],
-          ]),
-        ]),
-      ),
+      Text(_orderNo != null ? 'Sales Order · $_orderNo' : 'New Sales Order',
+          overflow: TextOverflow.ellipsis, maxLines: 1,
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+      const SizedBox(height: 2),
+      Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 4, children: [
+        _orderNo != null ? _statusChip(_status) : const Text('Unsaved draft', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        if (_isAgainstQuotation) Text('From $_sourceQuotationNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        if (_orderNo != null) PendingSyncBadge(documentType: 'SALES_ORDER', documentId: _orderNo!),
+      ]),
     ],
   );
 

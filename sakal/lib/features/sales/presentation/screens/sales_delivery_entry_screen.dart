@@ -888,19 +888,21 @@ class _SalesDeliveryEntryScreenState extends ConsumerState<SalesDeliveryEntryScr
     );
   }
 
-  Widget _buildTitleBlock() => Row(
-    crossAxisAlignment: CrossAxisAlignment.center,
+  // A plain Column (not a Row wrapping a single Column child) — a Row gives
+  // a non-flex child unbounded main-axis width, so the Text below never
+  // wraps and silently overflows on a narrow phone. See CLAUDE.md's "Row &
+  // Column layout distribution" rule; real bug caught live 2026-08-07.
+  Widget _buildTitleBlock() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
     mainAxisSize: MainAxisSize.min,
     children: [
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(_deliveryNo != null ? 'Sales Delivery · $_deliveryNo' : 'New Sales Delivery',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-        const SizedBox(height: 2),
-        _status == 'APPROVED'
-            ? _statusChip(_status)
-            : Text(_deliveryNo != null ? 'Draft' : 'Unsaved draft',
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-      ]),
+      Text(_deliveryNo != null ? 'Sales Delivery · $_deliveryNo' : 'New Sales Delivery',
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+      const SizedBox(height: 2),
+      _status == 'APPROVED'
+          ? _statusChip(_status)
+          : Text(_deliveryNo != null ? 'Draft' : 'Unsaved draft',
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
     ],
   );
 

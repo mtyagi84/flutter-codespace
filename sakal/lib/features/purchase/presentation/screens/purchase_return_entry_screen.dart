@@ -1013,27 +1013,25 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
     ]),
   );
 
-  Widget _buildTitleBlock() => Row(
-    crossAxisAlignment: CrossAxisAlignment.center,
+  // A plain Column (not a Row wrapping a single Column child) — a Row gives
+  // a non-flex child unbounded main-axis width, so the Text below never
+  // wraps and silently overflows on a narrow phone. See CLAUDE.md's "Row &
+  // Column layout distribution" rule; real bug caught live 2026-08-07.
+  Widget _buildTitleBlock() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
     children: [
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(_returnNo != null ? 'Purchase Return · $_returnNo' : 'New Purchase Return',
-              overflow: TextOverflow.ellipsis, maxLines: 1,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-          const SizedBox(height: 2),
-          Row(children: [
-            _status == 'APPROVED'
-                ? _statusChip(_status)
-                : Text(_returnNo != null ? 'Draft' : 'Unsaved draft',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            if (_returnNo != null) ...[
-              const SizedBox(width: 8),
-              PendingSyncBadge(documentType: 'PURCHASE_RETURN', documentId: _returnNo!),
-            ],
-          ]),
-        ]),
-      ),
+      Text(_returnNo != null ? 'Purchase Return · $_returnNo' : 'New Purchase Return',
+          overflow: TextOverflow.ellipsis, maxLines: 1,
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+      const SizedBox(height: 2),
+      Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 4, children: [
+        _status == 'APPROVED'
+            ? _statusChip(_status)
+            : Text(_returnNo != null ? 'Draft' : 'Unsaved draft',
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        if (_returnNo != null) PendingSyncBadge(documentType: 'PURCHASE_RETURN', documentId: _returnNo!),
+      ]),
     ],
   );
 

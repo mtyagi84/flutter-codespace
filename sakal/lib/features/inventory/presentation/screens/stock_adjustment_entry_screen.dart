@@ -740,25 +740,23 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
     );
   }
 
-  Widget _buildTitleBlock() => Row(
-    crossAxisAlignment: CrossAxisAlignment.center,
+  // A plain Column (not a Row wrapping a single Column child) — a Row gives
+  // a non-flex child unbounded main-axis width, so the Text below never
+  // wraps and silently overflows on a narrow phone. See CLAUDE.md's "Row &
+  // Column layout distribution" rule; real bug caught live 2026-08-07.
+  Widget _buildTitleBlock() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
     children: [
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(_adjustmentNo != null ? 'Stock Adjustment · $_adjustmentNo' : 'New Stock Adjustment',
-              overflow: TextOverflow.ellipsis, maxLines: 1,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-          const SizedBox(height: 2),
-          Row(children: [
-            _status == 'APPROVED' ? _statusChip(_status) : Text(_adjustmentNo != null ? 'Draft' : 'Unsaved draft',
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            if (_adjustmentNo != null) ...[
-              const SizedBox(width: 8),
-              PendingSyncBadge(documentType: 'STOCK_ADJUSTMENT', documentId: _adjustmentNo!),
-            ],
-          ]),
-        ]),
-      ),
+      Text(_adjustmentNo != null ? 'Stock Adjustment · $_adjustmentNo' : 'New Stock Adjustment',
+          overflow: TextOverflow.ellipsis, maxLines: 1,
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+      const SizedBox(height: 2),
+      Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 4, children: [
+        _status == 'APPROVED' ? _statusChip(_status) : Text(_adjustmentNo != null ? 'Draft' : 'Unsaved draft',
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        if (_adjustmentNo != null) PendingSyncBadge(documentType: 'STOCK_ADJUSTMENT', documentId: _adjustmentNo!),
+      ]),
     ],
   );
 

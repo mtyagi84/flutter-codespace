@@ -608,34 +608,31 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
     );
   }
 
-  Widget _buildTitleBlock() => Row(
-    crossAxisAlignment: CrossAxisAlignment.center,
+  // A plain Column (not a Row wrapping a single Column child) — a Row gives
+  // a non-flex child unbounded main-axis width, so the Text below never
+  // wraps and silently overflows on a narrow phone. See CLAUDE.md's "Row &
+  // Column layout distribution" rule; real bug caught live 2026-08-07.
+  Widget _buildTitleBlock() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
     mainAxisSize: MainAxisSize.min,
     children: [
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              _isNew ? 'New Product' : _nameCtrl.text.isNotEmpty
-                  ? _nameCtrl.text
-                  : 'Edit Product',
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-              style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary),
-            ),
-            const Text('Product Master',
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-                style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary)),
-          ],
-        ),
+      Text(
+        _isNew ? 'New Product' : _nameCtrl.text.isNotEmpty
+            ? _nameCtrl.text
+            : 'Edit Product',
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
+        style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary),
       ),
+      const Text('Product Master',
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+          style: TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary)),
     ],
   );
 

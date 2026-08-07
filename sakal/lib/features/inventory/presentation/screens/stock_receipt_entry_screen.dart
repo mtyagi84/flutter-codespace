@@ -669,22 +669,21 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
     );
   }
 
-  Widget _buildTitleBlock() => Row(
-    crossAxisAlignment: CrossAxisAlignment.center,
+  // A plain Column (not a Row wrapping a single Column child) — a Row gives
+  // a non-flex child unbounded main-axis width, so the Text below never
+  // wraps and silently overflows on a narrow phone. See CLAUDE.md's "Row &
+  // Column layout distribution" rule; real bug caught live 2026-08-07.
+  Widget _buildTitleBlock() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
     mainAxisSize: MainAxisSize.min,
     children: [
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(_receiptNo != null ? 'Stock Receipt · $_receiptNo' : 'New Stock Receipt',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-        const SizedBox(height: 2),
-        Row(children: [
-          _status == 'APPROVED' ? _statusChip(_status) : Text(_receiptNo != null ? 'Draft' : 'Unsaved draft',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          if (_receiptNo != null) ...[
-            const SizedBox(width: 8),
-            PendingSyncBadge(documentType: 'STOCK_RECEIPT', documentId: _receiptNo!),
-          ],
-        ]),
+      Text(_receiptNo != null ? 'Stock Receipt · $_receiptNo' : 'New Stock Receipt',
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+      const SizedBox(height: 2),
+      Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 4, children: [
+        _status == 'APPROVED' ? _statusChip(_status) : Text(_receiptNo != null ? 'Draft' : 'Unsaved draft',
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        if (_receiptNo != null) PendingSyncBadge(documentType: 'STOCK_RECEIPT', documentId: _receiptNo!),
       ]),
     ],
   );
