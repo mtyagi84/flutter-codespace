@@ -656,7 +656,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
                       _buildTransferPickerCard(locked),
                       const SizedBox(height: 16),
                     ],
-                    if (_lines.isNotEmpty) _buildLinesCard(locked, showLooseQty),
+                    if (_lines.isNotEmpty) _buildLinesCard(locked, showLooseQty, isMobile),
                     if (_status == 'APPROVED' && _postedVouchers.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       _buildPostedVouchersSection(),
@@ -796,7 +796,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
     );
   }
 
-  Widget _buildLinesCard(bool locked, bool showLooseQty) {
+  Widget _buildLinesCard(bool locked, bool showLooseQty, bool isMobile) {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -808,16 +808,37 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
           const Text('Dispatched quantity is pre-filled as fully received — reduce a line to record a shortfall.',
               style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
           const SizedBox(height: 12),
-          ..._lines.map((row) => _buildLineCard(row, locked, showLooseQty)),
+          if (!isMobile) _buildLinesHeader(showLooseQty),
+          ..._lines.map((row) => _buildLineCard(row, locked, showLooseQty, isMobile)),
         ]),
       ),
     );
   }
 
-  Widget _buildLineCard(_ReceiptLineRow row, bool locked, bool showLooseQty) {
+  // Header row for the desktop line-items table — same widths as
+  // _buildLineCard's own desktop Row below, so the dark SakalTableHeaderBar
+  // lines up column-for-column with the data. Template:
+  // sales_invoice_entry_screen.dart's _buildLineItemsHeader.
+  Widget _buildLinesHeader(bool showLooseQty) {
+    return SakalTableHeaderBar(cells: [
+      SizedBox(width: 240, child: SakalTableHeaderBar.label('Product')),
+      const SizedBox(width: 8),
+      SizedBox(width: 140, child: SakalTableHeaderBar.label('Dispatched')),
+      const SizedBox(width: 8),
+      SizedBox(width: 70, child: SakalTableHeaderBar.label('Unit')),
+      const SizedBox(width: 8),
+      SizedBox(width: 110, child: SakalTableHeaderBar.label(showLooseQty ? 'Received Qty Pack' : 'Received Qty')),
+      if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 110, child: SakalTableHeaderBar.label('Received Qty Loose'))],
+    ]);
+  }
+
+  Widget _buildLineCard(_ReceiptLineRow row, bool locked, bool showLooseQty, bool isMobile) {
     final isCompact = ref.watch(isCompactDensityProvider);
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
+    final productField = SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? '—' : row.productDisplay);
+    final dispatchedField = SakalFieldCard.readOnly(
+        label: 'Dispatched', value: '${row.dispatchedQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}');
     final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
     final qtyPackField = SakalFieldCard(
       label: showLooseQty ? 'Received Qty Pack' : 'Received Qty', editable: !locked,
@@ -838,25 +859,50 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
       ),
     );
 
-    return SakalLineItemCard(
-      title: row.productDisplay.isEmpty ? 'Line' : row.productDisplay,
-      subtitle: 'Dispatched ${row.dispatchedQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}',
-      fields: [
-        SizedBox(width: 70, height: 56, child: unitField),
-        SizedBox(width: 110, child: qtyPackField),
-        if (showLooseQty) SizedBox(width: 110, child: qtyLooseField),
-      ],
-      body: (row.shortfallQty > 0.0001 || row.isBatchTracked || row.isSerialTracked)
-          ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              if (row.shortfallQty > 0.0001)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Text('Shortfall ${row.shortfallQty.toStringAsFixed(2)} — will be written off',
-                      style: const TextStyle(fontSize: 11, color: AppColors.negative, fontWeight: FontWeight.w600)),
-                ),
-              if (row.isBatchTracked || row.isSerialTracked) _buildBatchSerialEditor(row, locked),
-            ])
-          : null,
+    final extraBody = (row.shortfallQty > 0.0001 || row.isBatchTracked || row.isSerialTracked)
+        ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (row.shortfallQty > 0.0001)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text('Shortfall ${row.shortfallQty.toStringAsFixed(2)} — will be written off',
+                    style: const TextStyle(fontSize: 11, color: AppColors.negative, fontWeight: FontWeight.w600)),
+              ),
+            if (row.isBatchTracked || row.isSerialTracked) _buildBatchSerialEditor(row, locked),
+          ])
+        : null;
+
+    if (isMobile) {
+      return SakalLineItemCard(
+        title: row.productDisplay.isEmpty ? 'Line' : row.productDisplay,
+        subtitle: 'Dispatched ${row.dispatchedQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}',
+        fields: [
+          SizedBox(width: 70, height: 56, child: unitField),
+          SizedBox(width: 110, child: qtyPackField),
+          if (showLooseQty) SizedBox(width: 110, child: qtyLooseField),
+        ],
+        body: extraBody,
+      );
+    }
+
+    // Desktop — a continuous row under _buildLinesHeader's dark bar, same
+    // left-to-right column order/widths as that header (see the "Line-items
+    // grid" mandatory pattern in CLAUDE.md).
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(width: 240, child: productField),
+          const SizedBox(width: 8),
+          SizedBox(width: 140, height: 56, child: dispatchedField),
+          const SizedBox(width: 8),
+          SizedBox(width: 70, height: 56, child: unitField),
+          const SizedBox(width: 8),
+          SizedBox(width: 110, child: qtyPackField),
+          if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 110, child: qtyLooseField)],
+        ]),
+        if (extraBody != null) Padding(padding: const EdgeInsets.only(top: 8), child: extraBody),
+      ]),
     );
   }
 

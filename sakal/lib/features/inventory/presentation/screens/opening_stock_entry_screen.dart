@@ -25,6 +25,7 @@ import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/opening_stock_repository.dart';
 import '../providers/opening_stock_providers.dart';
 
@@ -772,6 +773,12 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
   }
 
   Widget _buildLinesCard(bool locked, bool showLooseQty, bool isMobile) {
+    // Batch/Serial columns are per-row-optional (row.isBatchTracked /
+    // row.isSerialTracked) — computed once here, then rendered as a blank
+    // placeholder cell (not omitted) on rows where they don't apply, so
+    // columns stay aligned. See "Line-items grid" pattern in CLAUDE.md.
+    final showBatchColumns = _lines.any((l) => l.isBatchTracked);
+    final showSerialColumn = _lines.any((l) => l.isSerialTracked);
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -786,14 +793,42 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
           if (_lines.isEmpty)
             const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No lines yet — add a product, scan a barcode, or upload an Excel file.',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
-          else
-            ..._lines.asMap().entries.map((e) => _buildLineCard(e.value, e.key, locked, showLooseQty, isMobile)),
+          else ...[
+            if (!isMobile) _buildLinesHeader(showLooseQty, showBatchColumns, showSerialColumn),
+            ..._lines.asMap().entries.map((e) => _buildLineCard(e.value, e.key, locked, showLooseQty, isMobile, showBatchColumns, showSerialColumn)),
+          ],
         ]),
       ),
     );
   }
 
-  Widget _buildLineCard(_OpeningLineRow row, int idx, bool locked, bool showLooseQty, bool isMobile) {
+  // Header row for the desktop line-items table — same widths as
+  // _buildLineCard's own desktop Row below, so the dark SakalTableHeaderBar
+  // lines up column-for-column with the data. Template:
+  // sales_invoice_entry_screen.dart's _buildLineItemsHeader.
+  Widget _buildLinesHeader(bool showLooseQty, bool showBatchColumns, bool showSerialColumn) {
+    return SakalTableHeaderBar(cells: [
+      SizedBox(width: 240, child: SakalTableHeaderBar.label('Product')),
+      if (showBatchColumns) ...[
+        const SizedBox(width: 8), SizedBox(width: 150, child: SakalTableHeaderBar.label('Batch No')),
+        const SizedBox(width: 8), SizedBox(width: 150, child: SakalTableHeaderBar.label('Expiry Date')),
+        const SizedBox(width: 8), SizedBox(width: 160, child: SakalTableHeaderBar.label('Manufacturing Date')),
+      ],
+      if (showSerialColumn) ...[const SizedBox(width: 8), SizedBox(width: 150, child: SakalTableHeaderBar.label('Serial No'))],
+      const SizedBox(width: 8),
+      SizedBox(width: 80, child: SakalTableHeaderBar.label('Unit')),
+      const SizedBox(width: 8),
+      SizedBox(width: 110, child: SakalTableHeaderBar.label(showLooseQty ? 'Qty Pack' : 'Quantity')),
+      if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 110, child: SakalTableHeaderBar.label('Qty Loose'))],
+      const SizedBox(width: 8),
+      SizedBox(width: 110, child: SakalTableHeaderBar.label('Unit Cost')),
+      const SizedBox(width: 8),
+      SizedBox(width: 170, child: SakalTableHeaderBar.label('Remarks')),
+      const SizedBox(width: 40), // reserves the delete-icon column's width
+    ]);
+  }
+
+  Widget _buildLineCard(_OpeningLineRow row, int idx, bool locked, bool showLooseQty, bool isMobile, bool showBatchColumns, bool showSerialColumn) {
     final isCompact = ref.watch(isCompactDensityProvider);
     const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
@@ -879,27 +914,68 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
       child: TextFormField(controller: row.remarksCtrl, enabled: !locked, decoration: bare, style: style),
     );
 
-    return SakalLineItemCard(
-      title: '${idx + 1}. ${row.productDisplay.isEmpty ? 'New Line' : row.productDisplay}',
-      onDelete: locked ? null : () => _removeLine(row),
-      fields: [
-        SizedBox(width: isMobile ? double.infinity : 240, child: productField),
-        if (row.isBatchTracked) SizedBox(width: 150, child: batchNoField),
-        if (row.isBatchTracked) SizedBox(width: 150, child: expiryField),
-        if (row.isBatchTracked) SizedBox(width: 160, child: mfgField),
-        if (row.isSerialTracked) SizedBox(width: 150, child: serialNoField),
-        SizedBox(width: 80, child: unitField),
-        SizedBox(width: 110, child: qtyPackField),
-        if (showLooseQty) SizedBox(width: 110, child: qtyLooseField),
-        SizedBox(width: 110, child: unitCostField),
-        SizedBox(width: 170, child: remarksField),
-      ],
-      body: row.alreadyEstablished
-          ? Text(
-              'This product already has stock (${row.currentStock}) / cost (${row.currentCost}) at this location — Approve will be blocked.',
-              style: const TextStyle(fontSize: 11, color: AppColors.negative, fontWeight: FontWeight.w600),
-            )
-          : null,
+    final warningBody = row.alreadyEstablished
+        ? Text(
+            'This product already has stock (${row.currentStock}) / cost (${row.currentCost}) at this location — Approve will be blocked.',
+            style: const TextStyle(fontSize: 11, color: AppColors.negative, fontWeight: FontWeight.w600),
+          )
+        : null;
+
+    if (isMobile) {
+      return SakalLineItemCard(
+        title: '${idx + 1}. ${row.productDisplay.isEmpty ? 'New Line' : row.productDisplay}',
+        onDelete: locked ? null : () => _removeLine(row),
+        fields: [
+          SizedBox(width: double.infinity, child: productField),
+          if (row.isBatchTracked) SizedBox(width: 150, child: batchNoField),
+          if (row.isBatchTracked) SizedBox(width: 150, child: expiryField),
+          if (row.isBatchTracked) SizedBox(width: 160, child: mfgField),
+          if (row.isSerialTracked) SizedBox(width: 150, child: serialNoField),
+          SizedBox(width: 80, child: unitField),
+          SizedBox(width: 110, child: qtyPackField),
+          if (showLooseQty) SizedBox(width: 110, child: qtyLooseField),
+          SizedBox(width: 110, child: unitCostField),
+          SizedBox(width: 170, child: remarksField),
+        ],
+        body: warningBody,
+      );
+    }
+
+    // Desktop — a continuous row under _buildLinesHeader's dark bar, same
+    // left-to-right column order/widths as that header. showBatchColumns/
+    // showSerialColumn are screen-wide (any row has tracking) — a row that
+    // doesn't need them still gets a blank placeholder cell so columns stay
+    // aligned (see the "Line-items grid" mandatory pattern in CLAUDE.md).
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(width: 240, child: productField),
+          if (showBatchColumns) ...[
+            const SizedBox(width: 8), SizedBox(width: 150, child: row.isBatchTracked ? batchNoField : const SizedBox.shrink()),
+            const SizedBox(width: 8), SizedBox(width: 150, child: row.isBatchTracked ? expiryField : const SizedBox.shrink()),
+            const SizedBox(width: 8), SizedBox(width: 160, child: row.isBatchTracked ? mfgField : const SizedBox.shrink()),
+          ],
+          if (showSerialColumn) ...[
+            const SizedBox(width: 8), SizedBox(width: 150, child: row.isSerialTracked ? serialNoField : const SizedBox.shrink()),
+          ],
+          const SizedBox(width: 8),
+          SizedBox(width: 80, child: unitField),
+          const SizedBox(width: 8),
+          SizedBox(width: 110, child: qtyPackField),
+          if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 110, child: qtyLooseField)],
+          const SizedBox(width: 8),
+          SizedBox(width: 110, child: unitCostField),
+          const SizedBox(width: 8),
+          SizedBox(width: 170, child: remarksField),
+          SizedBox(
+            width: 40,
+            child: locked ? null : IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line'),
+          ),
+        ]),
+        if (warningBody != null) Padding(padding: const EdgeInsets.only(top: 8), child: warningBody),
+      ]),
     );
   }
 }

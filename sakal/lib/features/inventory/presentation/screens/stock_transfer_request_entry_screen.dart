@@ -22,6 +22,7 @@ import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/stock_transfer_request_repository.dart';
 import '../providers/stock_transfer_request_providers.dart';
 
@@ -430,7 +431,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
                     if (_actionError != null) ...[_errorBanner(_actionError!), const SizedBox(height: 16)],
                     _buildHeaderCard(locked, isMobile),
                     const SizedBox(height: 16),
-                    _buildLinesCard(locked, showLooseQty, showBarcode),
+                    _buildLinesCard(locked, showLooseQty, showBarcode, isMobile),
                   ]),
                 ),
         ),
@@ -560,7 +561,12 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
     );
   }
 
-  Widget _buildLinesCard(bool locked, bool showLooseQty, bool showBarcode) {
+  Widget _buildLinesCard(bool locked, bool showLooseQty, bool showBarcode, bool isMobile) {
+    // Transferred is a per-row-optional column — computed once here, then
+    // rendered as a blank placeholder cell (not omitted) on rows where it
+    // doesn't apply, so columns stay aligned. See "Line-items grid" pattern
+    // in CLAUDE.md.
+    final showTransferredColumn = _lines.any((l) => l.transferredQty > 0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -572,13 +578,35 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
         if (_lines.isEmpty)
           const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No lines yet — add a product.',
               style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
-        else
-          ..._lines.asMap().entries.map((e) => _buildLineCard(e.value, e.key, locked, showLooseQty, showBarcode)),
+        else ...[
+          if (!isMobile) _buildLinesHeader(showLooseQty, showBarcode, showTransferredColumn),
+          ..._lines.asMap().entries.map((e) => _buildLineCard(e.value, e.key, locked, showLooseQty, showBarcode, isMobile, showTransferredColumn)),
+        ],
       ],
     );
   }
 
-  Widget _buildLineCard(_RequestLineRow row, int idx, bool locked, bool showLooseQty, bool showBarcode) {
+  // Header row for the desktop line-items table — same widths as
+  // _buildLineCard's own desktop Row below, so the dark SakalTableHeaderBar
+  // lines up column-for-column with the data. Template:
+  // sales_invoice_entry_screen.dart's _buildLineItemsHeader.
+  Widget _buildLinesHeader(bool showLooseQty, bool showBarcode, bool showTransferredColumn) {
+    return SakalTableHeaderBar(cells: [
+      if (showBarcode) ...[SizedBox(width: 160, child: SakalTableHeaderBar.label('Scan/Enter Barcode')), const SizedBox(width: 8)],
+      SizedBox(width: 260, child: SakalTableHeaderBar.label('Product')),
+      const SizedBox(width: 8),
+      SizedBox(width: 100, child: SakalTableHeaderBar.label('Unit')),
+      const SizedBox(width: 8),
+      SizedBox(width: 100, child: SakalTableHeaderBar.label(showLooseQty ? 'Qty Pack' : 'Quantity')),
+      if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 100, child: SakalTableHeaderBar.label('Qty Loose'))],
+      const SizedBox(width: 8),
+      SizedBox(width: 220, child: SakalTableHeaderBar.label('Remarks')),
+      if (showTransferredColumn) ...[const SizedBox(width: 8), SizedBox(width: 130, child: SakalTableHeaderBar.label('Transferred'))],
+      const SizedBox(width: 40), // reserves the delete-icon column's width
+    ]);
+  }
+
+  Widget _buildLineCard(_RequestLineRow row, int idx, bool locked, bool showLooseQty, bool showBarcode, bool isMobile, bool showTransferredColumn) {
     final isCompact = ref.watch(isCompactDensityProvider);
     const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
@@ -631,18 +659,48 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
       child: TextFormField(controller: row.remarksCtrl, enabled: !locked, decoration: bare, style: style),
     );
 
-    return SakalLineItemCard(
-      title: '${idx + 1}. ${row.productDisplay.isEmpty ? 'New Line' : row.productDisplay}',
-      subtitle: row.transferredQty > 0 ? 'Transferred: ${row.transferredQty.toStringAsFixed(2)}' : null,
-      onDelete: locked ? null : () => _removeLine(row),
-      fields: [
-        if (showBarcode) SizedBox(width: 160, child: barcodeField),
+    if (isMobile) {
+      return SakalLineItemCard(
+        title: '${idx + 1}. ${row.productDisplay.isEmpty ? 'New Line' : row.productDisplay}',
+        subtitle: row.transferredQty > 0 ? 'Transferred: ${row.transferredQty.toStringAsFixed(2)}' : null,
+        onDelete: locked ? null : () => _removeLine(row),
+        fields: [
+          if (showBarcode) SizedBox(width: 160, child: barcodeField),
+          SizedBox(width: 260, child: productField),
+          SizedBox(width: 100, child: unitField),
+          SizedBox(width: 100, child: qtyPackField),
+          if (showLooseQty) SizedBox(width: 100, child: qtyLooseField),
+          SizedBox(width: 220, child: remarksField),
+        ],
+      );
+    }
+
+    // Desktop — a continuous row under _buildLinesHeader's dark bar, same
+    // left-to-right column order/widths as that header (see the "Line-items
+    // grid" mandatory pattern in CLAUDE.md).
+    final transferredField = SakalFieldCard.readOnly(label: 'Transferred', value: row.transferredQty.toStringAsFixed(2));
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (showBarcode) ...[SizedBox(width: 160, child: barcodeField), const SizedBox(width: 8)],
         SizedBox(width: 260, child: productField),
+        const SizedBox(width: 8),
         SizedBox(width: 100, child: unitField),
+        const SizedBox(width: 8),
         SizedBox(width: 100, child: qtyPackField),
-        if (showLooseQty) SizedBox(width: 100, child: qtyLooseField),
+        if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 100, child: qtyLooseField)],
+        const SizedBox(width: 8),
         SizedBox(width: 220, child: remarksField),
-      ],
+        if (showTransferredColumn) ...[
+          const SizedBox(width: 8),
+          SizedBox(width: 130, height: 56, child: row.transferredQty > 0 ? transferredField : const SizedBox.shrink()),
+        ],
+        SizedBox(
+          width: 40,
+          child: locked ? null : IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line'),
+        ),
+      ]),
     );
   }
 }

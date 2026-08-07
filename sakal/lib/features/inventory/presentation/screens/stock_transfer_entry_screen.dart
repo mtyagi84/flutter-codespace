@@ -840,7 +840,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
                       _buildRequestPickerCard(locked),
                       const SizedBox(height: 16),
                     ],
-                    _buildLinesCard(locked, showLooseQty, showBarcode),
+                    _buildLinesCard(locked, showLooseQty, showBarcode, isMobile),
                     const SizedBox(height: 16),
                     _buildChargesCard(locked, isMobile),
                     if (_status == 'APPROVED' && _postedVouchers.isNotEmpty) ...[
@@ -1015,7 +1015,13 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
     );
   }
 
-  Widget _buildLinesCard(bool locked, bool showLooseQty, bool showBarcode) {
+  Widget _buildLinesCard(bool locked, bool showLooseQty, bool showBarcode, bool isMobile) {
+    // Per-row-optional columns (Cost / + Charges) only show when at least
+    // one line actually populates them — computed once here, then rendered
+    // as a blank placeholder cell (not omitted) on rows that don't apply,
+    // so columns stay aligned. See "Line-items grid" pattern in CLAUDE.md.
+    final showCostColumn   = _lines.any((l) => l.costPriceHint > 0);
+    final showChargeColumn = _lines.any((l) => l.chargeAmount > 0);
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -1031,35 +1037,66 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
             Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(
                 _mode == 'AGAINST_REQUEST' ? 'No lines yet — pick a request above.' : 'No lines yet — add a product.',
                 style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)))
-          else
-            ..._lines.map((row) => _buildLineCard(row, locked, showLooseQty, showBarcode)),
+          else ...[
+            if (!isMobile) _buildLinesHeader(showLooseQty, showBarcode, showCostColumn, showChargeColumn),
+            ..._lines.map((row) => _buildLineCard(row, locked, showLooseQty, showBarcode, isMobile, showCostColumn, showChargeColumn)),
+          ],
         ]),
       ),
     );
   }
 
-  Widget _buildLineCard(_TransferLineRow row, bool locked, bool showLooseQty, bool showBarcode) {
+  // Header row for the desktop line-items table — same widths as
+  // _buildLineCard's own desktop Row below, so the dark SakalTableHeaderBar
+  // lines up column-for-column with the data. Template:
+  // sales_invoice_entry_screen.dart's _buildLineItemsHeader.
+  Widget _buildLinesHeader(bool showLooseQty, bool showBarcode, bool showCostColumn, bool showChargeColumn) {
+    return SakalTableHeaderBar(cells: [
+      SizedBox(width: 240, child: SakalTableHeaderBar.label('Product')),
+      if (_mode == 'DIRECT' && showBarcode) ...[const SizedBox(width: 8), SizedBox(width: 140, child: SakalTableHeaderBar.label('Scan'))],
+      if (_mode == 'AGAINST_REQUEST') ...[const SizedBox(width: 8), SizedBox(width: 130, child: SakalTableHeaderBar.label('Remaining'))],
+      const SizedBox(width: 8),
+      SizedBox(width: 70, child: SakalTableHeaderBar.label('Unit')),
+      const SizedBox(width: 8),
+      SizedBox(width: 100, child: SakalTableHeaderBar.label(showLooseQty ? 'Qty Pack' : 'Quantity')),
+      if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 100, child: SakalTableHeaderBar.label('Qty Loose'))],
+      if (_isLikelyInterEntity) ...[const SizedBox(width: 8), SizedBox(width: 100, child: SakalTableHeaderBar.label('Sales Price'))],
+      const SizedBox(width: 8),
+      SizedBox(width: 160, child: SakalTableHeaderBar.label('Remarks')),
+      if (showCostColumn) ...[const SizedBox(width: 8), SizedBox(width: 100, child: SakalTableHeaderBar.label('Cost'))],
+      if (showChargeColumn) ...[const SizedBox(width: 8), SizedBox(width: 110, child: SakalTableHeaderBar.label('+ Charges'))],
+      const SizedBox(width: 40), // reserves the delete-icon column's width
+    ]);
+  }
+
+  Widget _buildLineCard(_TransferLineRow row, bool locked, bool showLooseQty, bool showBarcode, bool isMobile, bool showCostColumn, bool showChargeColumn) {
     final isCompact = ref.watch(isCompactDensityProvider);
     const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
 
-    final productField = SakalFieldCard(
-      label: 'Product', required: true, editable: !locked,
-      child: SakalAutocomplete<Map<String, dynamic>>(
-        key: ValueKey('${row.hashCode}-${row.productDisplay}'),
-        initialValue: TextEditingValue(text: row.productDisplay),
-        displayStringForOption: (p) => '[${p['product_code']}] ${p['product_name']}',
-        optionsBuilder: (v) async {
-          if (locked) return const [];
-          final session = ref.read(sessionProvider)!;
-          return _ds.getProductsForPicker(clientId: session.clientId, companyId: session.companyId, search: v.text);
-        },
-        onSelected: (p) => _onProductSelected(row, p),
-        enabled: !locked,
-        decoration: bare,
-        style: style,
-      ),
+    final productField = _mode == 'DIRECT'
+        ? SakalFieldCard(
+            label: 'Product', required: true, editable: !locked,
+            child: SakalAutocomplete<Map<String, dynamic>>(
+              key: ValueKey('${row.hashCode}-${row.productDisplay}'),
+              initialValue: TextEditingValue(text: row.productDisplay),
+              displayStringForOption: (p) => '[${p['product_code']}] ${p['product_name']}',
+              optionsBuilder: (v) async {
+                if (locked) return const [];
+                final session = ref.read(sessionProvider)!;
+                return _ds.getProductsForPicker(clientId: session.clientId, companyId: session.companyId, search: v.text);
+              },
+              onSelected: (p) => _onProductSelected(row, p),
+              enabled: !locked,
+              decoration: bare,
+              style: style,
+            ),
+          )
+        : SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? '—' : row.productDisplay);
+    final remainingField = SakalFieldCard.readOnly(
+      label: 'Remaining',
+      value: '${row.requestRemainingQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}',
     );
     final barcodeField = SakalFieldCard(
       label: 'Scan/Enter Barcode', editable: !locked,
@@ -1101,26 +1138,68 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
       child: TextFormField(controller: row.remarksCtrl, enabled: !locked, decoration: bare, style: style),
     );
 
-    return SakalLineItemCard(
-      title: row.productDisplay.isEmpty ? 'Line' : row.productDisplay,
-      subtitle: _mode == 'AGAINST_REQUEST'
-          ? 'Remaining ${row.requestRemainingQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}'
-          : null,
-      onDelete: (_mode == 'DIRECT' && !locked) ? () => _removeLine(row) : null,
-      fields: [
-        if (_mode == 'DIRECT') SizedBox(width: 240, child: productField),
-        if (_mode == 'DIRECT' && showBarcode) SizedBox(width: 140, child: barcodeField),
-        SizedBox(width: 70, height: 56, child: unitField),
-        SizedBox(width: 100, child: qtyPackField),
-        if (showLooseQty) SizedBox(width: 100, child: qtyLooseField),
-        if (_isLikelyInterEntity) SizedBox(width: 100, child: salesPriceField),
-        SizedBox(width: 160, child: remarksField),
-        if (row.costPriceHint > 0)
-          SizedBox(width: 100, height: 56, child: SakalFieldCard.readOnly(label: 'Cost', value: AppNumberFormat.amount(row.costPriceHint.toDouble(), numberFormat), numeric: true)),
-        if (row.chargeAmount > 0)
-          SizedBox(width: 110, height: 56, child: SakalFieldCard.readOnly(label: '+ Charges', value: AppNumberFormat.amount(row.chargeAmount, numberFormat), numeric: true)),
-      ],
-      body: (row.isBatchTracked || row.isSerialTracked) ? _buildBatchSerialEditor(row, locked) : null,
+    final costField   = SakalFieldCard.readOnly(label: 'Cost', value: AppNumberFormat.amount(row.costPriceHint.toDouble(), numberFormat), numeric: true);
+    final chargeField = SakalFieldCard.readOnly(label: '+ Charges', value: AppNumberFormat.amount(row.chargeAmount, numberFormat), numeric: true);
+    final batchSerialBody = (row.isBatchTracked || row.isSerialTracked) ? _buildBatchSerialEditor(row, locked) : null;
+
+    if (isMobile) {
+      return SakalLineItemCard(
+        title: row.productDisplay.isEmpty ? 'Line' : row.productDisplay,
+        subtitle: _mode == 'AGAINST_REQUEST'
+            ? 'Remaining ${row.requestRemainingQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}'
+            : null,
+        onDelete: (_mode == 'DIRECT' && !locked) ? () => _removeLine(row) : null,
+        fields: [
+          if (_mode == 'DIRECT') SizedBox(width: 240, child: productField),
+          if (_mode == 'DIRECT' && showBarcode) SizedBox(width: 140, child: barcodeField),
+          SizedBox(width: 70, height: 56, child: unitField),
+          SizedBox(width: 100, child: qtyPackField),
+          if (showLooseQty) SizedBox(width: 100, child: qtyLooseField),
+          if (_isLikelyInterEntity) SizedBox(width: 100, child: salesPriceField),
+          SizedBox(width: 160, child: remarksField),
+          if (row.costPriceHint > 0) SizedBox(width: 100, height: 56, child: costField),
+          if (row.chargeAmount > 0) SizedBox(width: 110, height: 56, child: chargeField),
+        ],
+        body: batchSerialBody,
+      );
+    }
+
+    // Desktop — a continuous row under _buildLinesHeader's dark bar, same
+    // left-to-right column order/widths as that header (see the "Line-items
+    // grid" mandatory pattern in CLAUDE.md). showCostColumn/showChargeColumn
+    // are screen-wide (any row has a value) — a row without one still gets a
+    // blank placeholder cell so columns stay aligned.
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(width: 240, child: productField),
+          if (_mode == 'DIRECT' && showBarcode) ...[const SizedBox(width: 8), SizedBox(width: 140, child: barcodeField)],
+          if (_mode == 'AGAINST_REQUEST') ...[const SizedBox(width: 8), SizedBox(width: 130, child: remainingField)],
+          const SizedBox(width: 8),
+          SizedBox(width: 70, height: 56, child: unitField),
+          const SizedBox(width: 8),
+          SizedBox(width: 100, child: qtyPackField),
+          if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 100, child: qtyLooseField)],
+          if (_isLikelyInterEntity) ...[const SizedBox(width: 8), SizedBox(width: 100, child: salesPriceField)],
+          const SizedBox(width: 8),
+          SizedBox(width: 160, child: remarksField),
+          if (showCostColumn) ...[
+            const SizedBox(width: 8),
+            SizedBox(width: 100, height: 56, child: row.costPriceHint > 0 ? costField : const SizedBox.shrink()),
+          ],
+          if (showChargeColumn) ...[
+            const SizedBox(width: 8),
+            SizedBox(width: 110, height: 56, child: row.chargeAmount > 0 ? chargeField : const SizedBox.shrink()),
+          ],
+          SizedBox(
+            width: 40,
+            child: (_mode == 'DIRECT' && !locked) ? IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line') : null,
+          ),
+        ]),
+        if (batchSerialBody != null) Padding(padding: const EdgeInsets.only(top: 8), child: batchSerialBody),
+      ]),
     );
   }
 

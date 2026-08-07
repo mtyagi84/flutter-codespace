@@ -22,6 +22,7 @@ import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/material_requisition_repository.dart';
 import '../providers/material_requisition_providers.dart';
 
@@ -622,10 +623,36 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
       const SizedBox(height: 8),
       if (_lines.isEmpty)
         const Padding(padding: EdgeInsets.all(16), child: Text('No lines yet — add a product.',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary))),
-      ..._lines.asMap().entries.map((e) => _buildLineCard(e.value, e.key, locked, isMobile, showLooseQty, showBarcode)),
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
+      else ...[
+        if (!isMobile) _buildLinesHeader(showLooseQty, showBarcode),
+        ..._lines.asMap().entries.map((e) => _buildLineCard(e.value, e.key, locked, isMobile, showLooseQty, showBarcode)),
+      ],
     ],
   );
+
+  // Header row for the desktop line-items table — same widths as
+  // _buildLineCard's own desktop Row below, so the dark SakalTableHeaderBar
+  // lines up column-for-column with the data underneath. Template:
+  // sales_invoice_entry_screen.dart's _buildLineItemsHeader.
+  Widget _buildLinesHeader(bool showLooseQty, bool showBarcode) {
+    return SakalTableHeaderBar(cells: [
+      if (showBarcode) ...[SizedBox(width: 160, child: SakalTableHeaderBar.label('Scan/Enter Barcode')), const SizedBox(width: 8)],
+      SizedBox(width: 260, child: SakalTableHeaderBar.label('Product')),
+      const SizedBox(width: 8),
+      SizedBox(width: 100, child: SakalTableHeaderBar.label('Unit')),
+      const SizedBox(width: 8),
+      SizedBox(width: 100, child: SakalTableHeaderBar.label(showLooseQty ? 'Qty Pack' : 'Quantity')),
+      if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 100, child: SakalTableHeaderBar.label('Qty Loose'))],
+      const SizedBox(width: 8),
+      SizedBox(width: 180, child: SakalTableHeaderBar.label('Department')),
+      const SizedBox(width: 8),
+      SizedBox(width: 180, child: SakalTableHeaderBar.label('Consumption Area')),
+      const SizedBox(width: 8),
+      SizedBox(width: 200, child: SakalTableHeaderBar.label('Remarks')),
+      const SizedBox(width: 40), // reserves the delete-icon column's width
+    ]);
+  }
 
   Widget _buildLineCard(_RequisitionLineRow row, int idx, bool locked, bool isMobile, bool showLooseQty, bool showBarcode) {
     final isCompact = ref.watch(isCompactDensityProvider);
@@ -706,22 +733,71 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
       ),
     );
 
-    return SakalLineItemCard(
-      title: '${idx + 1}. ${row.productDisplay.isEmpty ? 'New Line' : row.productDisplay}',
-      onDelete: locked ? null : () => _removeLine(row),
-      fields: [
-        if (showBarcode) SizedBox(width: 160, child: barcodeField),
-        SizedBox(width: isMobile ? double.infinity : 260, child: productField),
-        SizedBox(width: 100, child: unitField),
-        SizedBox(width: 100, child: qtyPackField),
-        if (showLooseQty) SizedBox(width: 100, child: qtyLooseField),
-        SizedBox(width: 180, height: 56, child: departmentField),
-        SizedBox(width: 180, height: 56, child: consumptionAreaField),
-        SizedBox(width: 200, child: remarksField),
-      ],
-      footer: row.issuedQty > 0
-          ? Text('Issued: ${row.issuedQty.toStringAsFixed(2)}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))
-          : null,
+    final footer = row.issuedQty > 0
+        ? Text('Issued: ${row.issuedQty.toStringAsFixed(2)}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))
+        : null;
+
+    if (isMobile) {
+      // 2-column grid for secondary fields instead of a loose Wrap — same
+      // approach as grn_entry_screen.dart's own mobile line-card layout.
+      final secondaryFields = <Widget>[
+        if (showBarcode) barcodeField,
+        unitField,
+        qtyPackField,
+        if (showLooseQty) qtyLooseField,
+        departmentField,
+        consumptionAreaField,
+        remarksField,
+      ];
+      final pairedRows = <Widget>[];
+      for (var i = 0; i < secondaryFields.length; i += 2) {
+        pairedRows.add(SakalFieldRow(
+          isMobile: true,
+          children: secondaryFields.sublist(i, (i + 2).clamp(0, secondaryFields.length)),
+        ));
+        if (i + 2 < secondaryFields.length) pairedRows.add(const SizedBox(height: 8));
+      }
+      return SakalLineItemCard(
+        title: '${idx + 1}. ${row.productDisplay.isEmpty ? 'New Line' : row.productDisplay}',
+        onDelete: locked ? null : () => _removeLine(row),
+        fields: const [],
+        body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          productField,
+          const SizedBox(height: 8),
+          ...pairedRows,
+        ]),
+        footer: footer,
+      );
+    }
+
+    // Desktop — a continuous row under _buildLinesHeader's dark bar, same
+    // left-to-right column order/widths as that header (see the "Line-items
+    // grid" mandatory pattern in CLAUDE.md).
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (showBarcode) ...[SizedBox(width: 160, child: barcodeField), const SizedBox(width: 8)],
+          SizedBox(width: 260, child: productField),
+          const SizedBox(width: 8),
+          SizedBox(width: 100, child: unitField),
+          const SizedBox(width: 8),
+          SizedBox(width: 100, child: qtyPackField),
+          if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 100, child: qtyLooseField)],
+          const SizedBox(width: 8),
+          SizedBox(width: 180, height: 56, child: departmentField),
+          const SizedBox(width: 8),
+          SizedBox(width: 180, height: 56, child: consumptionAreaField),
+          const SizedBox(width: 8),
+          SizedBox(width: 200, child: remarksField),
+          SizedBox(
+            width: 40,
+            child: locked ? null : IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line'),
+          ),
+        ]),
+        if (footer != null) Padding(padding: const EdgeInsets.only(top: 8), child: footer),
+      ]),
     );
   }
 }
