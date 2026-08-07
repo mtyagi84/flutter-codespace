@@ -22,6 +22,7 @@ import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/material_issue_repository.dart';
 import '../providers/material_issue_providers.dart';
@@ -705,6 +706,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
   }
 
   Widget _buildLinesCard(bool locked, bool showLooseQty, bool isMobile) {
+    final lineWidgets = _lines.map((row) => _buildLineCard(row, locked, showLooseQty, isMobile)).toList();
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -718,10 +720,13 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
           const SizedBox(height: 12),
           if (_lines.isEmpty)
             const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No lines yet — pick a requisition above.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
-          else ...[
-            if (!isMobile) _buildLinesHeader(showLooseQty),
-            ..._lines.map((row) => _buildLineCard(row, locked, showLooseQty, isMobile)),
-          ],
+          else if (isMobile)
+            ...lineWidgets
+          else
+            SakalScrollableTable(
+              header: _buildLinesHeader(showLooseQty),
+              rows: lineWidgets,
+            ),
         ]),
       ),
     );

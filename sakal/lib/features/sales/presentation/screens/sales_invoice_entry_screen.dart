@@ -24,6 +24,7 @@ import '../../../../core/widgets/sakal_financial_summary_card.dart';
 import '../../../../core/widgets/sakal_formatted_number_field.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
+import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../domain/repositories/sales_invoice_repository.dart';
 import '../providers/sales_invoice_providers.dart';
 import '../providers/sales_delivery_providers.dart';
@@ -1838,7 +1839,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                     ),
                     if (!isMobile)
                       SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
                         sliver: SliverToBoxAdapter(
                           // showBarcode column must match _buildLineTile's own per-row
                           // condition exactly (showBarcode && !rowLocked) — showBarcode
@@ -1846,18 +1847,31 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                           // above), so ANDing !locked here reproduces !rowLocked without
                           // re-deriving it, keeping the header's Scan column from
                           // appearing when a locked/approved invoice's rows won't render one.
-                          child: _buildLineItemsHeader(showLooseQty, showBarcode && !locked, !locked && !_isAgainstSource),
+                          //
+                          // Wrapped in SakalScrollableTable (replacing the previous
+                          // separate header-sliver + row-SliverList pair) so the desktop
+                          // table can scroll horizontally instead of overflowing on a
+                          // real desktop window narrower than the table's fixed
+                          // column-width sum (see CLAUDE.md's "Line-items grid" pattern)
+                          // — trades the previous lazy per-row SliverList build for an
+                          // eagerly-built row list, same tradeoff every other line-items
+                          // table in the app already makes.
+                          child: SakalScrollableTable(
+                            header: _buildLineItemsHeader(showLooseQty, showBarcode && !locked, !locked && !_isAgainstSource),
+                            rows: _lines.map((row) => _buildLineTile(row, locked, showLooseQty, showBarcode, isMobile)).toList(),
+                          ),
                         ),
                       ),
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(24, 0, 24, isMobile ? 0 : 12),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) => _buildLineTile(_lines[index], locked, showLooseQty, showBarcode, isMobile),
-                          childCount: _lines.length,
+                    if (isMobile)
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) => _buildLineTile(_lines[index], locked, showLooseQty, showBarcode, isMobile),
+                            childCount: _lines.length,
+                          ),
                         ),
                       ),
-                    ),
                     SliverPadding(
                       padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
                       sliver: SliverToBoxAdapter(

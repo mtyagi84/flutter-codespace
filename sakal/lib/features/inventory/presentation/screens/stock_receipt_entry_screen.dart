@@ -22,6 +22,7 @@ import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/stock_receipt_repository.dart';
 import '../providers/stock_receipt_providers.dart';
@@ -797,6 +798,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
   }
 
   Widget _buildLinesCard(bool locked, bool showLooseQty, bool isMobile) {
+    final lineWidgets = _lines.map((row) => _buildLineCard(row, locked, showLooseQty, isMobile)).toList();
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -808,8 +810,13 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
           const Text('Dispatched quantity is pre-filled as fully received — reduce a line to record a shortfall.',
               style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
           const SizedBox(height: 12),
-          if (!isMobile) _buildLinesHeader(showLooseQty),
-          ..._lines.map((row) => _buildLineCard(row, locked, showLooseQty, isMobile)),
+          if (isMobile)
+            ...lineWidgets
+          else
+            SakalScrollableTable(
+              header: _buildLinesHeader(showLooseQty),
+              rows: lineWidgets,
+            ),
         ]),
       ),
     );

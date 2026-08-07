@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
 import 'package:sakal/core/widgets/sakal_field_card.dart';
@@ -41,6 +42,28 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
+
+/// The screen's title/subtitle/badge no longer render as body text — they're
+/// posted to the shared TopBar via ScreenHeaderMixin (screen_header.dart),
+/// and pumpApp() doesn't include a TopBar in its pumped tree at all. Read
+/// the posted ScreenHeaderInfo back from the provider instead of searching
+/// for rendered text — this is the actual observable contract the screen
+/// provides now.
+ScreenHeaderInfo? _readHeader(WidgetTester tester, Finder screenFinder) =>
+    ProviderScope.containerOf(tester.element(screenFinder)).read(screenHeaderProvider);
+
+/// Forces a viewport narrower than the app's 600px mobile breakpoint —
+/// flutter_test's own default (~800x600) falls on the DESKTOP side of that
+/// threshold, so the Lines section's isMobile branch (SakalLineItemCard,
+/// "N. Title" text) would otherwise never render; these tests were written
+/// against that mobile-card shape. Matches the existing Size(800, 1400)
+/// precedent elsewhere in this suite (tall enough that autocomplete
+/// overlays / below-the-fold content still build), just narrower.
+void _useMobileViewport(WidgetTester tester) {
+  tester.view.physicalSize = const Size(400, 1600);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
 
 void main() {
   late MockSalesQuotationRepository mockRepo;
@@ -107,13 +130,15 @@ void main() {
   group('New (blank) sales quotation', () {
     testWidgets('renders the blank form with all key fields and one auto-added blank line',
         (tester) async {
+      _useMobileViewport(tester);
       await pumpApp(tester, const SalesQuotationEntryScreen(), overrides: overrides(), session: testSession());
       await tester.pumpAndSettle();
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('New Sales Quotation'), findsOneWidget);
-      expect(find.text('Unsaved draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(SalesQuotationEntryScreen));
+      expect(header?.title, 'New Sales Quotation');
+      expect(header?.subtitle, 'Unsaved draft');
 
       expect(_findFieldLabel('QUOTATION NO'), findsOneWidget);
       expect(_findFieldLabel('QUOTATION DATE'), findsOneWidget);
@@ -248,6 +273,7 @@ void main() {
 
     testWidgets('loads and displays every field from the saved header and line', (tester) async {
       stubExistingDraft();
+      _useMobileViewport(tester);
 
       await pumpApp(
         tester,
@@ -259,11 +285,11 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('Sales Quotation · SQ-001'), findsOneWidget);
-      // _statusChip renders status.replaceAll('_',' ') verbatim — for a
-      // still-DRAFT resumed quotation that's the literal 'DRAFT' (all
-      // caps), not a title-cased 'Draft'.
-      expect(find.text('DRAFT'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(SalesQuotationEntryScreen));
+      expect(header?.title, 'Sales Quotation · SQ-001');
+      // badgeText is the raw status string verbatim — for a still-DRAFT
+      // resumed quotation that's the literal 'DRAFT' (all caps).
+      expect(header?.badgeText, 'DRAFT');
       expect(find.text('[CUS01] Customer One'), findsOneWidget); // Customer autocomplete field text
       expect(find.text('Main Warehouse'), findsOneWidget); // Location dropdown
       expect(find.text('USD'), findsOneWidget); // Currency dropdown — bare currency_id, not "USD — US Dollar"
@@ -419,6 +445,7 @@ void main() {
             },
           ]);
 
+      _useMobileViewport(tester);
       await pumpApp(tester, const SalesQuotationEntryScreen(), overrides: overrides(), session: testSession());
       await tester.pumpAndSettle();
 

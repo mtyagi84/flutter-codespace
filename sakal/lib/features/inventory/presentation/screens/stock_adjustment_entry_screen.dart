@@ -23,6 +23,7 @@ import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/stock_adjustment_repository.dart';
 import '../providers/stock_adjustment_providers.dart';
@@ -847,6 +848,7 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
   }
 
   Widget _buildLinesCard(bool locked, bool showLooseQty, bool showBarcode, bool isMobile) {
+    final lineWidgets = _lines.map((row) => _buildLineCard(row, locked, showLooseQty, showBarcode, isMobile)).toList();
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -861,10 +863,13 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
           if (_lines.isEmpty)
             const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No lines yet — add a product.',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
-          else ...[
-            if (!isMobile) _buildLinesHeader(showLooseQty, showBarcode),
-            ..._lines.map((row) => _buildLineCard(row, locked, showLooseQty, showBarcode, isMobile)),
-          ],
+          else if (isMobile)
+            ...lineWidgets
+          else
+            SakalScrollableTable(
+              header: _buildLinesHeader(showLooseQty, showBarcode),
+              rows: lineWidgets,
+            ),
         ]),
       ),
     );

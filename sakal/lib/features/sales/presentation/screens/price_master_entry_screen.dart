@@ -23,6 +23,7 @@ import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
+import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../domain/repositories/price_master_repository.dart';
 import '../providers/price_master_providers.dart';
 
@@ -1034,23 +1035,13 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
     // once so the header (fixed columns) and every row stay column-aligned
     // instead of drifting per-line.
     final showBelowCostReason = _lines.any((r) => r.isBelowCost);
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const Expanded(child: Text('Lines', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
-            if (!locked) TextButton.icon(onPressed: _addLine, icon: const Icon(Icons.add, size: 16), label: const Text('Add Line')),
-          ]),
-          const SizedBox(height: 8),
-          if (_lines.isEmpty)
-            const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No lines yet — add a product or scan a barcode.',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
-          else ...[
-            if (!isMobile) _buildLinesHeader(showBelowCostReason),
-            ..._lines.asMap().entries.map((entry) {
+    // Computed once, then embedded either as a plain vertical spread
+    // (mobile) or wrapped in SakalScrollableTable (desktop) below — a
+    // desktop table this wide can exceed real desktop widths, not just
+    // narrow test viewports, and a Row/Column can't reflow its own
+    // columns onto multiple lines and stay a valid table, so horizontal
+    // scroll is the fix here (see CLAUDE.md's "Line-items grid" pattern).
+    final lineWidgets = _lines.asMap().entries.map((entry) {
               final idx = entry.key;
               final row = entry.value;
 
@@ -1199,8 +1190,28 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
                   if (scannedTag != null) Padding(padding: const EdgeInsets.only(top: 6), child: scannedTag),
                 ]),
               );
-            }),
-          ],
+            }).toList();
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Expanded(child: Text('Lines', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
+            if (!locked) TextButton.icon(onPressed: _addLine, icon: const Icon(Icons.add, size: 16), label: const Text('Add Line')),
+          ]),
+          const SizedBox(height: 8),
+          if (_lines.isEmpty)
+            const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No lines yet — add a product or scan a barcode.',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
+          else if (isMobile)
+            ...lineWidgets
+          else
+            SakalScrollableTable(
+              header: _buildLinesHeader(showBelowCostReason),
+              rows: lineWidgets,
+            ),
         ]),
       ),
     );

@@ -22,6 +22,7 @@ import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/purchase_return_repository.dart';
 import '../providers/purchase_return_providers.dart';
@@ -1237,6 +1238,10 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
   // ── Lines card ────────────────────────────────────────────────────────────
 
   Widget _buildLinesCard(bool locked, bool showLooseQty, bool isMobile) {
+    // Computed once, then embedded either as a plain vertical spread
+    // (mobile) or wrapped in SakalScrollableTable (desktop) below — see
+    // CLAUDE.md's "Line-items grid" mandatory pattern.
+    final lineWidgets = _lines.map((row) => _buildLineCard(row, locked, showLooseQty, isMobile)).toList();
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -1251,10 +1256,13 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
           if (_lines.isEmpty)
             const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No lines yet — pick a GRN above.',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
-          else ...[
-            if (!isMobile) _buildLinesHeader(showLooseQty),
-            ..._lines.map((row) => _buildLineCard(row, locked, showLooseQty, isMobile)),
-          ],
+          else if (isMobile)
+            ...lineWidgets
+          else
+            SakalScrollableTable(
+              header: _buildLinesHeader(showLooseQty),
+              rows: lineWidgets,
+            ),
         ]),
       ),
     );

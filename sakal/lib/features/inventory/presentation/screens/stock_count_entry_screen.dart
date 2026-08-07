@@ -22,6 +22,7 @@ import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../../master/data/models/item_category_model.dart';
 import '../../../master/data/models/product_model.dart';
@@ -766,6 +767,13 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final rows = _filteredLines;
     final countedN = _lines.where((l) => l.isCounted).length;
+    // Computed once, then embedded either as a plain vertical spread
+    // (mobile) or wrapped in SakalScrollableTable (desktop) below — a
+    // desktop table this wide can exceed real desktop widths, not just
+    // narrow test viewports, so horizontal scroll is the fix here (see
+    // CLAUDE.md's "Line-items grid" pattern). Each row already carries its
+    // own highlight-border Container from _buildWorksheetRow — unchanged.
+    final lineWidgets = rows.map((r) => _buildWorksheetRow(r, locked, showLooseQty, isMobile)).toList();
 
     final scanField = SakalFieldCard(
       label: 'Scan Barcode/Part Number', editable: !locked,
@@ -804,13 +812,16 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
             SizedBox(width: 240, child: searchField),
           ]),
           const SizedBox(height: 10),
-          if (!isMobile) _buildLinesHeader(showLooseQty),
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 600),
-            child: ListView.builder(
+            child: SingleChildScrollView(
               controller: _scrollController,
-              itemCount: rows.length,
-              itemBuilder: (context, i) => _buildWorksheetRow(rows[i], locked, showLooseQty, isMobile),
+              child: isMobile
+                  ? Column(children: lineWidgets)
+                  : SakalScrollableTable(
+                      header: _buildLinesHeader(showLooseQty),
+                      rows: lineWidgets,
+                    ),
             ),
           ),
         ]),

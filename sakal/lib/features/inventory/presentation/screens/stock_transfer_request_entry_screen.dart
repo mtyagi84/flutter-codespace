@@ -22,6 +22,7 @@ import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/stock_transfer_request_repository.dart';
 import '../providers/stock_transfer_request_providers.dart';
@@ -567,6 +568,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
     // doesn't apply, so columns stay aligned. See "Line-items grid" pattern
     // in CLAUDE.md.
     final showTransferredColumn = _lines.any((l) => l.transferredQty > 0);
+    final lineWidgets = _lines.asMap().entries.map((e) => _buildLineCard(e.value, e.key, locked, showLooseQty, showBarcode, isMobile, showTransferredColumn)).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -578,10 +580,13 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
         if (_lines.isEmpty)
           const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No lines yet — add a product.',
               style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
-        else ...[
-          if (!isMobile) _buildLinesHeader(showLooseQty, showBarcode, showTransferredColumn),
-          ..._lines.asMap().entries.map((e) => _buildLineCard(e.value, e.key, locked, showLooseQty, showBarcode, isMobile, showTransferredColumn)),
-        ],
+        else if (isMobile)
+          ...lineWidgets
+        else
+          SakalScrollableTable(
+            header: _buildLinesHeader(showLooseQty, showBarcode, showTransferredColumn),
+            rows: lineWidgets,
+          ),
       ],
     );
   }

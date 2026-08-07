@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/config/master_type_keys.dart';
+import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
 import 'package:sakal/core/widgets/sakal_field_card.dart';
@@ -32,6 +33,26 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
+
+/// The screen's title/subtitle/badge no longer render as body text — they're
+/// posted to the shared TopBar via ScreenHeaderMixin (screen_header.dart),
+/// and pumpApp() doesn't include a TopBar in its pumped tree at all. Read
+/// the posted ScreenHeaderInfo back from the provider instead of searching
+/// for rendered text — this is the actual observable contract the screen
+/// provides now.
+ScreenHeaderInfo? _readHeader(WidgetTester tester, Finder screenFinder) =>
+    ProviderScope.containerOf(tester.element(screenFinder)).read(screenHeaderProvider);
+
+/// Forces a viewport narrower than the app's 600px mobile breakpoint —
+/// flutter_test's own default (~800x600) falls on the DESKTOP side of that
+/// threshold, so the Lines section's isMobile branch (SakalLineItemCard,
+/// "N. Title" text) would otherwise never render; these tests were written
+/// against that mobile-card shape.
+void _useMobileViewport(WidgetTester tester) {
+  tester.view.physicalSize = const Size(400, 1600);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
 
 void main() {
   late MockGrnRepository mockRepo;
@@ -109,8 +130,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('New Goods Receipt'), findsOneWidget);
-      expect(find.text('Unsaved draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(GrnEntryScreen));
+      expect(header?.title, 'New Goods Receipt');
+      expect(header?.subtitle, 'Unsaved draft');
       expect(_findFieldLabel('RECEIPT MODE'), findsOneWidget);
       expect(_findFieldLabel('GRN NO'), findsOneWidget);
       expect(_findFieldLabel('GRN DATE'), findsOneWidget);
@@ -224,6 +246,7 @@ void main() {
 
     testWidgets('loads and displays every field from the saved header and line', (tester) async {
       stubExistingDraft();
+      _useMobileViewport(tester);
 
       await pumpApp(
         tester,
@@ -235,8 +258,12 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('Goods Receipt · GRN-001'), findsOneWidget);
-      expect(find.text('Draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(GrnEntryScreen));
+      expect(header?.title, 'Goods Receipt · GRN-001');
+      // A still-DRAFT (unlocked) resumed GRN shows 'Draft' as the
+      // subtitle, not badgeText — badgeText only populates once locked
+      // (status != DRAFT), per buildScreenHeader()'s own contract.
+      expect(header?.subtitle, 'Draft');
       expect(find.text('[SUP-001] Test Supplier'), findsOneWidget); // Supplier autocomplete field text
       expect(find.text('Main Warehouse'), findsOneWidget); // Location dropdown
       expect(find.text('USD — US Dollar'), findsOneWidget); // Currency dropdown
@@ -418,6 +445,7 @@ void main() {
             locationId: any(named: 'locationId'),
           )).thenAnswer((_) async => null);
 
+      _useMobileViewport(tester);
       await pumpApp(tester, const GrnEntryScreen(), overrides: overrides(), session: testSession());
       await tester.pumpAndSettle();
 
@@ -578,6 +606,7 @@ void main() {
         'switching to Against PO, picking a supplier then a PO consolidates its pending line into the grid',
         (tester) async {
       stubAgainstPoWizard();
+      _useMobileViewport(tester);
 
       await pumpApp(tester, const GrnEntryScreen(), overrides: overrides(), session: testSession());
       await tester.pumpAndSettle();
@@ -620,6 +649,7 @@ void main() {
             charges: any(named: 'charges'),
           )).thenAnswer((_) async {});
 
+      _useMobileViewport(tester);
       await pumpApp(tester, const GrnEntryScreen(), overrides: overrides(), session: testSession());
       await tester.pumpAndSettle();
 

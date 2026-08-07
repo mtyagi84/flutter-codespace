@@ -25,6 +25,7 @@ import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_financial_summary_card.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
+import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../domain/repositories/sales_order_repository.dart';
 import '../providers/sales_order_providers.dart';
 import '../widgets/prospect_conversion_dialog.dart';
@@ -1485,6 +1486,16 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     // grid" mandatory pattern in CLAUDE.md).
     final showStock = _lines.any((r) => r.productId != null);
     final showDiscFrozen = _lines.any((r) => r.discountPct > 0);
+    // Computed once (only for whichever mode is active), then embedded
+    // either as a plain vertical spread (mobile) or wrapped in
+    // SakalScrollableTable (desktop) below — a desktop table this wide can
+    // exceed real desktop widths, not just narrow test viewports, and a
+    // Row/Column can't reflow its own columns onto multiple lines and stay
+    // a valid table, so horizontal scroll is the fix here (see CLAUDE.md's
+    // "Line-items grid" pattern).
+    final lineWidgets = _isAgainstQuotation
+        ? _lines.asMap().entries.map((e) => _buildQuotationLineRow(e.value, e.key, locked, isMobile, showDiscFrozen)).toList()
+        : _lines.asMap().entries.map((e) => _buildDirectLineRow(e.value, e.key, locked, showLooseQty, showBarcode, isMobile, showStock)).toList();
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -1499,13 +1510,18 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
           if (_lines.isEmpty)
             const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No lines yet.',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
-          else if (_isAgainstQuotation) ...[
-            if (!isMobile) _buildQuotationLinesHeader(showDiscFrozen),
-            ..._lines.asMap().entries.map((e) => _buildQuotationLineRow(e.value, e.key, locked, isMobile, showDiscFrozen)),
-          ] else ...[
-            if (!isMobile) _buildDirectLinesHeader(showLooseQty, showBarcode, showStock),
-            ..._lines.asMap().entries.map((e) => _buildDirectLineRow(e.value, e.key, locked, showLooseQty, showBarcode, isMobile, showStock)),
-          ],
+          else if (isMobile)
+            ...lineWidgets
+          else if (_isAgainstQuotation)
+            SakalScrollableTable(
+              header: _buildQuotationLinesHeader(showDiscFrozen),
+              rows: lineWidgets,
+            )
+          else
+            SakalScrollableTable(
+              header: _buildDirectLinesHeader(showLooseQty, showBarcode, showStock),
+              rows: lineWidgets,
+            ),
         ]),
       ),
     );

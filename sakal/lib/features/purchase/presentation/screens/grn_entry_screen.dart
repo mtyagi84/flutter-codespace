@@ -24,6 +24,7 @@ import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_financial_summary_card.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/grn_repository.dart';
 import '../providers/grn_providers.dart';
@@ -1559,6 +1560,10 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
   Widget _buildLinesSection(bool locked, bool isMobile) {
     final companyEnablesBarcode = ref.read(sessionProvider)?.enableBarcode ?? false;
     final showLooseQty = (ref.read(sessionProvider)?.qtyEntryMode ?? 'PACK_AND_LOOSE') != 'PACK_ONLY';
+    // Computed once, then embedded either as a plain vertical spread
+    // (mobile) or wrapped in SakalScrollableTable (desktop) below — see
+    // CLAUDE.md's "Line-items grid" mandatory pattern.
+    final lineWidgets = _lines.asMap().entries.map((e) => _buildLineCard(e.value, e.key, locked, isMobile)).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1570,10 +1575,13 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
         const SizedBox(height: 8),
         if (_lines.isEmpty)
           const Padding(padding: EdgeInsets.all(16), child: Text('No line items yet.'))
-        else ...[
-          if (!isMobile) _buildLinesHeader(companyEnablesBarcode, showLooseQty),
-          ..._lines.asMap().entries.map((e) => _buildLineCard(e.value, e.key, locked, isMobile)),
-        ],
+        else if (isMobile)
+          ...lineWidgets
+        else
+          SakalScrollableTable(
+            header: _buildLinesHeader(companyEnablesBarcode, showLooseQty),
+            rows: lineWidgets,
+          ),
       ],
     );
   }

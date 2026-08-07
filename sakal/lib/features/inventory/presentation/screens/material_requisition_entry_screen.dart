@@ -22,6 +22,7 @@ import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/material_requisition_repository.dart';
 import '../providers/material_requisition_providers.dart';
@@ -612,7 +613,9 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
     );
   }
 
-  Widget _buildLinesSection(bool locked, bool isMobile, bool showLooseQty, bool showBarcode) => Column(
+  Widget _buildLinesSection(bool locked, bool isMobile, bool showLooseQty, bool showBarcode) {
+    final lineWidgets = _lines.asMap().entries.map((e) => _buildLineCard(e.value, e.key, locked, isMobile, showLooseQty, showBarcode)).toList();
+    return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Row(children: [
@@ -624,12 +627,16 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
       if (_lines.isEmpty)
         const Padding(padding: EdgeInsets.all(16), child: Text('No lines yet — add a product.',
             style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
-      else ...[
-        if (!isMobile) _buildLinesHeader(showLooseQty, showBarcode),
-        ..._lines.asMap().entries.map((e) => _buildLineCard(e.value, e.key, locked, isMobile, showLooseQty, showBarcode)),
-      ],
+      else if (isMobile)
+        ...lineWidgets
+      else
+        SakalScrollableTable(
+          header: _buildLinesHeader(showLooseQty, showBarcode),
+          rows: lineWidgets,
+        ),
     ],
   );
+  }
 
   // Header row for the desktop line-items table — same widths as
   // _buildLineCard's own desktop Row below, so the dark SakalTableHeaderBar

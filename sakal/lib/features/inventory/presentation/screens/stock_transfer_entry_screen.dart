@@ -23,6 +23,7 @@ import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/stock_transfer_repository.dart';
 import '../providers/stock_transfer_providers.dart';
@@ -1022,6 +1023,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
     // so columns stay aligned. See "Line-items grid" pattern in CLAUDE.md.
     final showCostColumn   = _lines.any((l) => l.costPriceHint > 0);
     final showChargeColumn = _lines.any((l) => l.chargeAmount > 0);
+    final lineWidgets = _lines.map((row) => _buildLineCard(row, locked, showLooseQty, showBarcode, isMobile, showCostColumn, showChargeColumn)).toList();
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -1037,10 +1039,13 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
             Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(
                 _mode == 'AGAINST_REQUEST' ? 'No lines yet — pick a request above.' : 'No lines yet — add a product.',
                 style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)))
-          else ...[
-            if (!isMobile) _buildLinesHeader(showLooseQty, showBarcode, showCostColumn, showChargeColumn),
-            ..._lines.map((row) => _buildLineCard(row, locked, showLooseQty, showBarcode, isMobile, showCostColumn, showChargeColumn)),
-          ],
+          else if (isMobile)
+            ...lineWidgets
+          else
+            SakalScrollableTable(
+              header: _buildLinesHeader(showLooseQty, showBarcode, showCostColumn, showChargeColumn),
+              rows: lineWidgets,
+            ),
         ]),
       ),
     );

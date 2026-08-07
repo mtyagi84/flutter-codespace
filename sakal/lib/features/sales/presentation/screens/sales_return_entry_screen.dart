@@ -23,6 +23,7 @@ import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
+import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../domain/repositories/sales_return_repository.dart';
 import '../providers/sales_return_providers.dart';
 
@@ -1087,6 +1088,13 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
     // computed once so the header (fixed columns) and every row stay
     // column-aligned instead of drifting per-line.
     final showAlreadyReturned = _lines.any((r) => r.alreadyReturned > 0);
+    // Computed once, then embedded either as a plain vertical spread
+    // (mobile) or wrapped in SakalScrollableTable (desktop) below — a
+    // desktop table this wide can exceed real desktop widths, not just
+    // narrow test viewports, and a Row/Column can't reflow its own
+    // columns onto multiple lines and stay a valid table, so horizontal
+    // scroll is the fix here (see CLAUDE.md's "Line-items grid" pattern).
+    final lineWidgets = _lines.map((row) => _buildLineCard(row, locked, showLooseQty, isMobile, showAlreadyReturned)).toList();
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -1103,10 +1111,13 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
           else if (_lines.isEmpty)
             const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No lines yet — pick an invoice above.',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
-          else ...[
-            if (!isMobile) _buildLinesHeader(showLooseQty, showAlreadyReturned),
-            ..._lines.map((row) => _buildLineCard(row, locked, showLooseQty, isMobile, showAlreadyReturned)),
-          ],
+          else if (isMobile)
+            ...lineWidgets
+          else
+            SakalScrollableTable(
+              header: _buildLinesHeader(showLooseQty, showAlreadyReturned),
+              rows: lineWidgets,
+            ),
         ]),
       ),
     );

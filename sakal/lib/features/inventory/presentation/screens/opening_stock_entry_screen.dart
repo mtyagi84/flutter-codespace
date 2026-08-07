@@ -25,6 +25,7 @@ import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/opening_stock_repository.dart';
 import '../providers/opening_stock_providers.dart';
@@ -779,6 +780,7 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
     // columns stay aligned. See "Line-items grid" pattern in CLAUDE.md.
     final showBatchColumns = _lines.any((l) => l.isBatchTracked);
     final showSerialColumn = _lines.any((l) => l.isSerialTracked);
+    final lineWidgets = _lines.asMap().entries.map((e) => _buildLineCard(e.value, e.key, locked, showLooseQty, isMobile, showBatchColumns, showSerialColumn)).toList();
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -793,10 +795,13 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
           if (_lines.isEmpty)
             const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No lines yet — add a product, scan a barcode, or upload an Excel file.',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary)))
-          else ...[
-            if (!isMobile) _buildLinesHeader(showLooseQty, showBatchColumns, showSerialColumn),
-            ..._lines.asMap().entries.map((e) => _buildLineCard(e.value, e.key, locked, showLooseQty, isMobile, showBatchColumns, showSerialColumn)),
-          ],
+          else if (isMobile)
+            ...lineWidgets
+          else
+            SakalScrollableTable(
+              header: _buildLinesHeader(showLooseQty, showBatchColumns, showSerialColumn),
+              rows: lineWidgets,
+            ),
         ]),
       ),
     );
