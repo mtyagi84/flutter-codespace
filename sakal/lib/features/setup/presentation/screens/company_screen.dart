@@ -7,6 +7,7 @@ import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../../core/widgets/sakal_field_row.dart';
 
 class CompanyScreen extends ConsumerStatefulWidget {
   const CompanyScreen({super.key});
@@ -1135,24 +1136,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
         // down to one character per line on mobile — stack full-width
         // instead of forcing three columns into a phone screen.
         Builder(builder: (context) {
-          if (Responsive.isMobile(context)) {
-            return Column(children: [
-              logo,
-              const SizedBox(height: 16),
-              watermark,
-              const SizedBox(height: 16),
-              stamp,
-            ]);
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: logo),
-              const SizedBox(width: 16),
-              Expanded(child: watermark),
-              const SizedBox(width: 16),
-              Expanded(child: stamp),
-            ],
+          return SakalFieldRow(
+            isMobile: Responsive.isMobile(context),
+            children: [logo, watermark, stamp],
           );
         }),
       ],

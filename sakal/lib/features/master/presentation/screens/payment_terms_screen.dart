@@ -161,7 +161,11 @@ class _PaymentTermsScreenState extends ConsumerState<PaymentTermsScreen>
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1000),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            // stretch — a non-stretch Column only sizes each child to its
+            // own intrinsic width, so the Card below (no explicit width)
+            // silently shrink-wraps at narrower viewports (same bug as
+            // backdated_entry_control_screen.dart).
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (isMobile) ...[
                 const Text('Payment Terms',

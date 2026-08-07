@@ -423,7 +423,7 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildHeader(isMobile, offline),
               const SizedBox(height: 16),
@@ -456,10 +456,16 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
               ),
               const SizedBox(height: 12),
               for (var i = 0; i < _rows.length; i++) _buildRowCard(i),
-              OutlinedButton.icon(
-                onPressed: _addRow,
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Add Row'),
+              // Align — the outer Column is now `stretch` (for the Card
+              // children above), which would otherwise force this button
+              // to the full row width instead of its own intrinsic size.
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: _addRow,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add Row'),
+                ),
               ),
               const SizedBox(height: 40),
             ],

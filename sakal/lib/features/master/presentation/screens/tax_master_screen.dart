@@ -830,6 +830,7 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
 
   Widget _rateFormRow() {
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
+    final mobile = Responsive.isMobile(context);
     return Padding(
     padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
     child: Card(
@@ -840,42 +841,31 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
           Text(_editingRate == null ? 'Add Rate' : 'Edit Rate',
               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
           const SizedBox(height: 10),
-          Row(children: [
+          SakalFieldRow(isMobile: mobile, children: [
             // Rate Label
-            SizedBox(width: 130,
-              child: DropdownButtonFormField<String>(
-                initialValue: _rateLabel,
-                isDense: true,
-                decoration: const InputDecoration(labelText: 'Label', isDense: true),
-                items: ['STANDARD','REDUCED','ZERO','EXEMPT','SPECIAL']
-                    .map((l) => DropdownMenuItem(value: l, child: Text(l, style: const TextStyle(fontSize: 12))))
-                    .toList(),
-                onChanged: (v) => setState(() => _rateLabel = v!),
-              ),
+            DropdownButtonFormField<String>(
+              initialValue: _rateLabel,
+              isDense: true,
+              decoration: const InputDecoration(labelText: 'Label', isDense: true),
+              items: ['STANDARD','REDUCED','ZERO','EXEMPT','SPECIAL']
+                  .map((l) => DropdownMenuItem(value: l, child: Text(l, style: const TextStyle(fontSize: 12))))
+                  .toList(),
+              onChanged: (v) => setState(() => _rateLabel = v!),
             ),
-            const SizedBox(width: 8),
-            SizedBox(width: 90,
-              child: TextFormField(
-                controller: _rateCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Rate %', isDense: true),
-              ),
+            TextFormField(
+              controller: _rateCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Rate %', isDense: true),
             ),
-            const SizedBox(width: 8),
-            SizedBox(width: 120,
-              child: TextFormField(
-                controller: _rateFromCtrl,
-                decoration: const InputDecoration(labelText: 'Effective From', isDense: true,
-                    hintText: 'YYYY-MM-DD'),
-              ),
+            TextFormField(
+              controller: _rateFromCtrl,
+              decoration: const InputDecoration(labelText: 'Effective From', isDense: true,
+                  hintText: 'YYYY-MM-DD'),
             ),
-            const SizedBox(width: 8),
-            SizedBox(width: 120,
-              child: TextFormField(
-                controller: _rateToCtrl,
-                decoration: const InputDecoration(labelText: 'Effective To', isDense: true,
-                    hintText: 'YYYY-MM-DD'),
-              ),
+            TextFormField(
+              controller: _rateToCtrl,
+              decoration: const InputDecoration(labelText: 'Effective To', isDense: true,
+                  hintText: 'YYYY-MM-DD'),
             ),
           ]),
           const SizedBox(height: 6),

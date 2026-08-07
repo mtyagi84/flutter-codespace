@@ -228,7 +228,7 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // ── Header ────────────────────────────────────────────────
               Row(

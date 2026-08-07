@@ -167,7 +167,7 @@ class _PrintTemplateListScreenState extends ConsumerState<PrintTemplateListScree
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1000),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(children: [
                 const Expanded(
@@ -190,19 +190,25 @@ class _PrintTemplateListScreenState extends ConsumerState<PrintTemplateListScree
               ]),
               const SizedBox(height: 16),
 
-              SizedBox(
-                width: 260,
-                child: DropdownButtonFormField<String?>(
-                  decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10), labelText: 'Document Type'),
-                  isExpanded: true,
-                  initialValue: _filterDocType,
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('All document types')),
-                    ...PrintFieldRegistry.documentTypes.map((d) => DropdownMenuItem(
-                        value: d, child: Text(PrintFieldRegistry.documentTypeLabel(d)))),
-                  ],
-                  onChanged: (v) { setState(() => _filterDocType = v); _load(); },
+              // Align — the outer Column is now `stretch` (for the Card
+              // below), which would otherwise force this fixed-width filter
+              // to the full row width instead of its own 260px.
+              Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  width: 260,
+                  child: DropdownButtonFormField<String?>(
+                    decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10), labelText: 'Document Type'),
+                    isExpanded: true,
+                    initialValue: _filterDocType,
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('All document types')),
+                      ...PrintFieldRegistry.documentTypes.map((d) => DropdownMenuItem(
+                          value: d, child: Text(PrintFieldRegistry.documentTypeLabel(d)))),
+                    ],
+                    onChanged: (v) { setState(() => _filterDocType = v); _load(); },
+                  ),
                 ),
               ),
               const SizedBox(height: 20),

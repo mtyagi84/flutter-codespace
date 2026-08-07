@@ -544,7 +544,11 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
                 child: Form(
                   key: _formKey,
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    // stretch — a non-stretch Column only sizes each child
+                    // to its own intrinsic width, so the _SectionCard
+                    // (Card, no explicit width) sections below silently
+                    // shrink-wrap instead of filling the 900px form width.
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       // ── Page header ─────────────────────────────────────
                       isMobile

@@ -248,7 +248,7 @@ class _PeriodCloseScreenState extends ConsumerState<PeriodCloseScreen>
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 900),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(children: [
                 const Expanded(

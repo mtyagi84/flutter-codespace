@@ -406,7 +406,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // ── Page header ───────────────────────────────────────────
               const Text('User Permissions',
