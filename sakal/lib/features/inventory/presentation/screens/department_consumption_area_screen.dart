@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
@@ -31,8 +32,32 @@ class DepartmentConsumptionAreaScreen extends ConsumerStatefulWidget {
 }
 
 class _DepartmentConsumptionAreaScreenState extends ConsumerState<DepartmentConsumptionAreaScreen>
-    with ScreenPermissionMixin<DepartmentConsumptionAreaScreen> {
+    with ScreenPermissionMixin<DepartmentConsumptionAreaScreen>, ScreenHeaderMixin<DepartmentConsumptionAreaScreen> {
   @override String get screenName => RouteNames.departmentConsumptionAreas;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final session = ref.read(sessionProvider);
+    final isOffline = session?.offlineMode ?? false;
+    final canEdit = !isOffline && canAdd;
+    return ScreenHeaderInfo(
+      title: 'Consumption Area Setup',
+      subtitle: 'Link each Consumption Area to one Department and one expense account',
+      actions: (canEdit && !_loading)
+          ? [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilledButton(
+                  onPressed: _saving ? null : _saveAll,
+                  child: _saving
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Save'),
+                ),
+              ),
+            ]
+          : const [],
+    );
+  }
 
   DepartmentConsumptionAreaRepository get _ds => ref.read(departmentConsumptionAreaRepositoryProvider);
 
@@ -172,37 +197,22 @@ class _DepartmentConsumptionAreaScreenState extends ConsumerState<DepartmentCons
     final isMobile  = Responsive.isMobile(context);
     final canEdit   = !isOffline && canAdd;
 
+    // Title/subtitle/Save button live in the shared TopBar via
+    // ScreenHeaderMixin (see CLAUDE.md's "Screen header" pattern) — not
+    // rendered here as body content.
+    refreshScreenHeader();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Consumption Area Setup', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-                SizedBox(height: 2),
-                Text('Link each Consumption Area to one Department and one expense account',
-                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              ]),
-            ),
-            if (canEdit && !_loading) FilledButton(
-              onPressed: _saving ? null : _saveAll,
-              child: _saving
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Save'),
-            ),
-          ]),
-        ),
-        const Divider(height: 20),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : isOffline
                   ? const Center(child: Text('This screen needs a live connection.', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)))
                   : SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
+                      padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         if (_error != null) ...[
                           Container(

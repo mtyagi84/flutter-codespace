@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -118,8 +119,22 @@ class StockCountEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
-    with ScreenPermissionMixin<StockCountEntryScreen> {
+    with ScreenPermissionMixin<StockCountEntryScreen>, ScreenHeaderMixin<StockCountEntryScreen> {
   @override String get screenName => RouteNames.stockCount;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final locked = _status != 'DRAFT';
+    final statusColor = _status == 'SUBMITTED' ? AppColors.secondary : AppColors.positive;
+    return ScreenHeaderInfo(
+      title: _countNo != null ? 'Stock Count · $_countNo' : 'New Stock Count',
+      subtitle: locked ? null : (_countNo != null ? 'Draft' : 'Unsaved draft'),
+      badgeText: locked ? _status : null,
+      badgeColor: locked ? statusColor : null,
+      trailingBadge: _countNo != null ? PendingSyncBadge(documentType: 'STOCK_COUNT', documentId: _countNo!) : null,
+      actions: _countNo != null ? [_buildPrintButton()] : const [],
+    );
+  }
 
   StockCountRepository get _ds => ref.read(stockCountRepositoryProvider);
 
@@ -573,30 +588,20 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
     final showSubmit  = _status == 'DRAFT' && canApprove && _hasStarted;
     final locked      = _status != 'DRAFT';
 
+    // Title/subtitle/status-badge/Print now live in the shared TopBar via
+    // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. Save/
+    // Submit stay here as a slim body row.
+    refreshScreenHeader();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: isMobile
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _buildTitleBlock(),
-                  if (_countNo != null || (canSave && _hasStarted) || showSubmit) ...[
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      if (_countNo != null) _buildPrintButton(),
-                      if ((canSave && _hasStarted) || showSubmit) Expanded(child: _buildActionButtons(canSave: canSave && _hasStarted, canSubmit: showSubmit)),
-                    ]),
-                  ],
-                ])
-              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(child: _buildTitleBlock()),
-                  if (_countNo != null) _buildPrintButton(),
-                  if ((canSave && _hasStarted) || showSubmit) _buildActionButtons(canSave: canSave && _hasStarted, canSubmit: showSubmit),
-                ]),
-        ),
-        const Divider(height: 20),
+        if ((canSave && _hasStarted) || showSubmit)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+            child: _buildActionButtons(canSave: canSave && _hasStarted, canSubmit: showSubmit),
+          ),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
@@ -622,35 +627,6 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
                 ),
         ),
       ],
-    );
-  }
-
-  // A plain Column (not a Row wrapping a single Column child) — a Row gives
-  // a non-flex child unbounded main-axis width, so the Text below never
-  // wraps and silently overflows on a narrow phone. See CLAUDE.md's "Row &
-  // Column layout distribution" rule; real bug caught live 2026-08-07.
-  Widget _buildTitleBlock() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(_countNo != null ? 'Stock Count · $_countNo' : 'New Stock Count',
-          overflow: TextOverflow.ellipsis, maxLines: 1,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-      const SizedBox(height: 2),
-      Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 4, children: [
-        _status != 'DRAFT' ? _statusChip(_status) : Text(_countNo != null ? 'Draft' : 'Unsaved draft',
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-        if (_countNo != null) PendingSyncBadge(documentType: 'STOCK_COUNT', documentId: _countNo!),
-      ]),
-    ],
-  );
-
-  Widget _statusChip(String status) {
-    final color = status == 'SUBMITTED' ? AppColors.secondary : AppColors.positive;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(4)),
-      child: Text(status, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
     );
   }
 
