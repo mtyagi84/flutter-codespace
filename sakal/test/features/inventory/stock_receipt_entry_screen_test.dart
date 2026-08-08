@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
 import 'package:sakal/features/inventory/domain/repositories/stock_receipt_repository.dart';
 import 'package:sakal/features/inventory/presentation/providers/stock_receipt_providers.dart';
@@ -23,6 +24,14 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
+
+/// The screen's title/subtitle/badge no longer render as body text — they're
+/// posted to the shared TopBar via ScreenHeaderMixin (screen_header.dart),
+/// and pumpApp() doesn't include a TopBar in its pumped tree at all. Read
+/// the posted ScreenHeaderInfo back from the provider instead of searching
+/// for rendered text.
+ScreenHeaderInfo? _readHeader(WidgetTester tester, Finder screenFinder) =>
+    ProviderScope.containerOf(tester.element(screenFinder)).read(screenHeaderProvider);
 
 void main() {
   late MockStockReceiptRepository mockRepo;
@@ -52,8 +61,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('New Stock Receipt'), findsOneWidget);
-      expect(find.text('Unsaved draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(StockReceiptEntryScreen));
+      expect(header?.title, 'New Stock Receipt');
+      expect(header?.subtitle, 'Unsaved draft');
       expect(_findFieldLabel('SOURCE TRANSFER'), findsOneWidget);
       expect(find.text('(select below)'), findsOneWidget);
       expect(_findFieldLabel('FROM LOCATION'), findsOneWidget);
@@ -74,7 +84,7 @@ void main() {
       expect(find.text('Add Line'), findsNothing);
 
       expect(find.text('Save Draft'), findsOneWidget);
-      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(header?.actions, isEmpty);
       expect(find.text('Approve'), findsNothing);
     });
 
@@ -152,8 +162,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Stock Receipt · SRC-001'), findsOneWidget);
-      expect(find.text('Draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(StockReceiptEntryScreen));
+      expect(header?.title, 'Stock Receipt · SRC-001');
+      expect(header?.subtitle, 'Draft');
       expect(find.text('ST-001'), findsOneWidget); // Source Transfer read-only value
       expect(find.text('Main Warehouse'), findsOneWidget);
       expect(find.text('Branch Store'), findsOneWidget);

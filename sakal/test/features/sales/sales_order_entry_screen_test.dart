@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
 import 'package:sakal/core/widgets/sakal_field_card.dart';
@@ -41,6 +42,14 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
+
+/// The screen's title/subtitle/badge no longer render as body text — they're
+/// posted to the shared TopBar via ScreenHeaderMixin (screen_header.dart),
+/// and pumpApp() doesn't include a TopBar in its pumped tree at all. Read
+/// the posted ScreenHeaderInfo back from the provider instead of searching
+/// for rendered text.
+ScreenHeaderInfo? _readHeader(WidgetTester tester, Finder screenFinder) =>
+    ProviderScope.containerOf(tester.element(screenFinder)).read(screenHeaderProvider);
 
 /// Forces a viewport narrower than the app's 600px mobile breakpoint —
 /// flutter_test's own default (~800x600) falls on the DESKTOP side of that
@@ -158,8 +167,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('New Sales Order'), findsOneWidget);
-      expect(find.text('Unsaved draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(SalesOrderEntryScreen));
+      expect(header?.title, 'New Sales Order');
+      expect(header?.subtitle, 'Unsaved draft');
 
       expect(_findFieldLabel('ORDER NO'), findsOneWidget);
       expect(_findFieldLabel('ORDER DATE'), findsOneWidget);
@@ -195,7 +205,7 @@ void main() {
       expect(find.text('Save Draft'), findsOneWidget);
       // A brand-new, never-saved order has no order number yet, so no
       // print button, no approve button, and no cancel button.
-      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(header?.actions, isEmpty);
       expect(find.text('Approve'), findsNothing);
       expect(find.text('Cancel Order'), findsNothing);
     });
@@ -306,11 +316,12 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('Sales Order · SO-001'), findsOneWidget);
-      // _buildTitleBlock calls _statusChip(_status) directly whenever
-      // _orderNo != null, regardless of status value — for a still-DRAFT
-      // resumed order that renders the literal 'DRAFT' (all caps).
-      expect(find.text('DRAFT'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(SalesOrderEntryScreen));
+      expect(header?.title, 'Sales Order · SO-001');
+      // buildScreenHeader's badgeText is _status.replaceAll('_', ' ')
+      // whenever _orderNo != null, regardless of status value — for a
+      // still-DRAFT resumed order that renders the literal 'DRAFT' (all caps).
+      expect(header?.badgeText, 'DRAFT');
       expect(find.text('[CUS01] Customer One'), findsOneWidget); // Customer autocomplete field text
       expect(find.text('Main Warehouse'), findsOneWidget); // Location dropdown
       expect(find.text('USD'), findsOneWidget); // Currency dropdown — bare currency_id
@@ -328,7 +339,7 @@ void main() {
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Approve'), findsNothing); // canApprove defaults false from the harness's empty menuProvider
       expect(find.text('Cancel Order'), findsNothing); // showCancel also gated on canApprove
-      expect(find.byIcon(Icons.print_outlined), findsOneWidget); // a saved order is printable
+      expect(header?.actions.length, 1); // a saved order is printable
     });
 
     testWidgets('editing remarks and saving calls the repository with the updated payload', (tester) async {
@@ -587,10 +598,12 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
       // order_no is only assigned on Save -- still an unsaved draft, but
-      // tagged with its AGAINST_QUOTATION source.
-      expect(find.text('New Sales Order'), findsOneWidget);
-      expect(find.text('Unsaved draft'), findsOneWidget);
-      expect(find.text('From SQ-001'), findsOneWidget);
+      // tagged with its AGAINST_QUOTATION source. Subtitle is a single
+      // joined string ('Unsaved draft · From SQ-001'), not two separate
+      // text widgets.
+      final header = _readHeader(tester, find.byType(SalesOrderEntryScreen));
+      expect(header?.title, 'New Sales Order');
+      expect(header?.subtitle, 'Unsaved draft · From SQ-001');
 
       // Customer + currency carried over from the quotation header, both
       // locked (read-only Customer field / disabled Currency dropdown)

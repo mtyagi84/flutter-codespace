@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
 import 'package:sakal/core/utils/app_number_format.dart';
@@ -37,6 +38,16 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
+
+/// The screen's title/subtitle/badge no longer render as body text — they're
+/// posted to the shared TopBar via ScreenHeaderMixin (screen_header.dart),
+/// and pumpApp() doesn't include a TopBar in its pumped tree at all. Read
+/// the posted ScreenHeaderInfo back from the provider instead of searching
+/// for rendered text. This screen's own subtitle is a `join(' · ')` of
+/// several parts (Unsaved/Cash-Credit/From-quotation/From-order) — assert
+/// the full joined string, not a fragment.
+ScreenHeaderInfo? _readHeader(WidgetTester tester, Finder screenFinder) =>
+    ProviderScope.containerOf(tester.element(screenFinder)).read(screenHeaderProvider);
 
 void main() {
   late MockSalesInvoiceRepository mockRepo;
@@ -148,9 +159,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('New Quick Invoice'), findsOneWidget);
-      expect(find.text('Unsaved'), findsOneWidget);
-      expect(find.text('Cash Sale'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(SalesInvoiceEntryScreen));
+      expect(header?.title, 'New Quick Invoice');
+      expect(header?.subtitle, 'Unsaved · Cash Sale');
 
       // Mode + Sale Type SegmentedButtons — only rendered `if (_isNew)`.
       expect(find.text('Direct'), findsOneWidget);
@@ -206,7 +217,7 @@ void main() {
       // A brand-new, never-saved invoice has no invoice number yet, so no
       // print button; Cancel is gated on `!isOffline && status==DRAFT &&
       // canApprove && !_isNew` — _isNew alone already rules it out here.
-      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(header?.actions, isEmpty);
       expect(find.text('Cancel'), findsNothing);
     });
 
@@ -324,9 +335,10 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('Quick Invoice · SI-001'), findsOneWidget);
-      expect(find.text('DRAFT'), findsOneWidget); // status chip
-      expect(find.text('Cash Sale'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(SalesInvoiceEntryScreen));
+      expect(header?.title, 'Quick Invoice · SI-001');
+      expect(header?.badgeText, 'DRAFT'); // status chip
+      expect(header?.subtitle, 'Cash Sale');
       // New Invoice mode/type SegmentedButtons are only rendered `if
       // (_isNew)` — a resumed, already-saved invoice never shows them.
       expect(find.text('Direct'), findsNothing);
@@ -359,7 +371,7 @@ void main() {
 
       expect(find.text('Save Invoice'), findsOneWidget);
       expect(find.text('Cancel'), findsNothing); // canApprove defaults false from the harness's empty menuProvider
-      expect(find.byIcon(Icons.print_outlined), findsOneWidget); // a saved invoice is printable
+      expect(header?.actions.length, 1); // a saved invoice is printable
     });
 
     testWidgets('editing remarks and saving calls the repository with the updated payload', (tester) async {
@@ -686,7 +698,8 @@ void main() {
 
       // Starts in DIRECT + CASH — the screen's own default for a brand-new
       // invoice (_init()'s own else-branch when no newInvoiceMode is passed).
-      expect(find.text('Cash Sale'), findsOneWidget);
+      var header = _readHeader(tester, find.byType(SalesInvoiceEntryScreen));
+      expect(header?.subtitle, 'Unsaved · Cash Sale');
 
       // The 3-segment Mode SegmentedButton (Direct/Against Quotation/Against
       // Order) sits in the same Wrap row as the 2-segment Sale Type button
@@ -716,7 +729,8 @@ void main() {
       // source's own customer/currency verbatim; the picked doc number now
       // shows as a Chip next to the mode selector (dialog is closed, so
       // this is the only remaining match).
-      expect(find.text('Credit Sale'), findsOneWidget);
+      header = _readHeader(tester, find.byType(SalesInvoiceEntryScreen));
+      expect(header?.subtitle, 'Unsaved · Credit Sale · From SQ-001');
       expect(find.text('SQ-001'), findsOneWidget);
       expect(find.text('[CUS01] Customer One'), findsOneWidget); // read-only Customer field
       expect(find.text('USD'), findsOneWidget); // read-only Currency field

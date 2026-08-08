@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
 import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/inventory/domain/repositories/opening_stock_repository.dart';
@@ -24,6 +25,14 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
+
+/// The screen's title/subtitle/badge no longer render as body text — they're
+/// posted to the shared TopBar via ScreenHeaderMixin (screen_header.dart),
+/// and pumpApp() doesn't include a TopBar in its pumped tree at all. Read
+/// the posted ScreenHeaderInfo back from the provider instead of searching
+/// for rendered text.
+ScreenHeaderInfo? _readHeader(WidgetTester tester, Finder screenFinder) =>
+    ProviderScope.containerOf(tester.element(screenFinder)).read(screenHeaderProvider);
 
 void main() {
   late MockOpeningStockRepository mockRepo;
@@ -56,15 +65,16 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('New Opening Stock'), findsOneWidget);
-      expect(find.text('Unsaved draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(OpeningStockEntryScreen));
+      expect(header?.title, 'New Opening Stock');
+      expect(header?.subtitle, 'Unsaved draft');
       expect(_findFieldLabel('Store / Location'), findsOneWidget);
       expect(_findFieldLabel('Opening Date'), findsOneWidget);
       expect(_findFieldLabel('Remarks'), findsOneWidget);
       expect(find.text('No lines yet — add a product, scan a barcode, or upload an Excel file.'), findsOneWidget);
       expect(find.text('Add Line'), findsOneWidget);
       expect(find.text('Save Draft'), findsOneWidget);
-      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(header?.actions, isEmpty);
       expect(find.text('Approve'), findsNothing);
     });
 
@@ -133,8 +143,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Opening Stock · OPN-001'), findsOneWidget);
-      expect(find.text('Draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(OpeningStockEntryScreen));
+      expect(header?.title, 'Opening Stock · OPN-001');
+      expect(header?.subtitle, 'Draft');
       expect(find.text('Main Warehouse'), findsOneWidget);
       expect(find.text('Original remarks'), findsOneWidget);
       expect(find.textContaining('Widget A'), findsWidgets);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
 import 'package:sakal/features/inventory/domain/repositories/stock_count_repository.dart';
 import 'package:sakal/features/inventory/presentation/providers/stock_count_providers.dart';
@@ -27,6 +28,14 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
+
+/// The screen's title/subtitle/badge no longer render as body text — they're
+/// posted to the shared TopBar via ScreenHeaderMixin (screen_header.dart),
+/// and pumpApp() doesn't include a TopBar in its pumped tree at all. Read
+/// the posted ScreenHeaderInfo back from the provider instead of searching
+/// for rendered text.
+ScreenHeaderInfo? _readHeader(WidgetTester tester, Finder screenFinder) =>
+    ProviderScope.containerOf(tester.element(screenFinder)).read(screenHeaderProvider);
 
 void main() {
   late MockStockCountRepository mockRepo;
@@ -66,8 +75,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('New Stock Count'), findsOneWidget);
-      expect(find.text('Unsaved draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(StockCountEntryScreen));
+      expect(header?.title, 'New Stock Count');
+      expect(header?.subtitle, 'Unsaved draft');
       expect(_findFieldLabel('Count No'), findsOneWidget);
       expect(_findFieldLabel('Store / Location'), findsOneWidget);
       expect(_findFieldLabel('Count Date'), findsOneWidget);
@@ -82,7 +92,7 @@ void main() {
       expect(find.byIcon(Icons.play_arrow), findsOneWidget);
       expect(find.text('Save Draft'), findsNothing);
       expect(find.text('Submit'), findsNothing);
-      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(header?.actions, isEmpty);
     });
 
     testWidgets('blocks Start Count and shows a validation message when no location is selected', (tester) async {
@@ -161,8 +171,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Stock Count · CNT-001'), findsOneWidget);
-      expect(find.text('Draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(StockCountEntryScreen));
+      expect(header?.title, 'Stock Count · CNT-001');
+      expect(header?.subtitle, 'Draft');
       expect(find.text('Main Warehouse'), findsOneWidget);
       expect(find.text('Original remarks'), findsOneWidget);
       expect(find.textContaining('Widget A'), findsWidgets);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
 import 'package:sakal/core/widgets/sakal_field_card.dart';
@@ -35,6 +36,14 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
+
+/// The screen's title/subtitle/badge no longer render as body text — they're
+/// posted to the shared TopBar via ScreenHeaderMixin (screen_header.dart),
+/// and pumpApp() doesn't include a TopBar in its pumped tree at all. Read
+/// the posted ScreenHeaderInfo back from the provider instead of searching
+/// for rendered text.
+ScreenHeaderInfo? _readHeader(WidgetTester tester, Finder screenFinder) =>
+    ProviderScope.containerOf(tester.element(screenFinder)).read(screenHeaderProvider);
 
 /// Forces a viewport narrower than the app's 600px mobile breakpoint —
 /// flutter_test's own default (~800x600) falls on the DESKTOP side of that
@@ -107,8 +116,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('New Price Master Batch'), findsOneWidget);
-      expect(find.text('Unsaved draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(PriceMasterEntryScreen));
+      expect(header?.title, 'New Price Master Batch');
+      expect(header?.subtitle, 'Unsaved draft');
 
       expect(_findFieldLabel('ENTRY NO'), findsOneWidget);
       expect(_findFieldLabel('ENTRY DATE'), findsOneWidget);
@@ -133,7 +143,7 @@ void main() {
       // button; canApprove also defaults false from the harness's empty
       // menuProvider, so no Approve button either.
       expect(find.text('Approve'), findsNothing);
-      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(header?.actions, isEmpty);
     });
 
     testWidgets('blocks save and shows a validation message when no lines are added', (tester) async {
@@ -225,8 +235,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('Sales Price Master · PM-001'), findsOneWidget);
-      expect(find.text('Draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(PriceMasterEntryScreen));
+      expect(header?.title, 'Sales Price Master · PM-001');
+      expect(header?.subtitle, 'Draft');
       expect(find.text('PM-001'), findsOneWidget); // Entry No read-only field
       expect(find.text('20 Jul 2026'), findsOneWidget); // Entry Date
       expect(find.text('25 Jul 2026'), findsOneWidget); // Effective Date
@@ -245,7 +256,7 @@ void main() {
 
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Approve'), findsNothing); // canApprove defaults false from the harness's empty menuProvider
-      expect(find.byIcon(Icons.print_outlined), findsOneWidget); // a saved batch is printable regardless of status
+      expect(header?.actions.length, 1); // a saved batch is printable regardless of status
     });
 
     testWidgets('editing remarks and saving calls the repository with the updated payload', (tester) async {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
 import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/sales/domain/repositories/cash_receipt_repository.dart';
@@ -34,6 +35,14 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
+
+/// The screen's title/subtitle/badge no longer render as body text — they're
+/// posted to the shared TopBar via ScreenHeaderMixin (screen_header.dart),
+/// and pumpApp() doesn't include a TopBar in its pumped tree at all. Read
+/// the posted ScreenHeaderInfo back from the provider instead of searching
+/// for rendered text.
+ScreenHeaderInfo? _readHeader(WidgetTester tester, Finder screenFinder) =>
+    ProviderScope.containerOf(tester.element(screenFinder)).read(screenHeaderProvider);
 
 void main() {
   late MockCashReceiptRepository mockRepo;
@@ -108,8 +117,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('New Cash Receipt'), findsOneWidget);
-      expect(find.text('DRAFT'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(CashReceiptEntryScreen));
+      expect(header?.title, 'New Cash Receipt');
+      expect(header?.badgeText, 'DRAFT');
 
       expect(_findFieldLabel('LOCATION'), findsOneWidget);
       expect(_findFieldLabel('LOCAL CASH ACCOUNT'), findsOneWidget);
@@ -136,7 +146,7 @@ void main() {
       expect(find.text('Save & Collect'), findsOneWidget);
       // A brand-new, never-saved receipt has no receipt number yet, and
       // this screen only ever prints an APPROVED receipt.
-      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(header?.actions, isEmpty);
     });
 
     testWidgets('blocks save and shows a validation message when no customer is selected', (tester) async {
@@ -219,8 +229,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('CR-001'), findsOneWidget); // title is the bare receipt number
-      expect(find.text('DRAFT'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(CashReceiptEntryScreen));
+      expect(header?.title, 'CR-001'); // title is the bare receipt number
+      expect(header?.badgeText, 'DRAFT');
       expect(find.text('Main Branch'), findsOneWidget);
       expect(find.text('[CASH-L] Local Cash'), findsOneWidget);
       expect(find.text('[CASH-B] Base Cash'), findsOneWidget);
@@ -247,7 +258,7 @@ void main() {
       expect(find.text('Save & Collect'), findsOneWidget);
       // Still DRAFT (queued offline, never yet approved) — this screen only
       // prints an APPROVED receipt, even once a receipt number exists.
-      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(header?.actions, isEmpty);
     });
 
     testWidgets('editing remarks and saving calls save+approve with the updated payload', (tester) async {

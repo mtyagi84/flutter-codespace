@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
 import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/sales/domain/repositories/sales_delivery_repository.dart';
@@ -34,6 +35,14 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
+
+/// The screen's title/subtitle/badge no longer render as body text — they're
+/// posted to the shared TopBar via ScreenHeaderMixin (screen_header.dart),
+/// and pumpApp() doesn't include a TopBar in its pumped tree at all. Read
+/// the posted ScreenHeaderInfo back from the provider instead of searching
+/// for rendered text.
+ScreenHeaderInfo? _readHeader(WidgetTester tester, Finder screenFinder) =>
+    ProviderScope.containerOf(tester.element(screenFinder)).read(screenHeaderProvider);
 
 /// Forces a viewport narrower than the app's 600px mobile breakpoint —
 /// flutter_test's own default (~800x600) falls on the DESKTOP side of that
@@ -78,8 +87,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('New Sales Delivery'), findsOneWidget);
-      expect(find.text('Unsaved draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(SalesDeliveryEntryScreen));
+      expect(header?.title, 'New Sales Delivery');
+      expect(header?.subtitle, 'Unsaved draft');
 
       expect(_findFieldLabel('INVOICE *'), findsOneWidget);
       expect(_findFieldLabel('DELIVERY NO'), findsOneWidget);
@@ -103,7 +113,7 @@ void main() {
       expect(find.text('Save Draft'), findsOneWidget);
       // A brand-new, never-saved delivery has no delivery number yet, so no
       // print button and no approve button (approve requires !_isNew).
-      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(header?.actions, isEmpty);
       expect(find.text('Approve'), findsNothing);
     });
 
@@ -219,8 +229,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('Sales Delivery · SD-001'), findsOneWidget);
-      expect(find.text('Draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(SalesDeliveryEntryScreen));
+      expect(header?.title, 'Sales Delivery · SD-001');
+      expect(header?.subtitle, 'Draft');
       expect(find.text('[CUS01] Customer One'), findsOneWidget); // Customer read-only field
       expect(find.text('Main Warehouse'), findsOneWidget); // Dispatch Location
       expect(find.text('20 Jul 2026'), findsOneWidget); // Delivery Date
@@ -242,7 +253,7 @@ void main() {
 
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Approve'), findsNothing); // canApprove defaults false from the harness's empty menuProvider
-      expect(find.byIcon(Icons.print_outlined), findsOneWidget); // a saved delivery is printable
+      expect(header?.actions.length, 1); // a saved delivery is printable
     });
 
     testWidgets('editing remarks and saving calls the repository with the updated payload', (tester) async {
