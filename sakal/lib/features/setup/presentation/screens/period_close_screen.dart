@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/router/route_names.dart';
@@ -27,8 +28,30 @@ class PeriodCloseScreen extends ConsumerStatefulWidget {
 }
 
 class _PeriodCloseScreenState extends ConsumerState<PeriodCloseScreen>
-    with ScreenPermissionMixin<PeriodCloseScreen> {
+    with ScreenPermissionMixin<PeriodCloseScreen>, ScreenHeaderMixin<PeriodCloseScreen> {
   @override String get screenName => RouteNames.periodClose;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
+    return ScreenHeaderInfo(
+      title: 'Period Close',
+      subtitle: 'Lock a date range once it has been filed/reported — no transaction can post '
+          'against a locked period, company-wide, regardless of when it is entered.',
+      actions: (canEdit && !offline)
+          ? [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ElevatedButton.icon(
+                  onPressed: _openLockDialog,
+                  icon: const Icon(Icons.lock_outline, size: 16),
+                  label: const Text('Lock Period'),
+                ),
+              ),
+            ]
+          : const [],
+    );
+  }
 
   List<Map<String, dynamic>> _locks = [];
   bool _loading = true;
@@ -240,6 +263,11 @@ class _PeriodCloseScreenState extends ConsumerState<PeriodCloseScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle + Lock Period action live in the shared TopBar via
+    // ScreenHeaderMixin (see CLAUDE.md's "Screen header" pattern) — not
+    // rendered here as body content.
+    refreshScreenHeader();
+
     final offline  = ref.watch(sessionProvider)?.offlineMode ?? false;
     final isMobile = Responsive.isMobile(context);
     return SingleChildScrollView(
@@ -250,27 +278,6 @@ class _PeriodCloseScreenState extends ConsumerState<PeriodCloseScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(children: [
-                const Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Period Close',
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                    SizedBox(height: 4),
-                    Text(
-                        'Lock a date range once it has been filed/reported — no transaction can post '
-                        'against a locked period, company-wide, regardless of when it is entered.',
-                        style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                  ]),
-                ),
-                if (canEdit && !offline)
-                  ElevatedButton.icon(
-                    onPressed: _openLockDialog,
-                    icon: const Icon(Icons.lock_outline, size: 16),
-                    label: const Text('Lock Period'),
-                  ),
-              ]),
-              const SizedBox(height: 20),
-
               if (offline) const OfflineBanner(),
               if (offline) const SizedBox(height: 16),
 

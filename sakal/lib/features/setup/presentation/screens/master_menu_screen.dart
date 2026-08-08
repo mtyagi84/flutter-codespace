@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -13,7 +14,24 @@ class MasterMenuScreen extends ConsumerStatefulWidget {
   ConsumerState<MasterMenuScreen> createState() => _MasterMenuScreenState();
 }
 
-class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
+class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen>
+    with ScreenHeaderMixin<MasterMenuScreen> {
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: 'Master Menu',
+        subtitle: '${_entries.length} entries · ${_modules.length} modules',
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add Menu Entry'),
+              onPressed: () => _openDialog(),
+            ),
+          ),
+        ],
+      );
+
   List<Map<String, dynamic>> _modules = [];
   List<Map<String, dynamic>> _entries = [];
   bool _loading = true;
@@ -167,6 +185,11 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Title + "Add Menu Entry" action live in the shared TopBar via
+    // ScreenHeaderMixin (see CLAUDE.md's "Screen header" pattern) — not
+    // rendered here as body content.
+    refreshScreenHeader();
+
     if (_loading) return const Center(child: CircularProgressIndicator());
 
     if (_error != null) {
@@ -189,37 +212,6 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Page header ──────────────────────────────────────────
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('Master Menu',
-                          style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary)),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${_entries.length} entries · ${_modules.length} modules',
-                        style: const TextStyle(
-                            fontSize: 13, color: AppColors.textSecondary),
-                      ),
-                    ],
-                  ),
-                ),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add Menu Entry'),
-                  onPressed: () => _openDialog(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
             // ── List: mobile gets cards (an 8-column config table never
             // fits a phone width, and horizontal-scroll-only was reported
             // as hard to use with no visible scroll affordance); desktop

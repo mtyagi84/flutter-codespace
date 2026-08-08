@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/models/menu_models.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
@@ -16,7 +17,14 @@ class PermissionsScreen extends ConsumerStatefulWidget {
   ConsumerState<PermissionsScreen> createState() => _PermissionsScreenState();
 }
 
-class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
+class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
+    with ScreenHeaderMixin<PermissionsScreen> {
+  @override
+  ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(
+        title: 'User Permissions',
+        subtitle: 'Control what each user can view, edit, approve, copy and upload.',
+      );
+
   List<Map<String, dynamic>>         _users    = [];
   // Keyed by feature_code for O(1) toggle updates
   Map<String, Map<String, dynamic>>  _features = {};
@@ -399,6 +407,11 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Title + subtitle live in the shared TopBar via ScreenHeaderMixin (see
+    // CLAUDE.md's "Screen header" pattern) — not rendered here as body
+    // content.
+    refreshScreenHeader();
+
     final isMobile = Responsive.isMobile(context);
     return SingleChildScrollView(
       padding: EdgeInsets.all(isMobile ? 16 : 32),
@@ -408,19 +421,6 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ── Page header ───────────────────────────────────────────
-              const Text('User Permissions',
-                  style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary)),
-              const SizedBox(height: 4),
-              const Text(
-                'Control what each user can view, edit, approve, copy and upload.',
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 24),
-
               if (_error != null && _selectedUserId == null) ...[
                 _ErrorBanner(message: _error!, onRetry: _loadUsers),
                 const SizedBox(height: 20),

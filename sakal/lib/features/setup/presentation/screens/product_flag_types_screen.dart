@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
@@ -16,8 +17,16 @@ class ProductFlagTypesScreen extends ConsumerStatefulWidget {
 }
 
 class _ProductFlagTypesScreenState extends ConsumerState<ProductFlagTypesScreen>
-    with ScreenPermissionMixin<ProductFlagTypesScreen> {
+    with ScreenPermissionMixin<ProductFlagTypesScreen>, ScreenHeaderMixin<ProductFlagTypesScreen> {
   @override String get screenName => '/setup/product-flag-types';
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: 'Product Flag Types',
+        subtitle: '${_flags.length} flags defined  ·  '
+            'These appear as toggles on every category and product.',
+      );
+
   List<ProductFlagTypeModel> _flags   = [];
   bool    _loading = true;
   bool    _saving  = false;
@@ -274,6 +283,13 @@ class _ProductFlagTypesScreenState extends ConsumerState<ProductFlagTypesScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Title + subtitle live in the shared TopBar via ScreenHeaderMixin (see
+    // CLAUDE.md's "Screen header" pattern). The action buttons below stay
+    // in the body — this is a multi-button row (spinner + Load Defaults +
+    // Add Flag can all show at once), which the pattern says must NOT move
+    // into TopBar.actions.
+    refreshScreenHeader();
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: _loading
@@ -283,28 +299,10 @@ class _ProductFlagTypesScreenState extends ConsumerState<ProductFlagTypesScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Header
+                  // Action row
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Product Flag Types',
-                                style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.textPrimary)),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${_flags.length} flags defined  ·  '
-                              'These appear as toggles on every category and product.',
-                              style: const TextStyle(
-                                  fontSize: 13, color: AppColors.textSecondary),
-                            ),
-                          ],
-                        ),
-                      ),
                       if (_saving)
                         const Padding(
                           padding: EdgeInsets.only(right: 12),

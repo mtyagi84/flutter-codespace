@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/printing/print_field_registry.dart';
 import '../../../../core/providers/session_provider.dart';
@@ -26,8 +27,30 @@ class PrintTemplateListScreen extends ConsumerStatefulWidget {
 }
 
 class _PrintTemplateListScreenState extends ConsumerState<PrintTemplateListScreen>
-    with ScreenPermissionMixin<PrintTemplateListScreen> {
+    with ScreenPermissionMixin<PrintTemplateListScreen>, ScreenHeaderMixin<PrintTemplateListScreen> {
   @override String get screenName => RouteNames.printTemplates;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
+    return ScreenHeaderInfo(
+      title: 'Print Templates',
+      subtitle: 'Customize what prints for each document type — layout, fields, and paper size '
+          '(A4/Letter or 58mm/80mm receipt).',
+      actions: (canAdd && !offline)
+          ? [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ElevatedButton.icon(
+                  onPressed: _openNew,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('New Template'),
+                ),
+              ),
+            ]
+          : const [],
+    );
+  }
 
   List<Map<String, dynamic>> _templates = [];
   bool _loading = true;
@@ -159,6 +182,11 @@ class _PrintTemplateListScreenState extends ConsumerState<PrintTemplateListScree
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle + New Template action live in the shared TopBar via
+    // ScreenHeaderMixin (see CLAUDE.md's "Screen header" pattern) — not
+    // rendered here as body content.
+    refreshScreenHeader();
+
     final offline  = ref.watch(sessionProvider)?.offlineMode ?? false;
     final isMobile = Responsive.isMobile(context);
     return SingleChildScrollView(
@@ -169,27 +197,6 @@ class _PrintTemplateListScreenState extends ConsumerState<PrintTemplateListScree
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(children: [
-                const Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Print Templates',
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                    SizedBox(height: 4),
-                    Text(
-                        'Customize what prints for each document type — layout, fields, and paper size '
-                        '(A4/Letter or 58mm/80mm receipt).',
-                        style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                  ]),
-                ),
-                if (canAdd && !offline)
-                  ElevatedButton.icon(
-                    onPressed: _openNew,
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('New Template'),
-                  ),
-              ]),
-              const SizedBox(height: 16),
-
               // Align — the outer Column is now `stretch` (for the Card
               // below), which would otherwise force this fixed-width filter
               // to the full row width instead of its own 260px.

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
@@ -80,8 +81,29 @@ class UsersScreen extends ConsumerStatefulWidget {
 }
 
 class _UsersScreenState extends ConsumerState<UsersScreen>
-    with ScreenPermissionMixin<UsersScreen> {
+    with ScreenPermissionMixin<UsersScreen>, ScreenHeaderMixin<UsersScreen> {
   @override String get screenName => '/setup/users';
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
+    return ScreenHeaderInfo(
+      title: 'User Management',
+      subtitle: 'Manage user accounts for this company.',
+      actions: (canAdd && !offline)
+          ? [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ElevatedButton.icon(
+                  onPressed: () => _openDialog(),
+                  icon: const Icon(Icons.person_add_outlined, size: 18),
+                  label: const Text('Add User'),
+                ),
+              ),
+            ]
+          : const [],
+    );
+  }
 
   List<UserRow> _rows      = [];
   List<Map<String, dynamic>> _locations = [];
@@ -214,6 +236,11 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle + Add User action live in the shared TopBar via
+    // ScreenHeaderMixin (see CLAUDE.md's "Screen header" pattern) — not
+    // rendered here as body content.
+    refreshScreenHeader();
+
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     return Column(
       children: [
@@ -222,35 +249,6 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ── Header ────────────────────────────────────────────────
-              Row(
-                children: [
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('User Management',
-                            style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary)),
-                        SizedBox(height: 4),
-                        Text('Manage user accounts for this company.',
-                            style: TextStyle(
-                                fontSize: 13, color: AppColors.textSecondary)),
-                      ],
-                    ),
-                  ),
-                  if (canAdd && !offline)
-                    ElevatedButton.icon(
-                      onPressed: () => _openDialog(),
-                      icon: const Icon(Icons.person_add_outlined, size: 18),
-                      label: const Text('Add User'),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
               if (offline) const OfflineBanner(),
               if (offline) const SizedBox(height: 16),
 

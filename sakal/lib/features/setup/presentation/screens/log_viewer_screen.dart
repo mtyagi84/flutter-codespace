@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
 
@@ -7,25 +9,20 @@ import '../../../../core/utils/app_logger.dart';
 /// aid for support, not a business-data screen, so it carries no permission
 /// gating (see CLAUDE.md's "Crash visibility" mandatory pattern). Reachable
 /// from the TopBar's account menu ("View Logs").
-class LogViewerScreen extends StatefulWidget {
+class LogViewerScreen extends ConsumerStatefulWidget {
   const LogViewerScreen({super.key});
 
   @override
-  State<LogViewerScreen> createState() => _LogViewerScreenState();
+  ConsumerState<LogViewerScreen> createState() => _LogViewerScreenState();
 }
 
-class _LogViewerScreenState extends State<LogViewerScreen> {
+class _LogViewerScreenState extends ConsumerState<LogViewerScreen>
+    with ScreenHeaderMixin<LogViewerScreen> {
   bool _errorsOnly = false;
 
   @override
-  Widget build(BuildContext context) {
-    final entries = AppLogger.recentEntries.reversed
-        .where((e) => !_errorsOnly || e.level == AppLogLevel.error)
-        .toList();
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Application Logs'),
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: 'Application Logs',
         actions: [
           IconButton(
             icon: const Icon(Icons.copy_all_outlined),
@@ -40,8 +37,20 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
             },
           ),
         ],
-      ),
-      body: Column(
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    // Title + copy-to-clipboard action live in the shared TopBar via
+    // ScreenHeaderMixin (see CLAUDE.md's "Screen header" pattern) — this
+    // screen no longer builds its own Scaffold/AppBar.
+    refreshScreenHeader();
+
+    final entries = AppLogger.recentEntries.reversed
+        .where((e) => !_errorsOnly || e.level == AppLogLevel.error)
+        .toList();
+
+    return Column(
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -94,7 +103,6 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
                   ),
           ),
         ],
-      ),
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -17,8 +18,14 @@ class UserLocationAccessScreen extends ConsumerStatefulWidget {
 }
 
 class _UserLocationAccessScreenState extends ConsumerState<UserLocationAccessScreen>
-    with ScreenPermissionMixin<UserLocationAccessScreen> {
+    with ScreenPermissionMixin<UserLocationAccessScreen>, ScreenHeaderMixin<UserLocationAccessScreen> {
   @override String get screenName => '/setup/user-location-access';
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(
+        title: 'User Location Access',
+        subtitle: 'Restrict which locations a user can work at, and mark their default location.',
+      );
 
   List<Map<String, dynamic>> _users     = [];
   List<Map<String, dynamic>> _locations = [];
@@ -131,6 +138,11 @@ class _UserLocationAccessScreenState extends ConsumerState<UserLocationAccessScr
 
   @override
   Widget build(BuildContext context) {
+    // Title + subtitle live in the shared TopBar via ScreenHeaderMixin (see
+    // CLAUDE.md's "Screen header" pattern) — not rendered here as body
+    // content.
+    refreshScreenHeader();
+
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
@@ -140,13 +152,6 @@ class _UserLocationAccessScreenState extends ConsumerState<UserLocationAccessScr
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('User Location Access',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-              const SizedBox(height: 4),
-              const Text('Restrict which locations a user can work at, and mark their default location.',
-                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-              const SizedBox(height: 24),
-
               if (offline) const OfflineBanner(),
               if (offline) const SizedBox(height: 16),
 

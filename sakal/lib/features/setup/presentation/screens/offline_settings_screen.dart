@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/database/datasources/module_sync_status_local_ds.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/services/local_storage.dart';
 import '../../../../core/sync/master_data_modules.dart';
 import '../../../../core/sync/master_data_sync_service.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/utils/responsive.dart';
 
 /// Offline Settings — the "Selective Sync — Module-Level" screen speced
 /// in the binding offline-design memory (agreed 2026-06-18) but never
@@ -24,11 +24,26 @@ class OfflineSettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<OfflineSettingsScreen> createState() => _OfflineSettingsScreenState();
 }
 
-class _OfflineSettingsScreenState extends ConsumerState<OfflineSettingsScreen> {
+class _OfflineSettingsScreenState extends ConsumerState<OfflineSettingsScreen>
+    with ScreenHeaderMixin<OfflineSettingsScreen> {
   bool _deviceOfflineEnabled = LocalStorage.deviceOfflineEnabled;
   final Set<String> _syncingKeys = {};
   bool _syncingAll = false;
   String? _error;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: 'Offline Settings',
+        actions: kIsWeb ? const [] : [_buildRefreshAllButton()],
+      );
+
+  Widget _buildRefreshAllButton() => FilledButton.icon(
+        onPressed: _syncingAll ? null : _refreshAll,
+        icon: _syncingAll
+            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            : const Icon(Icons.sync, size: 18),
+        label: const Text('Refresh All'),
+      );
 
   Future<void> _toggleDeviceOffline(bool value) async {
     setState(() => _deviceOfflineEnabled = value);
@@ -72,16 +87,10 @@ class _OfflineSettingsScreenState extends ConsumerState<OfflineSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = Responsive.isMobile(context);
-    const title = Text('Offline Settings',
-        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary));
-    final refreshAllButton = FilledButton.icon(
-      onPressed: _syncingAll ? null : _refreshAll,
-      icon: _syncingAll
-          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-          : const Icon(Icons.sync, size: 18),
-      label: const Text('Refresh All'),
-    );
+    // Title + "Refresh All" action live in the shared TopBar via
+    // ScreenHeaderMixin (see CLAUDE.md's "Screen header" pattern) — not
+    // rendered here as body content.
+    refreshScreenHeader();
 
     if (kIsWeb) {
       return const Padding(
@@ -90,50 +99,32 @@ class _OfflineSettingsScreenState extends ConsumerState<OfflineSettingsScreen> {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: isMobile
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  title,
-                  const SizedBox(height: 10),
-                  Row(children: [refreshAllButton]),
-                ])
-              : Row(children: [const Expanded(child: title), refreshAllButton]),
-        ),
-        const Divider(height: 20),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (_error != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Text(_error!, style: const TextStyle(color: AppColors.negative)),
-                    ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Enable offline mode for this device'),
-                    subtitle: const Text('Lets this device work without connectivity, using the master data synced below.'),
-                    value: _deviceOfflineEnabled,
-                    onChanged: _toggleDeviceOffline,
-                  ),
-                  const SizedBox(height: 12),
-                  const Text('Master Data', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  ...masterDataModules.map(_buildModuleRow),
-                ],
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 720),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(_error!, style: const TextStyle(color: AppColors.negative)),
               ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Enable offline mode for this device'),
+              subtitle: const Text('Lets this device work without connectivity, using the master data synced below.'),
+              value: _deviceOfflineEnabled,
+              onChanged: _toggleDeviceOffline,
             ),
-          ),
+            const SizedBox(height: 12),
+            const Text('Master Data', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            ...masterDataModules.map(_buildModuleRow),
+          ],
         ),
-      ],
+      ),
     );
   }
 

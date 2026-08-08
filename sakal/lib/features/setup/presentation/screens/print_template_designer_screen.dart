@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_field_registry.dart';
@@ -169,9 +170,15 @@ class PrintTemplateDesignerScreen extends ConsumerStatefulWidget {
 }
 
 class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesignerScreen>
-    with ScreenPermissionMixin<PrintTemplateDesignerScreen> {
+    with ScreenPermissionMixin<PrintTemplateDesignerScreen>, ScreenHeaderMixin<PrintTemplateDesignerScreen> {
   @override
   String get screenName => RouteNames.printTemplates;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(
+        title: 'Template Designer',
+        subtitle: 'Design a custom print layout — use Preview to see it with sample data before saving.',
+      );
 
   static const _colorChoices = {
     '#000000': 'Black',
@@ -410,6 +417,12 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle live in the shared TopBar via ScreenHeaderMixin (see
+    // CLAUDE.md's "Screen header" pattern). The Preview + Save buttons stay
+    // in the body — this is a multi-button row (both can show at once),
+    // which the pattern says must NOT move into TopBar.actions.
+    refreshScreenHeader();
+
     final isMobile = Responsive.isMobile(context);
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
 
@@ -425,7 +438,7 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildHeader(isMobile, offline),
+              Align(alignment: Alignment.centerRight, child: _buildActionsRow(offline)),
               const SizedBox(height: 16),
               if (offline) ...[const OfflineBanner(), const SizedBox(height: 16)],
               if (_error != null) ...[
@@ -475,14 +488,8 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
     );
   }
 
-  Widget _buildHeader(bool isMobile, bool offline) {
-    const titleBlock = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('Template Designer', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-      SizedBox(height: 4),
-      Text('Design a custom print layout — use Preview to see it with sample data before saving.',
-          style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-    ]);
-    final buttons = Row(mainAxisSize: MainAxisSize.min, children: [
+  Widget _buildActionsRow(bool offline) {
+    return Wrap(spacing: 8, runSpacing: 8, children: [
       OutlinedButton.icon(
         onPressed: _printing ? null : _preview,
         icon: _printing
@@ -490,7 +497,6 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
             : const Icon(Icons.visibility_outlined, size: 16),
         label: const Text('Preview'),
       ),
-      const SizedBox(width: 8),
       if (canAdd || canEdit)
         ElevatedButton.icon(
           onPressed: (_saving || offline) ? null : _save,
@@ -500,10 +506,6 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
           label: const Text('Save'),
         ),
     ]);
-    if (isMobile) {
-      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [titleBlock, const SizedBox(height: 12), buttons]);
-    }
-    return Row(children: [const Expanded(child: titleBlock), buttons]);
   }
 
   Widget _buildSettingsCard(bool isMobile) {
