@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
@@ -22,8 +23,25 @@ class SalesReturnListScreen extends ConsumerStatefulWidget {
 }
 
 class _SalesReturnListScreenState extends ConsumerState<SalesReturnListScreen>
-    with ScreenPermissionMixin<SalesReturnListScreen> {
+    with ScreenPermissionMixin<SalesReturnListScreen>, ScreenHeaderMixin<SalesReturnListScreen> {
   @override String get screenName => RouteNames.salesReturns;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: 'Sales Return',
+        actions: canAdd
+            ? [
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('New Return'),
+                    onPressed: _openNew,
+                  ),
+                ),
+              ]
+            : const [],
+      );
 
   List<SalesReturnHeader> _returns = [];
   Set<String> _pendingIds = {};
@@ -112,6 +130,10 @@ class _SalesReturnListScreenState extends ConsumerState<SalesReturnListScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Title + New Return button live in the shared TopBar via
+    // ScreenHeaderMixin (see CLAUDE.md's "Screen header" pattern) — not
+    // rendered here as body content.
+    refreshScreenHeader();
     final rows = _filtered;
     final isMobile = Responsive.isMobile(context);
 
@@ -149,25 +171,7 @@ class _SalesReturnListScreenState extends ConsumerState<SalesReturnListScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: Row(children: [
-            const Expanded(
-              child: Text('Sales Return',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-            ),
-            if (canAdd)
-              FilledButton.icon(
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('New Return'),
-                onPressed: _openNew,
-              ),
-          ]),
-        ),
-
-        const Divider(height: 20),
-
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
           child: isMobile
               ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   statusField,

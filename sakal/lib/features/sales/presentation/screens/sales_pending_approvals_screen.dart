@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -46,9 +47,27 @@ class SalesPendingApprovalsScreen extends ConsumerStatefulWidget {
 }
 
 class _SalesPendingApprovalsScreenState extends ConsumerState<SalesPendingApprovalsScreen>
-    with ScreenPermissionMixin<SalesPendingApprovalsScreen> {
+    with ScreenPermissionMixin<SalesPendingApprovalsScreen>, ScreenHeaderMixin<SalesPendingApprovalsScreen> {
   @override
   String get screenName => '/sales/pending-approvals';
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: 'Pending Approvals',
+        subtitle: 'DRAFT Invoices, Returns, Deliveries, and Cash Receipts awaiting online approval.',
+        actions: (_items.isNotEmpty && canApprove)
+            ? [
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.playlist_add_check, size: 16),
+                    label: const Text('Post All Eligible'),
+                    onPressed: _postAllEligible,
+                  ),
+                ),
+              ]
+            : const [],
+      );
 
   String? _locationId;
   List<_ReviewItem> _items = [];
@@ -181,38 +200,18 @@ class _SalesPendingApprovalsScreenState extends ConsumerState<SalesPendingApprov
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle/Post All Eligible button live in the shared TopBar via
+    // ScreenHeaderMixin (see CLAUDE.md's "Screen header" pattern) — not
+    // rendered here as body content.
+    refreshScreenHeader();
     final locationsAsync = ref.watch(locationsProvider);
     final isMobile = Responsive.isMobile(context);
-    const title = Text('Pending Approvals',
-        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary));
-    final postAllButton = (_items.isNotEmpty && canApprove)
-        ? FilledButton.icon(icon: const Icon(Icons.playlist_add_check, size: 16), label: const Text('Post All Eligible'), onPressed: _postAllEligible)
-        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: isMobile
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  title,
-                  const SizedBox(height: 4),
-                  const Text('DRAFT Invoices, Returns, Deliveries, and Cash Receipts awaiting online approval.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                  if (postAllButton != null) ...[const SizedBox(height: 10), postAllButton],
-                ])
-              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    title,
-                    SizedBox(height: 4),
-                    Text('DRAFT Invoices, Returns, Deliveries, and Cash Receipts awaiting online approval.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                  ])),
-                  if (postAllButton != null) postAllButton,
-                ]),
-        ),
-        const Divider(height: 20),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
           child: locationsAsync.when(
             loading: () => const LinearProgressIndicator(),
             error: (_, __) => const Text('Could not load locations.', style: TextStyle(color: AppColors.negative)),

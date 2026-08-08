@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -160,9 +161,18 @@ class SalesReturnEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
-    with ScreenPermissionMixin<SalesReturnEntryScreen> {
+    with ScreenPermissionMixin<SalesReturnEntryScreen>, ScreenHeaderMixin<SalesReturnEntryScreen> {
   // Entry screen is not itself a menu item — Menu -> List -> Entry pattern.
   @override String get screenName => RouteNames.salesReturns;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: _returnNo != null ? 'Sales Return · $_returnNo' : 'New Sales Return',
+        subtitle: _status != 'APPROVED' ? (_returnNo != null ? 'Draft' : 'Unsaved draft') : null,
+        badgeText: _status == 'APPROVED' ? _status : null,
+        badgeColor: _status == 'APPROVED' ? AppColors.positive : null,
+        actions: _returnNo != null ? [_buildPrintButton()] : const [],
+      );
 
   SalesReturnRepository get _ds => ref.read(salesReturnRepositoryProvider);
 
@@ -900,6 +910,12 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Title/status badge/Print now live in the shared TopBar via
+    // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. The
+    // Save/Approve action buttons deliberately stay here as their own body
+    // row (both can be visible at once, and the AppBar's actions row has
+    // no reflow mechanism).
+    refreshScreenHeader();
     final isMobile = Responsive.isMobile(context);
     final showLooseQty = (ref.watch(sessionProvider)?.qtyEntryMode ?? 'PACK_AND_LOOSE') != 'PACK_ONLY';
 
@@ -910,28 +926,11 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: isMobile
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _buildTitleBlock(),
-                  if (_returnNo != null || canSave || showApprove) ...[
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      if (_returnNo != null) _buildPrintButton(),
-                      if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
-                    ]),
-                  ],
-                ])
-              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(child: _buildTitleBlock()),
-                  if (_returnNo != null) _buildPrintButton(),
-                  if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
-                ]),
-        ),
-
-        const Divider(height: 20),
-
+        if (canSave || showApprove)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+            child: _buildActionButtons(canSave: canSave, canApprove: showApprove),
+          ),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
@@ -957,33 +956,6 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
                 ),
         ),
       ],
-    );
-  }
-
-  // A plain Column (not a Row wrapping a single Column child) — a Row gives
-  // a non-flex child unbounded main-axis width, so the Text below never
-  // wraps and silently overflows on a narrow phone. See CLAUDE.md's "Row &
-  // Column layout distribution" rule; real bug caught live 2026-08-07.
-  Widget _buildTitleBlock() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(_returnNo != null ? 'Sales Return · $_returnNo' : 'New Sales Return',
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-      const SizedBox(height: 2),
-      _status == 'APPROVED'
-          ? _statusChip(_status)
-          : Text(_returnNo != null ? 'Draft' : 'Unsaved draft',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-    ],
-  );
-
-  Widget _statusChip(String status) {
-    final color = status == 'APPROVED' ? AppColors.positive : AppColors.secondary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(4)),
-      child: Text(status, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
     );
   }
 

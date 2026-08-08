@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
@@ -24,8 +25,25 @@ class SalesOrderListScreen extends ConsumerStatefulWidget {
 }
 
 class _SalesOrderListScreenState extends ConsumerState<SalesOrderListScreen>
-    with ScreenPermissionMixin<SalesOrderListScreen> {
+    with ScreenPermissionMixin<SalesOrderListScreen>, ScreenHeaderMixin<SalesOrderListScreen> {
   @override String get screenName => RouteNames.salesOrders;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: 'Sales Order',
+        actions: canAdd
+            ? [
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('New Order'),
+                    onPressed: _openNew,
+                  ),
+                ),
+              ]
+            : const [],
+      );
 
   List<SalesOrderHeader> _rows = [];
   Set<String> _pendingIds = {};
@@ -204,6 +222,10 @@ class _SalesOrderListScreenState extends ConsumerState<SalesOrderListScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Title + New Order button live in the shared TopBar via
+    // ScreenHeaderMixin (see CLAUDE.md's "Screen header" pattern) — not
+    // rendered here as body content.
+    refreshScreenHeader();
     final session   = ref.watch(sessionProvider);
     final isOffline = session?.offlineMode ?? false;
     final rows = _filtered;
@@ -259,23 +281,7 @@ class _SalesOrderListScreenState extends ConsumerState<SalesOrderListScreen>
       children: [
         if (isOffline) const OfflineBanner(),
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: Row(children: [
-            const Expanded(
-              child: Text('Sales Order',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-            ),
-            if (canAdd)
-              FilledButton.icon(
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('New Order'),
-                onPressed: _openNew,
-              ),
-          ]),
-        ),
-        const Divider(height: 20),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
           child: isMobile
               ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   Row(children: [Expanded(child: modeField), const SizedBox(width: 8), Expanded(child: statusField)]),

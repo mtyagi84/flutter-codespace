@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/router/route_names.dart';
@@ -62,10 +63,18 @@ class CashReceiptEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
-    with ScreenPermissionMixin<CashReceiptEntryScreen>, DeferredRowDisposal<CashReceiptEntryScreen> {
+    with ScreenPermissionMixin<CashReceiptEntryScreen>, ScreenHeaderMixin<CashReceiptEntryScreen>, DeferredRowDisposal<CashReceiptEntryScreen> {
   // Entry screen is not itself a menu item — Menu -> List -> Entry pattern.
   @override
   String get screenName => RouteNames.salesReceipts;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: _receiptNo ?? 'New Cash Receipt',
+        badgeText: _status,
+        badgeColor: _status == 'APPROVED' ? AppColors.positive : AppColors.secondary,
+        actions: (_receiptNo != null && _status == 'APPROVED') ? [_buildPrintButton()] : const [],
+      );
 
   CashReceiptRepository get _ds => ref.read(cashReceiptRepositoryProvider);
 
@@ -516,33 +525,22 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = Responsive.isMobile(context);
+    // Title/status badge/Print now live in the shared TopBar via
+    // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. The
+    // Save & Collect button deliberately stays here as its own body row
+    // (same convention as every other entry screen's Save/Approve row).
+    refreshScreenHeader();
     final locked = _status != 'DRAFT';
     final canSave = !locked && canAdd;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: isMobile
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _buildTitleBlock(),
-                  if (_receiptNo != null || canSave) ...[
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      if (_receiptNo != null && _status == 'APPROVED') _buildPrintButton(),
-                      if (canSave) Expanded(child: _buildSaveButton()),
-                    ]),
-                  ],
-                ])
-              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(child: _buildTitleBlock()),
-                  if (_receiptNo != null && _status == 'APPROVED') _buildPrintButton(),
-                  if (canSave) _buildSaveButton(),
-                ]),
-        ),
-        const Divider(height: 20),
+        if (canSave)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+            child: _buildSaveButton(),
+          ),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
@@ -574,21 +572,6 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
         ),
       ],
     );
-  }
-
-  Widget _buildTitleBlock() {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(_receiptNo ?? 'New Cash Receipt', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-      const SizedBox(height: 4),
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: (_status == 'APPROVED' ? AppColors.positive : AppColors.secondary).withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(_status, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _status == 'APPROVED' ? AppColors.positive : AppColors.secondary)),
-      ),
-    ]);
   }
 
   Widget _buildSaveButton() => FilledButton.icon(

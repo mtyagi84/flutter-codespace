@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
@@ -25,9 +26,26 @@ class CashReceiptListScreen extends ConsumerStatefulWidget {
 }
 
 class _CashReceiptListScreenState extends ConsumerState<CashReceiptListScreen>
-    with ScreenPermissionMixin<CashReceiptListScreen> {
+    with ScreenPermissionMixin<CashReceiptListScreen>, ScreenHeaderMixin<CashReceiptListScreen> {
   @override
   String get screenName => RouteNames.salesReceipts;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: 'Cash Receipt',
+        actions: canAdd
+            ? [
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('New Receipt'),
+                    onPressed: _openNew,
+                  ),
+                ),
+              ]
+            : const [],
+      );
 
   List<CashReceiptHeader> _receipts = [];
   Set<String> _pendingIds = {};
@@ -135,6 +153,10 @@ class _CashReceiptListScreenState extends ConsumerState<CashReceiptListScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Title + New Receipt button live in the shared TopBar via
+    // ScreenHeaderMixin (see CLAUDE.md's "Screen header" pattern) — not
+    // rendered here as body content.
+    refreshScreenHeader();
     final rows = _filtered;
     final isMobile = Responsive.isMobile(context);
 
@@ -179,22 +201,7 @@ class _CashReceiptListScreenState extends ConsumerState<CashReceiptListScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: Row(children: [
-            const Expanded(
-              child: Text('Cash Receipt', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-            ),
-            if (canAdd)
-              FilledButton.icon(
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('New Receipt'),
-                onPressed: _openNew,
-              ),
-          ]),
-        ),
-        const Divider(height: 20),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
           // A Wrap here doesn't stretch a field to fill leftover row space
           // (see sakal_field_row.dart's own doc comment for this exact
           // gap) — Status alone on its own mobile row would leave a large

@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -133,8 +134,20 @@ class SalesOrderEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
-    with ScreenPermissionMixin<SalesOrderEntryScreen> {
+    with ScreenPermissionMixin<SalesOrderEntryScreen>, ScreenHeaderMixin<SalesOrderEntryScreen> {
   @override String get screenName => RouteNames.salesOrders;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: _orderNo != null ? 'Sales Order · $_orderNo' : 'New Sales Order',
+        subtitle: _orderNo == null
+            ? (_isAgainstQuotation ? 'Unsaved draft · From $_sourceQuotationNo' : 'Unsaved draft')
+            : (_isAgainstQuotation ? 'From $_sourceQuotationNo' : null),
+        badgeText: _orderNo != null ? _status.replaceAll('_', ' ') : null,
+        badgeColor: _orderNo != null ? _statusColor(_status) : null,
+        trailingBadge: _orderNo != null ? PendingSyncBadge(documentType: 'SALES_ORDER', documentId: _orderNo!) : null,
+        actions: _orderNo != null ? [_buildPrintButton()] : const [],
+      );
 
   SalesOrderRepository get _ds => ref.read(salesOrderRepositoryProvider);
 
@@ -1157,6 +1170,12 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Title/status badge/Print now live in the shared TopBar via
+    // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. The
+    // Save/Approve/Cancel action buttons deliberately stay here as their
+    // own body row (more than one can be visible at once, and the AppBar's
+    // actions row has no reflow mechanism).
+    refreshScreenHeader();
     _recompute();
     final session   = ref.watch(sessionProvider);
     final isOffline = session?.offlineMode ?? false;
@@ -1173,24 +1192,11 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: isMobile
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _buildTitleBlock(),
-                  const SizedBox(height: 10),
-                  Row(children: [
-                    if (_orderNo != null) _buildPrintButton(),
-                    Expanded(child: _buildActionButtons(canSave: canSave, showApprove: showApprove, showCancel: showCancel)),
-                  ]),
-                ])
-              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(child: _buildTitleBlock()),
-                  if (_orderNo != null) _buildPrintButton(),
-                  _buildActionButtons(canSave: canSave, showApprove: showApprove, showCancel: showCancel),
-                ]),
-        ),
-        const Divider(height: 20),
+        if (canSave || showApprove || showCancel)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+            child: _buildActionButtons(canSave: canSave, showApprove: showApprove, showCancel: showCancel),
+          ),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
@@ -1213,41 +1219,14 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     );
   }
 
-  // A plain Column (not a Row wrapping a single Column child) — a Row gives
-  // a non-flex child unbounded main-axis width, so the Text below never
-  // wraps and silently overflows on a narrow phone. See CLAUDE.md's "Row &
-  // Column layout distribution" rule; real bug caught live 2026-08-07.
-  Widget _buildTitleBlock() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(_orderNo != null ? 'Sales Order · $_orderNo' : 'New Sales Order',
-          overflow: TextOverflow.ellipsis, maxLines: 1,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-      const SizedBox(height: 2),
-      Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 4, children: [
-        _orderNo != null ? _statusChip(_status) : const Text('Unsaved draft', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-        if (_isAgainstQuotation) Text('From $_sourceQuotationNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-        if (_orderNo != null) PendingSyncBadge(documentType: 'SALES_ORDER', documentId: _orderNo!),
-      ]),
-    ],
-  );
-
-  Widget _statusChip(String status) {
-    final color = switch (status) {
-      'DRAFT'                => AppColors.badgeDraft,
-      'APPROVED'              => AppColors.positive,
-      'PARTIALLY_DELIVERED'    => AppColors.secondary,
-      'DELIVERED'               => AppColors.textSecondary,
-      'CANCELLED'                => AppColors.negative,
-      _                            => AppColors.positive,
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(4)),
-      child: Text(status.replaceAll('_', ' '), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
-    );
-  }
+  Color _statusColor(String status) => switch (status) {
+    'DRAFT'                => AppColors.badgeDraft,
+    'APPROVED'              => AppColors.positive,
+    'PARTIALLY_DELIVERED'    => AppColors.secondary,
+    'DELIVERED'               => AppColors.textSecondary,
+    'CANCELLED'                => AppColors.negative,
+    _                            => AppColors.positive,
+  };
 
   Widget _buildActionButtons({required bool canSave, required bool showApprove, required bool showCancel}) =>
       Wrap(spacing: 12, runSpacing: 8, children: [

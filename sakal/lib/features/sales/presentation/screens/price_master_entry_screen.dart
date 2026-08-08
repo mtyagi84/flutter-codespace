@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -77,8 +78,18 @@ class PriceMasterEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
-    with ScreenPermissionMixin<PriceMasterEntryScreen>, DeferredRowDisposal<PriceMasterEntryScreen> {
+    with ScreenPermissionMixin<PriceMasterEntryScreen>, ScreenHeaderMixin<PriceMasterEntryScreen>, DeferredRowDisposal<PriceMasterEntryScreen> {
   @override String get screenName => RouteNames.salesPriceMaster;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: _entryNo != null ? 'Sales Price Master · $_entryNo' : 'New Price Master Batch',
+        subtitle: _status != 'APPROVED' ? (_entryNo != null ? 'Draft' : 'Unsaved draft') : null,
+        badgeText: _status == 'APPROVED' ? 'APPROVED' : null,
+        badgeColor: _status == 'APPROVED' ? AppColors.positive : null,
+        trailingBadge: _entryNo != null ? PendingSyncBadge(documentType: 'PRICE_MASTER', documentId: _entryNo!) : null,
+        actions: _entryNo != null ? [_buildPrintButton()] : const [],
+      );
 
   PriceMasterRepository get _ds => ref.read(priceMasterRepositoryProvider);
 
@@ -730,6 +741,12 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Title/status badge/Print now live in the shared TopBar via
+    // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. The
+    // Save/Approve action buttons deliberately stay here as their own body
+    // row (both can be visible at once, and the AppBar's actions row has
+    // no reflow mechanism).
+    refreshScreenHeader();
     final session   = ref.watch(sessionProvider);
     final isOffline = session?.offlineMode ?? false;
     final isMobile  = Responsive.isMobile(context);
@@ -745,26 +762,11 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: isMobile
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _buildTitleBlock(),
-                  if (_entryNo != null || canSave || showApprove) ...[
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      if (_entryNo != null) _buildPrintButton(),
-                      if (canSave || showApprove) Expanded(child: _buildActionButtons(canSave: canSave, showApprove: showApprove)),
-                    ]),
-                  ],
-                ])
-              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(child: _buildTitleBlock()),
-                  if (_entryNo != null) _buildPrintButton(),
-                  if (canSave || showApprove) _buildActionButtons(canSave: canSave, showApprove: showApprove),
-                ]),
-        ),
-        const Divider(height: 20),
+        if (canSave || showApprove)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+            child: _buildActionButtons(canSave: canSave, showApprove: showApprove),
+          ),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
@@ -782,35 +784,6 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
       ],
     );
   }
-
-  Widget _buildTitleBlock() => Row(
-    crossAxisAlignment: CrossAxisAlignment.center,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(_entryNo != null ? 'Sales Price Master · $_entryNo' : 'New Price Master Batch',
-              overflow: TextOverflow.ellipsis, maxLines: 1,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-          const SizedBox(height: 2),
-          // Wrap, not Row — a status chip + PendingSyncBadge with no
-          // Expanded/Flexible fallback overflows at narrow widths. See
-          // CLAUDE.md's "Row & Column layout distribution" rule.
-          Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 4, children: [
-            _status == 'APPROVED' ? _statusChip() : Text(_entryNo != null ? 'Draft' : 'Unsaved draft',
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            if (_entryNo != null) PendingSyncBadge(documentType: 'PRICE_MASTER', documentId: _entryNo!),
-          ]),
-        ]),
-      ),
-    ],
-  );
-
-  Widget _statusChip() => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-    decoration: BoxDecoration(color: AppColors.positive.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(4)),
-    child: const Text('APPROVED', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.positive)),
-  );
 
   Widget _buildActionButtons({required bool canSave, required bool showApprove}) => Wrap(spacing: 12, runSpacing: 8, children: [
     if (canSave) FilledButton(

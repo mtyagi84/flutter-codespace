@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
@@ -26,8 +27,25 @@ class PriceMasterListScreen extends ConsumerStatefulWidget {
 }
 
 class _PriceMasterListScreenState extends ConsumerState<PriceMasterListScreen>
-    with ScreenPermissionMixin<PriceMasterListScreen> {
+    with ScreenPermissionMixin<PriceMasterListScreen>, ScreenHeaderMixin<PriceMasterListScreen> {
   @override String get screenName => RouteNames.salesPriceMaster;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: 'Sales Price Master',
+        actions: canAdd
+            ? [
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('New Batch'),
+                    onPressed: _openNew,
+                  ),
+                ),
+              ]
+            : const [],
+      );
 
   List<PriceMasterHeader> _rows = [];
   List<Map<String, dynamic>> _locations = [];
@@ -137,6 +155,10 @@ class _PriceMasterListScreenState extends ConsumerState<PriceMasterListScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Title + New Batch button live in the shared TopBar via
+    // ScreenHeaderMixin (see CLAUDE.md's "Screen header" pattern) — not
+    // rendered here as body content.
+    refreshScreenHeader();
     final session   = ref.watch(sessionProvider);
     final isOffline = session?.offlineMode ?? false;
     final rows = _filtered;
@@ -235,23 +257,7 @@ class _PriceMasterListScreenState extends ConsumerState<PriceMasterListScreen>
       children: [
         if (isOffline) const OfflineBanner(),
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: Row(children: [
-            const Expanded(
-              child: Text('Sales Price Master',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-            ),
-            if (canAdd)
-              FilledButton.icon(
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('New Batch'),
-                onPressed: _openNew,
-              ),
-          ]),
-        ),
-        const Divider(height: 20),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
           // Wrap doesn't stretch a fixed-width field to fill leftover row
           // space (see sakal_field_row.dart's own doc comment) — with 5+
           // filter fields here, an isMobile-conditional Row/Column grouping

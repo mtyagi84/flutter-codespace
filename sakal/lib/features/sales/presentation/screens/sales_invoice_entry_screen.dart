@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -168,9 +169,33 @@ class SalesInvoiceEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScreen>
-    with ScreenPermissionMixin<SalesInvoiceEntryScreen>, DeferredRowDisposal<SalesInvoiceEntryScreen> {
+    with ScreenPermissionMixin<SalesInvoiceEntryScreen>, ScreenHeaderMixin<SalesInvoiceEntryScreen>, DeferredRowDisposal<SalesInvoiceEntryScreen> {
   @override
   String get screenName => '/sales/invoices';
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final subtitleParts = <String>[
+      if (_invoiceNo == null) 'Unsaved',
+      _saleType == 'CASH' ? 'Cash Sale' : 'Credit Sale',
+      if (_sourceQuotationNo != null) 'From $_sourceQuotationNo',
+      if (_sourceOrderNo != null) 'From $_sourceOrderNo',
+    ];
+    final extraBadges = <Widget>[
+      if (_invoiceNo != null) PendingSyncBadge(documentType: 'SALES_INVOICE', documentId: _invoiceNo!),
+      if (_deliveryStatus != null) _deliveryStatusBadge()!,
+    ];
+    return ScreenHeaderInfo(
+      title: _invoiceNo != null ? 'Quick Invoice · $_invoiceNo' : 'New Quick Invoice',
+      subtitle: subtitleParts.join(' · '),
+      badgeText: _invoiceNo != null ? _status : null,
+      badgeColor: _invoiceNo != null ? _statusColor(_status) : null,
+      trailingBadge: extraBadges.isEmpty
+          ? null
+          : Wrap(spacing: 6, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: extraBadges),
+      actions: _invoiceNo != null ? [_buildPrintButton()] : const [],
+    );
+  }
 
   String? _invoiceNo;
   DateTime _invoiceDate = DateTime.now();
@@ -1690,19 +1715,12 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
         ),
       );
 
-  Widget _statusChip(String status) {
-    final color = switch (status) {
-      'DRAFT' => AppColors.badgeDraft,
-      'APPROVED' => AppColors.positive,
-      'CANCELLED' => AppColors.negative,
-      _ => AppColors.positive,
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(4)),
-      child: Text(status, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
-    );
-  }
+  Color _statusColor(String status) => switch (status) {
+    'DRAFT' => AppColors.badgeDraft,
+    'APPROVED' => AppColors.positive,
+    'CANCELLED' => AppColors.negative,
+    _ => AppColors.positive,
+  };
 
   Widget _errorBanner(String message, {VoidCallback? onRetry}) => Container(
         padding: const EdgeInsets.all(12),
@@ -1752,32 +1770,14 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     );
   }
 
-  // A plain Column (not a Row wrapping a single Column child) — a Row gives
-  // a non-flex child unbounded main-axis width, so the Text below never
-  // wraps and silently overflows on a narrow phone. See CLAUDE.md's "Row &
-  // Column layout distribution" rule; real bug caught live 2026-08-07.
-  Widget _buildTitleBlock() => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(_invoiceNo != null ? 'Quick Invoice · $_invoiceNo' : 'New Quick Invoice',
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-          const SizedBox(height: 2),
-          Wrap(spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            _invoiceNo != null ? _statusChip(_status) : const Text('Unsaved', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            Text(_saleType == 'CASH' ? 'Cash Sale' : 'Credit Sale', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            if (_sourceQuotationNo != null) Text('From $_sourceQuotationNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            if (_sourceOrderNo != null) Text('From $_sourceOrderNo', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            if (_invoiceNo != null) PendingSyncBadge(documentType: 'SALES_INVOICE', documentId: _invoiceNo!),
-            if (_deliveryStatus != null) _deliveryStatusBadge()!,
-          ]),
-        ],
-      );
-
   @override
   Widget build(BuildContext context) {
+    // Title/status badge/sale-type/source/Pending-sync/delivery-status/
+    // Print now live in the shared TopBar via ScreenHeaderMixin — see
+    // CLAUDE.md's "Screen header" pattern. The Save/Cancel action buttons
+    // deliberately stay here as their own body row (both can be visible at
+    // once, and the AppBar's actions row has no reflow mechanism).
+    refreshScreenHeader();
     if (!_loading) _recompute();
     final session = ref.watch(sessionProvider);
     final isOffline = session?.offlineMode ?? false;
@@ -1792,24 +1792,11 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: isMobile
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _buildTitleBlock(),
-                  const SizedBox(height: 10),
-                  Row(children: [
-                    if (_invoiceNo != null) _buildPrintButton(),
-                    Expanded(child: _buildActionButtons(canSave: canSave, showCancel: showCancel)),
-                  ]),
-                ])
-              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(child: _buildTitleBlock()),
-                  if (_invoiceNo != null) _buildPrintButton(),
-                  _buildActionButtons(canSave: canSave, showCancel: showCancel),
-                ]),
-        ),
-        const Divider(height: 20),
+        if (canSave || showCancel)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+            child: _buildActionButtons(canSave: canSave, showCancel: showCancel),
+          ),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
