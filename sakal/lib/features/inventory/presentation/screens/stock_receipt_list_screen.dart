@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
@@ -23,8 +24,25 @@ class StockReceiptListScreen extends ConsumerStatefulWidget {
 }
 
 class _StockReceiptListScreenState extends ConsumerState<StockReceiptListScreen>
-    with ScreenPermissionMixin<StockReceiptListScreen> {
+    with ScreenPermissionMixin<StockReceiptListScreen>, ScreenHeaderMixin<StockReceiptListScreen> {
   @override String get screenName => RouteNames.stockReceipts;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: 'Stock Receipt',
+        actions: canAdd
+            ? [
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('New Receipt'),
+                    onPressed: _openNew,
+                  ),
+                ),
+              ]
+            : const [],
+      );
 
   List<StockReceiptHeader> _rows = [];
   Set<String> _pendingIds = {};
@@ -134,28 +152,17 @@ class _StockReceiptListScreenState extends ConsumerState<StockReceiptListScreen>
     );
     final refreshButton = IconButton(icon: const Icon(Icons.refresh, size: 20), onPressed: _load, tooltip: 'Refresh', color: AppColors.primary);
 
+    // Title + New Receipt button live in the shared TopBar via
+    // ScreenHeaderMixin (see CLAUDE.md's "Screen header" pattern) — not
+    // rendered here as body content.
+    refreshScreenHeader();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: Row(children: [
-            const Expanded(
-              child: Text('Stock Receipt',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-            ),
-            if (canAdd)
-              FilledButton.icon(
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('New Receipt'),
-                onPressed: _openNew,
-              ),
-          ]),
-        ),
-        const Divider(height: 20),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
           child: isMobile
               ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   statusField,

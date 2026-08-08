@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -62,8 +63,21 @@ class StockTransferRequestEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferRequestEntryScreen>
-    with ScreenPermissionMixin<StockTransferRequestEntryScreen> {
+    with ScreenPermissionMixin<StockTransferRequestEntryScreen>, ScreenHeaderMixin<StockTransferRequestEntryScreen> {
   @override String get screenName => RouteNames.stockTransferRequests;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final badgeColor = _status == 'CLOSED' ? AppColors.textSecondary : AppColors.positive;
+    return ScreenHeaderInfo(
+      title: _requestNo != null ? 'Stock Transfer Request · $_requestNo' : 'New Stock Transfer Request',
+      subtitle: _status == 'DRAFT' ? (_requestNo != null ? 'Draft' : 'Unsaved draft') : null,
+      badgeText: _status != 'DRAFT' ? _status.replaceAll('_', ' ') : null,
+      badgeColor: _status != 'DRAFT' ? badgeColor : null,
+      trailingBadge: _requestNo != null ? PendingSyncBadge(documentType: 'STOCK_TRANSFER_REQUEST', documentId: _requestNo!) : null,
+      actions: _requestNo != null ? [_buildPrintButton()] : const [],
+    );
+  }
 
   StockTransferRequestRepository get _ds => ref.read(stockTransferRequestRepositoryProvider);
 
@@ -398,29 +412,23 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
     final locked      = _status != 'DRAFT';
 
+    // Title/subtitle/badge/Print live in the shared TopBar via
+    // ScreenHeaderMixin (see CLAUDE.md's "Screen header" pattern) — only the
+    // multi-button Save/Approve row stays here as body content.
+    refreshScreenHeader();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: isMobile
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _buildTitleBlock(),
-                  if (_requestNo != null || canSave || showApprove) ...[
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      if (_requestNo != null) _buildPrintButton(),
-                      if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
-                    ]),
-                  ],
-                ])
-              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(child: _buildTitleBlock()),
-                  if (_requestNo != null) _buildPrintButton(),
-                  if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
-                ]),
-        ),
+        if (canSave || showApprove)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: _buildActionButtons(canSave: canSave, canApprove: showApprove),
+            ),
+          ),
         const Divider(height: 20),
         Expanded(
           child: _loading
@@ -440,39 +448,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
     );
   }
 
-  // In-content back button, additive to TopBar's own corner arrow — see
-  // design_system_guide.md §5.2.
-  // A plain Column (not a Row wrapping a single Column child) — a Row gives
-  // a non-flex child unbounded main-axis width, so the Text below never
-  // wraps and silently overflows on a narrow phone. See CLAUDE.md's "Row &
-  // Column layout distribution" rule; real bug caught live 2026-08-07.
-  Widget _buildTitleBlock() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(_requestNo != null ? 'Stock Transfer Request · $_requestNo' : 'New Stock Transfer Request',
-          overflow: TextOverflow.ellipsis, maxLines: 1,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-      const SizedBox(height: 2),
-      Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 4, children: [
-        _status != 'DRAFT' ? _statusChip(_status) : Text(_requestNo != null ? 'Draft' : 'Unsaved draft',
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-        if (_requestNo != null) PendingSyncBadge(documentType: 'STOCK_TRANSFER_REQUEST', documentId: _requestNo!),
-      ]),
-    ],
-  );
-
-  Widget _statusChip(String status) {
-    final color = status == 'DRAFT' ? AppColors.secondary
-        : status == 'CLOSED' ? AppColors.textSecondary : AppColors.positive;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(4)),
-      child: Text(status.replaceAll('_', ' '), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
-    );
-  }
-
-  Widget _buildActionButtons({required bool canSave, required bool canApprove}) => Row(children: [
+  Widget _buildActionButtons({required bool canSave, required bool canApprove}) => Row(mainAxisSize: MainAxisSize.min, children: [
     if (canSave) FilledButton(
       onPressed: _saving ? null : _saveDraft,
       child: _saving
