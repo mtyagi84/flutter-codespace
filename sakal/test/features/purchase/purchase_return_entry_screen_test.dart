@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
 import 'package:sakal/core/widgets/sakal_field_card.dart';
@@ -36,6 +37,15 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
+
+/// The screen's title/subtitle/badge no longer render as body text — they're
+/// posted to the shared TopBar via ScreenHeaderMixin (screen_header.dart),
+/// and pumpApp() doesn't include a TopBar in its pumped tree at all. Read
+/// the posted ScreenHeaderInfo back from the provider instead of searching
+/// for rendered text — this is the actual observable contract the screen
+/// provides now.
+ScreenHeaderInfo? _readHeader(WidgetTester tester, Finder screenFinder) =>
+    ProviderScope.containerOf(tester.element(screenFinder)).read(screenHeaderProvider);
 
 void main() {
   late MockPurchaseReturnRepository mockRepo;
@@ -79,8 +89,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('New Purchase Return'), findsOneWidget);
-      expect(find.text('Unsaved draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(PurchaseReturnEntryScreen));
+      expect(header?.title, 'New Purchase Return');
+      expect(header?.subtitle, 'Unsaved draft');
 
       expect(_findFieldLabel('SUPPLIER *'), findsOneWidget);
       expect(_findFieldLabel('RETURN NO'), findsOneWidget);
@@ -108,7 +119,7 @@ void main() {
       expect(find.text('Save Draft'), findsOneWidget);
       // A brand-new, never-saved return has no return number yet, so no
       // print button and no approve button (approve requires !_isNew).
-      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(header?.actions, isEmpty);
       expect(find.text('Approve'), findsNothing);
     });
 
@@ -235,8 +246,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('Purchase Return · PRET-001'), findsOneWidget);
-      expect(find.text('Draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(PurchaseReturnEntryScreen));
+      expect(header?.title, 'Purchase Return · PRET-001');
+      expect(header?.subtitle, 'Draft');
       expect(find.textContaining('Supplier One'), findsWidgets); // '[SUP01] Supplier One'
       expect(find.text('10 Jul 2026'), findsOneWidget); // Return Date
       expect(find.text('USD — US Dollar'), findsOneWidget); // Currency, resolved from currenciesProvider
@@ -269,7 +281,7 @@ void main() {
 
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Approve'), findsNothing); // canApprove defaults false from the harness's empty menuProvider
-      expect(find.byIcon(Icons.print_outlined), findsOneWidget); // a saved return is printable
+      expect(header?.actions.length, 1); // a saved return is printable
     });
 
     testWidgets('editing remarks and saving calls the repository with the updated payload', (tester) async {
