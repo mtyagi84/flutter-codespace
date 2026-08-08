@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
@@ -62,8 +63,25 @@ class SalesExecutiveMasterScreen extends ConsumerStatefulWidget {
 }
 
 class _SalesExecutiveMasterScreenState extends ConsumerState<SalesExecutiveMasterScreen>
-    with ScreenPermissionMixin<SalesExecutiveMasterScreen> {
+    with ScreenPermissionMixin<SalesExecutiveMasterScreen>, ScreenHeaderMixin<SalesExecutiveMasterScreen> {
   @override String get screenName => RouteNames.salesExecutives;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: 'Sales Executives',
+        actions: canAdd
+            ? [
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('New Sales Executive'),
+                    onPressed: () => _showEntryDialog(),
+                  ),
+                ),
+              ]
+            : const [],
+      );
 
   List<SalesExecutive> _rows  = [];
   List<Map<String, dynamic>> _users = [];
@@ -223,27 +241,14 @@ class _SalesExecutiveMasterScreenState extends ConsumerState<SalesExecutiveMaste
 
   @override
   Widget build(BuildContext context) {
+    // Title/New-Sales-Executive button live in the shared TopBar via
+    // ScreenHeaderMixin — not rendered here as body content.
+    refreshScreenHeader();
     final rows = _filtered;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: Row(children: [
-            const Expanded(
-              child: Text('Sales Executives',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-            ),
-            if (canAdd)
-              FilledButton.icon(
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('New Sales Executive'),
-                onPressed: () => _showEntryDialog(),
-              ),
-          ]),
-        ),
-        const Divider(height: 20),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
           // A Wrap here doesn't stretch a field to fill leftover row space

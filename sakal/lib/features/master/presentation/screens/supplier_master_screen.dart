@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
@@ -25,8 +26,15 @@ class SupplierMasterScreen extends ConsumerStatefulWidget {
 }
 
 class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
-    with ScreenPermissionMixin<SupplierMasterScreen> {
+    with ScreenPermissionMixin<SupplierMasterScreen>, ScreenHeaderMixin<SupplierMasterScreen> {
   @override String get screenName => RouteNames.supplierMaster;
+
+  // Same two-panel master/detail shape as Chart of Accounts / Customers —
+  // no page-level title of its own, just panel-internal headers
+  // ("Suppliers" list header, "New/Edit Supplier" form header). A plain
+  // static title here is still better than TopBar's blank fallback.
+  @override
+  ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(title: 'Suppliers');
 
   List<Map<String, dynamic>> _suppliers  = [];
   List<Map<String, dynamic>> _filtered   = [];
@@ -424,6 +432,8 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Static title lives in the shared TopBar via ScreenHeaderMixin.
+    refreshScreenHeader();
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) { return Center(
         child: Text(_error!, style: const TextStyle(color: AppColors.negative))); }

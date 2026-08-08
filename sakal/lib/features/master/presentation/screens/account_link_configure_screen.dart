@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/network/dio_client.dart';
@@ -36,8 +37,14 @@ class AccountLinkConfigureScreen extends ConsumerStatefulWidget {
 }
 
 class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigureScreen>
-    with ScreenPermissionMixin<AccountLinkConfigureScreen> {
+    with ScreenPermissionMixin<AccountLinkConfigureScreen>, ScreenHeaderMixin<AccountLinkConfigureScreen> {
   @override String get screenName => RouteNames.accountLinkSetup;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: widget.linkName,
+        subtitle: 'Choose how this account is determined, then assign it.',
+      );
 
   String? _level;
   String? _setupId;
@@ -264,6 +271,9 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle live in the shared TopBar via ScreenHeaderMixin — not
+    // rendered here as body content.
+    refreshScreenHeader();
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
@@ -273,28 +283,6 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // No in-content back arrow here — the TopBar's own corner
-              // arrow already provides it; this screen used to duplicate
-              // it with a second back button right next to the title,
-              // which read as confusing ("two back buttons") rather than
-              // matching the deliberate in-content-back pilot on Sales
-              // Order/Sales Invoice (a different, additive convention).
-              Row(children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(widget.linkName,
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                      const SizedBox(height: 4),
-                      const Text('Choose how this account is determined, then assign it.',
-                          style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                    ],
-                  ),
-                ),
-              ]),
-              const SizedBox(height: 20),
-
               if (offline) const OfflineBanner(),
               if (offline) const SizedBox(height: 16),
 

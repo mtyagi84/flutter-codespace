@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/network/dio_client.dart';
@@ -24,8 +25,29 @@ class AdditionalChargesScreen extends ConsumerStatefulWidget {
 }
 
 class _AdditionalChargesScreenState extends ConsumerState<AdditionalChargesScreen>
-    with ScreenPermissionMixin<AdditionalChargesScreen> {
+    with ScreenPermissionMixin<AdditionalChargesScreen>, ScreenHeaderMixin<AdditionalChargesScreen> {
   @override String get screenName => '/master/additional-charges';
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
+    return ScreenHeaderInfo(
+      title: 'Additional Charges',
+      subtitle: 'Shared charge types for Sales and Purchase — freight, loading, handling, insurance…',
+      actions: (canAdd && !offline)
+          ? [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ElevatedButton.icon(
+                  onPressed: () => _openDialog(),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add Charge'),
+                ),
+              ),
+            ]
+          : const [],
+    );
+  }
 
   List<Map<String, dynamic>> _rows  = [];
   List<Map<String, dynamic>> _taxes = [];
@@ -159,15 +181,11 @@ class _AdditionalChargesScreenState extends ConsumerState<AdditionalChargesScree
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle/Add-Charge button live in the shared TopBar via
+    // ScreenHeaderMixin — not rendered here as body content.
+    refreshScreenHeader();
     final offline  = ref.watch(sessionProvider)?.offlineMode ?? false;
     final isMobile = Responsive.isMobile(context);
-    final addButton = (canAdd && !offline)
-        ? ElevatedButton.icon(
-            onPressed: () => _openDialog(),
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add Charge'),
-          )
-        : null;
     return SingleChildScrollView(
       padding: EdgeInsets.all(isMobile ? 16 : 32),
       child: Center(
@@ -176,34 +194,6 @@ class _AdditionalChargesScreenState extends ConsumerState<AdditionalChargesScree
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (isMobile) ...[
-                const Text('Additional Charges',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                const SizedBox(height: 4),
-                const Text('Shared charge types for Sales and Purchase — freight, loading, handling, insurance…',
-                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                if (addButton != null) ...[
-                  const SizedBox(height: 12),
-                  SizedBox(width: double.infinity, child: addButton),
-                ],
-              ] else
-                Row(children: [
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Additional Charges',
-                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                        SizedBox(height: 4),
-                        Text('Shared charge types for Sales and Purchase — freight, loading, handling, insurance…',
-                            style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                      ],
-                    ),
-                  ),
-                  if (addButton != null) addButton,
-                ]),
-              const SizedBox(height: 20),
-
               if (offline) const OfflineBanner(),
               if (offline) const SizedBox(height: 16),
 

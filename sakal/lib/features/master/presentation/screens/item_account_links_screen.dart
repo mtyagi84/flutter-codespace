@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/network/dio_client.dart';
@@ -34,8 +35,14 @@ class ItemAccountLinksScreen extends ConsumerStatefulWidget {
 }
 
 class _ItemAccountLinksScreenState extends ConsumerState<ItemAccountLinksScreen>
-    with ScreenPermissionMixin<ItemAccountLinksScreen> {
+    with ScreenPermissionMixin<ItemAccountLinksScreen>, ScreenHeaderMixin<ItemAccountLinksScreen> {
   @override String get screenName => RouteNames.itemAccountLinks;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(
+        title: 'Item Account Links',
+        subtitle: 'View or override which GL account each posting type uses for a specific item.',
+      );
 
   List<Map<String, dynamic>> _products  = [];
   List<ItemCategoryModel>    _categories = [];
@@ -162,6 +169,9 @@ class _ItemAccountLinksScreenState extends ConsumerState<ItemAccountLinksScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle live in the shared TopBar via ScreenHeaderMixin — not
+    // rendered here as body content.
+    refreshScreenHeader();
     final offline  = ref.watch(sessionProvider)?.offlineMode ?? false;
     final isMobile = Responsive.isMobile(context);
     final filtered = _filteredProducts;
@@ -173,13 +183,6 @@ class _ItemAccountLinksScreenState extends ConsumerState<ItemAccountLinksScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('Item Account Links',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-              const SizedBox(height: 4),
-              const Text('View or override which GL account each posting type uses for a specific item.',
-                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-              const SizedBox(height: 20),
-
               if (offline) const OfflineBanner(),
               if (offline) const SizedBox(height: 16),
 

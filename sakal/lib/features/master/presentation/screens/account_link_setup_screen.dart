@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/router/route_names.dart';
@@ -49,8 +50,15 @@ class AccountLinkSetupScreen extends ConsumerStatefulWidget {
 }
 
 class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
-    with ScreenPermissionMixin<AccountLinkSetupScreen> {
+    with ScreenPermissionMixin<AccountLinkSetupScreen>, ScreenHeaderMixin<AccountLinkSetupScreen> {
   @override String get screenName => RouteNames.accountLinkSetup;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(
+        title: 'Account Link Setup',
+        subtitle: 'GL account determination — decide which account each posting type uses '
+            '(company-wide, by category, by location, or per item).',
+      );
 
   List<AccountLinkType> _types = [];
   Map<String, String> _levelByType = {};   // link_type_id -> link_type
@@ -161,24 +169,13 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle live in the shared TopBar via ScreenHeaderMixin — not
+    // rendered here as body content.
+    refreshScreenHeader();
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Account Link Setup',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-            SizedBox(height: 4),
-            Text(
-                'GL account determination — decide which account each posting type uses '
-                '(company-wide, by category, by location, or per item).',
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-          ]),
-        ),
-        const SizedBox(height: 16),
-
         if (offline) const OfflineBanner(),
 
         if (_error != null)

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
@@ -22,8 +23,36 @@ class ItemCategoriesScreen extends ConsumerStatefulWidget {
 }
 
 class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
-    with ScreenPermissionMixin<ItemCategoriesScreen> {
+    with ScreenPermissionMixin<ItemCategoriesScreen>, ScreenHeaderMixin<ItemCategoriesScreen> {
   @override String get screenName => '/master/item-categories';
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
+    return ScreenHeaderInfo(
+      title: 'Item Categories',
+      subtitle: '${_flat.length} categories  ·  ${_levels.length} levels configured',
+      actions: [
+        if (_saving)
+          const Padding(
+            padding: EdgeInsets.only(right: 12),
+            child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+          ),
+        // Hidden while the add/edit panel is already open — having both
+        // "+Add {Level}" and the panel's own Save visible at once left the
+        // user unsure which one to use.
+        if (_canAdd && _levels.isNotEmpty && _panelMode == 'none' && !offline)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilledButton.icon(
+              onPressed: _saving ? null : () => _openAdd(),
+              icon: const Icon(Icons.add, size: 18),
+              label: Text('Add ${_levelLabel(1)}'),
+            ),
+          ),
+      ],
+    );
+  }
   // Data
   List<CategoryLevelModel>               _levels     = [];
   List<ProductFlagTypeModel>             _flagTypes  = [];
@@ -296,6 +325,9 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
   // ── Build ───────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle/Add-button live in the shared TopBar via
+    // ScreenHeaderMixin — not rendered here as body content.
+    refreshScreenHeader();
     final isWide = Responsive.isDesktop(context);
 
     return Scaffold(
@@ -307,7 +339,6 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildHeader(),
                   if (ref.read(sessionProvider)?.offlineMode == true)
                     const Padding(
                       padding: EdgeInsets.only(top: 8),
@@ -357,47 +388,6 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
                 ],
               ),
             ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Item Categories',
-                  style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary)),
-              const SizedBox(height: 4),
-              Text(
-                '${_flat.length} categories  ·  ${_levels.length} levels configured',
-                style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
-              ),
-            ],
-          ),
-        ),
-        if (_saving)
-          const Padding(
-            padding: EdgeInsets.only(right: 12),
-            child: SizedBox(
-                width: 18, height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2)),
-          ),
-        // Hidden while the add/edit panel is already open — having both
-        // "+Add {Level}" and the panel's own Save visible at once left the
-        // user unsure which one to use.
-        if (_canAdd && _levels.isNotEmpty && _panelMode == 'none' &&
-            !(ref.read(sessionProvider)?.offlineMode ?? false))
-          FilledButton.icon(
-            onPressed: _saving ? null : () => _openAdd(),
-            icon: const Icon(Icons.add, size: 18),
-            label: Text('Add ${_levelLabel(1)}'),
-          ),
-      ],
     );
   }
 

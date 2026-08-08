@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
@@ -38,8 +39,16 @@ class ChartOfAccountsScreen extends ConsumerStatefulWidget {
 
 class _ChartOfAccountsScreenState
     extends ConsumerState<ChartOfAccountsScreen>
-    with ScreenPermissionMixin<ChartOfAccountsScreen> {
+    with ScreenPermissionMixin<ChartOfAccountsScreen>, ScreenHeaderMixin<ChartOfAccountsScreen> {
   @override String get screenName => RouteNames.chartOfAccounts;
+
+  // This screen has no local top-level title block of its own — it's a
+  // two-panel master/detail layout where the left panel's "Accounts" label
+  // and the right panel's "Add Account"/"Account Details" text are both
+  // functional panel headers, not a duplicated page title. Registering a
+  // plain static title here is still better than TopBar's blank fallback.
+  @override
+  ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(title: 'Chart of Accounts');
 
   // Data
   List<Map<String, dynamic>> _accounts   = [];
@@ -429,6 +438,8 @@ class _ChartOfAccountsScreenState
 
   @override
   Widget build(BuildContext context) {
+    // Static title lives in the shared TopBar via ScreenHeaderMixin.
+    refreshScreenHeader();
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) { return Center(
         child: Text(_error!, style: const TextStyle(color: AppColors.negative))); }

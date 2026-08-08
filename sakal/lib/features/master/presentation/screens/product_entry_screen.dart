@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -37,9 +38,22 @@ class ProductEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
-    with ScreenPermissionMixin<ProductEntryScreen> {
+    with ScreenPermissionMixin<ProductEntryScreen>, ScreenHeaderMixin<ProductEntryScreen> {
   @override
   String get screenName => RouteNames.productMaster;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
+    final canSave = !offline && (_isNew ? canAdd : canEdit);
+    return ScreenHeaderInfo(
+      title: _isNew ? 'New Product' : _nameCtrl.text.isNotEmpty ? _nameCtrl.text : 'Edit Product',
+      subtitle: 'Product Master',
+      actions: canSave
+          ? [Padding(padding: const EdgeInsets.only(right: 8), child: _buildSaveButton())]
+          : const [],
+    );
+  }
 
   late final ProductsRepository _repo;
   final _formKey = GlobalKey<FormState>();
@@ -523,10 +537,12 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle/Save button live in the shared TopBar via
+    // ScreenHeaderMixin — not rendered here as body content.
+    refreshScreenHeader();
     final session = ref.watch(sessionProvider);
     final offline = session?.offlineMode ?? false;
     final canSave = !offline && (_isNew ? canAdd : canEdit);
-    final isMobile = Responsive.isMobile(context);
 
     if (_loadingRefs || _loadingProd) {
       return const Center(child: CircularProgressIndicator());
@@ -550,23 +566,6 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
                     // shrink-wrap instead of filling the 900px form width.
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // ── Page header ─────────────────────────────────────
-                      isMobile
-                          ? Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildTitleBlock(),
-                                const SizedBox(height: 10),
-                                if (canSave) _buildSaveButton(),
-                              ],
-                            )
-                          : Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(child: _buildTitleBlock()),
-                                if (canSave) _buildSaveButton(),
-                              ],
-                            ),
                       if (_error != null) ...[
                         const SizedBox(height: 16),
                         _ErrorBanner(_error!),
@@ -607,34 +606,6 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
       ],
     );
   }
-
-  // A plain Column (not a Row wrapping a single Column child) — a Row gives
-  // a non-flex child unbounded main-axis width, so the Text below never
-  // wraps and silently overflows on a narrow phone. See CLAUDE.md's "Row &
-  // Column layout distribution" rule; real bug caught live 2026-08-07.
-  Widget _buildTitleBlock() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(
-        _isNew ? 'New Product' : _nameCtrl.text.isNotEmpty
-            ? _nameCtrl.text
-            : 'Edit Product',
-        overflow: TextOverflow.ellipsis,
-        maxLines: 1,
-        style: const TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary),
-      ),
-      const Text('Product Master',
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-          style: TextStyle(
-              fontSize: 13,
-              color: AppColors.textSecondary)),
-    ],
-  );
 
   Widget _buildSaveButton() => FilledButton.icon(
     onPressed: _saving ? null : _save,

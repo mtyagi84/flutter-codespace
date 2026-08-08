@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -52,8 +53,14 @@ class CommonMastersScreen extends ConsumerStatefulWidget {
 }
 
 class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
-    with ScreenPermissionMixin<CommonMastersScreen> {
+    with ScreenPermissionMixin<CommonMastersScreen>, ScreenHeaderMixin<CommonMastersScreen> {
   @override String get screenName => RouteNames.commonMasters;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(
+        title: 'Common Masters',
+        subtitle: 'Shared lookup values used in various screens',
+      );
 
   List<CommonMasterTypeModel> _types   = [];
   List<CommonMasterModel>     _masters = [];
@@ -275,6 +282,9 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle live in the shared TopBar via ScreenHeaderMixin — not
+    // rendered here as body content.
+    refreshScreenHeader();
     final session   = ref.watch(sessionProvider);
     final isOffline = session?.offlineMode ?? false;
     final isMobile  = Responsive.isMobile(context);
@@ -287,20 +297,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
       children: [
         if (isOffline) const OfflineBanner(),
 
-        // ── Page header ────────────────────────────────────────────────────
-        const Padding(
-          padding: EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Common Masters',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary)),
-            SizedBox(height: 2),
-            Text('Shared lookup values used in various screens',
-                style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
-          ]),
-        ),
-
-        const Divider(height: 24),
+        const SizedBox(height: 12),
 
         // ── Type selector + search + add button ───────────────────────────
         Padding(

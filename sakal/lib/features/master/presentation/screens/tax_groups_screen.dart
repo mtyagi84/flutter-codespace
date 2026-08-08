@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
@@ -21,8 +22,15 @@ class TaxGroupsScreen extends ConsumerStatefulWidget {
 }
 
 class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
-    with ScreenPermissionMixin<TaxGroupsScreen> {
+    with ScreenPermissionMixin<TaxGroupsScreen>, ScreenHeaderMixin<TaxGroupsScreen> {
   @override String get screenName => '/master/tax-groups';
+
+  // Same two-panel master/detail shape as Chart of Accounts / Customers /
+  // Suppliers — no page-level title of its own, just panel-internal
+  // headers ("Tax Groups" list header, "New/Edit Tax Group" form header).
+  // A plain static title here is still better than TopBar's blank fallback.
+  @override
+  ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(title: 'Tax Groups');
 
   List<TaxGroupModel>  _groups  = [];
   List<TaxModel>       _allTaxes = [];

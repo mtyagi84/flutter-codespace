@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
@@ -27,8 +28,15 @@ class CustomerMasterScreen extends ConsumerStatefulWidget {
 }
 
 class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
-    with ScreenPermissionMixin<CustomerMasterScreen> {
+    with ScreenPermissionMixin<CustomerMasterScreen>, ScreenHeaderMixin<CustomerMasterScreen> {
   @override String get screenName => RouteNames.customerMaster;
+
+  // Same two-panel master/detail shape as Chart of Accounts — no page-level
+  // title of its own, just panel-internal headers ("Customers" list header,
+  // "New/Edit Customer" form header). A plain static title here is still
+  // better than TopBar's blank fallback.
+  @override
+  ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(title: 'Customers');
 
   List<Map<String, dynamic>> _customers  = [];
   List<Map<String, dynamic>> _filtered   = [];
@@ -629,6 +637,8 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Static title lives in the shared TopBar via ScreenHeaderMixin.
+    refreshScreenHeader();
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) { return Center(
         child: Text(_error!, style: const TextStyle(color: AppColors.negative))); }

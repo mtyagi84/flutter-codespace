@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -24,8 +25,29 @@ class PaymentTermsScreen extends ConsumerStatefulWidget {
 }
 
 class _PaymentTermsScreenState extends ConsumerState<PaymentTermsScreen>
-    with ScreenPermissionMixin<PaymentTermsScreen> {
+    with ScreenPermissionMixin<PaymentTermsScreen>, ScreenHeaderMixin<PaymentTermsScreen> {
   @override String get screenName => '/master/payment-terms';
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
+    return ScreenHeaderInfo(
+      title: 'Payment Terms',
+      subtitle: 'Installment schedules referenced by Sales Order and future documents.',
+      actions: (canAdd && !offline)
+          ? [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ElevatedButton.icon(
+                  onPressed: () => _openDialog(),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add Payment Term'),
+                ),
+              ),
+            ]
+          : const [],
+    );
+  }
 
   List<Map<String, dynamic>> _rows = [];
   bool    _loading = true;
@@ -146,15 +168,11 @@ class _PaymentTermsScreenState extends ConsumerState<PaymentTermsScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle/Add-button live in the shared TopBar via
+    // ScreenHeaderMixin — not rendered here as body content.
+    refreshScreenHeader();
     final offline  = ref.watch(sessionProvider)?.offlineMode ?? false;
     final isMobile = Responsive.isMobile(context);
-    final addButton = (canAdd && !offline)
-        ? ElevatedButton.icon(
-            onPressed: () => _openDialog(),
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add Payment Term'),
-          )
-        : null;
     return SingleChildScrollView(
       padding: EdgeInsets.all(isMobile ? 16 : 32),
       child: Center(
@@ -167,34 +185,6 @@ class _PaymentTermsScreenState extends ConsumerState<PaymentTermsScreen>
             // backdated_entry_control_screen.dart).
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (isMobile) ...[
-                const Text('Payment Terms',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                const SizedBox(height: 4),
-                const Text('Installment schedules referenced by Sales Order and future documents.',
-                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                if (addButton != null) ...[
-                  const SizedBox(height: 12),
-                  SizedBox(width: double.infinity, child: addButton),
-                ],
-              ] else
-                Row(children: [
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Payment Terms',
-                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                        SizedBox(height: 4),
-                        Text('Installment schedules referenced by Sales Order and future documents.',
-                            style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                      ],
-                    ),
-                  ),
-                  if (addButton != null) addButton,
-                ]),
-              const SizedBox(height: 20),
-
               if (offline) const OfflineBanner(),
               if (offline) const SizedBox(height: 16),
 

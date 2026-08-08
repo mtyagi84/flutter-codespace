@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -22,9 +23,30 @@ class ProductListScreen extends ConsumerStatefulWidget {
 }
 
 class _ProductListScreenState extends ConsumerState<ProductListScreen>
-    with ScreenPermissionMixin<ProductListScreen> {
+    with ScreenPermissionMixin<ProductListScreen>, ScreenHeaderMixin<ProductListScreen> {
   @override
   String get screenName => RouteNames.productMaster;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
+    return ScreenHeaderInfo(
+      title: 'Products',
+      subtitle: 'Product and item master',
+      actions: (!offline && canAdd)
+          ? [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilledButton.icon(
+                  onPressed: () => _openEntry(),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('New Product'),
+                ),
+              ),
+            ]
+          : const [],
+    );
+  }
 
   final _searchCtrl = TextEditingController();
   String  _search   = '';
@@ -117,7 +139,9 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen>
 
   @override
   Widget build(BuildContext context) {
-    final session = ref.watch(sessionProvider);
+    // Title/subtitle/New-Product button live in the shared TopBar via
+    // ScreenHeaderMixin — not rendered here as body content.
+    refreshScreenHeader();
 
     return Column(
       children: [
@@ -127,31 +151,6 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen>
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
           child: Column(
             children: [
-              Row(
-                children: [
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Products',
-                          style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary)),
-                      Text('Product and item master',
-                          style: TextStyle(
-                              fontSize: 13, color: AppColors.textSecondary)),
-                    ],
-                  ),
-                  const Spacer(),
-                  if (!(session?.offlineMode ?? false) && canAdd)
-                    FilledButton.icon(
-                      onPressed: () => _openEntry(),
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('New Product'),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
               // Search + filters — the two dropdowns + refresh button are
               // fixed-intrinsic-width siblings of the search field's own
               // Expanded; on mobile their combined width doesn't leave room
