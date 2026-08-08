@@ -1,11 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/theme/app_colors.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen>
+    with ScreenHeaderMixin<DashboardScreen> {
+  @override
+  ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(title: 'Dashboard');
+
+  @override
   Widget build(BuildContext context) {
+    // Title lives in the shared TopBar via ScreenHeaderMixin (see
+    // CLAUDE.md's "Screen header" pattern) — not rendered here as body content.
+    refreshScreenHeader();
     return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,

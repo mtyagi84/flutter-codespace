@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
@@ -15,8 +16,14 @@ class ChangePasswordScreen extends ConsumerStatefulWidget {
       _ChangePasswordScreenState();
 }
 
-class _ChangePasswordScreenState
-    extends ConsumerState<ChangePasswordScreen> {
+class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen>
+    with ScreenHeaderMixin<ChangePasswordScreen> {
+  @override
+  ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(
+        title: 'Change Password',
+        subtitle: 'Update your account password.',
+      );
+
   final _formKey     = GlobalKey<FormState>();
   final _currentCtrl = TextEditingController();
   final _newCtrl     = TextEditingController();
@@ -76,6 +83,9 @@ class _ChangePasswordScreenState
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle live in the shared TopBar via ScreenHeaderMixin (see
+    // CLAUDE.md's "Screen header" pattern) — not rendered here as body content.
+    refreshScreenHeader();
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
@@ -85,17 +95,6 @@ class _ChangePasswordScreenState
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ── Header ───────────────────────────────────────────────
-              const Text('Change Password',
-                  style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary)),
-              const SizedBox(height: 4),
-              const Text('Update your account password.',
-                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-              const SizedBox(height: 24),
-
               // ── Card ─────────────────────────────────────────────────
               Card(
                 shape: RoundedRectangleBorder(
