@@ -29,7 +29,7 @@ class _LogViewerScreenState extends ConsumerState<LogViewerScreen>
             tooltip: 'Copy all to clipboard',
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: AppLogger.exportAsText()));
-              if (context.mounted) {
+              if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Logs copied to clipboard.')),
                 );
