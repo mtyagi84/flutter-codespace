@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
@@ -16,8 +17,34 @@ class CategoryLevelsScreen extends ConsumerStatefulWidget {
 }
 
 class _CategoryLevelsScreenState extends ConsumerState<CategoryLevelsScreen>
-    with ScreenPermissionMixin<CategoryLevelsScreen> {
+    with ScreenPermissionMixin<CategoryLevelsScreen>, ScreenHeaderMixin<CategoryLevelsScreen> {
   @override String get screenName => '/setup/category-levels';
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
+    return ScreenHeaderInfo(
+      title: 'Category Level Setup',
+      subtitle: '${_levels.length} of 4 levels configured  ·  '
+          'These labels appear on all product forms and reports.',
+      actions: [
+        if (_saving)
+          const Padding(
+            padding: EdgeInsets.only(right: 4),
+            child: SizedBox(
+                width: 18, height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2)),
+          ),
+        if (_canAdd && _levels.length < 4 && !offline)
+          FilledButton.icon(
+            onPressed: _saving ? null : () => _openDialog(),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add Level'),
+          ),
+      ],
+    );
+  }
+
   List<CategoryLevelModel> _levels = [];
   bool    _loading = true;
   bool    _saving  = false;
@@ -204,6 +231,9 @@ class _CategoryLevelsScreenState extends ConsumerState<CategoryLevelsScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle/Add-Level action live in the shared TopBar via
+    // ScreenHeaderMixin — call every build so it tracks current state.
+    refreshScreenHeader();
     return Scaffold(
       backgroundColor: AppColors.background,
       body: _loading
@@ -216,45 +246,6 @@ class _CategoryLevelsScreenState extends ConsumerState<CategoryLevelsScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Header
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Category Level Setup',
-                                style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.textPrimary)),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${_levels.length} of 4 levels configured  ·  '
-                              'These labels appear on all product forms and reports.',
-                              style: const TextStyle(
-                                  fontSize: 13, color: AppColors.textSecondary),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (_saving)
-                        const Padding(
-                          padding: EdgeInsets.only(right: 12),
-                          child: SizedBox(
-                              width: 18, height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2)),
-                        ),
-                      if (_canAdd && _levels.length < 4 &&
-                          !(ref.read(sessionProvider)?.offlineMode ?? false))
-                        FilledButton.icon(
-                          onPressed: _saving ? null : () => _openDialog(),
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Add Level'),
-                        ),
-                    ],
-                  ),
-
                   if (ref.read(sessionProvider)?.offlineMode == true)
                     const Padding(
                       padding: EdgeInsets.only(top: 8),

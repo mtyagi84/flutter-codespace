@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -16,7 +17,15 @@ class CompanyScreen extends ConsumerStatefulWidget {
   ConsumerState<CompanyScreen> createState() => _CompanyScreenState();
 }
 
-class _CompanyScreenState extends ConsumerState<CompanyScreen> {
+class _CompanyScreenState extends ConsumerState<CompanyScreen>
+    with ScreenHeaderMixin<CompanyScreen> {
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: 'Company Information',
+        subtitle: 'Edit your company profile, contact details and tax information.',
+        actions: [_buildSaveButton()],
+      );
+
   final _formKey = GlobalKey<FormState>();
 
   // Basic Info
@@ -300,6 +309,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle/Save action live in the shared TopBar via
+    // ScreenHeaderMixin — call every build so it tracks current state.
+    refreshScreenHeader();
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -312,24 +324,6 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Page header — Save moved here (top-right of the title,
-              // mandatory placement convention) from the bottom of what is
-              // a very long scrolling form; mobile stacks it below the
-              // title instead of inline to avoid overflow.
-              if (Responsive.isMobile(context)) ...[
-                _buildTitleBlock(),
-                const SizedBox(height: 12),
-                _buildSaveButton(),
-              ] else
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: _buildTitleBlock()),
-                    _buildSaveButton(),
-                  ],
-                ),
-              const SizedBox(height: 28),
-
               // ── Success / Error banners ──────────────────────────────
               if (_successMsg != null) ...[
                 _Banner(
@@ -380,18 +374,6 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
       ),
     );
   }
-
-  Widget _buildTitleBlock() => const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('Company Information',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-          SizedBox(height: 4),
-          Text('Edit your company profile, contact details and tax information.',
-              style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-        ],
-      );
 
   Widget _buildSaveButton() => SizedBox(
         width: 200,

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -51,7 +52,27 @@ class CitiesScreen extends ConsumerStatefulWidget {
   ConsumerState<CitiesScreen> createState() => _CitiesScreenState();
 }
 
-class _CitiesScreenState extends ConsumerState<CitiesScreen> {
+class _CitiesScreenState extends ConsumerState<CitiesScreen>
+    with ScreenHeaderMixin<CitiesScreen> {
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
+    return ScreenHeaderInfo(
+      title: 'Cities',
+      subtitle: _selectedCountry == null
+          ? 'Select a country to view its cities'
+          : '${_cities.where((c) => c.isActive).length} of ${_cities.length} active',
+      actions: [
+        if (_selectedCountry != null && !offline)
+          ElevatedButton.icon(
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add City'),
+            onPressed: () => _openDialog(),
+          ),
+      ],
+    );
+  }
+
   List<Map<String, dynamic>> _countries  = [];
   List<Map<String, dynamic>> _divisions  = [];
   List<City> _cities     = [];
@@ -331,9 +352,11 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle/Add-City action live in the shared TopBar via
+    // ScreenHeaderMixin — call every build so it tracks current state.
+    refreshScreenHeader();
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     final filtered = _filtered;
-    final activeCount = _cities.where((c) => c.isActive).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -343,39 +366,6 @@ class _CitiesScreenState extends ConsumerState<CitiesScreen> {
           child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header ────────────────────────────────────────────────
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('Cities',
-                        style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary)),
-                    const SizedBox(height: 4),
-                    Text(
-                      _selectedCountry == null
-                          ? 'Select a country to view its cities'
-                          : '$activeCount of ${_cities.length} active',
-                      style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-              if (_selectedCountry != null && !offline)
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add City'),
-                  onPressed: () => _openDialog(),
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
           // ── Filters ───────────────────────────────────────────────
           Wrap(
             spacing: 12,

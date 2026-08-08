@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
@@ -53,7 +54,22 @@ class CurrenciesScreen extends ConsumerStatefulWidget {
   ConsumerState<CurrenciesScreen> createState() => _CurrenciesScreenState();
 }
 
-class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
+class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen>
+    with ScreenHeaderMixin<CurrenciesScreen> {
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final total = _allRows.length;
+    final activeCount = _allRows.where((r) => r.isActive).length;
+    return ScreenHeaderInfo(
+      title: 'Currency Master',
+      subtitle: 'Activate the currencies your company transacts in. '
+          'Base and local currencies are active by default.',
+      trailingBadge: !_loading && total > 0
+          ? _ActiveBadge(active: activeCount, total: total)
+          : null,
+    );
+  }
+
   List<Currency> _allRows      = [];
   List<Currency> _filtered     = [];
   final _searchCtrl = TextEditingController();
@@ -168,8 +184,10 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle/active-count badge live in the shared TopBar via
+    // ScreenHeaderMixin — call every build so it tracks current state.
+    refreshScreenHeader();
     final offline     = ref.watch(sessionProvider)?.offlineMode ?? false;
-    final activeCount = _allRows.where((r) => r.isActive).length;
     final total       = _allRows.length;
 
     return Column(
@@ -179,36 +197,6 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Page header ───────────────────────────────────────────
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Currency Master',
-                            style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary)),
-                        SizedBox(height: 4),
-                        Text(
-                            'Activate the currencies your company transacts in. '
-                            'Base and local currencies are active by default.',
-                            style: TextStyle(
-                                fontSize: 13, color: AppColors.textSecondary)),
-                      ],
-                    ),
-                  ),
-                  if (!_loading && total > 0) ...[
-                    const SizedBox(width: 16),
-                    _ActiveBadge(active: activeCount, total: total),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 16),
-
               // ── Error banner ──────────────────────────────────────────
               if (_error != null) ...[
                 _ErrorBanner(message: _error!, onRetry: _load),

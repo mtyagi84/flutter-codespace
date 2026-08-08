@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
 import '../../../../core/providers/session_provider.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -35,8 +36,20 @@ class _TxnTypeRow {
 }
 
 class _BackdatedEntryControlScreenState extends ConsumerState<BackdatedEntryControlScreen>
-    with ScreenPermissionMixin<BackdatedEntryControlScreen> {
+    with ScreenPermissionMixin<BackdatedEntryControlScreen>, ScreenHeaderMixin<BackdatedEntryControlScreen> {
   @override String get screenName => RouteNames.backdatedEntryControl;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
+    return ScreenHeaderInfo(
+      title: 'Backdated Entry Control',
+      subtitle: 'Per-screen guardrail for how far back a new entry can normally be '
+          'dated. Leave Max Days blank for unlimited. This is separate from Period '
+          'Close — a locked period always blocks posting regardless of this setting.',
+      actions: canEdit && !offline ? [_buildSaveButton()] : const [],
+    );
+  }
 
   static const _types = [
     ('GRN', 'Goods Receipt'),
@@ -150,6 +163,9 @@ class _BackdatedEntryControlScreenState extends ConsumerState<BackdatedEntryCont
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle/Save action live in the shared TopBar via
+    // ScreenHeaderMixin — call every build so it tracks current state.
+    refreshScreenHeader();
     final offline  = ref.watch(sessionProvider)?.offlineMode ?? false;
     final isMobile = Responsive.isMobile(context);
     return SingleChildScrollView(
@@ -166,26 +182,6 @@ class _BackdatedEntryControlScreenState extends ConsumerState<BackdatedEntryCont
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Save button belongs top-right next to the title on every
-              // entry screen (mandatory placement convention) — it was
-              // previously only reachable at the bottom of the form.
-              // Mobile stacks it below the title block to avoid overflow.
-              if (isMobile) ...[
-                _buildTitleBlock(),
-                if (canEdit && !offline) ...[
-                  const SizedBox(height: 12),
-                  _buildSaveButton(),
-                ],
-              ] else
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: _buildTitleBlock()),
-                    if (canEdit && !offline) _buildSaveButton(),
-                  ],
-                ),
-              const SizedBox(height: 20),
-
               if (offline) const OfflineBanner(),
               if (offline) const SizedBox(height: 16),
 
@@ -221,21 +217,6 @@ class _BackdatedEntryControlScreenState extends ConsumerState<BackdatedEntryCont
       ),
     );
   }
-
-  Widget _buildTitleBlock() => const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('Backdated Entry Control',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-          SizedBox(height: 4),
-          Text(
-              'Per-screen guardrail for how far back a new entry can normally be dated. '
-              'Leave Max Days blank for unlimited. This is separate from Period Close — '
-              'a locked period always blocks posting regardless of this setting.',
-              style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-        ],
-      );
 
   Widget _buildSaveButton() => SizedBox(
         width: 160,

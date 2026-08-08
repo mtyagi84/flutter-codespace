@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
@@ -93,8 +94,25 @@ class LocationsScreen extends ConsumerStatefulWidget {
 }
 
 class _LocationsScreenState extends ConsumerState<LocationsScreen>
-    with ScreenPermissionMixin<LocationsScreen> {
+    with ScreenPermissionMixin<LocationsScreen>, ScreenHeaderMixin<LocationsScreen> {
   @override String get screenName => '/setup/locations';
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
+    return ScreenHeaderInfo(
+      title: 'Location Master',
+      subtitle: 'Manage stores, warehouses and offices under this company.',
+      actions: [
+        if (canAdd && !offline)
+          ElevatedButton.icon(
+            onPressed: () => _openDialog(),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add Location'),
+          ),
+      ],
+    );
+  }
 
   List<Location> _rows   = [];
   List<Map<String, dynamic>> _groups = [];
@@ -222,6 +240,9 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle/Add-Location action live in the shared TopBar via
+    // ScreenHeaderMixin — call every build so it tracks current state.
+    refreshScreenHeader();
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     return Column(
       children: [
@@ -230,35 +251,6 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ── Header ────────────────────────────────────────────────
-              Row(
-                children: [
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Location Master',
-                            style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary)),
-                        SizedBox(height: 4),
-                        Text('Manage stores, warehouses and offices under this company.',
-                            style: TextStyle(
-                                fontSize: 13, color: AppColors.textSecondary)),
-                      ],
-                    ),
-                  ),
-                  if (canAdd && !offline)
-                    ElevatedButton.icon(
-                      onPressed: () => _openDialog(),
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Add Location'),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
               if (offline) const OfflineBanner(),
               if (offline) const SizedBox(height: 16),
 

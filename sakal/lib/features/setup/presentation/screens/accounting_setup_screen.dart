@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -19,7 +20,25 @@ class AccountingSetupScreen extends ConsumerStatefulWidget {
 }
 
 class _AccountingSetupScreenState
-    extends ConsumerState<AccountingSetupScreen> {
+    extends ConsumerState<AccountingSetupScreen>
+    with ScreenHeaderMixin<AccountingSetupScreen> {
+  // No local title block of its own — the two states (locked / setup form)
+  // previously each drew their own "Accounting Setup" heading + subtitle
+  // inline; folded into the shared TopBar here instead.
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final locked = _setup != null && _setup!['is_coa_seeded'] == true;
+    return ScreenHeaderInfo(
+      title: 'Accounting Setup',
+      subtitle: _loading || _error != null
+          ? null
+          : locked
+              ? 'Locked — cannot be changed after Chart of Accounts is seeded.'
+              : 'This is a one-time setup. Accounting standard cannot be '
+                  'changed after the Chart of Accounts is seeded.',
+    );
+  }
+
   Map<String, dynamic>? _setup;
   bool _loading  = true;
   bool _saving   = false;
@@ -151,6 +170,8 @@ class _AccountingSetupScreenState
 
   @override
   Widget build(BuildContext context) {
+    // Static/dynamic title lives in the shared TopBar via ScreenHeaderMixin.
+    refreshScreenHeader();
     return Scaffold(
       backgroundColor: AppColors.background,
       body: _loading
@@ -182,17 +203,6 @@ class _AccountingSetupScreenState
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(children: [
-              Icon(Icons.lock_outline, size: 20, color: AppColors.positive),
-              SizedBox(width: 8),
-              Text('Accounting Setup',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary)),
-            ]),
-            const SizedBox(height: 4),
-            const Text('Locked — cannot be changed after Chart of Accounts is seeded.',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            const SizedBox(height: 28),
             _infoRow('Accounting Standard', std == 'OHADA'
                 ? 'OHADA / SYSCOHADA (DRC & Francophone Africa)'
                 : 'Indian Accounting Standards'),
@@ -250,17 +260,6 @@ class _AccountingSetupScreenState
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Accounting Setup',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary)),
-              const SizedBox(height: 4),
-              const Text(
-                'This is a one-time setup. Accounting standard cannot be changed '
-                'after the Chart of Accounts is seeded.',
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 32),
-
               // Accounting Standard
               const Text('Accounting Standard *',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,

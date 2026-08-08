@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
@@ -22,8 +23,26 @@ class LocationGroupsScreen extends ConsumerStatefulWidget {
 }
 
 class _LocationGroupsScreenState extends ConsumerState<LocationGroupsScreen>
-    with ScreenPermissionMixin<LocationGroupsScreen> {
+    with ScreenPermissionMixin<LocationGroupsScreen>, ScreenHeaderMixin<LocationGroupsScreen> {
   @override String get screenName => '/setup/location-groups';
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
+    return ScreenHeaderInfo(
+      title: 'Location Groups',
+      subtitle: 'Group locations into accountable entities. Groups determine how '
+          'stock movements between your own locations are treated.',
+      actions: [
+        if (canAdd && !offline)
+          ElevatedButton.icon(
+            onPressed: () => _openDialog(),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add Group'),
+          ),
+      ],
+    );
+  }
 
   List<Map<String, dynamic>> _rows  = [];
   List<Map<String, dynamic>> _users = [];
@@ -244,6 +263,9 @@ class _LocationGroupsScreenState extends ConsumerState<LocationGroupsScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle/Add-Group action live in the shared TopBar via
+    // ScreenHeaderMixin — call every build so it tracks current state.
+    refreshScreenHeader();
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
@@ -253,34 +275,6 @@ class _LocationGroupsScreenState extends ConsumerState<LocationGroupsScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Location Groups',
-                            style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary)),
-                        SizedBox(height: 4),
-                        Text('Group locations into accountable entities. Groups determine how stock '
-                            'movements between your own locations are treated.',
-                            style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                      ],
-                    ),
-                  ),
-                  if (canAdd && !offline)
-                    ElevatedButton.icon(
-                      onPressed: () => _openDialog(),
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Add Group'),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(

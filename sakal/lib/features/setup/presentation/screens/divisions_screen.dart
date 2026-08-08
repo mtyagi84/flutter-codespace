@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/database/datasources/generic_lookup_local_ds.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -48,7 +49,28 @@ class DivisionsScreen extends ConsumerStatefulWidget {
   ConsumerState<DivisionsScreen> createState() => _DivisionsScreenState();
 }
 
-class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
+class _DivisionsScreenState extends ConsumerState<DivisionsScreen>
+    with ScreenHeaderMixin<DivisionsScreen> {
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
+    return ScreenHeaderInfo(
+      title: 'Divisions',
+      subtitle: _selectedCountry == null
+          ? 'Select a country to view its divisions'
+          : '${_divisions.length} ${_divisionLabel.toLowerCase()}s'
+            '  ·  ${_divisions.where((d) => !d.isSystem).length} custom',
+      actions: [
+        if (_selectedCountry != null && !offline)
+          ElevatedButton.icon(
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add Custom'),
+            onPressed: () => _openDialog(),
+          ),
+      ],
+    );
+  }
+
   List<Map<String, dynamic>> _countries  = [];
   List<Division> _divisions  = [];
   String? _selectedCountry;
@@ -227,6 +249,9 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Title/subtitle/Add-Custom action live in the shared TopBar via
+    // ScreenHeaderMixin — call every build so it tracks current state.
+    refreshScreenHeader();
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     return Column(
       children: [
@@ -235,40 +260,6 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen> {
           child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header ────────────────────────────────────────────────
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('Divisions',
-                        style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary)),
-                    const SizedBox(height: 4),
-                    Text(
-                      _selectedCountry == null
-                          ? 'Select a country to view its divisions'
-                          : '${_divisions.length} ${_divisionLabel.toLowerCase()}s'
-                            '  ·  ${_divisions.where((d) => !d.isSystem).length} custom',
-                      style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-              if (_selectedCountry != null && !offline)
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add Custom'),
-                  onPressed: () => _openDialog(),
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
           // ── Country filter ────────────────────────────────────────
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 340),
