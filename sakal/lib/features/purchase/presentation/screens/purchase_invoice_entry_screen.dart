@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -32,9 +33,18 @@ class PurchaseInvoiceEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntryScreen>
-    with ScreenPermissionMixin<PurchaseInvoiceEntryScreen> {
+    with ScreenPermissionMixin<PurchaseInvoiceEntryScreen>, ScreenHeaderMixin<PurchaseInvoiceEntryScreen> {
   // Entry screen is not itself a menu item — Menu -> List -> Entry pattern.
   @override String get screenName => RouteNames.purchaseInvoices;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: _invoiceNo != null ? 'Purchase Bill · $_invoiceNo' : 'New Purchase Bill',
+        subtitle: _status != 'APPROVED' ? (_invoiceNo != null ? 'Draft' : 'Unsaved draft') : null,
+        badgeText: _status == 'APPROVED' ? _status : null,
+        badgeColor: _status == 'APPROVED' ? AppColors.positive : null,
+        actions: _invoiceNo != null ? [_buildPrintButton()] : const [],
+      );
 
   PurchaseInvoiceRepository get _ds => ref.read(purchaseInvoiceRepositoryProvider);
 
@@ -433,32 +443,22 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
     final locked      = _status != 'DRAFT';
 
+    // Title/subtitle/status-badge/Print now live in the shared TopBar via
+    // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. Save/
+    // Approve stay here as a slim body row (same reasoning as GRN Entry's
+    // own migration).
+    refreshScreenHeader();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
 
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: isMobile
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _buildTitleBlock(),
-                  if (_invoiceNo != null || canSave || showApprove) ...[
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      if (_invoiceNo != null) _buildPrintButton(),
-                      if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
-                    ]),
-                  ],
-                ])
-              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(child: _buildTitleBlock()),
-                  if (_invoiceNo != null) _buildPrintButton(),
-                  if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
-                ]),
-        ),
-
-        const Divider(height: 20),
+        if (canSave || showApprove)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+            child: _buildActionButtons(canSave: canSave, canApprove: showApprove),
+          ),
 
         Expanded(
           child: _loading
@@ -496,33 +496,6 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
           textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
     ),
   );
-
-  // A plain Column (not a Row wrapping a single Column child) — a Row gives
-  // a non-flex child unbounded main-axis width, so the Text below never
-  // wraps and silently overflows on a narrow phone. See CLAUDE.md's "Row &
-  // Column layout distribution" rule; real bug caught live 2026-08-07.
-  Widget _buildTitleBlock() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(_invoiceNo != null ? 'Purchase Bill · $_invoiceNo' : 'New Purchase Bill',
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-      const SizedBox(height: 2),
-      _status == 'APPROVED'
-          ? _statusChip(_status)
-          : Text(_invoiceNo != null ? 'Draft' : 'Unsaved draft',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-    ],
-  );
-
-  Widget _statusChip(String status) {
-    final color = status == 'APPROVED' ? AppColors.positive : AppColors.secondary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(4)),
-      child: Text(status, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
-    );
-  }
 
   Widget _buildActionButtons({required bool canSave, required bool canApprove}) => Row(children: [
     if (canSave) FilledButton(

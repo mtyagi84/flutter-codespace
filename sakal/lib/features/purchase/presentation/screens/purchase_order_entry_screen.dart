@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/master_type_keys.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -127,10 +128,28 @@ class PurchaseOrderEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScreen>
-    with ScreenPermissionMixin<PurchaseOrderEntryScreen> {
+    with ScreenPermissionMixin<PurchaseOrderEntryScreen>, ScreenHeaderMixin<PurchaseOrderEntryScreen> {
   // Same key as the list screen — the entry screen is not itself a menu
   // item, per the shared ERP navigation pattern (Menu -> List -> Entry).
   @override String get screenName => RouteNames.purchaseOrders;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final locked = _status != 'DRAFT';
+    return ScreenHeaderInfo(
+      title: _orderNo != null ? 'Purchase Order · $_orderNo' : 'New Purchase Order',
+      subtitle: locked ? null : (_orderNo != null ? 'Draft' : 'Unsaved draft'),
+      badgeText: locked ? _status : null,
+      badgeColor: locked
+          ? (_status == 'APPROVED' ? AppColors.positive : _status == 'CANCELLED' ? AppColors.negative : AppColors.secondary)
+          : null,
+      trailingBadge: _orderNo != null ? PendingSyncBadge(documentType: 'PURCHASE_ORDER', documentId: _orderNo!) : null,
+      actions: [
+        if (_canCopy) _buildCopyButton(),
+        if (_orderNo != null) _buildPrintButton(),
+      ],
+    );
+  }
 
   PurchaseOrderRepository get _ds => ref.read(purchaseOrderRepositoryProvider);
 
@@ -904,34 +923,22 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     final showApprove  = _status == 'DRAFT' && !isOffline && canApprove && _orderNo != null;
     final locked       = _status != 'DRAFT';
 
+    // Title/subtitle/status-badge/Copy/Print now live in the shared TopBar
+    // via ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. Save/
+    // Approve stay here as a slim body row (same reasoning as GRN Entry's
+    // own migration).
+    refreshScreenHeader();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
 
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: isMobile
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _buildTitleBlock(locked),
-                  if (_canCopy || _orderNo != null || canSave || showApprove) ...[
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      if (_canCopy) _buildCopyButton(),
-                      if (_orderNo != null) _buildPrintButton(),
-                      if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
-                    ]),
-                  ],
-                ])
-              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(child: _buildTitleBlock(locked)),
-                  if (_canCopy) _buildCopyButton(),
-                  if (_orderNo != null) _buildPrintButton(),
-                  if (canSave || showApprove) _buildActionButtons(canSave: canSave, canApprove: showApprove),
-                ]),
-        ),
-
-        const Divider(height: 20),
+        if (canSave || showApprove)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+            child: _buildActionButtons(canSave: canSave, canApprove: showApprove),
+          ),
 
         Expanded(
           child: _loading
@@ -959,44 +966,6 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
                 ),
         ),
       ],
-    );
-  }
-
-  // In-content back button, additive to TopBar's own corner arrow — see
-  // design_system_guide.md §5.2.
-  Widget _buildTitleBlock(bool locked) => Row(
-    crossAxisAlignment: CrossAxisAlignment.center,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(_orderNo != null ? 'Purchase Order · $_orderNo' : 'New Purchase Order',
-              overflow: TextOverflow.ellipsis, maxLines: 1,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-          const SizedBox(height: 2),
-          if (locked)
-            _statusChip(_status)
-          else
-            Row(children: [
-              Text(_orderNo != null ? 'Draft' : 'Unsaved draft',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              if (_orderNo != null) ...[
-                const SizedBox(width: 8),
-                PendingSyncBadge(documentType: 'PURCHASE_ORDER', documentId: _orderNo!),
-              ],
-            ]),
-        ]),
-      ),
-    ],
-  );
-
-  Widget _statusChip(String status) {
-    final color = status == 'APPROVED' ? AppColors.positive
-        : status == 'CANCELLED' ? AppColors.negative : AppColors.secondary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(4)),
-      child: Text(status, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
     );
   }
 
