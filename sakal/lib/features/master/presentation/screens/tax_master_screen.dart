@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
@@ -21,8 +22,15 @@ class TaxMasterScreen extends ConsumerStatefulWidget {
 }
 
 class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
-    with ScreenPermissionMixin<TaxMasterScreen> {
+    with ScreenPermissionMixin<TaxMasterScreen>, ScreenHeaderMixin<TaxMasterScreen> {
   @override String get screenName => '/master/tax-master';
+
+  // Two-panel master/detail shape, same as Chart of Accounts/Customers —
+  // "Taxes" is a panel-internal list header, not a page-level title to
+  // remove. A plain static title here is still better than TopBar's blank
+  // fallback.
+  @override
+  ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(title: 'Tax Master');
 
   // Data
   List<TaxTypeModel>         _taxTypes    = [];
@@ -379,6 +387,8 @@ class _TaxMasterScreenState extends ConsumerState<TaxMasterScreen>
   // TopBar's own title bar — removed as part of this conversion).
   @override
   Widget build(BuildContext context) {
+    // Static title lives in the shared TopBar via ScreenHeaderMixin.
+    refreshScreenHeader();
     if (Responsive.isMobile(context)) {
       return _panelMode == 'none' ? _listPanel() : _formPanel();
     }
