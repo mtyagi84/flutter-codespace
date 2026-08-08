@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/models/menu_models.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
@@ -64,7 +65,16 @@ class ExchangeRateScreen extends ConsumerStatefulWidget {
   ConsumerState<ExchangeRateScreen> createState() => _ExchangeRateScreenState();
 }
 
-class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
+class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen>
+    with ScreenHeaderMixin<ExchangeRateScreen> {
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: 'Exchange Rates',
+        subtitle: _baseCurrency.isEmpty
+            ? 'Set base currency in Company Setup first'
+            : 'Daily buying & selling rates  ·  Base currency: $_baseCurrency',
+      );
+
   List<Map<String, dynamic>> _locations = [];
   String?   _locationId;
   DateTime  _rateDate     = DateTime.now();
@@ -360,33 +370,19 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen> {
     final canCopy = feature.addAllowed || feature.editAllowed;
     final canBulk = feature.approveAllowed;
 
+    // Title + subtitle now live in the shared TopBar via ScreenHeaderMixin
+    // (see CLAUDE.md's "Screen header" pattern) — not rendered here as
+    // body content.
+    refreshScreenHeader();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
 
-        // ── Page header ──────────────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Exchange Rates',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700,
-                    color: AppColors.primary)),
-            const SizedBox(height: 2),
-            Text(
-              _baseCurrency.isEmpty
-                  ? 'Set base currency in Company Setup first'
-                  : 'Daily buying & selling rates  ·  Base currency: $_baseCurrency',
-              style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-            ),
-          ]),
-        ),
-
-        const Divider(height: 24),
-
         // ── Location + Date controls ─────────────────────────────────────────
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
           child: Wrap(
             spacing: 12, runSpacing: 12,
             crossAxisAlignment: WrapCrossAlignment.center,

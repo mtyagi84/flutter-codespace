@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/router/route_names.dart';
@@ -39,9 +40,18 @@ class ContraVoucherEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScreen>
-    with ScreenPermissionMixin<ContraVoucherEntryScreen> {
+    with ScreenPermissionMixin<ContraVoucherEntryScreen>, ScreenHeaderMixin<ContraVoucherEntryScreen> {
   @override
   String get screenName => RouteNames.contraVoucherList;
+
+  @override
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: _transNo ?? 'New Contra Voucher',
+        subtitle: _flavorLabel,
+        badgeText: _isPosted ? 'Posted' : 'Draft',
+        badgeColor: _isPosted ? AppColors.positive : AppColors.secondary,
+        actions: _transNo != null ? [_buildPrintButton()] : const [],
+      );
 
   FinanceVoucherRepository get _ds => ref.read(financeVoucherRepositoryProvider);
 
@@ -743,24 +753,22 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
     final canSave = !_locked && (_isNew ? canAdd : canEdit);
     final showApprove = !_locked && canApprove && !_isNew;
     final showReverse = _locked && canApprove;
+    final showCopy = !_locked && !_isNew;
+
+    // Title/subtitle/status-badge/Print now live in the shared TopBar via
+    // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. Copy/
+    // Reverse/Save/Approve stay here as a slim body row (multi-button —
+    // never moved into TopBar.actions).
+    refreshScreenHeader();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: isMobile
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _buildTitleBlock(),
-                  const SizedBox(height: 10),
-                  Wrap(spacing: 8, runSpacing: 8, children: _buildActionButtons(canSave, showApprove, showReverse)),
-                ])
-              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(child: _buildTitleBlock()),
-                  ..._buildActionButtons(canSave, showApprove, showReverse),
-                ]),
-        ),
-        const Divider(height: 20),
+        if (canSave || showApprove || showReverse || showCopy)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+            child: Wrap(spacing: 8, runSpacing: 8, children: _buildActionButtons(canSave, showApprove, showReverse)),
+          ),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
@@ -783,29 +791,21 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
     );
   }
 
-  Widget _buildTitleBlock() {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Flexible(child: Text(_transNo ?? 'New Contra Voucher', overflow: TextOverflow.ellipsis, maxLines: 1, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary))),
-        const SizedBox(width: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(color: AppColors.secondary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(4)),
-          child: Text(_flavorLabel, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.secondary)),
-        ),
-      ]),
-      const SizedBox(height: 4),
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(color: (_isPosted ? AppColors.positive : AppColors.secondary).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(4)),
-        child: Text(_isPosted ? 'Posted' : 'Draft', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _isPosted ? AppColors.positive : AppColors.secondary)),
-      ),
-    ]);
-  }
+  Widget _buildPrintButton() => Tooltip(
+    message: _printing ? 'Preparing PDF…' : 'Print',
+    child: IconButton(
+      icon: _printing
+          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.print_outlined),
+      // sidebarText, not primary — rendered on the dark TopBar now (see
+      // the same fix in grn_entry_screen.dart's own _buildPrintButton()).
+      color: AppColors.sidebarText,
+      onPressed: _printing ? null : _print,
+    ),
+  );
 
   List<Widget> _buildActionButtons(bool canSave, bool showApprove, bool showReverse) {
     return [
-      if (_transNo != null) Tooltip(message: _printing ? 'Preparing PDF…' : 'Print', child: IconButton(icon: _printing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.print_outlined), color: AppColors.primary, onPressed: _printing ? null : _print)),
       if (!_locked && !_isNew) OutlinedButton.icon(onPressed: _applyCopy, icon: const Icon(Icons.copy_outlined, size: 16), label: const Text('Copy')),
       if (showReverse) OutlinedButton.icon(onPressed: _reversing ? null : _reverse, icon: _reversing ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.undo, size: 16), label: const Text('Reverse')),
       if (canSave) FilledButton.icon(onPressed: _saving ? null : () => _saveDraft(), icon: _saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.save_outlined), label: const Text('Save Draft')),

@@ -9,6 +9,7 @@ import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/deferred_row_disposal.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../data/models/finance_voucher_model.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/app_number_format.dart';
@@ -115,7 +116,28 @@ class FinanceVoucherEntryScreen extends ConsumerStatefulWidget {
 
 class _FinanceVoucherEntryScreenState
     extends ConsumerState<FinanceVoucherEntryScreen>
-    with DeferredRowDisposal<FinanceVoucherEntryScreen> {
+    with ScreenHeaderMixin<FinanceVoucherEntryScreen>, DeferredRowDisposal<FinanceVoucherEntryScreen> {
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    String title;
+    if (_voucherNo != null) {
+      title = '${_typeLabels[_voucherType] ?? 'Voucher'}  ·  $_voucherNo';
+    } else if (_voucherType != null) {
+      title = 'New ${_typeLabels[_voucherType] ?? 'Voucher'}';
+    } else {
+      title = 'New Finance Voucher';
+    }
+    return ScreenHeaderInfo(
+      title: title,
+      subtitle: _isPosted ? null : (_voucherNo != null ? 'Draft' : 'Unsaved draft'),
+      badgeText: _isPosted ? 'POSTED — read only' : null,
+      badgeColor: _isPosted ? AppColors.positive : null,
+      trailingBadge: (!_isPosted && _voucherNo != null)
+          ? PendingSyncBadge(documentType: 'FINANCE_VOUCHER', documentId: _voucherNo!)
+          : null,
+      actions: _voucherNo != null ? [_buildPrintButton()] : const [],
+    );
+  }
 
   // ── Header ────────────────────────────────────────────────────────────────
   String?   _voucherType;
@@ -1088,35 +1110,25 @@ class _FinanceVoucherEntryScreenState
     final canApprove = !_isPosted && !isOffline && feature.approveAllowed;
     final locked     = !canSave;
 
+    // Title/subtitle/status-badge/Print now live in the shared TopBar via
+    // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. Copy/
+    // Save/Post stay here as a slim body row (multi-button — never moved
+    // into TopBar.actions).
+    refreshScreenHeader();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
 
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: isMobile
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _buildTitleBlock(),
-                  if (_voucherNo != null || canSave || canApprove) ...[
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      if (_voucherNo != null && _isOnAccount) _buildCopyButton(),
-                      if (_voucherNo != null) _buildPrintButton(),
-                      if (canSave || canApprove)
-                        Expanded(child: _buildActionButtons(canSave: canSave, canApprove: canApprove)),
-                    ]),
-                  ],
-                ])
-              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(child: _buildTitleBlock()),
-                  if (_voucherNo != null && _isOnAccount) _buildCopyButton(),
-                  if (_voucherNo != null) _buildPrintButton(),
-                  if (canSave || canApprove) _buildActionButtons(canSave: canSave, canApprove: canApprove),
-                ]),
-        ),
-
-        const Divider(height: 20),
+        if ((_voucherNo != null && _isOnAccount) || canSave || canApprove)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+            child: Wrap(spacing: 12, runSpacing: 8, children: [
+              if (_voucherNo != null && _isOnAccount) _buildCopyButton(),
+              if (canSave || canApprove) _buildActionButtons(canSave: canSave, canApprove: canApprove),
+            ]),
+          ),
 
         Expanded(
           child: _loading
@@ -1148,46 +1160,6 @@ class _FinanceVoucherEntryScreenState
     );
   }
 
-  Widget _buildTitleBlock() {
-    String title;
-    if (_voucherNo != null) {
-      title = '${_typeLabels[_voucherType] ?? 'Voucher'}  ·  $_voucherNo';
-    } else if (_voucherType != null) {
-      title = 'New ${_typeLabels[_voucherType] ?? 'Voucher'}';
-    } else {
-      title = 'New Finance Voucher';
-    }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title,
-                overflow: TextOverflow.ellipsis, maxLines: 1,
-                style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary)),
-            const SizedBox(height: 2),
-            if (_isPosted)
-              _statusChip('POSTED — read only', AppColors.positive)
-            else
-              Row(children: [
-                Text(
-                  _voucherNo != null ? 'Draft' : 'Unsaved draft',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                ),
-                if (_voucherNo != null) ...[
-                  const SizedBox(width: 8),
-                  PendingSyncBadge(documentType: 'FINANCE_VOUCHER', documentId: _voucherNo!),
-                ],
-              ]),
-          ]),
-        ),
-      ],
-    );
-  }
-
   Widget _buildCopyButton() => Tooltip(
     message: 'Copy to new voucher',
     child: IconButton(
@@ -1203,7 +1175,9 @@ class _FinanceVoucherEntryScreenState
       icon: _printing
           ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
           : const Icon(Icons.print_outlined),
-      color: AppColors.primary,
+      // sidebarText, not primary — rendered on the dark TopBar now (see
+      // the same fix in grn_entry_screen.dart's own _buildPrintButton()).
+      color: AppColors.sidebarText,
       onPressed: _printing ? null : _printVoucher,
     ),
   );
@@ -1815,17 +1789,4 @@ class _FinanceVoucherEntryScreenState
     ]),
   );
 
-  Widget _statusChip(String label, Color color) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.1),
-      borderRadius: BorderRadius.circular(4),
-      border: Border.all(color: color.withValues(alpha: 0.4)),
-    ),
-    child: Text(label,
-        style: TextStyle(
-            fontSize: 11,
-            color: color,
-            fontWeight: FontWeight.w600)),
-  );
 }

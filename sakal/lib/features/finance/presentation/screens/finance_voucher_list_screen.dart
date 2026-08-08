@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/layout/screen_header.dart';
 import '../../../../core/models/menu_models.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
@@ -36,7 +37,25 @@ class FinanceVoucherListScreen extends ConsumerStatefulWidget {
 }
 
 class _FinanceVoucherListScreenState
-    extends ConsumerState<FinanceVoucherListScreen> {
+    extends ConsumerState<FinanceVoucherListScreen>
+    with ScreenHeaderMixin<FinanceVoucherListScreen> {
+  @override
+  ScreenHeaderInfo buildScreenHeader() {
+    final menus = ref.read(menuProvider);
+    final feature = _findFeature(menus, RouteNames.voucherList);
+    final canAdd = feature?.addAllowed ?? false;
+    return ScreenHeaderInfo(
+      title: 'Payment & Receipt Vouchers',
+      actions: canAdd
+          ? [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: _NewVoucherButton(isMobile: Responsive.isMobile(context), onSelect: _openNew),
+              ),
+            ]
+          : const [],
+    );
+  }
 
   List<FinanceVoucherHeader> _vouchers = [];
   Set<String> _pendingIds = {};
@@ -166,35 +185,21 @@ class _FinanceVoucherListScreenState
 
     // Creating a new voucher is allowed offline (queued via SyncEngine) —
     // only Post/Approve requires being online.
-    final canAdd = feature.addAllowed;
-    final rows   = _filtered;
+    final rows = _filtered;
+
+    // Title + New Voucher button live in the shared TopBar via
+    // ScreenHeaderMixin (see CLAUDE.md's "Screen header" pattern) — not
+    // rendered here as body content.
+    refreshScreenHeader();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
 
-        // ── Page header ───────────────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-          child: Row(children: [
-            const Expanded(
-              child: Text('Payment & Receipt Vouchers',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700,
-                      color: AppColors.primary)),
-            ),
-            if (canAdd) ...[
-              const SizedBox(width: 8),
-              _NewVoucherButton(isMobile: isMobile, onSelect: _openNew),
-            ],
-          ]),
-        ),
-
-        const Divider(height: 20),
-
         // ── Filter bar ────────────────────────────────────────────────────────
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final fromField = SakalFieldCard(
