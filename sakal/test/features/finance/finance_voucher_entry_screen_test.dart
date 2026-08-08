@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/models/menu_models.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/providers/session_provider.dart';
@@ -32,6 +33,15 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
+
+/// The screen's title/subtitle/badge no longer render as body text — they're
+/// posted to the shared TopBar via ScreenHeaderMixin (screen_header.dart),
+/// and pumpApp() doesn't include a TopBar in its pumped tree at all. Read
+/// the posted ScreenHeaderInfo back from the provider instead of searching
+/// for rendered text — this is the actual observable contract the screen
+/// provides now.
+ScreenHeaderInfo? _readHeader(WidgetTester tester, Finder screenFinder) =>
+    ProviderScope.containerOf(tester.element(screenFinder)).read(screenHeaderProvider);
 
 // FinanceVoucherEntryScreen is one of the screens that does NOT use
 // ScreenPermissionMixin — it reads menuProvider directly via its own
@@ -135,8 +145,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('New Cash Receipt Voucher'), findsOneWidget);
-      expect(find.text('Unsaved draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(FinanceVoucherEntryScreen));
+      expect(header?.title, 'New Cash Receipt Voucher');
+      expect(header?.subtitle, 'Unsaved draft');
 
       expect(_findFieldLabel('VOUCHER TYPE'), findsOneWidget);
       expect(_findFieldLabel('VOUCHER NO'), findsOneWidget);
@@ -163,7 +174,7 @@ void main() {
       // A brand-new, never-saved voucher has no voucher number yet, so no
       // copy button, no print button, and no post/approve button.
       expect(find.byIcon(Icons.copy_outlined), findsNothing);
-      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(header?.actions, isEmpty);
       expect(find.text('Post Voucher'), findsNothing);
     });
 
@@ -272,8 +283,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('Cash Receipt Voucher  ·  CRV-001'), findsOneWidget);
-      expect(find.text('Draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(FinanceVoucherEntryScreen));
+      expect(header?.title, 'Cash Receipt Voucher  ·  CRV-001');
+      expect(header?.subtitle, 'Draft'); // not posted, voucherNo != null ⇒ subtitle 'Draft' (not badgeText)
       expect(find.text('[CASH-01] Cash In Hand'), findsOneWidget); // Cash account autocomplete field text
       expect(find.text('USD'), findsOneWidget); // Currency read-only field
       expect(find.text('01 Jul 2026'), findsOneWidget); // Date field
@@ -292,7 +304,7 @@ void main() {
 
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Post Voucher'), findsNothing); // approveAllowed=false in this fixture
-      expect(find.byIcon(Icons.print_outlined), findsOneWidget); // a saved voucher is printable
+      expect(header?.actions.length, 1); // a saved voucher is printable
       expect(find.byIcon(Icons.copy_outlined), findsOneWidget); // saved + On Account → copy allowed
     });
 
@@ -498,8 +510,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('New Bank Receipt Voucher'), findsOneWidget);
-      expect(find.text('Unsaved draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(FinanceVoucherEntryScreen));
+      expect(header?.title, 'New Bank Receipt Voucher');
+      expect(header?.subtitle, 'Unsaved draft');
 
       expect(_findFieldLabel('VOUCHER TYPE'), findsOneWidget);
       expect(_findFieldLabel('VOUCHER NO'), findsOneWidget);
@@ -524,7 +537,7 @@ void main() {
 
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.byIcon(Icons.copy_outlined), findsNothing);
-      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(header?.actions, isEmpty);
       expect(find.text('Post Voucher'), findsNothing);
     });
 
@@ -539,8 +552,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('New Cash Payment Voucher'), findsOneWidget);
-      expect(find.text('Unsaved draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(FinanceVoucherEntryScreen));
+      expect(header?.title, 'New Cash Payment Voucher');
+      expect(header?.subtitle, 'Unsaved draft');
 
       expect(_findFieldLabel('VOUCHER TYPE'), findsOneWidget);
       expect(_findFieldLabel('VOUCHER NO'), findsOneWidget);
@@ -565,7 +579,7 @@ void main() {
 
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.byIcon(Icons.copy_outlined), findsNothing);
-      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(header?.actions, isEmpty);
       expect(find.text('Post Voucher'), findsNothing);
     });
 
@@ -580,8 +594,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('New Bank Payment Voucher'), findsOneWidget);
-      expect(find.text('Unsaved draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(FinanceVoucherEntryScreen));
+      expect(header?.title, 'New Bank Payment Voucher');
+      expect(header?.subtitle, 'Unsaved draft');
 
       expect(_findFieldLabel('VOUCHER TYPE'), findsOneWidget);
       expect(_findFieldLabel('VOUCHER NO'), findsOneWidget);
@@ -606,7 +621,7 @@ void main() {
 
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.byIcon(Icons.copy_outlined), findsNothing);
-      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(header?.actions, isEmpty);
       expect(find.text('Post Voucher'), findsNothing);
     });
   });

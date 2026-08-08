@@ -42,18 +42,15 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
   @override
   String get screenName => RouteNames.productMaster;
 
+  // Save is this screen's one primary action — kept in the body (not
+  // TopBar.actions) to match the "primary action button" convention every
+  // other entry screen in the app already uses for Save/Approve, not just
+  // the "single icon action" (Print) exception.
   @override
-  ScreenHeaderInfo buildScreenHeader() {
-    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
-    final canSave = !offline && (_isNew ? canAdd : canEdit);
-    return ScreenHeaderInfo(
-      title: _isNew ? 'New Product' : _nameCtrl.text.isNotEmpty ? _nameCtrl.text : 'Edit Product',
-      subtitle: 'Product Master',
-      actions: canSave
-          ? [Padding(padding: const EdgeInsets.only(right: 8), child: _buildSaveButton())]
-          : const [],
-    );
-  }
+  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
+        title: _isNew ? 'New Product' : _nameCtrl.text.isNotEmpty ? _nameCtrl.text : 'Edit Product',
+        subtitle: 'Product Master',
+      );
 
   late final ProductsRepository _repo;
   final _formKey = GlobalKey<FormState>();
@@ -537,8 +534,9 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Title/subtitle/Save button live in the shared TopBar via
-    // ScreenHeaderMixin — not rendered here as body content.
+    // Title/subtitle live in the shared TopBar via ScreenHeaderMixin — not
+    // rendered here as body content. Save stays in the body below (see
+    // buildScreenHeader()'s own comment for why).
     refreshScreenHeader();
     final session = ref.watch(sessionProvider);
     final offline = session?.offlineMode ?? false;
@@ -551,6 +549,11 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
     return Column(
       children: [
         const OfflineBanner(),
+        if (canSave)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+            child: Align(alignment: Alignment.centerRight, child: _buildSaveButton()),
+          ),
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),

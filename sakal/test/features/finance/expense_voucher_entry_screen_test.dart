@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
 import 'package:sakal/core/widgets/sakal_field_card.dart';
@@ -28,6 +29,15 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
+
+/// The screen's title/subtitle/badge no longer render as body text — they're
+/// posted to the shared TopBar via ScreenHeaderMixin (screen_header.dart),
+/// and pumpApp() doesn't include a TopBar in its pumped tree at all. Read
+/// the posted ScreenHeaderInfo back from the provider instead of searching
+/// for rendered text — this is the actual observable contract the screen
+/// provides now.
+ScreenHeaderInfo? _readHeader(WidgetTester tester, Finder screenFinder) =>
+    ProviderScope.containerOf(tester.element(screenFinder)).read(screenHeaderProvider);
 
 void main() {
   late MockExpenseVoucherRepository mockRepo;
@@ -74,8 +84,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('New Expense Voucher'), findsOneWidget);
-      expect(find.text('Draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(ExpenseVoucherEntryScreen));
+      expect(header?.title, 'New Expense Voucher');
+      expect(header?.badgeText, 'Draft');
 
       expect(_findFieldLabel('VOUCHER NO'), findsOneWidget);
       expect(_findFieldLabel('VOUCHER DATE'), findsOneWidget);
@@ -102,7 +113,7 @@ void main() {
       expect(find.text('Save Draft'), findsOneWidget);
       // A brand-new, never-saved voucher has no trans number yet, so no
       // print button, no copy button, and no approve/reverse button.
-      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(header?.actions, isEmpty);
       expect(find.text('Copy'), findsNothing);
       expect(find.text('Approve'), findsNothing);
       expect(find.byIcon(Icons.undo), findsNothing);
@@ -180,9 +191,13 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      // Title Text + read-only Voucher No field both render the same string.
-      expect(find.text('EXV-001'), findsNWidgets(2));
-      expect(find.text('Draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(ExpenseVoucherEntryScreen));
+      expect(header?.title, 'EXV-001');
+      expect(header?.badgeText, 'Draft');
+      // The read-only Voucher No field card's own value — the title itself
+      // no longer renders as body text (moved to the TopBar via the header
+      // provider, asserted above).
+      expect(find.text('EXV-001'), findsOneWidget);
       expect(find.text('[SUP-001] Test Supplier'), findsOneWidget); // Supplier autocomplete field text
       expect(find.text('USD'), findsOneWidget); // Currency dropdown, single fixture entry
       expect(find.text('01 Jul 2026'), findsOneWidget); // Voucher Date
@@ -200,7 +215,7 @@ void main() {
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Copy'), findsOneWidget); // saved + not locked → copy allowed
       expect(find.text('Approve'), findsNothing); // canApprove defaults false from the harness's empty menuProvider
-      expect(find.byIcon(Icons.print_outlined), findsOneWidget); // a saved voucher is printable
+      expect(header?.actions.length, 1); // a saved voucher is printable
       expect(find.byIcon(Icons.undo), findsNothing); // not posted → no reverse button
     });
 

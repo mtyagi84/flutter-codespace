@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
 import 'package:sakal/core/widgets/sakal_field_card.dart';
@@ -29,6 +30,15 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
+
+/// The screen's title/subtitle/badge no longer render as body text — they're
+/// posted to the shared TopBar via ScreenHeaderMixin (screen_header.dart),
+/// and pumpApp() doesn't include a TopBar in its pumped tree at all. Read
+/// the posted ScreenHeaderInfo back from the provider instead of searching
+/// for rendered text — this is the actual observable contract the screen
+/// provides now.
+ScreenHeaderInfo? _readHeader(WidgetTester tester, Finder screenFinder) =>
+    ProviderScope.containerOf(tester.element(screenFinder)).read(screenHeaderProvider);
 
 void main() {
   late MockFinanceVoucherRepository mockRepo;
@@ -83,10 +93,11 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('New Contra Voucher'), findsOneWidget);
-      // Flavor badge — 'Contra Voucher' (generic) until both accounts are picked.
-      expect(find.text('Contra Voucher'), findsOneWidget);
-      expect(find.text('Draft'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(ContraVoucherEntryScreen));
+      expect(header?.title, 'New Contra Voucher');
+      // Flavor subtitle — 'Contra Voucher' (generic) until both accounts are picked.
+      expect(header?.subtitle, 'Contra Voucher');
+      expect(header?.badgeText, 'Draft');
 
       expect(_findFieldLabel('VOUCHER NO'), findsOneWidget);
       expect(_findFieldLabel('VOUCHER DATE'), findsOneWidget);
@@ -114,7 +125,7 @@ void main() {
       expect(find.byIcon(Icons.swap_horiz), findsOneWidget);
 
       expect(find.text('Save Draft'), findsOneWidget);
-      expect(find.byIcon(Icons.print_outlined), findsNothing);
+      expect(header?.actions, isEmpty);
       expect(find.text('Copy'), findsNothing);
       expect(find.text('Approve'), findsNothing);
       expect(find.text('Reverse'), findsNothing);
@@ -221,12 +232,15 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      // 'CTR-001' appears twice — the title block AND the read-only
-      // Voucher No field card's own value.
-      expect(find.text('CTR-001'), findsNWidgets(2));
+      final header = _readHeader(tester, find.byType(ContraVoucherEntryScreen));
+      expect(header?.title, 'CTR-001');
       // fromNature=Cash, toNature=Bank ⇒ _flavorLabel == 'Deposit'.
-      expect(find.text('Deposit'), findsOneWidget);
-      expect(find.text('Draft'), findsOneWidget);
+      expect(header?.subtitle, 'Deposit');
+      expect(header?.badgeText, 'Draft');
+      // The read-only Voucher No field card's own value — the title itself
+      // no longer renders as body text (moved to the TopBar via the header
+      // provider, asserted above).
+      expect(find.text('CTR-001'), findsOneWidget);
 
       expect(find.text('[CASH-01] Petty Cash'), findsOneWidget);
       expect(find.text('[BANK-01] Main Bank'), findsOneWidget);
@@ -242,7 +256,7 @@ void main() {
 
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Approve'), findsNothing); // canApprove defaults false from the harness's empty menuProvider
-      expect(find.byIcon(Icons.print_outlined), findsOneWidget); // a saved voucher is printable
+      expect(header?.actions.length, 1); // a saved voucher is printable
       expect(find.text('Copy'), findsOneWidget); // a saved voucher can be copied
       expect(find.text('Reverse'), findsNothing); // only shown once posted
     });

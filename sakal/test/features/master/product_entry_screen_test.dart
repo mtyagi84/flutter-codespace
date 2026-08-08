@@ -12,6 +12,7 @@ import 'package:sakal/features/master/data/models/tax_group_model.dart';
 import 'package:sakal/features/master/domain/repositories/products_repository.dart';
 import 'package:sakal/features/master/presentation/providers/products_providers.dart';
 import 'package:sakal/features/master/presentation/screens/product_entry_screen.dart';
+import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/widgets/sakal_field_card.dart';
 
 import '../../test_helpers/pump_app.dart';
@@ -38,6 +39,9 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
     );
+
+ScreenHeaderInfo? _readHeader(WidgetTester tester, Finder screenFinder) =>
+    ProviderScope.containerOf(tester.element(screenFinder)).read(screenHeaderProvider);
 
 void main() {
   late MockProductsRepository mockRepo;
@@ -92,8 +96,9 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      expect(find.text('New Product'), findsOneWidget);
-      expect(find.text('Product Master'), findsOneWidget);
+      final header = _readHeader(tester, find.byType(ProductEntryScreen));
+      expect(header?.title, 'New Product');
+      expect(header?.subtitle, 'Product Master');
 
       expect(_findFieldLabel('PRODUCT CODE'), findsOneWidget);
       expect(_findFieldLabel('PRODUCT NAME *'), findsOneWidget);
@@ -191,9 +196,12 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
       // Title shows the loaded product's own name once loaded (not "Edit
-      // Product") — and the Product Name field's own EditableText displays
-      // the identical string, so this is genuinely 2 matches, not 1.
-      expect(find.text('Widget A'), findsNWidgets(2));
+      // Product") — now only reachable via the shared TopBar header
+      // (screenHeaderProvider), not the widget tree, so it's a separate
+      // check from the Product Name field's own EditableText.
+      final header = _readHeader(tester, find.byType(ProductEntryScreen));
+      expect(header?.title, 'Widget A');
+      expect(find.text('Widget A'), findsOneWidget);
       expect(find.text('WID-A'), findsOneWidget);
       expect(find.text('Trading / Resale'), findsOneWidget); // Product Nature dropdown
       expect(find.text('Piece'), findsOneWidget); // Base UOM dropdown
