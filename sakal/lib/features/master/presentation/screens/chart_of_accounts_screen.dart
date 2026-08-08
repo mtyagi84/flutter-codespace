@@ -467,7 +467,7 @@ class _ChartOfAccountsScreenState
     final offline   = ref.watch(sessionProvider)?.offlineMode ?? false;
     final highlight = ThemePresetConfig.all[ref.watch(themePresetProvider)]!
         .accent.withValues(alpha: 0.15);
-    return Column(children: [
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Container(
         color: AppColors.surface,
         padding: const EdgeInsets.fromLTRB(16, 16, 8, 12),
@@ -567,9 +567,8 @@ class _ChartOfAccountsScreenState
         Text(parentLabel,
             style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
       if (!isAdd && isFixed)
-        const Row(mainAxisSize: MainAxisSize.min, children: [
+        const Wrap(spacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
           Icon(Icons.lock_outline, size: 13, color: AppColors.textSecondary),
-          SizedBox(width: 4),
           Text('System account — some fields are locked',
               style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
         ]),
@@ -644,7 +643,7 @@ class _ChartOfAccountsScreenState
     final natureLocked = _addParent?['account_nature'] != null &&
         _addParent!['account_nature'] != 'General';
 
-    return Column(children: [
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       // Header — title block left, Delete/Cancel/Save top-right (mandatory
       // "actions in the header row" convention), Close always last.
       Container(
@@ -678,14 +677,13 @@ class _ChartOfAccountsScreenState
             if (isAdd) ...[
               const _Label('Node Type *'),
               const SizedBox(height: 8),
-              Row(children: [
+              Wrap(spacing: 10, runSpacing: 8, children: [
                 _TypeChip(
                   label: 'Group',
                   selected: !_postingAllowed,
                   selectedColor: chipHighlight,
                   onTap: () => setState(() => _postingAllowed = false),
                 ),
-                const SizedBox(width: 10),
                 _TypeChip(
                   label: 'Ledger',
                   selected: _postingAllowed,
@@ -1054,7 +1052,7 @@ class _ChartOfAccountsScreenState
       const SizedBox(height: 14),
 
       // Credit Blocked
-      Row(children: [
+      Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
         Checkbox(
           value: _creditBlocked,
           onChanged: (v) => setState(() => _creditBlocked = v!),

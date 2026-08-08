@@ -83,7 +83,7 @@ class _ChangePasswordScreenState
           constraints: const BoxConstraints(maxWidth: 480),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // ── Header ───────────────────────────────────────────────
               const Text('Change Password',

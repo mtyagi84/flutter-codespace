@@ -503,16 +503,14 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
           child: Row(children: [
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
+                Wrap(spacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
                   Text(loc['location_name'] as String? ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                  if (loc['is_default'] == true) ...[
-                    const SizedBox(width: 6),
+                  if (loc['is_default'] == true)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                       decoration: BoxDecoration(color: AppColors.positive.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
                       child: const Text('Default', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.positive)),
                     ),
-                  ],
                 ]),
                 if ((loc['address_line1'] as String? ?? '').isNotEmpty)
                   Text(loc['address_line1'] as String, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
@@ -656,7 +654,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
 
   Widget _listPanel() {
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
-    return Column(children: [
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
     Container(
       color: AppColors.surface,
       padding: const EdgeInsets.all(16),
@@ -812,7 +810,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
     final isAdd = _isAdd;
     final row   = _selected;
     final mobile = Responsive.isMobile(context);
-    return Column(children: [
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Container(
         color: AppColors.surface,
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
@@ -1143,7 +1141,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
       ]),
       const SizedBox(height: 14),
 
-      Row(children: [
+      Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
         Checkbox(
           value: _creditBlocked,
           onChanged: (v) => setState(() => _creditBlocked = v!),

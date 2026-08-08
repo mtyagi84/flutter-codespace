@@ -206,6 +206,7 @@ class _DepartmentConsumptionAreaScreenState extends ConsumerState<DepartmentCons
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         if (_error != null) ...[
                           Container(
+                            width: double.infinity,
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             decoration: BoxDecoration(
                               color: AppColors.negative.withValues(alpha: 0.08),

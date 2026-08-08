@@ -441,7 +441,7 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
           if (parentIds.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-              child: Row(
+              child: Wrap(
                 children: [
                   TextButton.icon(
                     onPressed: () => setState(() => _expanded.addAll(parentIds)),
@@ -650,7 +650,7 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
         border: Border.all(color: AppColors.border),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Panel header — title + primary actions top-right, per the
           // app-wide "actions live next to the title" convention.

@@ -510,7 +510,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
     final headerColor = ThemePresetConfig.all[ref.watch(themePresetProvider)]!.primary;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-      child: Column(children: [
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         // Header row
         Container(
           decoration: BoxDecoration(
@@ -852,24 +852,24 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
                   ),
               ]),
               const SizedBox(height: 4),
-              Row(children: [
+              Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
                 Text('Order: ${m.sortOrder}',
                     style: const TextStyle(
                         fontSize: 12, color: Color(0xFF6B7280))),
-                const SizedBox(width: 12),
-                Icon(
-                  m.isActive ? Icons.check_circle_outline : Icons.cancel_outlined,
-                  size: 14,
-                  color: m.isActive ? AppColors.positive : AppColors.negative,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  m.isActive ? 'Active' : 'Inactive',
-                  style: TextStyle(
-                    fontSize: 12,
+                Wrap(spacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                  Icon(
+                    m.isActive ? Icons.check_circle_outline : Icons.cancel_outlined,
+                    size: 14,
                     color: m.isActive ? AppColors.positive : AppColors.negative,
                   ),
-                ),
+                  Text(
+                    m.isActive ? 'Active' : 'Inactive',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: m.isActive ? AppColors.positive : AppColors.negative,
+                    ),
+                  ),
+                ]),
               ]),
             ]),
           ),

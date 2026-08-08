@@ -308,9 +308,11 @@ class _AccountingSetupScreenState
                 child: Row(children: [
                   const Icon(Icons.info_outline, size: 16, color: AppColors.textSecondary),
                   const SizedBox(width: 8),
-                  Text(
-                    'Your FY: ${_months[_fyStartMonth - 1]} 1  →  ${_months[endMonth - 1]} $endDay',
-                    style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                  Expanded(
+                    child: Text(
+                      'Your FY: ${_months[_fyStartMonth - 1]} 1  →  ${_months[endMonth - 1]} $endDay',
+                      style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                    ),
                   ),
                 ]),
               ),

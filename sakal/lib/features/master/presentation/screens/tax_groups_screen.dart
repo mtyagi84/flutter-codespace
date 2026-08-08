@@ -315,7 +315,7 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
 
   Widget _listPanel() {
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
-    return Column(children: [
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Container(
         color: AppColors.surface,
         padding: const EdgeInsets.all(16),
@@ -407,16 +407,14 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
                   children: [
                 Text(g.groupName, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
                     color: isInactive ? AppColors.textDisabled : AppColors.textPrimary)),
-                Row(children: [
+                Wrap(spacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
                   Text(g.applicableOn, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                  if (isInactive) ...[
-                    const SizedBox(width: 6),
+                  if (isInactive)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                       decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(4)),
                       child: const Text('Inactive', style: TextStyle(fontSize: 10, color: Colors.deepOrange)),
                     ),
-                  ],
                 ]),
               ])),
               PopupMenuButton<String>(
@@ -474,7 +472,7 @@ class _TaxGroupsScreenState extends ConsumerState<TaxGroupsScreen>
             hintStyle: const TextStyle(fontSize: 12, color: AppColors.textDisabled, fontWeight: FontWeight.normal),
           );
 
-    return Column(children: [
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Container(
         color: AppColors.surface,
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),

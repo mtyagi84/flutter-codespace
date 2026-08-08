@@ -174,7 +174,7 @@ class _AdditionalChargesScreenState extends ConsumerState<AdditionalChargesScree
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1000),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (isMobile) ...[
                 const Text('Additional Charges',

@@ -110,7 +110,7 @@ class _OfflineSettingsScreenState extends ConsumerState<OfflineSettingsScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 720),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (_error != null)
                     Padding(

@@ -404,7 +404,9 @@ class _ProductCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
+                      Wrap(
+                        spacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(product.productCode,
                               style: const TextStyle(
@@ -412,7 +414,6 @@ class _ProductCard extends StatelessWidget {
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.primary)),
-                          const SizedBox(width: 8),
                           _NatureBadge(product.productNature),
                         ],
                       ),

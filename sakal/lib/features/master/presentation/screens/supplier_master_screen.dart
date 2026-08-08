@@ -448,7 +448,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
 
   Widget _listPanel() {
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
-    return Column(children: [
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
     Container(
       color: AppColors.surface,
       padding: const EdgeInsets.all(16),
@@ -599,7 +599,7 @@ class _SupplierMasterScreenState extends ConsumerState<SupplierMasterScreen>
     final row   = _selected;
     final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     final isCompact = ref.watch(isCompactDensityProvider);
-    return Column(children: [
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Container(
         color: AppColors.surface,
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),

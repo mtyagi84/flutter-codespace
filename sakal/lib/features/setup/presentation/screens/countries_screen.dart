@@ -136,7 +136,7 @@ class _CountriesScreenState extends ConsumerState<CountriesScreen> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 920),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // ── Header ────────────────────────────────────────────────
               Row(

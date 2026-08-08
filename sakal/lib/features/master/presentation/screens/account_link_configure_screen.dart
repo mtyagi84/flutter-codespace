@@ -319,30 +319,39 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
               if (_loading)
                 const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()))
               else ...[
-                Card(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Level', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-                        const SizedBox(height: 8),
-                        SegmentedButton<String>(
-                          showSelectedIcon: false,
-                          emptySelectionAllowed: true,
-                          segments: const [
-                            ButtonSegment(value: 'COMPANY',  label: Text('Company-wide')),
-                            ButtonSegment(value: 'CATEGORY', label: Text('Category-wise')),
-                            ButtonSegment(value: 'LOCATION', label: Text('Location-wise')),
-                            ButtonSegment(value: 'ITEM',     label: Text('Item-wise')),
-                          ],
-                          selected: _level != null ? {_level!} : const {},
-                          onSelectionChanged: (canEdit && !offline && !_busy)
-                              ? (s) { if (s.isNotEmpty) _changeLevel(s.first); }
-                              : null,
-                        ),
-                      ],
+                // Explicit full-width wrapper: this Card's content (a label +
+                // a SegmentedButton, no Row/self-expanding child) would
+                // otherwise shrink-wrap to the SegmentedButton's own intrinsic
+                // width under the outer Column's start alignment — the same
+                // "settings Card collapses to a fraction of the screen" bug
+                // documented in CLAUDE.md's Row/Column layout rule.
+                SizedBox(
+                  width: double.infinity,
+                  child: Card(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Level', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                          const SizedBox(height: 8),
+                          SegmentedButton<String>(
+                            showSelectedIcon: false,
+                            emptySelectionAllowed: true,
+                            segments: const [
+                              ButtonSegment(value: 'COMPANY',  label: Text('Company-wide')),
+                              ButtonSegment(value: 'CATEGORY', label: Text('Category-wise')),
+                              ButtonSegment(value: 'LOCATION', label: Text('Location-wise')),
+                              ButtonSegment(value: 'ITEM',     label: Text('Item-wise')),
+                            ],
+                            selected: _level != null ? {_level!} : const {},
+                            onSelectionChanged: (canEdit && !offline && !_busy)
+                                ? (s) { if (s.isNotEmpty) _changeLevel(s.first); }
+                                : null,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

@@ -281,7 +281,7 @@ class _ProductFlagTypesScreenState extends ConsumerState<ProductFlagTypesScreen>
           : Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Header
                   Row(
