@@ -1,25 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/layout/screen_header.dart';
 import '../../../../core/theme/app_colors.dart';
 
-class DashboardScreen extends ConsumerStatefulWidget {
+// Deliberately NOT using ScreenHeaderMixin — landing here right after login
+// should show the company name in the shared TopBar (its own default
+// fallback when no header is registered), not a plain "Dashboard" label.
+// A ScreenHeaderMixin registration was tried here once and reverted after
+// live testing showed it silently overrode that fallback.
+class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
   @override
-  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
-}
-
-class _DashboardScreenState extends ConsumerState<DashboardScreen>
-    with ScreenHeaderMixin<DashboardScreen> {
-  @override
-  ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(title: 'Dashboard');
-
-  @override
   Widget build(BuildContext context) {
-    // Title lives in the shared TopBar via ScreenHeaderMixin (see
-    // CLAUDE.md's "Screen header" pattern) — not rendered here as body content.
-    refreshScreenHeader();
     return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,

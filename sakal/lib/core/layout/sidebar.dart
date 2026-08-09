@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../config/app_config.dart';
 import '../models/menu_models.dart';
 import '../providers/session_provider.dart';
 import '../router/route_names.dart';
@@ -67,61 +66,12 @@ class _SidebarState extends ConsumerState<Sidebar> {
 
     return Container(
       color: activePreset.primary,
-      child: Column(
-        children: [
-          _buildHeader(collapsed),
-          Expanded(
-            child: collapsed
-                ? _buildCollapsedList(menu, path)
-                : _buildExpandedList(menu, path, mobile),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Header ─────────────────────────────────────────────────
-  Widget _buildHeader(bool collapsed) {
-    return Container(
-      height: 64,
-      padding: EdgeInsets.symmetric(horizontal: collapsed ? 12 : 16),
-      decoration: BoxDecoration(
-        color: _activePreset.primary,
-        border: const Border(bottom: BorderSide(color: Colors.white10)),
-      ),
+      // No app-branding header block — the sidebar's module list starts
+      // directly at the top (branding removed per explicit request; the
+      // shared TopBar's own company name is the app's identity marker now).
       child: collapsed
-          ? const Center(
-              child: Text('S',
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white)),
-            )
-          : Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text('S',
-                      style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: _activePreset.primary)),
-                ),
-                const SizedBox(width: 10),
-                const Text(AppConfig.appName,
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        letterSpacing: 1.5)),
-              ],
-            ),
+          ? _buildCollapsedList(menu, path)
+          : _buildExpandedList(menu, path, mobile),
     );
   }
 
