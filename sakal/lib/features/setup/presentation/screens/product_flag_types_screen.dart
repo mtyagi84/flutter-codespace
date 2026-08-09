@@ -115,9 +115,15 @@ class _ProductFlagTypesScreenState extends ConsumerState<ProductFlagTypesScreen>
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
           title: Text(existing == null ? 'Add Flag Type' : 'Edit Flag Type'),
-          content: SizedBox(
-            width: 420,
-            child: Form(
+          content: ConstrainedBox(
+            // A missing maxHeight let this dialog grow arbitrarily tall on
+            // a short viewport; the Spacer() fix below is the real cause
+            // of the reported "weird big popup" (an invalid ParentDataWidget
+            // use inside AlertDialog.actions, which lays out via OverflowBar
+            // since Flutter 3, not Row/Flex), but both were real gaps.
+            constraints: const BoxConstraints(maxWidth: 420, maxHeight: 600),
+            child: SingleChildScrollView(
+              child: Form(
               key: formKey,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -194,24 +200,35 @@ class _ProductFlagTypesScreenState extends ConsumerState<ProductFlagTypesScreen>
                   ),
                 ],
               ),
+              ),
             ),
           ),
           actions: [
-            if (existing != null)
-              TextButton(
-                style: TextButton.styleFrom(foregroundColor: AppColors.negative),
-                onPressed: () => Navigator.pop(ctx, null),
-                child: const Text('Delete'),
+            // AlertDialog.actions lays out via OverflowBar (since Flutter
+            // 3), not Row/Flex -- a bare Spacer() here (needs a Flex
+            // ancestor) threw a ParentDataWidget layout error at runtime,
+            // corrupting the dialog's rendering (the reported "weird big
+            // popup"). A single Row as the one actions entry keeps the
+            // same Delete-left / Cancel+Save-right layout while being
+            // valid -- Spacer works fine inside ITS OWN Row.
+            Row(children: [
+              if (existing != null)
+                TextButton(
+                  style: TextButton.styleFrom(foregroundColor: AppColors.negative),
+                  onPressed: () => Navigator.pop(ctx, null),
+                  child: const Text('Delete'),
+                ),
+              const Spacer(),
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: () {
+                  if (!formKey.currentState!.validate()) return;
+                  Navigator.pop(ctx, true);
+                },
+                child: const Text('Save'),
               ),
-            const Spacer(),
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            FilledButton(
-              onPressed: () {
-                if (!formKey.currentState!.validate()) return;
-                Navigator.pop(ctx, true);
-              },
-              child: const Text('Save'),
-            ),
+            ]),
           ],
         ),
       ),

@@ -178,6 +178,14 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
       children: [
         if (offline) const OfflineBanner(),
 
+        // Every other SakalAdaptiveList-consuming screen has some padded
+        // element (usually a filter bar) between the TopBar and the list,
+        // which is what actually creates the visual gap — this screen has
+        // none, so the table's own header (same primary color as TopBar)
+        // sat flush against it with zero seam, reading as one continuous
+        // band ("overlapping"). Real bug, fixed live.
+        const SizedBox(height: 16),
+
         if (_error != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),

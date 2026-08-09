@@ -37,12 +37,27 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen>
   bool _loading = true;
   String? _error;
 
+  // Explicit controller, shared between the horizontal Scrollbar and its
+  // SingleChildScrollView below — without one, Scrollbar has to guess
+  // which Scrollable in the subtree to track, and here it was silently
+  // latching onto the wrong one (the outer, unrelated vertical page
+  // scroll), rendering its thumb at the bottom of the whole page instead
+  // of under the table header, and not actually scrolling the table when
+  // dragged. Real bug, fixed live.
+  final _hScrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     // addPostFrameCallback avoids calling setState during initState
     // (async fns run synchronously to first await — setState before that = lifecycle violation)
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _hScrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -233,8 +248,11 @@ class _MasterMenuScreenState extends ConsumerState<MasterMenuScreen>
               )
             else
               Scrollbar(
+                controller: _hScrollController,
                 thumbVisibility: true,
+                notificationPredicate: (notification) => notification.depth == 0,
                 child: SingleChildScrollView(
+                  controller: _hScrollController,
                   scrollDirection: Axis.horizontal,
                   child: Container(
                     decoration: BoxDecoration(

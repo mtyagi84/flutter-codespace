@@ -250,7 +250,7 @@ class _SalesExecutiveMasterScreenState extends ConsumerState<SalesExecutiveMaste
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
           // A Wrap here doesn't stretch a field to fill leftover row space
           // (see sakal_field_row.dart's own doc comment) — on mobile the
           // fixed-width Search field would leave a large empty gap to its

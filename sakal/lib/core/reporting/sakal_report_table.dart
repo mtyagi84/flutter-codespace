@@ -106,10 +106,15 @@ class _SakalReportTableState extends State<SakalReportTable> {
       ),
       const Divider(height: 1, color: AppColors.border),
       Expanded(
-        child: SingleChildScrollView(
+        child: Scrollbar(
           controller: _hBodyController,
-          scrollDirection: Axis.horizontal,
-          child: SizedBox(width: _totalWidth, child: _buildBody()),
+          thumbVisibility: true,
+          notificationPredicate: (n) => n.depth == 0,
+          child: SingleChildScrollView(
+            controller: _hBodyController,
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(width: _totalWidth, child: _buildBody()),
+          ),
         ),
       ),
       if (totalsRow != null) ...[
