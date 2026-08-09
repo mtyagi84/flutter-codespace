@@ -86,6 +86,10 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen>
   bool    _saving      = false;
   bool    _replicating = false;
   String? _saveError;
+  // Whether this location already had ANY rate row for _rateDate before
+  // the currently-loaded rows were fetched — used to decide whether a
+  // successful _save() is this location's first-ever rate for that date.
+  bool    _hadExistingRatesForDate = false;
 
   @override
   void initState() {
@@ -142,6 +146,7 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen>
 
       final rateMap = <String, ExchangeRateModel>{};
       for (final r in rates) { rateMap[r.toCurrency] = r; }
+      _hadExistingRatesForDate = rateMap.isNotEmpty;
 
       for (final r in _rows) { r.dispose(); }
 
@@ -236,19 +241,72 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen>
         'updated_by':    session.userId,
       }).toList();
 
+      final wasFirstEverForDate = !_hadExistingRatesForDate;
       await ref.read(exchangeRateRepositoryProvider).saveRates(payload);
 
       if (mounted) {
-        setState(() => _saving = false);
+        setState(() { _saving = false; _hadExistingRatesForDate = true; });
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Exchange rates saved.'),
           backgroundColor: AppColors.positive,
         ));
+        if (wasFirstEverForDate && _locations.length > 1) {
+          await _promptReplicateToNewLocations(session);
+        }
       }
     } catch (e) {
       if (mounted) { setState(() {
         _saving    = false;
         _saveError = 'Save failed: $e';
+      }); }
+    }
+  }
+
+  // ── Prompt: replicate a first-ever rate to locations with none yet ────────
+
+  Future<void> _promptReplicateToNewLocations(UserSession session) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Replicate to Other Locations?'),
+        content: const Text(
+            'This is the first rate saved for this date. Apply the same rate to '
+            'every other location that does not already have one for this date? '
+            'Locations that already have a rate for this date will be left unchanged.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(false),
+            child: const Text('No'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(true),
+            child: const Text('Yes, Replicate'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _replicating = true);
+    try {
+      final count = await ref.read(exchangeRateRepositoryProvider).replicateToNewLocationsOnly(
+        clientId:       session.clientId,
+        companyId:      session.companyId,
+        fromLocationId: _locationId!,
+        rateDate:       _fmt(_rateDate),
+        userId:         session.userId,
+      );
+      if (mounted) {
+        setState(() => _replicating = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Rate applied to $count location(s) with no prior rate for this date.'),
+          backgroundColor: AppColors.positive,
+        ));
+      }
+    } catch (e) {
+      if (mounted) { setState(() {
+        _replicating = false;
+        _saveError   = 'Replication failed: $e';
       }); }
     }
   }

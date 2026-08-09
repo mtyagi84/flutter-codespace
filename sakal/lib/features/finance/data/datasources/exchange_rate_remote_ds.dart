@@ -80,4 +80,24 @@ class ExchangeRateRemoteDs {
     );
     return res.data as int? ?? 0;
   }
+
+  Future<int> replicateToNewLocationsOnly({
+    required String clientId,
+    required String companyId,
+    required String fromLocationId,
+    required String rateDate,
+    required String userId,
+  }) async {
+    final res = await DioClient.instance.post(
+      '/rpc/fn_replicate_exchange_rates_new_only',
+      data: {
+        'p_client_id':     clientId,
+        'p_company_id':    companyId,
+        'p_from_location': fromLocationId,
+        'p_rate_date':     rateDate,
+        'p_replicated_by': userId,
+      },
+    );
+    return res.data as int? ?? 0;
+  }
 }

@@ -77,4 +77,21 @@ class ExchangeRateRepositoryImpl implements ExchangeRateRepository {
         rateDate:       rateDate,
         userId:         userId,
       );
+
+  // Always remote — button is hidden when offline
+  @override
+  Future<int> replicateToNewLocationsOnly({
+    required String clientId,
+    required String companyId,
+    required String fromLocationId,
+    required String rateDate,
+    required String userId,
+  }) =>
+      _remote.replicateToNewLocationsOnly(
+        clientId:       clientId,
+        companyId:      companyId,
+        fromLocationId: fromLocationId,
+        rateDate:       rateDate,
+        userId:         userId,
+      );
 }

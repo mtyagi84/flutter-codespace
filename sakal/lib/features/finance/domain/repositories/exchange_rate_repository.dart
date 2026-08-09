@@ -24,4 +24,12 @@ abstract class ExchangeRateRepository {
     required String rateDate,
     required String userId,
   });
+
+  Future<int> replicateToNewLocationsOnly({
+    required String clientId,
+    required String companyId,
+    required String fromLocationId,
+    required String rateDate,
+    required String userId,
+  });
 }
