@@ -1023,6 +1023,7 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
         style: style,
       ),
     );
+    final invoiceDateField = SakalFieldCard.readOnly(label: 'Invoice Date', value: _invoiceDate ?? '—');
     final returnNoField = SakalFieldCard.readOnly(label: 'Return No', value: _returnNo ?? '(auto on save)');
     final returnDateField = SakalFieldCard(
       label: 'Return Date', required: true, editable: !locked,
@@ -1051,7 +1052,7 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SakalFieldRow(isMobile: isMobile, children: [invoiceField, returnNoField, returnDateField]),
+          SakalFieldRow(isMobile: isMobile, children: [invoiceField, invoiceDateField, returnNoField, returnDateField]),
           const SizedBox(height: 12),
           SakalFieldRow(isMobile: isMobile, children: [customerField, saleTypeField, reasonField]),
         ]),
