@@ -72,6 +72,7 @@ void main() {
                 'account_code': 'CASH-01',
                 'account_name': 'Petty Cash',
                 'account_nature': 'Cash',
+                'posting_allowed': true,
                 'rim_currencies': {'currency_id': 'USD'},
               },
               {
@@ -79,6 +80,7 @@ void main() {
                 'account_code': 'BANK-01',
                 'account_name': 'Main Bank',
                 'account_nature': 'Bank',
+                'posting_allowed': true,
                 'rim_currencies': {'currency_id': 'USD'},
               },
             ]),

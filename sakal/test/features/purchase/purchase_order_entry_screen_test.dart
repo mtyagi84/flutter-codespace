@@ -117,6 +117,13 @@ void main() {
         )).thenAnswer((_) async => [
           {'id': 'user-001', 'full_name': 'Test User'},
         ]);
+    // Called whenever a line's product is selected/resumed — same
+    // 'uom-001'/'Piece' fixture as the Unit dropdown's own reference data
+    // above, so a resumed or freshly-picked line's UOM always has a
+    // matching option to render.
+    when(() => mockRepo.getProductUoms(any())).thenAnswer((_) async => [
+          {'uom_id': 'uom-001', 'conversion_factor': 1, 'is_base_uom': true, 'uom': {'description': 'Piece'}},
+        ]);
   });
 
   // PurchaseOrderEntryScreen's own _init() also Future.waits on
@@ -129,7 +136,7 @@ void main() {
         purchaseOrderRepositoryProvider.overrideWithValue(mockRepo),
         syncEngineProvider.overrideWithValue(SyncEngine(null)),
         accountsProvider.overrideWith((ref) async => [
-              {'id': 'sup-001', 'account_code': 'SUP-001', 'account_name': 'Test Supplier', 'account_nature': 'Supplier'},
+              {'id': 'sup-001', 'account_code': 'SUP-001', 'account_name': 'Test Supplier', 'account_nature': 'Supplier', 'posting_allowed': true},
             ]),
         locationsProvider.overrideWith((ref) async => [
               {'id': 'loc-001', 'location_name': 'Main Warehouse'},

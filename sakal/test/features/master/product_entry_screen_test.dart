@@ -83,6 +83,13 @@ void main() {
           clientId: any(named: 'clientId'),
           companyId: any(named: 'companyId'),
         )).thenAnswer((_) async => <ProductFlagTypeModel>[]);
+    // Called on resume for every existing product to decide whether Base
+    // UOM should render read-only — null means "not locked".
+    when(() => mockRepo.canChangeBaseUom(
+          clientId: any(named: 'clientId'),
+          companyId: any(named: 'companyId'),
+          productId: any(named: 'productId'),
+        )).thenAnswer((_) async => null);
   });
 
   List<Override> overrides() => [

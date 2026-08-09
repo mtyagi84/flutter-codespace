@@ -63,8 +63,8 @@ void main() {
         expenseVoucherRepositoryProvider.overrideWithValue(mockRepo),
         syncEngineProvider.overrideWithValue(SyncEngine(null)),
         accountsProvider.overrideWith((ref) async => [
-              {'id': 'sup-001', 'account_code': 'SUP-001', 'account_name': 'Test Supplier', 'account_nature': 'Supplier'},
-              {'id': 'exp-001', 'account_code': 'EXP-01', 'account_name': 'Electricity Expense', 'account_nature': 'Expense'},
+              {'id': 'sup-001', 'account_code': 'SUP-001', 'account_name': 'Test Supplier', 'account_nature': 'Supplier', 'posting_allowed': true},
+              {'id': 'exp-001', 'account_code': 'EXP-01', 'account_name': 'Electricity Expense', 'account_nature': 'Expense', 'posting_allowed': true},
             ]),
         currenciesProvider.overrideWith((ref) async => [
               {'id': 'ccy-usd', 'currency_id': 'USD', 'currency_name': 'US Dollar', 'rate_decimal_places': 2},

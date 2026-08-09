@@ -108,6 +108,7 @@ void main() {
                 'account_code': 'CASH-01',
                 'account_name': 'Cash In Hand',
                 'account_nature': 'Cash',
+                'posting_allowed': true,
                 'rim_currencies': {'currency_id': 'USD'},
               },
               {
@@ -115,6 +116,7 @@ void main() {
                 'account_code': 'INC-01',
                 'account_name': 'Sales Income',
                 'account_nature': 'Income',
+                'posting_allowed': true,
                 'rim_currencies': {'currency_id': 'USD'},
               },
               {
@@ -122,6 +124,7 @@ void main() {
                 'account_code': 'CUS-01',
                 'account_name': 'Test Customer',
                 'account_nature': 'Customer',
+                'posting_allowed': true,
                 'rim_currencies': {'currency_id': 'USD'},
               },
             ]),

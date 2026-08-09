@@ -100,6 +100,13 @@ void main() {
           taxIds: any(named: 'taxIds'),
           asOfDate: any(named: 'asOfDate'),
         )).thenAnswer((_) async => {});
+    // Called whenever a line's product is selected/resumed/consolidated —
+    // same 'uom-001'/'Piece' fixture as the Unit dropdown's own reference
+    // data above, so a resumed or freshly-picked line's UOM always has a
+    // matching option to render.
+    when(() => mockRepo.getProductUoms(any())).thenAnswer((_) async => [
+          {'uom_id': 'uom-001', 'conversion_factor': 1, 'is_base_uom': true, 'uom': {'description': 'Piece'}},
+        ]);
   });
 
   // GRN's own _init() also Future.waits on accountsProvider/locationsProvider/
@@ -111,7 +118,7 @@ void main() {
         grnRepositoryProvider.overrideWithValue(mockRepo),
         syncEngineProvider.overrideWithValue(SyncEngine(null)),
         accountsProvider.overrideWith((ref) async => [
-              {'id': 'sup-001', 'account_code': 'SUP-001', 'account_name': 'Test Supplier', 'account_nature': 'Supplier'},
+              {'id': 'sup-001', 'account_code': 'SUP-001', 'account_name': 'Test Supplier', 'account_nature': 'Supplier', 'posting_allowed': true},
             ]),
         locationsProvider.overrideWith((ref) async => [
               {'id': 'loc-001', 'location_name': 'Main Warehouse'},
