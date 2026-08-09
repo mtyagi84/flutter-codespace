@@ -151,4 +151,17 @@ class ItemCategoriesRemoteDs {
     });
     return (res.data as List).isNotEmpty;
   }
+
+  Future<String?> canDeleteCategory({
+    required String clientId,
+    required String companyId,
+    required String categoryId,
+  }) async {
+    final res = await _dio.post('/rpc/fn_can_delete_item_category', data: {
+      'p_client_id':  clientId,
+      'p_company_id': companyId,
+      'p_category_id': categoryId,
+    });
+    return res.data as String?;
+  }
 }

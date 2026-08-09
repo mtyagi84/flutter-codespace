@@ -36,4 +36,11 @@ class DepartmentConsumptionAreaRepositoryImpl implements DepartmentConsumptionAr
 
   @override
   Future<void> deleteLink({required String id, required String userId}) => _remote.deleteLink(id: id, userId: userId);
+
+  @override
+  Future<String?> canDeleteConsumptionArea({
+    required String clientId,
+    required String companyId,
+    required String consumptionAreaId,
+  }) => _remote.canDeleteConsumptionArea(clientId: clientId, companyId: companyId, consumptionAreaId: consumptionAreaId);
 }

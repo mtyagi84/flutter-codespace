@@ -87,6 +87,7 @@ class _ChartOfAccountsScreenState
   bool    _postingAllowed = false;
   String  _nature         = 'General';
   String? _currencyId;
+  bool    _currencyLocked = false;
   String? _defaultTaxGroupId;
   String? _partyType;
   String? _countryId;
@@ -276,6 +277,7 @@ class _ChartOfAccountsScreenState
       _nature         = nat;
       _isAutoCode     = false;
       _currencyId     = node['account_currency_id'] as String?;
+      _currencyLocked = false;
       _defaultTaxGroupId = node['default_tax_group_id'] as String?;
       _partyType      = node['party_type'] as String?;
       _countryId      = cId;
@@ -310,6 +312,22 @@ class _ChartOfAccountsScreenState
         if (mounted) setState(() => _cityId = targetCityId);
       });
     }
+
+    final accountId = node['id'] as String?;
+    if (accountId != null) _checkCurrencyLock(accountId);
+  }
+
+  Future<void> _checkCurrencyLock(String accountId) async {
+    final session = ref.read(sessionProvider)!;
+    try {
+      final res = await DioClient.instance.post(
+        '/rpc/fn_can_change_account_currency',
+        data: {'p_client_id': session.clientId, 'p_company_id': session.companyId, 'p_account_id': accountId},
+      );
+      if (mounted) setState(() => _currencyLocked = res.data != null);
+    } on DioException {
+      // Fail open — a check-failure shouldn't itself block editing.
+    }
   }
 
   void _clearForm() {
@@ -317,7 +335,7 @@ class _ChartOfAccountsScreenState
     _phoneCtrl.clear(); _emailCtrl.clear(); _addr1Ctrl.clear();
     _addr2Ctrl.clear(); _taxIdCtrl.clear(); _catCtrl.clear();
     _limitCtrl.clear();
-    _currencyId = null; _defaultTaxGroupId = null; _partyType = null;
+    _currencyId = null; _currencyLocked = false; _defaultTaxGroupId = null; _partyType = null;
     _countryId  = null; _countryCode = null;
     _divisionId = null; _cityId      = null;
     _divisions  = [];   _cities      = [];
@@ -803,22 +821,30 @@ class _ChartOfAccountsScreenState
                               : (v) => setState(() => _nature = v!),
                         ),
                       ),
-                SakalFieldCard(
-                  label: 'Currency',
-                  editable: true,
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _currencyId,
-                    isExpanded: true, isDense: true, itemHeight: null,
-                    style: fieldStyle,
-                    decoration: bare(hint: 'Select…'),
-                    items: _currencies.map((c) => DropdownMenuItem(
-                      value: c['id'] as String,
-                      child: Text('${c['currency_id']} — ${c['currency_name']}',
-                          overflow: TextOverflow.ellipsis),
-                    )).toList(),
-                    onChanged: (v) => setState(() => _currencyId = v),
-                  ),
-                ),
+                _currencyLocked
+                    ? SakalFieldCard.readOnly(
+                        label: 'Currency',
+                        value: _currencies.firstWhere(
+                          (c) => c['id'] == _currencyId,
+                          orElse: () => const {},
+                        )['currency_id'] as String? ?? '—',
+                      )
+                    : SakalFieldCard(
+                        label: 'Currency',
+                        editable: true,
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _currencyId,
+                          isExpanded: true, isDense: true, itemHeight: null,
+                          style: fieldStyle,
+                          decoration: bare(hint: 'Select…'),
+                          items: _currencies.map((c) => DropdownMenuItem(
+                            value: c['id'] as String,
+                            child: Text('${c['currency_id']} — ${c['currency_name']}',
+                                overflow: TextOverflow.ellipsis),
+                          )).toList(),
+                          onChanged: (v) => setState(() => _currencyId = v),
+                        ),
+                      ),
                 SakalFieldCard(
                   label: 'Default Tax Group',
                   editable: true,

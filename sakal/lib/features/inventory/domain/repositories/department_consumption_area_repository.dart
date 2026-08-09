@@ -23,4 +23,10 @@ abstract class DepartmentConsumptionAreaRepository {
   Future<void> saveLink({required Map<String, dynamic> payload});
 
   Future<void> deleteLink({required String id, required String userId});
+
+  Future<String?> canDeleteConsumptionArea({
+    required String clientId,
+    required String companyId,
+    required String consumptionAreaId,
+  });
 }

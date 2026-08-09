@@ -248,6 +248,19 @@ class ProductsRemoteDs {
     return (res.data as List).cast<Map<String, dynamic>>();
   }
 
+  Future<String?> canChangeBaseUom({
+    required String clientId,
+    required String companyId,
+    required String productId,
+  }) async {
+    final res = await _dio.post('/rpc/fn_can_change_product_base_uom', data: {
+      'p_client_id':  clientId,
+      'p_company_id': companyId,
+      'p_product_id': productId,
+    });
+    return res.data as String?;
+  }
+
   Future<List<ProductFlagTypeModel>> getFlagTypes({
     required String clientId,
     required String companyId,

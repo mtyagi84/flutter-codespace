@@ -35,4 +35,10 @@ abstract class ProductsRepository {
   Future<List<ItemCategoryModel>>              getCategories({required String clientId, required String companyId});
   Future<List<TaxGroupModel>>                  getTaxGroups({required String clientId, required String companyId});
   Future<List<Map<String, dynamic>>>           getCurrencies(String clientId);
+
+  Future<String?> canChangeBaseUom({
+    required String clientId,
+    required String companyId,
+    required String productId,
+  });
 }

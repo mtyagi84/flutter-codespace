@@ -88,6 +88,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
   String? _itemSizeId;     String? _itemSizeDisplay;
   String? _itemColorId;    String? _itemColorDisplay;
   String? _baseUomId;
+  bool    _baseUomLocked = false;
   String? _costCurrencyId;
   String? _salesTaxId;
   String? _purchTaxId;
@@ -230,6 +231,7 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
       }
       _populate(product, uoms, media);
       setState(() => _loadingProd = false);
+      _checkBaseUomLock(id);
     } on DioException catch (e) {
       if (mounted) {
         setState(() {
@@ -237,6 +239,18 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
           _error = e.response?.data?['message'] as String? ?? 'Failed to load product.';
         });
       }
+    }
+  }
+
+  Future<void> _checkBaseUomLock(String productId) async {
+    final session = ref.read(sessionProvider)!;
+    try {
+      final blockReason = await _repo.canChangeBaseUom(
+        clientId: session.clientId, companyId: session.companyId, productId: productId,
+      );
+      if (mounted) setState(() => _baseUomLocked = blockReason != null);
+    } on DioException {
+      // Fail open — a check-failure shouldn't itself block editing.
     }
   }
 
@@ -893,26 +907,32 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
       icon:  Icons.scale_outlined,
       children: [
         SakalFieldRow(isMobile: mobile, children: [
-          SakalFieldCard(
-            label:    'Base UOM',
-            required: true,
-            editable: true,
-            child: DropdownButtonFormField<String?>(
-              initialValue: _baseUomId,
-              isExpanded: true, isDense: true, itemHeight: null,
-              style: _fieldStyle,
-              decoration: _bare(),
-              validator: (v) => v == null ? 'Base UOM is required' : null,
-              items: [
-                const DropdownMenuItem(value: null, child: Text('— Select —')),
-                ..._uoms.map((u) => DropdownMenuItem(
-                    value: u.id, child: Text(u.description, overflow: TextOverflow.ellipsis))),
-              ],
-              onChanged: (id) => setState(() {
-                _baseUomId = id;
-              }),
-            ),
-          ),
+          _baseUomLocked
+              ? SakalFieldCard.readOnly(
+                  label: 'Base UOM',
+                  required: true,
+                  value: _uoms.where((u) => u.id == _baseUomId).firstOrNull?.description ?? '—',
+                )
+              : SakalFieldCard(
+                  label:    'Base UOM',
+                  required: true,
+                  editable: true,
+                  child: DropdownButtonFormField<String?>(
+                    initialValue: _baseUomId,
+                    isExpanded: true, isDense: true, itemHeight: null,
+                    style: _fieldStyle,
+                    decoration: _bare(),
+                    validator: (v) => v == null ? 'Base UOM is required' : null,
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('— Select —')),
+                      ..._uoms.map((u) => DropdownMenuItem(
+                          value: u.id, child: Text(u.description, overflow: TextOverflow.ellipsis))),
+                    ],
+                    onChanged: (id) => setState(() {
+                      _baseUomId = id;
+                    }),
+                  ),
+                ),
           SakalFieldCard(
             label:    'Tracking Type',
             editable: true,

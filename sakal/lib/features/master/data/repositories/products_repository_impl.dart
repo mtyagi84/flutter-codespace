@@ -128,4 +128,12 @@ class ProductsRepositoryImpl implements ProductsRepository {
   @override
   Future<List<Map<String, dynamic>>> getCurrencies(String clientId) =>
       _remote.getCurrencies(clientId);
+
+  @override
+  Future<String?> canChangeBaseUom({
+    required String clientId,
+    required String companyId,
+    required String productId,
+  }) =>
+      _remote.canChangeBaseUom(clientId: clientId, companyId: companyId, productId: productId);
 }

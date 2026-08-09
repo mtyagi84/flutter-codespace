@@ -97,4 +97,7 @@ class ItemCategoriesRepositoryImpl implements ItemCategoriesRepository {
       _remote.cascadeFlagsToChildren(childIds: childIds, flags: flags, userId: userId);
 
   @override Future<bool> hasChildren(String categoryId) => _remote.hasChildren(categoryId);
+
+  @override Future<String?> canDeleteCategory({required String clientId, required String companyId, required String categoryId}) =>
+      _remote.canDeleteCategory(clientId: clientId, companyId: companyId, categoryId: categoryId);
 }

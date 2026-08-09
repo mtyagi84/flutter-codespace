@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -407,6 +408,23 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
   }
 
   Future<void> _confirmDelete(String id) async {
+    final session = ref.read(sessionProvider);
+    if (session == null) return;
+    try {
+      final res = await DioClient.instance.post(
+        '/rpc/fn_can_delete_location',
+        data: {'p_client_id': session.clientId, 'p_company_id': session.companyId, 'p_location_id': id},
+      );
+      final blockReason = res.data as String?;
+      if (blockReason != null) {
+        _showError(blockReason);
+        return;
+      }
+    } on DioException catch (e) {
+      _showError(ErrorPresenter.format(e, action: 'check whether this location can be deleted'));
+      return;
+    }
+
     // Use the dialog's OWN builder context (ctx), not the enclosing
     // screen's — Navigator.pop(context, ...) here was popping the wrong
     // Navigator (the screen itself, via whatever Navigator is nearest to

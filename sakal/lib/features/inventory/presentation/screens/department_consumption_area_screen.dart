@@ -134,12 +134,23 @@ class _DepartmentConsumptionAreaScreenState extends ConsumerState<DepartmentCons
 
   void _addRow() => setState(() => _rows.add(_LinkRow()));
 
-  void _removeRow(_LinkRow row) {
+  Future<void> _removeRow(_LinkRow row) async {
     if (row.id == null) {
       setState(() => _rows.remove(row));
-    } else {
-      setState(() => row.deleted = true);
+      return;
     }
+    final session = ref.read(sessionProvider)!;
+    if (row.consumptionAreaId != null) {
+      final blockReason = await _ds.canDeleteConsumptionArea(
+        clientId: session.clientId, companyId: session.companyId, consumptionAreaId: row.consumptionAreaId!,
+      );
+      if (!mounted) return;
+      if (blockReason != null) {
+        _showSnack(blockReason, color: AppColors.negative);
+        return;
+      }
+    }
+    setState(() => row.deleted = true);
   }
 
   List<Map<String, dynamic>> _areaOptionsFor(_LinkRow row) => _consumptionAreas

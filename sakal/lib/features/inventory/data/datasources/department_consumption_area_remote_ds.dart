@@ -103,4 +103,17 @@ class DepartmentConsumptionAreaRemoteDs {
       'updated_at': DateTime.now().toIso8601String(),
     });
   }
+
+  Future<String?> canDeleteConsumptionArea({
+    required String clientId,
+    required String companyId,
+    required String consumptionAreaId,
+  }) async {
+    final res = await _dio.post('/rpc/fn_can_delete_consumption_area', data: {
+      'p_client_id':           clientId,
+      'p_company_id':          companyId,
+      'p_consumption_area_id': consumptionAreaId,
+    });
+    return res.data as String?;
+  }
 }

@@ -20,4 +20,5 @@ abstract class ItemCategoriesRepository {
   Future<void> softDeleteCategory({required String id, required String userId});
   Future<void> cascadeFlagsToChildren({required List<String> childIds, required Map<String, dynamic> flags, required String userId});
   Future<bool> hasChildren(String categoryId);
+  Future<String?> canDeleteCategory({required String clientId, required String companyId, required String categoryId});
 }

@@ -285,6 +285,15 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
       _showMsg('Cannot delete "${node.categoryName}" — it has sub-categories. Delete those first.');
       return;
     }
+    final session = ref.read(sessionProvider)!;
+    final blockReason = await _repo.canDeleteCategory(
+      clientId: session.clientId, companyId: session.companyId, categoryId: node.id!,
+    );
+    if (!mounted) return;
+    if (blockReason != null) {
+      _showMsg(blockReason);
+      return;
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
