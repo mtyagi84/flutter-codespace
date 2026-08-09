@@ -107,6 +107,8 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
   // may still reference an outgoing row's FocusNode this same frame.
   // Deferred all the way to this screen's own dispose() via DeferredRowDisposal.
   final List<_BillRow> _bills = [];
+  final _billSearchCtrl = TextEditingController();
+  String _billSearchText = '';
 
   bool _loading = true;
   String? _error;
@@ -132,6 +134,32 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
   double get _appliedTotal => _bills.fold(0.0, (sum, b) => sum + b.applyLocal);
   bool get _totalsMatch => (_appliedTotal - _headerTotalLocal).abs() < 0.01;
 
+  List<_BillRow> get _filteredBills {
+    final q = _billSearchText.trim().toLowerCase();
+    if (q.isEmpty) return _bills;
+    return _bills.where((b) => b.invBillNo.toLowerCase().contains(q)).toList();
+  }
+
+  // Distributes the header's total collected amount across the pending
+  // bills oldest-first (bills already arrive ordered trans_date.asc from
+  // getPendingBills), filling each bill's outstanding balance before
+  // moving to the next — the cashier no longer has to hand-split a
+  // collected amount across several invoices themselves.
+  void _autoApplyOldestFirst() {
+    var remaining = _headerTotalLocal;
+    setState(() {
+      for (final b in _bills) {
+        if (remaining <= 0.001) {
+          b.applyCtrl.text = '';
+          continue;
+        }
+        final take = remaining >= b.balanceLocalCcy ? b.balanceLocalCcy : remaining;
+        b.applyCtrl.text = _fmtNum(take);
+        remaining -= take;
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -143,6 +171,7 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
     _remarksCtrl.dispose();
     _localAmountCtrl.dispose();
     _baseAmountCtrl.dispose();
+    _billSearchCtrl.dispose();
     for (final b in _bills) {
       b.dispose();
     }
@@ -283,50 +312,81 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
     if (_customerId == null || _locationId == null) return;
     setState(() => _loadingBills = true);
     try {
-      final rows = await _ds.getPendingBills(companyId: session.companyId, locationId: _locationId!, accountId: _customerId!);
       final savedLines = _receiptNo != null
           ? await _ds.getLines(clientId: session.clientId, companyId: session.companyId, receiptNo: _receiptNo!, receiptDate: _fmtDate(_receiptDate))
           : <Map<String, dynamic>>[];
 
-      // Resolve Base/Local currency-equivalent columns — one rate lookup
-      // per distinct party_currency present, not per row.
-      final rateCache = <String, double>{};
       final newBills = <_BillRow>[];
-      for (final r in rows) {
-        final ccy = r['party_currency'] as String;
-        final balance = (r['balance_amount'] as num? ?? 0).toDouble();
-        final bill = _BillRow(
-          invBillNo: r['inv_bill_no'] as String,
-          invBillDate: r['inv_bill_date'] as String,
-          partyCurrency: ccy,
-          balancePartyCcy: balance,
-        );
-        if (!rateCache.containsKey('$ccy>base') && _baseCcy != null) {
-          rateCache['$ccy>base'] = await _ds.getExchangeRate(
-                companyId: session.companyId, locationId: _locationId!,
-                fromCurrency: ccy, toCurrency: _baseCcy!, rateDate: _fmtDate(_receiptDate),
-              ) ??
-              1;
-        }
-        if (!rateCache.containsKey('$ccy>local') && _localCcy != null) {
-          rateCache['$ccy>local'] = await _ds.getExchangeRate(
-                companyId: session.companyId, locationId: _locationId!,
-                fromCurrency: ccy, toCurrency: _localCcy!, rateDate: _fmtDate(_receiptDate),
-              ) ??
-              1;
-        }
-        bill.balanceBaseCcy = balance * (rateCache['$ccy>base'] ?? 1);
-        bill.balanceLocalCcy = balance * (rateCache['$ccy>local'] ?? 1);
 
-        // Reopening a saved DRAFT — restore whatever was already applied.
-        final saved = savedLines.firstWhere(
-          (l) => l['inv_bill_no'] == bill.invBillNo && l['inv_bill_date'] == bill.invBillDate,
-          orElse: () => const {},
-        );
-        if (saved.isNotEmpty) {
-          bill.applyCtrl.text = _fmtNum(saved['applied_amount_local']);
+      // A saved, APPROVED receipt is a locked historical record — show
+      // ONLY the invoices it actually settled, built directly from its own
+      // saved lines, never the live "still outstanding" list.
+      // v_pending_bills excludes any bill this receipt fully paid off
+      // (balance <= 0), so reusing it here would silently drop settled
+      // bills from view (or worse, show an unrelated bill's now-reduced
+      // balance in its place) — real bug found live in the QA pass. Saved
+      // lines only carry applied_amount_local (already local currency, not
+      // the original party-currency balance), so there's no rate math to
+      // redo here — the applied amount IS the figure to show in all three
+      // columns for a settled historical row. A DRAFT still shows live
+      // pending bills (with rate-converted balances) so the cashier can
+      // keep applying against them.
+      if (_status == 'APPROVED') {
+        for (final l in savedLines) {
+          final applied = (l['applied_amount_local'] as num? ?? 0).toDouble();
+          final bill = _BillRow(
+            invBillNo: l['inv_bill_no'] as String,
+            invBillDate: l['inv_bill_date'] as String,
+            partyCurrency: l['bill_currency'] as String? ?? _localCcy ?? '',
+            balancePartyCcy: applied,
+          )
+            ..balanceBaseCcy = applied
+            ..balanceLocalCcy = applied;
+          bill.applyCtrl.text = _fmtNum(applied);
+          newBills.add(bill);
         }
-        newBills.add(bill);
+      } else {
+        final rows = await _ds.getPendingBills(companyId: session.companyId, locationId: _locationId!, accountId: _customerId!);
+
+        // Resolve Base/Local currency-equivalent columns — one rate lookup
+        // per distinct party_currency present, not per row.
+        final rateCache = <String, double>{};
+        for (final r in rows) {
+          final ccy = r['party_currency'] as String;
+          final balance = (r['balance_amount'] as num? ?? 0).toDouble();
+          final bill = _BillRow(
+            invBillNo: r['inv_bill_no'] as String,
+            invBillDate: r['inv_bill_date'] as String,
+            partyCurrency: ccy,
+            balancePartyCcy: balance,
+          );
+          if (!rateCache.containsKey('$ccy>base') && _baseCcy != null) {
+            rateCache['$ccy>base'] = await _ds.getExchangeRate(
+                  companyId: session.companyId, locationId: _locationId!,
+                  fromCurrency: ccy, toCurrency: _baseCcy!, rateDate: _fmtDate(_receiptDate),
+                ) ??
+                1;
+          }
+          if (!rateCache.containsKey('$ccy>local') && _localCcy != null) {
+            rateCache['$ccy>local'] = await _ds.getExchangeRate(
+                  companyId: session.companyId, locationId: _locationId!,
+                  fromCurrency: ccy, toCurrency: _localCcy!, rateDate: _fmtDate(_receiptDate),
+                ) ??
+                1;
+          }
+          bill.balanceBaseCcy = balance * (rateCache['$ccy>base'] ?? 1);
+          bill.balanceLocalCcy = balance * (rateCache['$ccy>local'] ?? 1);
+
+          // Reopening a saved DRAFT — restore whatever was already applied.
+          final saved = savedLines.firstWhere(
+            (l) => l['inv_bill_no'] == bill.invBillNo && l['inv_bill_date'] == bill.invBillDate,
+            orElse: () => const {},
+          );
+          if (saved.isNotEmpty) {
+            bill.applyCtrl.text = _fmtNum(saved['applied_amount_local']);
+          }
+          newBills.add(bill);
+        }
       }
       if (mounted) {
         setState(() {
@@ -682,6 +742,26 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
       return const Padding(padding: EdgeInsets.all(16), child: Text('This customer has no pending invoices at this location.'));
     }
 
+    final filtered = _filteredBills;
+    final isMobile = Responsive.isMobile(context);
+    final searchField = TextField(
+      controller: _billSearchCtrl,
+      decoration: InputDecoration(
+        isDense: true,
+        hintText: 'Search bill no…',
+        prefixIcon: const Icon(Icons.search, size: 18),
+        suffixIcon: _billSearchText.isNotEmpty
+            ? IconButton(icon: const Icon(Icons.clear, size: 16), onPressed: () => setState(() { _billSearchCtrl.clear(); _billSearchText = ''; }))
+            : null,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      onChanged: (v) => setState(() => _billSearchText = v),
+    );
+    final autoApplyButton = OutlinedButton.icon(
+      onPressed: _headerTotalLocal > 0 ? _autoApplyOldestFirst : null,
+      icon: const Icon(Icons.auto_fix_high, size: 16),
+      label: const Text('Auto-Apply (Oldest First)'),
+    );
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         const Expanded(child: Text('Pending Invoices', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700))),
@@ -691,12 +771,29 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
         ),
       ]),
       const SizedBox(height: 8),
-      for (var i = 0; i < _bills.length; i++) _buildBillCard(_bills[i], i, locked),
+      if (!locked)
+        isMobile
+            ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                searchField,
+                const SizedBox(height: 8),
+                autoApplyButton,
+              ])
+            : Row(children: [
+                Expanded(child: searchField),
+                const SizedBox(width: 8),
+                autoApplyButton,
+              ]),
+      const SizedBox(height: 8),
+      if (filtered.isEmpty)
+        const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('No bills match your search.'))
+      else
+        for (var i = 0; i < filtered.length; i++) _buildBillCard(filtered[i], i, filtered, locked),
     ]);
   }
 
-  Widget _buildBillCard(_BillRow bill, int index, bool locked) {
+  Widget _buildBillCard(_BillRow bill, int index, List<_BillRow> siblings, bool locked) {
     final isMobile = Responsive.isMobile(context);
+    final isFullyApplied = bill.balanceLocalCcy > 0 && (bill.applyLocal - bill.balanceLocalCcy).abs() < 0.01;
     final billLabel = Text('${bill.invBillNo}\n${bill.invBillDate}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600));
     final balancePartyField = SakalFieldCard.readOnly(
       label: 'Balance (${bill.partyCurrency})',
@@ -729,17 +826,30 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
         inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,4}'))],
         decoration: SakalFieldCard.bareDecoration,
         textAlign: TextAlign.right,
-        textInputAction: index < _bills.length - 1 ? TextInputAction.next : TextInputAction.done,
+        textInputAction: index < siblings.length - 1 ? TextInputAction.next : TextInputAction.done,
         onChanged: (_) => setState(() {}),
         onFieldSubmitted: (_) {
-          if (index < _bills.length - 1) {
-            _bills[index + 1].applyFocusNode.requestFocus();
+          if (index < siblings.length - 1) {
+            siblings[index + 1].applyFocusNode.requestFocus();
           } else {
             FocusScope.of(context).unfocus();
           }
         },
       ),
     );
+    // Applies the full outstanding balance for this one bill with a single
+    // tap instead of the cashier having to type/copy the exact number.
+    final fullAmountToggle = locked
+        ? const SizedBox(width: 24, height: 24)
+        : Tooltip(
+            message: isFullyApplied ? 'Full balance applied' : 'Apply full balance',
+            child: Checkbox(
+              value: isFullyApplied,
+              onChanged: (v) => setState(() {
+                bill.applyCtrl.text = (v ?? false) ? _fmtNum(bill.balanceLocalCcy) : '';
+              }),
+            ),
+          );
 
     return Card(
       elevation: 0,
@@ -759,7 +869,12 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
                 const SizedBox(height: 8),
                 Row(children: [Expanded(child: balancePartyField), const SizedBox(width: 8), Expanded(child: balanceBaseField)]),
                 const SizedBox(height: 8),
-                Row(children: [Expanded(child: balanceLocalField), const SizedBox(width: 8), Expanded(child: applyField)]),
+                Row(children: [
+                  Expanded(child: balanceLocalField),
+                  const SizedBox(width: 8),
+                  Expanded(child: applyField),
+                  fullAmountToggle,
+                ]),
               ])
             : Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
                 Expanded(child: billLabel),
@@ -771,6 +886,7 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
                 Expanded(child: balanceLocalField),
                 const SizedBox(width: 12),
                 Expanded(child: applyField),
+                fullAmountToggle,
               ]),
       ),
     );
