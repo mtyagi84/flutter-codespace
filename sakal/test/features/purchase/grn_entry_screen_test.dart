@@ -627,8 +627,10 @@ void main() {
       // active (_receiptMode == 'AGAINST_PO' branch of supplierField).
       expect(find.text('[SUP-001] Test Supplier'), findsOneWidget);
 
-      // Purchase Orders consolidation section shows the picked PO as a chip.
-      expect(find.text('PO-2001'), findsOneWidget);
+      // Purchase Orders consolidation section shows the picked PO as a chip,
+      // labeled with its own order date (Phase 4 fix — CLAUDE.md's "GRN
+      // against PO" section).
+      expect(find.text('PO-2001 · 2026-07-15'), findsOneWidget);
 
       // The PO's pending line landed as its own line card — title format
       // matches DIRECT mode's own ('idx. productDisplay'), plus the
