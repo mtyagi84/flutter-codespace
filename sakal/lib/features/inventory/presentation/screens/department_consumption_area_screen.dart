@@ -47,7 +47,17 @@ class _DepartmentConsumptionAreaScreenState extends ConsumerState<DepartmentCons
           ? [
               Padding(
                 padding: const EdgeInsets.only(right: 8),
+                // Placed in the TopBar's own actions row (primary-color
+                // background) — FilledButton's default M3 styling also
+                // derives from colorScheme.primary (the SAME color), which
+                // made the button visually vanish into the bar. Explicit
+                // secondary/amber styling gives it real contrast, same fix
+                // as Company Setup's own Save button.
                 child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.secondary,
+                    foregroundColor: Colors.white,
+                  ),
                   onPressed: _saving ? null : _saveAll,
                   child: _saving
                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))

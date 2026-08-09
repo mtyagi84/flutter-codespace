@@ -21,7 +21,7 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     with ScreenHeaderMixin<CompanyScreen> {
   @override
   ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
-        title: 'Company Information',
+        title: _nameCtrl.text.isNotEmpty ? '${_nameCtrl.text} · Company Information' : 'Company Information',
         subtitle: 'Edit your company profile, contact details and tax information.',
         actions: [_buildSaveButton()],
       );
@@ -375,9 +375,19 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     );
   }
 
+  // Placed in the TopBar's own actions row (activePreset.primary
+  // background) — the globally-themed ElevatedButton also defaults to
+  // that SAME primary color, which made this button visually vanish
+  // into the bar ("doesn't look like a real button"). Explicit
+  // secondary/amber styling gives it real contrast. Same fix applied to
+  // Consumption Area Setup's own Save button.
   Widget _buildSaveButton() => SizedBox(
         width: 200,
         child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.secondary,
+            foregroundColor: Colors.white,
+          ),
           onPressed: _saving ? null : _save,
           child: _saving
               ? const SizedBox(

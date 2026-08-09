@@ -218,9 +218,16 @@ class _BackdatedEntryControlScreenState extends ConsumerState<BackdatedEntryCont
     );
   }
 
+  // Same fix as Company Setup / Consumption Area Setup — ElevatedButton's
+  // themed background matches the TopBar's own primary color, so without
+  // an explicit contrasting style this button visually vanishes into the bar.
   Widget _buildSaveButton() => SizedBox(
         width: 160,
         child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.secondary,
+            foregroundColor: Colors.white,
+          ),
           onPressed: _saving ? null : _save,
           child: _saving
               ? const SizedBox(height: 18, width: 18,
