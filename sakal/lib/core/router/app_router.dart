@@ -105,7 +105,22 @@ import 'route_names.dart';
 // whenever the user logs in, logs out, or the session is restored on page refresh.
 final sessionNotifier = ValueNotifier<UserSession?>(null);
 
+// Explicit, stable identities for the root Navigator and each nested
+// ShellRoute's own Navigator. Without these, go_router can end up
+// ambiguous about a nested Navigator's identity across a route-table
+// swap as dramatic as a full logout->login cycle (tear down the entire
+// authenticated shell, show /login, then rebuild the shell again) —
+// reproduced live as a "Duplicate GlobalKey"/Element-reactivation crash
+// on relogin. A prior fix (removing a redundant explicit context.go()
+// that raced against this redirect callback) was a real, separate bug
+// but did not resolve this — stable navigatorKeys are the documented
+// mitigation for this class of nested-ShellRoute bug.
+final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
+final _outerShellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'outerShell-selectionArea');
+final _appShellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'appShell-authenticated');
+
 final appRouter = GoRouter(
+  navigatorKey: _rootNavigatorKey,
   initialLocation: RouteNames.landing,
   refreshListenable: sessionNotifier,
   debugLogDiagnostics: true,
@@ -150,6 +165,7 @@ final appRouter = GoRouter(
     // Must be inside a route (i.e., inside the Navigator) so that the Overlay
     // ancestor required by SelectionArea already exists.
     ShellRoute(
+      navigatorKey: _outerShellNavigatorKey,
       builder: (context, state, child) => SelectionArea(child: child),
       routes: [
 
@@ -161,6 +177,7 @@ final appRouter = GoRouter(
 
     // Authenticated routes — all wrapped in AppShell (sidebar + topbar)
     ShellRoute(
+      navigatorKey: _appShellNavigatorKey,
       builder: (context, state, child) => AppShell(child: child),
       routes: [
         GoRoute(
