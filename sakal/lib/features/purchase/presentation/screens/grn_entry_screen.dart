@@ -1552,10 +1552,13 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
           if (_consolidatedPoOrderNos.isEmpty)
             const Text('No purchase orders consolidated yet.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary))
           else
-            Wrap(spacing: 8, runSpacing: 8, children: _consolidatedPoOrderNos.map((orderNo) => Chip(
-              label: Text(orderNo, style: const TextStyle(fontSize: 12)),
-              onDeleted: locked ? null : () => _removeConsolidatedPo(orderNo),
-            )).toList()),
+            Wrap(spacing: 8, runSpacing: 8, children: _consolidatedPoOrderNos.map((orderNo) {
+              final poDate = _lines.where((l) => l.sourcePoOrderNo == orderNo).firstOrNull?.sourcePoOrderDate;
+              return Chip(
+                label: Text(poDate != null ? '$orderNo · $poDate' : orderNo, style: const TextStyle(fontSize: 12)),
+                onDeleted: locked ? null : () => _removeConsolidatedPo(orderNo),
+              );
+            }).toList()),
         ],
       ),
     ),
