@@ -1187,10 +1187,6 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
     final showCancel  = !isOffline && (_status == 'DRAFT' || _status == 'APPROVED') && canApprove && !_isNew;
     final locked      = _status != 'DRAFT';
-    // Date locks once the document has a real number too, not just once
-    // approved — a saved DRAFT's date should not be silently changeable
-    // after the fact (real bug reported live).
-    final dateLocked  = locked || _orderNo != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1277,6 +1273,10 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final showRate = _orderCurrencyCode != null && _orderCurrencyCode != _baseCurrency;
     final customerLocked = locked || _isAgainstQuotation;
+    // Date locks once the document has a real number too, not just once
+    // approved — a saved DRAFT's date should not be silently changeable
+    // after the fact (real bug reported live).
+    final dateLocked = locked || _orderNo != null;
 
     final orderNoField = SakalFieldCard.readOnly(label: 'Order No', value: _orderNo ?? '(auto on save)');
     final orderDateField = SakalFieldCard(

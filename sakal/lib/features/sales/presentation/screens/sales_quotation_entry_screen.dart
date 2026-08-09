@@ -920,10 +920,6 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
     final showSend     = !isOffline && _status == 'APPROVED' && canEdit;
     final showAcceptReject = !isOffline && _status == 'SENT' && canEdit;
     final locked       = _status != 'DRAFT';
-    // Date locks once the document has a real number too, not just once
-    // approved — a saved DRAFT's date should not be silently changeable
-    // after the fact (real bug reported live).
-    final dateLocked   = locked || _quotationNo != null;
 
     // Title/subtitle/status-badge/Print now live in the shared TopBar via
     // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. The
@@ -1021,6 +1017,10 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
     const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final showRate = _quotationCurrencyCode != null && _quotationCurrencyCode != _baseCurrency;
+    // Date locks once the document has a real number too, not just once
+    // approved — a saved DRAFT's date should not be silently changeable
+    // after the fact (real bug reported live).
+    final dateLocked = locked || _quotationNo != null;
 
     final quotationNoField = SakalFieldCard.readOnly(label: 'Quotation No', value: _quotationNo ?? '(auto on save)');
     final quotationDateField = SakalFieldCard(

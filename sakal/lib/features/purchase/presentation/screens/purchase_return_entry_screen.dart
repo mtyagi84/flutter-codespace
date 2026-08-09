@@ -944,10 +944,6 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
     final canSave     = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
     final locked      = _status != 'DRAFT';
-    // Date locks once the document has a real number too, not just once
-    // approved — a saved DRAFT's date should not be silently changeable
-    // after the fact (real bug reported live).
-    final dateLocked  = locked || _returnNo != null;
 
     // Title/subtitle/status-badge/Print now live in the shared TopBar via
     // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. Save/
@@ -1057,6 +1053,10 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
     const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final supplierLocked = locked || _selectedGrnKeys.isNotEmpty;
+    // Date locks once the document has a real number too, not just once
+    // approved — a saved DRAFT's date should not be silently changeable
+    // after the fact (real bug reported live).
+    final dateLocked = locked || _returnNo != null;
 
     final supplierField = SakalFieldCard(
       label: 'Supplier', required: true, editable: !supplierLocked,

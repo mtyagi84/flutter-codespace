@@ -450,10 +450,6 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
     final canSave     = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
     final locked      = _status != 'DRAFT';
-    // Date locks once the document has a real number too, not just once
-    // approved — a saved DRAFT's date should not be silently changeable
-    // after the fact (real bug reported live).
-    final dateLocked  = locked || _requisitionNo != null;
 
     // Title/subtitle/status-badge/Print now live in the shared TopBar via
     // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. Save/
@@ -524,6 +520,10 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
     final isCompact = ref.watch(isCompactDensityProvider);
     const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
+    // Date locks once the document has a real number too, not just once
+    // approved — a saved DRAFT's date should not be silently changeable
+    // after the fact (real bug reported live).
+    final dateLocked = locked || _requisitionNo != null;
 
     final locationField = SakalFieldCard(
       label: 'From Location', required: true, editable: !locked,

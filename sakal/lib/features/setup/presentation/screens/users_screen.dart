@@ -437,6 +437,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
       _showError(ErrorPresenter.format(e, action: 'check whether this user can be deleted'));
       return;
     }
+    if (!mounted) return;
 
     // Use the dialog's OWN builder context (ctx), not the enclosing
     // screen's — Navigator.pop(context, ...) here was popping the wrong

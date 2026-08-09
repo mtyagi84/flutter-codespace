@@ -1324,10 +1324,6 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     final canSave      = _status == 'DRAFT' && (_grnNo == null ? canAdd : canEdit);
     final showApprove  = _status == 'DRAFT' && !isOffline && canApprove && _grnNo != null;
     final locked       = _status != 'DRAFT';
-    // Date locks once the document has a real number too, not just once
-    // approved — a saved DRAFT's date should not be silently changeable
-    // after the fact (real bug reported live).
-    final dateLocked   = locked || _grnNo != null;
 
     // Title/subtitle/status-badge/Print now live in the shared TopBar via
     // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. Save/
@@ -1407,6 +1403,10 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     // the three afterward short of abandoning the draft.
     final modeLocked = locked || _supplierId != null;
     final currencyLocked = locked || (_receiptMode == 'AGAINST_PO' && _supplierId != null);
+    // Date locks once the document has a real number too, not just once
+    // approved — a saved DRAFT's date should not be silently changeable
+    // after the fact (real bug reported live).
+    final dateLocked = locked || _grnNo != null;
 
     final receiptModeField = SakalFieldCard(
       label: 'Receipt Mode', required: true, editable: !modeLocked,

@@ -849,10 +849,6 @@ class _SalesDeliveryEntryScreenState extends ConsumerState<SalesDeliveryEntryScr
     final canSave     = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showApprove = _status == 'DRAFT' && canApprove && !_isNew;
     final locked      = _status != 'DRAFT';
-    // Date locks once the document has a real number too, not just once
-    // approved — a saved DRAFT's date should not be silently changeable
-    // after the fact (real bug reported live).
-    final dateLocked  = locked || _deliveryNo != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -930,6 +926,10 @@ class _SalesDeliveryEntryScreenState extends ConsumerState<SalesDeliveryEntryScr
     const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final invoiceLocked = locked || _lines.isNotEmpty || !_isNew;
+    // Date locks once the document has a real number too, not just once
+    // approved — a saved DRAFT's date should not be silently changeable
+    // after the fact (real bug reported live).
+    final dateLocked = locked || _deliveryNo != null;
 
     final invoiceField = SakalFieldCard(
       label: 'Invoice', required: true, editable: !invoiceLocked,

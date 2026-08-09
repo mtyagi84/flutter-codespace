@@ -424,6 +424,7 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
       _showError(ErrorPresenter.format(e, action: 'check whether this location can be deleted'));
       return;
     }
+    if (!mounted) return;
 
     // Use the dialog's OWN builder context (ctx), not the enclosing
     // screen's — Navigator.pop(context, ...) here was popping the wrong

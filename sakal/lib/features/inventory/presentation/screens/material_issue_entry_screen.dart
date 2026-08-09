@@ -557,10 +557,6 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
     final canSave     = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
     final locked      = _status != 'DRAFT';
-    // Date locks once the document has a real number too, not just once
-    // approved — a saved DRAFT's date should not be silently changeable
-    // after the fact (real bug reported live).
-    final dateLocked  = locked || _issueNo != null;
 
     // Title/subtitle/status-badge/Print now live in the shared TopBar via
     // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. Save/
@@ -628,6 +624,10 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
     final isCompact = ref.watch(isCompactDensityProvider);
     const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
+    // Date locks once the document has a real number too, not just once
+    // approved — a saved DRAFT's date should not be silently changeable
+    // after the fact (real bug reported live).
+    final dateLocked = locked || _issueNo != null;
 
     final issueNoField = SakalFieldCard.readOnly(label: 'Issue No', value: _issueNo ?? '(auto on save)');
     final issueDateField = SakalFieldCard(
