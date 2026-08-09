@@ -238,10 +238,15 @@ class _ChartOfAccountsScreenState
 
   // ── Panel actions ─────────────────────────────────────────────────────────
 
-  void _openAdd(Map<String, dynamic> parent) {
+  Future<void> _openAdd(Map<String, dynamic> parent) async {
     final parentNature = parent['account_nature'] as String? ?? 'General';
     final autoNature   = parentNature == 'General' ? 'General' : parentNature;
-    final needsAuto    = autoNature != 'General';
+    // Every new account/group is added as a child of an existing node, so a
+    // parent code always exists to build from — auto-generate (parent code
+    // + next sequential number, via the same fn_next_account_code already
+    // used for party-nature accounts) for every new node, not just
+    // Customer/Supplier/Cash/Bank/Employee/Tax ones.
+    const needsAuto    = true;
 
     setState(() {
       _panelMode      = 'add';
@@ -251,12 +256,22 @@ class _ChartOfAccountsScreenState
       _nature         = autoNature;
       _isAutoCode     = needsAuto;
       _autoCode       = null;
-      _partyExpanded  = needsAuto;
+      _partyExpanded  = autoNature != 'General';
       _isActive       = true;
       _saveError      = null;
       _clearForm();
       _daysCtrl.text  = '30';
     });
+
+    // Default a new account's Currency to the company's own base currency
+    // — was previously possible to save with no currency chosen at all.
+    try {
+      final baseCode = await ref.read(baseCurrencyProvider.future);
+      final match = _currencies.where((c) => c['currency_id'] == baseCode).firstOrNull;
+      if (mounted && match != null && _panelMode == 'add') {
+        setState(() => _currencyId = match['id'] as String);
+      }
+    } catch (_) { /* leave unset — user can pick manually */ }
     if (needsAuto) _loadAutoCode(parent['id'] as String);
   }
 
@@ -347,6 +362,7 @@ class _ChartOfAccountsScreenState
     final code = _isAutoCode ? (_autoCode ?? '') : _codeCtrl.text.trim();
     if (name.isEmpty) { setState(() => _saveError = 'Name is required.'); return; }
     if (code.isEmpty) { setState(() => _saveError = 'Code is required.'); return; }
+    if (_postingAllowed && _currencyId == null) { setState(() => _saveError = 'Currency is required.'); return; }
 
     final session = ref.read(sessionProvider)!;
     setState(() { _saving = true; _saveError = null; });
@@ -504,6 +520,16 @@ class _ChartOfAccountsScreenState
           const Expanded(child: Text('Accounts',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
                   color: AppColors.textPrimary))),
+          IconButton(
+            icon: const Icon(Icons.unfold_more, size: 18),
+            tooltip: 'Expand All',
+            onPressed: () => setState(() => _expanded.addAll(_childMap.keys)),
+          ),
+          IconButton(
+            icon: const Icon(Icons.unfold_less, size: 18),
+            tooltip: 'Collapse All',
+            onPressed: () => setState(() => _expanded.clear()),
+          ),
           IconButton(icon: const Icon(Icons.refresh, size: 18),
               tooltip: 'Refresh', onPressed: _load),
         ]),
@@ -831,8 +857,15 @@ class _ChartOfAccountsScreenState
                       )
                     : SakalFieldCard(
                         label: 'Currency',
+                        required: true,
                         editable: true,
                         child: DropdownButtonFormField<String>(
+                          // Externally-set value (the base-currency default
+                          // populated async in _openAdd, after this field's
+                          // first build) needs a key to force a remount —
+                          // initialValue is otherwise only read once. See
+                          // CLAUDE.md's FormField-family gotcha.
+                          key: ValueKey(_currencyId),
                           initialValue: _currencyId,
                           isExpanded: true, isDense: true, itemHeight: null,
                           style: fieldStyle,
