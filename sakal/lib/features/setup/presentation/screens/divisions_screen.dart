@@ -10,6 +10,7 @@ import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
 
 // No repository/model layer exists for this screen (it calls DioClient/
 // GenericLookupLocalDs directly) — this row type is defined locally rather
@@ -237,6 +238,8 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen>
     );
   }
 
+  String _countryDisplay(Map<String, dynamic> c) => c['country_name'] as String? ?? '';
+
   // dominant division_type for the selected country (used as field label hint)
   String get _divisionLabel {
     if (_divisions.isEmpty) return 'Province / State';
@@ -265,24 +268,37 @@ class _DivisionsScreenState extends ConsumerState<DivisionsScreen>
             constraints: const BoxConstraints(maxWidth: 340),
             child: _loadingCountries
                 ? const LinearProgressIndicator()
-                : DropdownButtonFormField<String>(
-                    initialValue: _selectedCountry,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Country',
-                      prefixIcon: Icon(Icons.public_outlined),
-                      isDense: true,
-                    ),
-                    hint: const Text('Select country…'),
-                    items: _countries.map((c) => DropdownMenuItem(
-                      value: c['country_code'] as String,
-                      child: Text(c['country_name'] as String),
-                    )).toList(),
-                    onChanged: (v) {
-                      setState(() { _selectedCountry = v; _divisions = []; });
-                      _loadDivisions();
-                    },
-                  ),
+                : Builder(builder: (context) {
+                    final selectedRows = _countries.where((c) => c['country_code'] == _selectedCountry).toList();
+                    final selectedDisplay = selectedRows.isNotEmpty ? _countryDisplay(selectedRows.first) : '';
+                    return SakalAutocomplete<Map<String, dynamic>>(
+                      key: ValueKey(_selectedCountry),
+                      initialValue: TextEditingValue(text: selectedDisplay),
+                      displayStringForOption: _countryDisplay,
+                      optionsBuilder: (v) {
+                        final q = v.text.toLowerCase().trim();
+                        return q.isEmpty
+                            ? _countries
+                            : _countries.where((c) => _countryDisplay(c).toLowerCase().contains(q));
+                      },
+                      onSelected: (c) {
+                        setState(() { _selectedCountry = c['country_code'] as String; _divisions = []; });
+                        _loadDivisions();
+                      },
+                      onChanged: (v) {
+                        if (v.isEmpty && _selectedCountry != null) {
+                          setState(() { _selectedCountry = null; _divisions = []; });
+                          _loadDivisions();
+                        }
+                      },
+                      decoration: const InputDecoration(
+                        labelText: 'Country',
+                        prefixIcon: Icon(Icons.public_outlined),
+                        isDense: true,
+                        hintText: 'Select country…',
+                      ),
+                    );
+                  }),
           ),
           const SizedBox(height: 20),
 

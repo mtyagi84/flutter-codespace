@@ -67,11 +67,11 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
   // Only Cash/Bank accounts are pickable for FROM/TO — the mirror-image
   // exclusion of Journal Voucher's own picker, which excludes them.
   List<Map<String, dynamic>> get _cashBankAccounts =>
-      _allAccounts.where((a) => a['account_nature'] == 'Cash' || a['account_nature'] == 'Bank').toList();
+      _allAccounts.where((a) => (a['account_nature'] == 'Cash' || a['account_nature'] == 'Bank') && a['posting_allowed'] == true).toList();
   // The transfer-charge line needs a normal Expense/General account —
   // never Cash/Bank (that would just be a second, unrelated transfer).
   List<Map<String, dynamic>> get _chargeAccounts =>
-      _allAccounts.where((a) => a['account_nature'] != 'Cash' && a['account_nature'] != 'Bank').toList();
+      _allAccounts.where((a) => a['account_nature'] != 'Cash' && a['account_nature'] != 'Bank' && a['posting_allowed'] == true).toList();
 
   // ── FROM (money leaves — always CR) ──────────────────────────────────
   String? _fromAccountId;

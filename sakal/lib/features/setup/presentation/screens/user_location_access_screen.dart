@@ -7,6 +7,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../data/user_location_access_helper.dart';
 import '../widgets/location_access_picker.dart';
 
@@ -76,6 +77,8 @@ class _UserLocationAccessScreenState extends ConsumerState<UserLocationAccessScr
       if (mounted) setState(() { _loading = false; _error = 'Could not load users or locations.'; });
     }
   }
+
+  String _userDisplay(Map<String, dynamic> u) => u['full_name'] as String? ?? '';
 
   Future<void> _selectUser(String? userId) async {
     setState(() {
@@ -184,18 +187,30 @@ class _UserLocationAccessScreenState extends ConsumerState<UserLocationAccessScr
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            DropdownButtonFormField<String>(
-                              initialValue: _userId,
-                              decoration: const InputDecoration(
-                                labelText: 'Select User',
-                                prefixIcon: Icon(Icons.person_outline),
-                              ),
-                              items: _users
-                                  .map((u) => DropdownMenuItem(
-                                      value: u['id'] as String, child: Text(u['full_name'] as String)))
-                                  .toList(),
-                              onChanged: (canEdit && !offline) ? _selectUser : null,
-                            ),
+                            Builder(builder: (context) {
+                              final selectedRows = _users.where((u) => u['id'] == _userId).toList();
+                              final selectedDisplay = selectedRows.isNotEmpty ? _userDisplay(selectedRows.first) : '';
+                              return SakalAutocomplete<Map<String, dynamic>>(
+                                key: ValueKey(_userId),
+                                initialValue: TextEditingValue(text: selectedDisplay),
+                                displayStringForOption: _userDisplay,
+                                optionsBuilder: (v) {
+                                  final q = v.text.toLowerCase().trim();
+                                  return q.isEmpty
+                                      ? _users
+                                      : _users.where((u) => _userDisplay(u).toLowerCase().contains(q));
+                                },
+                                onSelected: (u) => _selectUser(u['id'] as String),
+                                onChanged: (v) {
+                                  if (v.isEmpty && _userId != null) _selectUser(null);
+                                },
+                                enabled: canEdit && !offline,
+                                decoration: const InputDecoration(
+                                  labelText: 'Select User',
+                                  prefixIcon: Icon(Icons.person_outline),
+                                ),
+                              );
+                            }),
                             const SizedBox(height: 16),
 
                             if (_userId != null) ...[

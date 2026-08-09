@@ -76,6 +76,15 @@ class _SidebarState extends ConsumerState<Sidebar> {
   }
 
   // ── Collapsed — icon-only list ──────────────────────────────
+  // Tapping a module icon opens a popup flyout listing that module's
+  // groups/features, rather than trying to expand the sidebar itself.
+  // Real bug, fixed live: on tablet-width windows (600-1024px, see
+  // AppShell's own forced-collapse override) the sidebar's expand toggle
+  // is deliberately defeated to avoid a real overflow (a full 240px
+  // sidebar leaves too little room for content at that width) — so the
+  // old "tap to expand" behavior here silently did nothing, leaving the
+  // user stuck unable to reach any other page. A popup flyout lets
+  // navigation work without ever needing to expand.
   Widget _buildCollapsedList(List<MenuModule> menu, String path) {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -90,9 +99,27 @@ class _SidebarState extends ConsumerState<Sidebar> {
         return Tooltip(
           message: m.moduleName,
           preferBelow: false,
-          child: InkWell(
-            onTap: () =>
-                ref.read(sidebarCollapsedProvider.notifier).state = false,
+          child: PopupMenuButton<String>(
+            tooltip: '',
+            offset: const Offset(56, 0),
+            itemBuilder: (context) => [
+              for (final g in m.groups) ...[
+                PopupMenuItem<String>(
+                  value: RouteNames.groupPath(g.groupCode),
+                  child: Text(g.groupName,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                ),
+                for (final f in g.features)
+                  PopupMenuItem<String>(
+                    value: f.screenName,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 12),
+                      child: Text(f.featureName),
+                    ),
+                  ),
+              ],
+            ],
+            onSelected: (route) => context.go(route),
             child: Container(
               height: 48,
               alignment: Alignment.center,

@@ -266,7 +266,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
       ]);
 
       final accounts = results[0] as List<Map<String, dynamic>>;
-      _suppliers          = accounts.where((a) => a['account_nature'] == 'Supplier').toList();
+      _suppliers          = accounts.where((a) => a['account_nature'] == 'Supplier' && a['posting_allowed'] == true).toList();
       _products            = results[1] as List<Map<String, dynamic>>;
       _uoms                = results[2] as List<Map<String, dynamic>>;
       _taxGroups           = results[3] as List<Map<String, dynamic>>;
@@ -1280,6 +1280,10 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     final canSave      = _status == 'DRAFT' && (_grnNo == null ? canAdd : canEdit);
     final showApprove  = _status == 'DRAFT' && !isOffline && canApprove && _grnNo != null;
     final locked       = _status != 'DRAFT';
+    // Date locks once the document has a real number too, not just once
+    // approved — a saved DRAFT's date should not be silently changeable
+    // after the fact (real bug reported live).
+    final dateLocked   = locked || _grnNo != null;
 
     // Title/subtitle/status-badge/Print now live in the shared TopBar via
     // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. Save/
@@ -1376,7 +1380,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     final grnDateField = SakalFieldCard(
       label: 'GRN Date', required: true, editable: !locked,
       child: InkWell(
-        onTap: locked ? null : () => _pickDate(_grnDate, (d) => setState(() => _grnDate = d)),
+        onTap: dateLocked ? null : () => _pickDate(_grnDate, (d) => setState(() => _grnDate = d)),
         child: Row(children: [
           Expanded(child: Text(_displayDate(_grnDate), style: style)),
           Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),

@@ -120,7 +120,7 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
   // untouched (other screens still need Cash/Bank in it).
   List<Map<String, dynamic>> _allAccounts = [];
   List<Map<String, dynamic>> get _pickableAccounts =>
-      _allAccounts.where((a) => a['account_nature'] != 'Cash' && a['account_nature'] != 'Bank').toList();
+      _allAccounts.where((a) => a['account_nature'] != 'Cash' && a['account_nature'] != 'Bank' && a['posting_allowed'] == true).toList();
 
   final List<_JVLineRow> _lines = [];
 

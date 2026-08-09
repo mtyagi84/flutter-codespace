@@ -420,18 +420,24 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
   }
 
   Future<void> _confirmDelete(String id) async {
+    // Use the dialog's OWN builder context (ctx), not the enclosing
+    // screen's — Navigator.pop(context, ...) here was popping the wrong
+    // Navigator (the screen itself, via whatever Navigator is nearest to
+    // UsersScreen) instead of dismissing the dialog, producing a real
+    // "click Yes/Cancel -> blank screen" bug. See the same recurring
+    // pattern documented in project memory (feedback_dialog_rootnavigator).
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Delete User?'),
         content: const Text(
             'This will mark the account as deleted. The user will no longer be able to log in.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
+              onPressed: () => Navigator.of(ctx, rootNavigator: true).pop(false),
               child: const Text('Cancel')),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
+              onPressed: () => Navigator.of(ctx, rootNavigator: true).pop(true),
               child: const Text('Delete',
                   style: TextStyle(color: AppColors.negative))),
         ],

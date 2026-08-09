@@ -263,15 +263,15 @@ class _FinanceVoucherEntryScreenState
       setState(() {
         _baseCurrency  = base;
         _localCurrency = local;
-        _cashAccounts  = accounts.where((a) => a['account_nature'] == 'Cash').toList();
-        _bankAccounts  = accounts.where((a) => a['account_nature'] == 'Bank').toList();
+        _cashAccounts  = accounts.where((a) => a['account_nature'] == 'Cash' && a['posting_allowed'] == true).toList();
+        _bankAccounts  = accounts.where((a) => a['account_nature'] == 'Bank' && a['posting_allowed'] == true).toList();
         _partyAccounts = accounts.where((a) {
           final n = a['account_nature'] as String?;
-          return n == 'Customer' || n == 'Supplier';
+          return (n == 'Customer' || n == 'Supplier') && a['posting_allowed'] == true;
         }).toList();
         _otherAccounts = accounts.where((a) {
           final n = a['account_nature'] as String?;
-          return n != 'Cash' && n != 'Bank';
+          return n != 'Cash' && n != 'Bank' && a['posting_allowed'] == true;
         }).toList();
         _paymentModes  = modes;
       });

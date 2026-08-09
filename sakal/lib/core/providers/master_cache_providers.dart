@@ -252,7 +252,7 @@ final countriesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async
       final res = await DioClient.instance.get('/rim_countries', queryParameters: {
         'client_id':  'eq.${session.clientId}',
         'company_id': 'eq.${session.companyId}',
-        'select':     'id,country_name,country_code',
+        'select':     'id,country_name,country_code,is_active',
         'order':      'country_name.asc',
       });
       return List<Map<String, dynamic>>.from(res.data as List);

@@ -132,9 +132,10 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen>
     await _load();
   }
 
-  void _openEntry({String? productId}) {
-    context.push(RouteNames.productEntry,
+  Future<void> _openEntry({String? productId}) async {
+    await context.push(RouteNames.productEntry,
         extra: productId != null ? {'productId': productId} : null);
+    if (mounted) _reload();
   }
 
   @override

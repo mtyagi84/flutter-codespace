@@ -35,8 +35,32 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
   // title of its own, just panel-internal headers ("Customers" list header,
   // "New/Edit Customer" form header). A plain static title here is still
   // better than TopBar's blank fallback.
+  //
+  // The Add button lives here (not in _listPanel()'s own header) so it's
+  // hidden while a record is being added/edited — it used to sit inside
+  // _listPanel(), which renders unconditionally regardless of showPanel,
+  // so Add stayed visible (and clickable) even while editing an existing
+  // customer, a real reported bug.
   @override
-  ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(title: 'Customers');
+  ScreenHeaderInfo buildScreenHeader() {
+    final offline = ref.read(sessionProvider)?.offlineMode ?? false;
+    final showPanel = _isAdd || _selected != null;
+    return ScreenHeaderInfo(
+      title: 'Customers',
+      actions: (!offline && canAdd && !showPanel)
+          ? [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add'),
+                  onPressed: _openAdd,
+                ),
+              ),
+            ]
+          : const [],
+    );
+  }
 
   List<Map<String, dynamic>> _customers  = [];
   List<Map<String, dynamic>> _filtered   = [];
@@ -260,6 +284,8 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
       if (mounted) setState(() => _cities = List<Map<String, dynamic>>.from(res.data as List));
     } on DioException { /* silent */ }
   }
+
+  String _countryDisplay(Map<String, dynamic> c) => c['country_name'] as String? ?? '';
 
   void _onCountryChanged(String? v) {
     setState(() { _countryId = v; _divisionId = null; _cityId = null; _divisions = []; _cities = []; });
@@ -663,22 +689,13 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
   // ── List panel ────────────────────────────────────────────────────────────
 
   Widget _listPanel() {
-    final offline = ref.watch(sessionProvider)?.offlineMode ?? false;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
     Container(
       color: AppColors.surface,
       padding: const EdgeInsets.all(16),
-      child: Row(children: [
-        const Expanded(child: Text('Customers',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary))),
-        if (!offline && canAdd)
-          FilledButton.icon(
-            icon: const Icon(Icons.add, size: 16),
-            label: const Text('Add'),
-            onPressed: _openAdd,
-          ),
-      ]),
+      child: const Text('Customers',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary)),
     ),
     Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
@@ -1057,17 +1074,28 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
         SakalFieldCard(
           label: 'Country',
           editable: true,
-          child: DropdownButtonFormField<String>(
-            initialValue: _countryId,
-            isExpanded: true, isDense: true, itemHeight: null,
-            style: fieldStyle,
-            decoration: bare(hint: 'Select…'),
-            items: _countries.map((c) => DropdownMenuItem(
-                value: c['id'] as String,
-                child: Text(c['country_name'] as String,
-                    overflow: TextOverflow.ellipsis))).toList(),
-            onChanged: _onCountryChanged,
-          ),
+          child: Builder(builder: (context) {
+            final activeCountries = _countries.where((c) => c['is_active'] as bool? ?? true).toList();
+            final selectedRows = activeCountries.where((c) => c['id'] == _countryId).toList();
+            final selectedDisplay = selectedRows.isNotEmpty ? _countryDisplay(selectedRows.first) : '';
+            return SakalAutocomplete<Map<String, dynamic>>(
+              key: ValueKey(_countryId),
+              initialValue: TextEditingValue(text: selectedDisplay),
+              displayStringForOption: _countryDisplay,
+              optionsBuilder: (v) {
+                final q = v.text.toLowerCase().trim();
+                return q.isEmpty
+                    ? activeCountries
+                    : activeCountries.where((c) => _countryDisplay(c).toLowerCase().contains(q));
+              },
+              onSelected: (c) => _onCountryChanged(c['id'] as String),
+              onChanged: (v) {
+                if (v.isEmpty && _countryId != null) _onCountryChanged(null);
+              },
+              style: fieldStyle,
+              decoration: bare(hint: 'Select…'),
+            );
+          }),
         ),
         SakalFieldCard(
           label: 'State / Province',

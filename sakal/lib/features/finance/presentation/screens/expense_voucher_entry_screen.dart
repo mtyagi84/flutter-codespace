@@ -92,13 +92,13 @@ class _ExpenseVoucherEntryScreenState extends ConsumerState<ExpenseVoucherEntryS
   List<Map<String, dynamic>> _taxGroups = [];
 
   List<Map<String, dynamic>> get _supplierAccounts =>
-      _allAccounts.where((a) => a['account_nature'] == 'Supplier').toList();
+      _allAccounts.where((a) => a['account_nature'] == 'Supplier' && a['posting_allowed'] == true).toList();
   // Excludes Cash/Bank/Customer/Supplier — stricter than Journal
   // Voucher's own exclusion, per the user's own spec: Supplier is
   // already the fixed computed line, so a second Customer/Supplier
   // pick here would just be a confusing back door into what JV is for.
   List<Map<String, dynamic>> get _expenseAccounts => _allAccounts
-      .where((a) => const {'Cash', 'Bank', 'Customer', 'Supplier'}.contains(a['account_nature']) == false)
+      .where((a) => const {'Cash', 'Bank', 'Customer', 'Supplier'}.contains(a['account_nature']) == false && a['posting_allowed'] == true)
       .toList();
 
   String? _supplierId;

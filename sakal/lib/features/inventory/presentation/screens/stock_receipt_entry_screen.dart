@@ -629,6 +629,10 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
     final canSave     = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
     final locked      = _status != 'DRAFT';
+    // Date locks once the document has a real number too, not just once
+    // approved — a saved DRAFT's date should not be silently changeable
+    // after the fact (real bug reported live).
+    final dateLocked  = locked || _receiptNo != null;
 
     // Title/subtitle/badge/Print live in the shared TopBar via
     // ScreenHeaderMixin (see CLAUDE.md's "Screen header" pattern) — only the
@@ -710,7 +714,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
     final receiptDateField = SakalFieldCard(
       label: 'Receipt Date', required: true, editable: !locked,
       child: InkWell(
-        onTap: locked ? null : () => _pickDate(_receiptDate, (d) => setState(() => _receiptDate = d)),
+        onTap: dateLocked ? null : () => _pickDate(_receiptDate, (d) => setState(() => _receiptDate = d)),
         child: Row(children: [
           Expanded(child: Text(_displayDate(_receiptDate), style: style)),
           Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),

@@ -250,7 +250,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
       ]);
 
       final accounts = results[0] as List<Map<String, dynamic>>;
-      _suppliers          = accounts.where((a) => a['account_nature'] == 'Supplier').toList();
+      _suppliers          = accounts.where((a) => a['account_nature'] == 'Supplier' && a['posting_allowed'] == true).toList();
       _products            = results[1] as List<Map<String, dynamic>>;
       _uoms                = results[2] as List<Map<String, dynamic>>;
       _taxGroups           = results[3] as List<Map<String, dynamic>>;
@@ -922,6 +922,10 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     final canSave      = _status == 'DRAFT' && (_orderNo == null ? canAdd : canEdit);
     final showApprove  = _status == 'DRAFT' && !isOffline && canApprove && _orderNo != null;
     final locked       = _status != 'DRAFT';
+    // Date locks once the document has a real number too, not just once
+    // approved — a saved DRAFT's date should not be silently changeable
+    // after the fact (real bug reported live).
+    final dateLocked   = locked || _orderNo != null;
 
     // Title/subtitle/status-badge/Copy/Print now live in the shared TopBar
     // via ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. Save/
@@ -1007,7 +1011,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     final orderDateField = SakalFieldCard(
       label: 'Order Date', required: true, editable: !locked,
       child: InkWell(
-        onTap: locked ? null : () => _pickDate(_orderDate, (d) => setState(() => _orderDate = d)),
+        onTap: dateLocked ? null : () => _pickDate(_orderDate, (d) => setState(() => _orderDate = d)),
         child: Row(children: [
           Expanded(child: Text(_displayDate(_orderDate), style: style)),
           Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),

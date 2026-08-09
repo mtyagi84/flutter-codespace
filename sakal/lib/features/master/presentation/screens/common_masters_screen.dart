@@ -11,6 +11,7 @@ import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../data/models/common_master_model.dart';
 import '../../data/models/common_master_type_model.dart';
@@ -440,25 +441,31 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
       );
     }
 
-    return DropdownButtonFormField<String>(
-      isExpanded: true,
+    final selectedRows = _types.where((t) => t.id == _selectedTypeId).toList();
+    final selectedDisplay = selectedRows.isNotEmpty ? selectedRows.first.typeName : '';
+    return SakalAutocomplete<CommonMasterTypeModel>(
+      key: ValueKey(_selectedTypeId),
+      initialValue: TextEditingValue(text: selectedDisplay),
+      displayStringForOption: (t) => t.typeName,
+      optionsBuilder: (v) {
+        final q = v.text.toLowerCase().trim();
+        return q.isEmpty
+            ? _types
+            : _types.where((t) => t.typeName.toLowerCase().contains(q));
+      },
+      onSelected: (t) {
+        if (t.id == _selectedTypeId) return;
+        _cancelAdd();
+        for (final id in _editStates.keys.toList()) { _cancelEdit(id); }
+        setState(() => _selectedTypeId = t.id);
+        _loadMasters(reset: true);
+      },
       decoration: const InputDecoration(
         labelText: 'Master Type',
         border: OutlineInputBorder(),
         isDense: true,
         contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
-      initialValue: _selectedTypeId,
-      items: _types
-          .map((t) => DropdownMenuItem(value: t.id, child: Text(t.typeName)))
-          .toList(),
-      onChanged: (v) {
-        if (v == null || v == _selectedTypeId) return;
-        _cancelAdd();
-        for (final id in _editStates.keys.toList()) { _cancelEdit(id); }
-        setState(() => _selectedTypeId = v);
-        _loadMasters(reset: true);
-      },
     );
   }
 

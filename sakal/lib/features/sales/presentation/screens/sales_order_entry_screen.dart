@@ -1187,6 +1187,10 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
     final showCancel  = !isOffline && (_status == 'DRAFT' || _status == 'APPROVED') && canApprove && !_isNew;
     final locked      = _status != 'DRAFT';
+    // Date locks once the document has a real number too, not just once
+    // approved — a saved DRAFT's date should not be silently changeable
+    // after the fact (real bug reported live).
+    final dateLocked  = locked || _orderNo != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1278,7 +1282,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     final orderDateField = SakalFieldCard(
       label: 'Order Date', required: true, editable: !locked,
       child: InkWell(
-        onTap: locked ? null : () => _pickDate(_orderDate, (d) { setState(() => _orderDate = d); unawaited(_fetchRates()); }),
+        onTap: dateLocked ? null : () => _pickDate(_orderDate, (d) { setState(() => _orderDate = d); unawaited(_fetchRates()); }),
         child: Row(children: [
           Expanded(child: Text(_displayDate(_orderDate), style: style)),
           Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),

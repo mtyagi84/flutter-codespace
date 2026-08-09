@@ -944,6 +944,10 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
     final canSave     = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showApprove = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
     final locked      = _status != 'DRAFT';
+    // Date locks once the document has a real number too, not just once
+    // approved — a saved DRAFT's date should not be silently changeable
+    // after the fact (real bug reported live).
+    final dateLocked  = locked || _returnNo != null;
 
     // Title/subtitle/status-badge/Print now live in the shared TopBar via
     // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. Save/
@@ -1077,7 +1081,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
     final returnDateField = SakalFieldCard(
       label: 'Return Date', required: true, editable: !locked,
       child: InkWell(
-        onTap: locked ? null : () => _pickDate(_returnDate, (d) => setState(() => _returnDate = d)),
+        onTap: dateLocked ? null : () => _pickDate(_returnDate, (d) => setState(() => _returnDate = d)),
         child: Row(children: [
           Expanded(child: Text(_displayDate(_returnDate), style: style)),
           Icon(Icons.calendar_today_outlined, size: 15, color: locked ? AppColors.textDisabled : AppColors.primary),
