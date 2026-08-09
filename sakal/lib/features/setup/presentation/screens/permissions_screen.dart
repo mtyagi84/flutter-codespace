@@ -1199,9 +1199,15 @@ class _FeatureRow extends StatelessWidget {
     final masterExcel   = feature['master_excel']   as bool? ?? false;
 
     return Container(
-      color: isEven
-          ? Colors.transparent
-          : AppColors.surfaceVariant.withValues(alpha: 0.3),
+      decoration: BoxDecoration(
+        color: isEven
+            ? Colors.transparent
+            : AppColors.surfaceVariant.withValues(alpha: 0.3),
+        // Zebra striping alone reads as flat/hard-to-scan on a narrow,
+        // horizontally-scrolled mobile view — an explicit border between
+        // rows makes each feature's boundary unambiguous regardless.
+        border: const Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
+      ),
       padding:
           const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       child: Row(
