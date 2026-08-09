@@ -128,10 +128,18 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
               } else if (val == 'open_theme') {
                 await _showThemePicker(context, ref);
               } else if (val == 'logout') {
+                // Setting sessionProvider to null already triggers
+                // GoRouter's redirect (via sessionNotifier/refreshListenable
+                // in app.dart/app_router.dart) to navigate to /login on its
+                // own — an explicit context.go() here raced against that
+                // redirect-driven navigation and could hit both targeting
+                // the same destination concurrently, which is what caused a
+                // real "Duplicate GlobalKey"/Element-reactivation crash on
+                // a subsequent login. Let the redirect be the only thing
+                // that navigates.
                 ref.read(sessionProvider.notifier).state = null;
                 ref.read(menuProvider.notifier).state    = [];
                 await OfflineSessionCache.deactivate();
-                if (context.mounted) context.go(RouteNames.login);
               }
             },
             child: Row(

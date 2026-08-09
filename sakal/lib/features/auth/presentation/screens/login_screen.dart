@@ -156,7 +156,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         } catch (_) {}
       }
       if (!mounted) return;
-      context.go(pending > 0 ? RouteNames.sync : RouteNames.dashboard);
+      // Setting sessionProvider above already triggers GoRouter's redirect
+      // to navigate to /dashboard on its own (via sessionNotifier/
+      // refreshListenable) — only navigate explicitly here when overriding
+      // that default destination (pending offline docs -> /sync instead).
+      // An unconditional context.go() to the SAME destination the redirect
+      // was already navigating to raced against it and could crash with a
+      // "Duplicate GlobalKey"/Element-reactivation error.
+      if (pending > 0) context.go(RouteNames.sync);
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] as String? ?? '';
       setState(() => _error = _friendlyError(msg));
@@ -201,7 +208,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         numberFormat:     result.session.numberFormat,
       );
       ref.read(menuProvider.notifier).state = result.menu;
-      context.go(RouteNames.dashboard);
+      // No explicit navigation needed — setting sessionProvider above
+      // already triggers GoRouter's redirect to /dashboard on its own (see
+      // the same note in _submit() above).
     } finally {
       if (mounted) setState(() => _loading = false);
     }
