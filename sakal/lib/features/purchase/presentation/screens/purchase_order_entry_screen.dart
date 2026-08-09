@@ -39,6 +39,10 @@ class _POLineRow {
   bool    descExpanded  = false;
   final TextEditingController descCtrl      = TextEditingController();
   String? uomId;
+  // Units actually linked to this line's product (rim_product_uom), never
+  // the full company-wide unit list — populated by _loadUomOptionsForLine.
+  List<Map<String, dynamic>> uomOptions = [];
+  bool    uomLoading = false;
   // True once a barcode scan/search has matched this line to a specific
   // rim_product_uom row — the barcode encodes product+UOM+pack size
   // together, so the conversion factor it implies must not then be
@@ -330,6 +334,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         row.rateCtrl.text        = l.rate.toString();
         row.discountPctCtrl.text = l.discountPercent.toString();
         _lines.add(row);
+        if (row.productId != null) unawaited(_loadUomOptionsForLine(row, row.productId!, resetSelection: false));
       }
 
       for (final c in charges) {
@@ -435,16 +440,17 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
       row.productDisplay = '[${product['product_code']}] ${product['product_name']}';
       row.descCtrl.text  = product['product_name'] as String? ?? '';
       if (!fromBarcode) {
-        // A plain code/name pick doesn't imply a pack size — leave UOM/factor
-        // as the product's default and freely editable. A barcode match sets
-        // these separately, right after this call, and locks the factor.
-        row.uomId            = product['base_uom_id'] as String?;
+        // A plain code/name pick doesn't imply a pack size — UOM/factor get
+        // reloaded from this product's own rim_product_uom rows below,
+        // defaulting to its base unit. A barcode match sets these
+        // separately, right after this call, and locks the factor.
         row.convFactorLocked = false;
       }
       row.taxGroupId     = product['purchase_tax_group_id'] as String?;
       final cost = (product['last_purchase_cost'] as num?) ?? (product['standard_cost'] as num?) ?? 0;
       row.rateCtrl.text  = cost.toString();
     });
+    if (!fromBarcode) await _loadUomOptionsForLine(row, productId);
     if (_locationId != null) {
       final snap = await _ds.getProductStockSnapshot(productId: row.productId!, locationId: _locationId!);
       if (mounted) {
@@ -452,6 +458,40 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
           row.qtyOnHandAtOrder    = snap['current_stock'] ?? 0;
           row.reorderLevelAtOrder = snap['reorder_level'] ?? 0;
         });
+      }
+    }
+  }
+
+  // Loads the units actually linked to this product (never the full
+  // company-wide unit list) — mirrors Price Master's own getProductUoms-
+  // based load/default pattern. resetSelection=true (a fresh product pick)
+  // auto-selects the base unit; resetSelection=false (resuming a saved
+  // DRAFT) only populates the option list so the already-saved uomId has
+  // something to match against, without overwriting what was saved.
+  Future<void> _loadUomOptionsForLine(_POLineRow row, String productId, {bool resetSelection = true}) async {
+    setState(() => row.uomLoading = true);
+    try {
+      final uoms = await _ds.getProductUoms(productId);
+      if (!mounted) return;
+      setState(() {
+        row.uomOptions = uoms;
+        row.uomLoading = false;
+        if (resetSelection) {
+          if (uoms.isNotEmpty) {
+            final base = uoms.firstWhere((u) => u['is_base_uom'] == true, orElse: () => uoms.first);
+            row.uomId = base['uom_id'] as String?;
+            row.convFactorCtrl.text = (base['conversion_factor'] as num? ?? 1).toString();
+          } else {
+            row.uomId = null;
+            row.convFactorCtrl.text = '1';
+          }
+        }
+      });
+    } catch (e, st) {
+      AppLogger.error('PoLoadUoms', e, st);
+      if (mounted) {
+        setState(() => row.uomLoading = false);
+        _showSnack(ErrorPresenter.format(e, action: 'load units for "${row.productDisplay}"'), color: AppColors.negative);
       }
     }
   }
@@ -478,6 +518,12 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     // If _onProductSelected rejected the match as a duplicate, row.productId
     // still points at whatever it was before — don't override UOM/factor.
     if (mounted && row.productId == matchedProduct['id']) {
+      // Populate uomOptions (for the dropdown's own label rendering) before
+      // applying the barcode's authoritative uomId/factor on top — a
+      // barcode match still needs row.uomOptions non-empty or the disabled
+      // dropdown has nothing to render its selected value's label from.
+      await _loadUomOptionsForLine(row, matchedProduct['id'] as String, resetSelection: false);
+      if (!mounted) return;
       setState(() {
         row.uomId               = matchedProduct['matched_uom_id'] as String? ?? row.uomId;
         row.convFactorCtrl.text = (matchedProduct['matched_uom_conversion_factor'] as num? ?? 1).toString();
@@ -1343,29 +1389,34 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         matches: (p, q) => (p['product_code'] as String? ?? '').toLowerCase().contains(q) ||
             (p['product_name'] as String? ?? '').toLowerCase().contains(q),
         onSelected: (p) => _onProductSelected(row, p),
-        onCleared: () => setState(() { row.productId = null; row.productDisplay = ''; row.convFactorLocked = false; }),
+        onCleared: () => setState(() { row.productId = null; row.productDisplay = ''; row.convFactorLocked = false; row.uomOptions = []; row.uomId = null; }),
       ),
     );
     final uomField = SakalFieldCard(
       label: 'UOM', editable: !locked && !row.convFactorLocked,
-      child: DropdownButtonFormField<String>(
-        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
-        initialValue: row.uomId,
-        items: _uoms.map((u) => DropdownMenuItem(value: u['id'] as String,
-            child: Text(u['description'] as String, overflow: TextOverflow.ellipsis, style: style))).toList(),
-        onChanged: (locked || row.convFactorLocked) ? null : (v) => setState(() => row.uomId = v),
-      ),
+      child: row.uomLoading
+          ? const Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))
+          : DropdownButtonFormField<String>(
+              decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+              initialValue: row.uomId,
+              items: row.uomOptions.map((u) => DropdownMenuItem(value: u['uom_id'] as String,
+                  child: Text((u['uom'] as Map<String, dynamic>?)?['description'] as String? ?? '',
+                      overflow: TextOverflow.ellipsis, style: style))).toList(),
+              onChanged: (locked || row.convFactorLocked) ? null : (v) {
+                final opt = row.uomOptions.firstWhere((u) => u['uom_id'] == v);
+                setState(() {
+                  row.uomId = v;
+                  row.convFactorCtrl.text = (opt['conversion_factor'] as num? ?? 1).toString();
+                });
+              },
+            ),
     );
-    final convFactorField = SakalFieldCard(
-      label: 'Conv. Factor', editable: !locked && !row.convFactorLocked,
-      child: TextFormField(
-        controller: row.convFactorCtrl, enabled: !locked && !row.convFactorLocked,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        decoration: bare.copyWith(
-            suffixIcon: row.convFactorLocked ? const Icon(Icons.lock_outline, size: 14, color: AppColors.textSecondary) : null),
-        style: style,
-        onChanged: (_) => setState(() {}),
-      ),
+    // Always derived — either from the picked UOM's own conversion_factor
+    // (rim_product_uom) or from a barcode match — never user-typed.
+    final convFactorField = SakalFieldCard.readOnly(
+      label: 'Conv. Factor',
+      value: row.convFactorCtrl.text,
+      numeric: true,
     );
     final qtyPackField = SakalFieldCard(
       label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked,

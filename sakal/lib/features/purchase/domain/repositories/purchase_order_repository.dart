@@ -89,6 +89,8 @@ abstract class PurchaseOrderRepository {
     required String barcode,
   });
 
+  Future<List<Map<String, dynamic>>> getProductUoms(String productId);
+
   Future<List<Map<String, dynamic>>> getCommonMastersByType({
     required String clientId,
     required String companyId,

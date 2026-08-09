@@ -58,6 +58,10 @@ class _GrnLineRow {
   bool    descExpanded = false;
   final TextEditingController descCtrl = TextEditingController();
   String? uomId;
+  // Units actually linked to this line's product (rim_product_uom), never
+  // the full company-wide unit list — populated by _loadUomOptionsForLine.
+  List<Map<String, dynamic>> uomOptions = [];
+  bool    uomLoading = false;
   bool    convFactorLocked = false;
   final TextEditingController convFactorCtrl  = TextEditingController(text: '1');
   final TextEditingController qtyPackCtrl     = TextEditingController(text: '0');
@@ -357,6 +361,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
             : (l.serials.isNotEmpty ? 'SERIAL' : 'NONE');
         if (l.sourcePoOrderNo != null) _consolidatedPoOrderNos.add(l.sourcePoOrderNo!);
         _lines.add(row);
+        if (row.productId != null) unawaited(_loadUomOptionsForLine(row, row.productId!, resetSelection: false));
       }
 
       for (final c in charges) {
@@ -473,7 +478,6 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
       row.descCtrl.text  = product['product_name'] as String? ?? '';
       row.trackingType   = product['tracking_type'] as String? ?? 'NONE';
       if (!fromBarcode) {
-        row.uomId            = product['base_uom_id'] as String?;
         row.convFactorLocked = false;
       }
       row.taxGroupId     = product['purchase_tax_group_id'] as String?;
@@ -481,7 +485,39 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
       final cost = (product['last_purchase_cost'] as num?) ?? (product['standard_cost'] as num?) ?? 0;
       row.rateCtrl.text  = cost.toString();
     });
+    if (!fromBarcode) await _loadUomOptionsForLine(row, productId);
     await _loadLastCostPrice(row, productId);
+  }
+
+  // Loads the units actually linked to this product (never the full
+  // company-wide unit list) and auto-selects its base unit — mirrors
+  // Price Master's own getProductUoms-based load/default pattern.
+  Future<void> _loadUomOptionsForLine(_GrnLineRow row, String productId, {bool resetSelection = true}) async {
+    setState(() => row.uomLoading = true);
+    try {
+      final uoms = await _ds.getProductUoms(productId);
+      if (!mounted) return;
+      setState(() {
+        row.uomOptions = uoms;
+        row.uomLoading = false;
+        if (resetSelection) {
+          if (uoms.isNotEmpty) {
+            final base = uoms.firstWhere((u) => u['is_base_uom'] == true, orElse: () => uoms.first);
+            row.uomId = base['uom_id'] as String?;
+            row.convFactorCtrl.text = (base['conversion_factor'] as num? ?? 1).toString();
+          } else {
+            row.uomId = null;
+            row.convFactorCtrl.text = '1';
+          }
+        }
+      });
+    } catch (e, st) {
+      AppLogger.error('GrnLoadUoms', e, st);
+      if (mounted) {
+        setState(() => row.uomLoading = false);
+        _showSnack(ErrorPresenter.format(e, action: 'load units for "${row.productDisplay}"'), color: AppColors.negative);
+      }
+    }
   }
 
   /// Fetches this product's moving-average cost at the GRN's location, in
@@ -515,6 +551,10 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     final matchedProduct = match;
     await _onProductSelected(row, matchedProduct, fromBarcode: true);
     if (mounted && row.productId == matchedProduct['id']) {
+      // Populate uomOptions (for the dropdown's own label rendering) before
+      // applying the barcode's authoritative uomId/factor on top.
+      await _loadUomOptionsForLine(row, matchedProduct['id'] as String, resetSelection: false);
+      if (!mounted) return;
       setState(() {
         row.uomId               = matchedProduct['matched_uom_id'] as String? ?? row.uomId;
         row.convFactorCtrl.text = (matchedProduct['matched_uom_conversion_factor'] as num? ?? 1).toString();
@@ -853,6 +893,10 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
           row.descCtrl.text       = pl['item_description'] as String? ?? '';
           row.convFactorCtrl.text = convFactor.toString();
           unawaited(_loadLastCostPrice(row, row.productId!));
+          // Populate uomOptions (for the dropdown's own label rendering) —
+          // the PO's own uomId/convFactor above are authoritative and kept
+          // untouched (resetSelection: false).
+          unawaited(_loadUomOptionsForLine(row, row.productId!, resetSelection: false));
           row.qtyPackCtrl.text    = convFactor > 0 ? (pending / convFactor).toStringAsFixed(4) : pending.toString();
           row.qtyLooseCtrl.text   = '0';
           row.rateCtrl.text       = (pl['rate'] as num? ?? 0).toString();
@@ -1652,29 +1696,35 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
               matches: (p, q) => (p['product_code'] as String? ?? '').toLowerCase().contains(q) ||
                   (p['product_name'] as String? ?? '').toLowerCase().contains(q),
               onSelected: (p) => _onProductSelected(row, p),
-              onCleared: () => setState(() { row.productId = null; row.productDisplay = ''; row.convFactorLocked = false; }),
+              onCleared: () => setState(() { row.productId = null; row.productDisplay = ''; row.convFactorLocked = false; row.uomOptions = []; row.uomId = null; }),
             ),
           );
     final uomField = SakalFieldCard(
       label: 'UOM', editable: !(rowLocked || row.isFromPo || row.convFactorLocked),
-      child: DropdownButtonFormField<String>(
-        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
-        initialValue: row.uomId,
-        items: _uoms.map((u) => DropdownMenuItem(value: u['id'] as String,
-            child: Text(u['description'] as String, overflow: TextOverflow.ellipsis, style: style))).toList(),
-        onChanged: (rowLocked || row.isFromPo || row.convFactorLocked) ? null : (v) => setState(() => row.uomId = v),
-      ),
+      child: row.uomLoading
+          ? const Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))
+          : DropdownButtonFormField<String>(
+              decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+              initialValue: row.uomId,
+              items: row.uomOptions.map((u) => DropdownMenuItem(value: u['uom_id'] as String,
+                  child: Text((u['uom'] as Map<String, dynamic>?)?['description'] as String? ?? '',
+                      overflow: TextOverflow.ellipsis, style: style))).toList(),
+              onChanged: (rowLocked || row.isFromPo || row.convFactorLocked) ? null : (v) {
+                final opt = row.uomOptions.firstWhere((u) => u['uom_id'] == v);
+                setState(() {
+                  row.uomId = v;
+                  row.convFactorCtrl.text = (opt['conversion_factor'] as num? ?? 1).toString();
+                });
+              },
+            ),
     );
-    final convFactorField = SakalFieldCard(
-      label: 'Conv. Factor', editable: !locked && !row.convFactorLocked,
-      child: TextFormField(
-        controller: row.convFactorCtrl, enabled: !locked && !row.convFactorLocked,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        decoration: bare.copyWith(
-            suffixIcon: row.convFactorLocked ? const Icon(Icons.lock_outline, size: 14, color: AppColors.textSecondary) : null),
-        style: style,
-        onChanged: (_) => setState(() {}),
-      ),
+    // Always derived — either from the picked UOM's own conversion_factor
+    // (rim_product_uom), a barcode match, or a consolidated PO line —
+    // never user-typed.
+    final convFactorField = SakalFieldCard.readOnly(
+      label: 'Conv. Factor',
+      value: row.convFactorCtrl.text,
+      numeric: true,
     );
     final qtyPackField = SakalFieldCard(
       label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked,

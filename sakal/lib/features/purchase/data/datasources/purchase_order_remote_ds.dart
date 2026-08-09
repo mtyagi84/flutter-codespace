@@ -237,6 +237,41 @@ class PurchaseOrderRemoteDs {
     };
   }
 
+  /// Units actually linked to this specific product (rim_product_uom),
+  /// base UOM first — never the full company-wide unit master. Falls back
+  /// to the product's own base_uom_id when it has no rim_product_uom rows
+  /// at all (documented "Product UOM Fallback Gap" — same pattern already
+  /// used by Price Master's own getProductUoms).
+  Future<List<Map<String, dynamic>>> getProductUoms(String productId) async {
+    final res = await _dio.get('/rim_product_uom', queryParameters: {
+      'product_id': 'eq.$productId',
+      'select':     'uom_id,conversion_factor,is_base_uom,'
+          'uom:rim_common_masters!uom_id(description)',
+      'order':      'is_base_uom.desc,sort_order.asc',
+    });
+    final rows = List<Map<String, dynamic>>.from(res.data as List);
+    if (rows.isNotEmpty) return rows;
+
+    final productRes = await _dio.get('/rim_products', queryParameters: {
+      'id':     'eq.$productId',
+      'select': 'base_uom_id,uom:rim_common_masters!base_uom_id(description)',
+      'limit':  '1',
+    });
+    final productList = productRes.data as List;
+    if (productList.isEmpty) return [];
+    final product = productList.first as Map<String, dynamic>;
+    final baseUomId = product['base_uom_id'] as String?;
+    if (baseUomId == null) return [];
+    return [
+      {
+        'uom_id': baseUomId,
+        'conversion_factor': 1,
+        'is_base_uom': true,
+        'uom': product['uom'],
+      },
+    ];
+  }
+
   Future<List<Map<String, dynamic>>> getCommonMastersByType({
     required String clientId,
     required String companyId,

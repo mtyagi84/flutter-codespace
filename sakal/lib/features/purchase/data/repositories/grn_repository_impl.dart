@@ -227,6 +227,10 @@ class GrnRepositoryImpl implements GrnRepository {
   }) => _remote.getProductByBarcode(clientId: clientId, companyId: companyId, barcode: barcode);
 
   @override
+  Future<List<Map<String, dynamic>>> getProductUoms(String productId) =>
+      _remote.getProductUoms(productId);
+
+  @override
   Future<List<Map<String, dynamic>>> getCommonMastersByType({
     required String clientId,
     required String companyId,

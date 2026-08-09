@@ -217,6 +217,10 @@ class PurchaseOrderRepositoryImpl implements PurchaseOrderRepository {
   }
 
   @override
+  Future<List<Map<String, dynamic>>> getProductUoms(String productId) =>
+      _remote.getProductUoms(productId);
+
+  @override
   Future<List<Map<String, dynamic>>> getCommonMastersByType({
     required String clientId,
     required String companyId,
