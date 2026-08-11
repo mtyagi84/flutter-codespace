@@ -103,7 +103,7 @@ class _LocationsScreenState extends ConsumerState<LocationsScreen>
     final offline = ref.read(sessionProvider)?.offlineMode ?? false;
     return ScreenHeaderInfo(
       title: 'Location Master',
-      subtitle: 'Manage stores, warehouses and offices under this company.',
+      helpText: 'Manage stores, warehouses and offices under this company.',
       actions: [
         if (canAdd && !offline)
           ElevatedButton.icon(

@@ -90,7 +90,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     final offline = ref.read(sessionProvider)?.offlineMode ?? false;
     return ScreenHeaderInfo(
       title: 'User Management',
-      subtitle: 'Manage user accounts for this company.',
+      helpText: 'Manage user accounts for this company.',
       actions: (canAdd && !offline)
           ? [
               Padding(

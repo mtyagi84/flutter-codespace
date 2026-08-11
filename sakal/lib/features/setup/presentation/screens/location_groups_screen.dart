@@ -31,7 +31,7 @@ class _LocationGroupsScreenState extends ConsumerState<LocationGroupsScreen>
     final offline = ref.read(sessionProvider)?.offlineMode ?? false;
     return ScreenHeaderInfo(
       title: 'Location Groups',
-      subtitle: 'Group locations into accountable entities. Groups determine how '
+      helpText: 'Group locations into accountable entities. Groups determine how '
           'stock movements between your own locations are treated.',
       actions: [
         if (canAdd && !offline)

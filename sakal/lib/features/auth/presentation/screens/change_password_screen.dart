@@ -21,7 +21,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen>
   @override
   ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(
         title: 'Change Password',
-        subtitle: 'Update your account password.',
+        helpText: 'Update your account password.',
       );
 
   final _formKey     = GlobalKey<FormState>();

@@ -56,7 +56,7 @@ class _AccountLinkSetupScreenState extends ConsumerState<AccountLinkSetupScreen>
   @override
   ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(
         title: 'Account Link Setup',
-        subtitle: 'GL account determination — decide which account each posting type uses '
+        helpText: 'GL account determination — decide which account each posting type uses '
             '(company-wide, by category, by location, or per item).',
       );
 

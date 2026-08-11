@@ -21,8 +21,12 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
     with ScreenHeaderMixin<CompanyScreen> {
   @override
   ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
-        title: _nameCtrl.text.isNotEmpty ? '${_nameCtrl.text} · Company Information' : 'Company Information',
-        subtitle: 'Edit your company profile, contact details and tax information.',
+        // Company name is now always shown by the TopBar itself (composited
+        // as "Company : Screen Title") — prepending it here too caused a
+        // real live bug: "Rigvedam Trading : Rigvedam Trading · Company
+        // Information". Just the screen's own title from here on.
+        title: 'Company Information',
+        helpText: 'Edit your company profile, contact details and tax information.',
         actions: [_buildSaveButton()],
       );
 

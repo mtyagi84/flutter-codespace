@@ -43,7 +43,7 @@ class _AccountLinkConfigureScreenState extends ConsumerState<AccountLinkConfigur
   @override
   ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
         title: widget.linkName,
-        subtitle: 'Choose how this account is determined, then assign it.',
+        helpText: 'Choose how this account is determined, then assign it.',
       );
 
   String? _level;

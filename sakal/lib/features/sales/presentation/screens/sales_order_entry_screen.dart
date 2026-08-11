@@ -24,6 +24,7 @@ import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_financial_summary_card.dart';
+import '../../../../core/widgets/sakal_header_action_button.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../../../core/widgets/sakal_scrollable_table.dart';
@@ -138,16 +139,51 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
   @override String get screenName => RouteNames.salesOrders;
 
   @override
-  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
-        title: _orderNo != null ? 'Sales Order · $_orderNo' : 'New Sales Order',
-        subtitle: _orderNo == null
-            ? (_isAgainstQuotation ? 'Unsaved draft · From $_sourceQuotationNo' : 'Unsaved draft')
-            : (_isAgainstQuotation ? 'From $_sourceQuotationNo' : null),
-        badgeText: _orderNo != null ? _status.replaceAll('_', ' ') : null,
-        badgeColor: _orderNo != null ? _statusColor(_status) : null,
-        trailingBadge: _orderNo != null ? PendingSyncBadge(documentType: 'SALES_ORDER', documentId: _orderNo!) : null,
-        actions: _orderNo != null ? [_buildPrintButton()] : const [],
-      );
+  ScreenHeaderInfo buildScreenHeader() {
+    // Desktop-only (user-confirmed) — all action buttons consolidated into
+    // the TopBar via SakalHeaderActionButton for consistent label+icon
+    // styling app-wide. Mobile keeps the body-level Wrap row (see
+    // _buildActionButtons/build()) since there's no spare AppBar width
+    // there — same reasoning as the company-name fix.
+    final isOffline = ref.read(sessionProvider)?.offlineMode ?? false;
+    final canSaveNow    = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
+    final showApproveNow = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
+    final showCancelNow  = !isOffline && (_status == 'DRAFT' || _status == 'APPROVED') && canApprove && !_isNew;
+    final showDesktopActions = !Responsive.isMobile(context);
+    return ScreenHeaderInfo(
+      title: _orderNo != null ? 'Sales Order · $_orderNo' : 'New Sales Order',
+      subtitle: _orderNo == null
+          ? (_isAgainstQuotation ? 'Unsaved draft · From $_sourceQuotationNo' : 'Unsaved draft')
+          : (_isAgainstQuotation ? 'From $_sourceQuotationNo' : null),
+      badgeText: _orderNo != null ? _status.replaceAll('_', ' ') : null,
+      badgeColor: _orderNo != null ? _statusColor(_status) : null,
+      trailingBadge: _orderNo != null ? PendingSyncBadge(documentType: 'SALES_ORDER', documentId: _orderNo!) : null,
+      actions: showDesktopActions
+          ? [
+              if (canSaveNow)
+                SakalHeaderActionButton(
+                  label: 'Save Draft', icon: Icons.save_outlined, kind: SakalActionKind.save,
+                  loading: _saving, onPressed: _saving ? null : _saveDraft,
+                ),
+              if (showApproveNow)
+                SakalHeaderActionButton(
+                  label: 'Approve', icon: Icons.check_circle_outline, kind: SakalActionKind.approve,
+                  loading: _approving, onPressed: _approving ? null : _approve,
+                ),
+              if (showCancelNow)
+                SakalHeaderActionButton(
+                  label: 'Cancel Order', icon: Icons.cancel_outlined, kind: SakalActionKind.cancel,
+                  loading: _cancelling, onPressed: _cancelling ? null : _cancel,
+                ),
+              if (_orderNo != null)
+                SakalHeaderActionButton(
+                  label: 'Print', icon: Icons.print_outlined, kind: SakalActionKind.neutral,
+                  loading: _printing, onPressed: _printing ? null : _printOrder,
+                ),
+            ]
+          : (_orderNo != null ? [_buildPrintButton()] : const []),
+    );
+  }
 
   SalesOrderRepository get _ds => ref.read(salesOrderRepositoryProvider);
 
@@ -1192,7 +1228,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
-        if (canSave || showApprove || showCancel)
+        if (isMobile && (canSave || showApprove || showCancel))
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
             child: _buildActionButtons(canSave: canSave, showApprove: showApprove, showCancel: showCancel),
@@ -1463,6 +1499,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     // grid" mandatory pattern in CLAUDE.md).
     final showStock = _lines.any((r) => r.productId != null);
     final showDiscFrozen = _lines.any((r) => r.discountPct > 0);
+    final showOverrideReasonColumn = _lines.any((r) => r.priceSource == 'MANUAL_OVERRIDE');
     // Computed once (only for whichever mode is active), then embedded
     // either as a plain vertical spread (mobile) or wrapped in
     // SakalScrollableTable (desktop) below — a desktop table this wide can
@@ -1472,7 +1509,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     // "Line-items grid" pattern).
     final lineWidgets = _isAgainstQuotation
         ? _lines.asMap().entries.map((e) => _buildQuotationLineRow(e.value, e.key, locked, isMobile, showDiscFrozen)).toList()
-        : _lines.asMap().entries.map((e) => _buildDirectLineRow(e.value, e.key, locked, showLooseQty, showBarcode, isMobile, showStock)).toList();
+        : _lines.asMap().entries.map((e) => _buildDirectLineRow(e.value, e.key, locked, showLooseQty, showBarcode, isMobile, showStock, showOverrideReasonColumn)).toList();
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
@@ -1496,7 +1533,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
             )
           else
             SakalScrollableTable(
-              header: _buildDirectLinesHeader(showLooseQty, showBarcode, showStock),
+              header: _buildDirectLinesHeader(showLooseQty, showBarcode, showStock, showOverrideReasonColumn),
               rows: lineWidgets,
             ),
         ]),
@@ -1507,7 +1544,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
   // Header row for the desktop Direct-mode line-items table — same
   // SizedBox widths as _buildDirectLineRow's own desktop Row below, so the
   // dark SakalTableHeaderBar lines up column-for-column with the data.
-  Widget _buildDirectLinesHeader(bool showLooseQty, bool showBarcode, bool showStock) {
+  Widget _buildDirectLinesHeader(bool showLooseQty, bool showBarcode, bool showStock, bool showOverrideReason) {
     return SakalTableHeaderBar(cells: [
       SizedBox(width: 220, child: SakalTableHeaderBar.label('Product')),
       if (showBarcode) ...[const SizedBox(width: 8), SizedBox(width: 110, child: SakalTableHeaderBar.label('Barcode'))],
@@ -1527,11 +1564,12 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
       SizedBox(width: 110, child: SakalTableHeaderBar.label('Landed')),
       if (showStock) ...[const SizedBox(width: 8), SizedBox(width: 90, child: SakalTableHeaderBar.label('Stock'))],
       if (_canViewCostPrice) ...[const SizedBox(width: 8), SizedBox(width: 90, child: SakalTableHeaderBar.label('Cost'))],
+      if (showOverrideReason) ...[const SizedBox(width: 8), SizedBox(width: 220, child: SakalTableHeaderBar.label('Override Reason'))],
       const SizedBox(width: 40), // reserves the delete-icon column's width
     ]);
   }
 
-  Widget _buildDirectLineRow(_OrderLineRow row, int idx, bool locked, bool showLooseQty, bool showBarcode, bool isMobile, bool showStock) {
+  Widget _buildDirectLineRow(_OrderLineRow row, int idx, bool locked, bool showLooseQty, bool showBarcode, bool isMobile, bool showStock, bool showOverrideReasonColumn) {
     final isCompact = ref.watch(isCompactDensityProvider);
     const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
@@ -1627,12 +1665,17 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
         ? const SakalFieldCard(label: 'Cost', child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)))
         : SakalFieldCard.readOnly(label: 'Cost', value: row.costPrice.toStringAsFixed(2), numeric: true);
 
-    final overrideReasonBody = row.priceSource == 'MANUAL_OVERRIDE'
-        ? SizedBox(width: 320, child: SakalFieldCard(
+    // A real scrollable column now (alongside Product/Qty/Rate/...), not a
+    // second row below the main line — it's a plain text value, so there
+    // was never a layout reason for it to be a separate row once the
+    // table could scroll horizontally.
+    final overrideReasonVisible = row.priceSource == 'MANUAL_OVERRIDE';
+    final overrideReasonField = overrideReasonVisible
+        ? SakalFieldCard(
             label: 'Override Reason', required: true, editable: !locked,
             child: TextFormField(controller: row.overrideReasonCtrl, enabled: !locked, decoration: bare, style: style),
-          ))
-        : null;
+          )
+        : const SizedBox.shrink();
 
     if (isMobile) {
       // 2-column grid for secondary fields instead of a loose Wrap —
@@ -1667,7 +1710,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
           productField,
           const SizedBox(height: 8),
           ...pairedRows,
-          if (overrideReasonBody != null) ...[const SizedBox(height: 8), overrideReasonBody],
+          if (overrideReasonVisible) ...[const SizedBox(height: 8), overrideReasonField],
         ]),
       );
     }
@@ -1701,12 +1744,12 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
             SizedBox(width: 90, height: 56, child: row.productId != null ? stockField : const SizedBox.shrink()),
           ],
           if (_canViewCostPrice) ...[const SizedBox(width: 8), SizedBox(width: 90, height: 56, child: costField)],
+          if (showOverrideReasonColumn) ...[const SizedBox(width: 8), SizedBox(width: 220, child: overrideReasonField)],
           SizedBox(
             width: 40,
             child: locked ? null : IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line'),
           ),
         ]),
-        if (overrideReasonBody != null) Padding(padding: const EdgeInsets.only(top: 8), child: overrideReasonBody),
       ]),
     );
   }

@@ -1844,8 +1844,8 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                           // eagerly-built row list, same tradeoff every other line-items
                           // table in the app already makes.
                           child: SakalScrollableTable(
-                            header: _buildLineItemsHeader(showLooseQty, showBarcode && !locked, !locked && !_isAgainstSource),
-                            rows: _lines.map((row) => _buildLineTile(row, locked, showLooseQty, showBarcode, isMobile)).toList(),
+                            header: _buildLineItemsHeader(showLooseQty, showBarcode && !locked, !locked && !_isAgainstSource, _showOverrideReasonColumn),
+                            rows: _lines.map((row) => _buildLineTile(row, locked, showLooseQty, showBarcode, isMobile, _showOverrideReasonColumn)).toList(),
                           ),
                         ),
                       ),
@@ -2105,11 +2105,17 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     );
   }
 
+  // Whether ANY line could show the Override Reason field — computed once
+  // so the header (fixed columns) and every row stay column-aligned
+  // instead of drifting per-line, same pattern as every other per-row-
+  // optional column in this app (CLAUDE.md's "Line-items grid" section).
+  bool get _showOverrideReasonColumn => _lines.any((l) => l.priceSource == 'MANUAL_OVERRIDE');
+
   // Header row for the desktop line-items table — built with the EXACT same
   // SizedBox/Expanded widths as _buildLineTile's own desktop Row below, so
   // the dark SakalTableHeaderBar lines up column-for-column with the data
   // underneath rather than two independently-flexed layouts drifting apart.
-  Widget _buildLineItemsHeader(bool showLooseQty, bool showBarcode, bool showActionsColumn) {
+  Widget _buildLineItemsHeader(bool showLooseQty, bool showBarcode, bool showActionsColumn, bool showOverrideReason) {
     return SakalTableHeaderBar(cells: [
       Expanded(flex: 3, child: SakalTableHeaderBar.label('Product')),
       if (showBarcode) ...[const SizedBox(width: 8), SizedBox(width: 140, child: SakalTableHeaderBar.label('Scan'))],
@@ -2124,11 +2130,12 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
       Expanded(flex: 2, child: SakalTableHeaderBar.label('Tax')),
       const SizedBox(width: 10),
       SizedBox(width: 120, child: SakalTableHeaderBar.label('Amount')),
+      if (showOverrideReason) ...[const SizedBox(width: 10), SizedBox(width: 180, child: SakalTableHeaderBar.label('Override Reason'))],
       if (showActionsColumn) const SizedBox(width: 92),
     ]);
   }
 
-  Widget _buildLineTile(_InvoiceLineRow row, bool locked, bool showLooseQty, bool showBarcode, bool isMobile) {
+  Widget _buildLineTile(_InvoiceLineRow row, bool locked, bool showLooseQty, bool showBarcode, bool isMobile, bool showOverrideReasonColumn) {
     final rowLocked = locked || _isAgainstSource;
     final rateEditable = !locked && !_isAgainstSource && (row.priceSource == 'MANUAL_OVERRIDE' || (!row.priceResolved && _canOverridePrice));
     final isCompact = ref.watch(isCompactDensityProvider);
@@ -2196,16 +2203,24 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     final showActions = !locked && !_isAgainstSource;
     final overrideVisible = !locked && !_isAgainstSource && !row.priceResolved && _canOverridePrice;
     final overrideReasonVisible = row.priceSource == 'MANUAL_OVERRIDE' && !locked;
+    // A real scrollable column now (alongside Product/Qty/Rate/...), not a
+    // second row below — the field is a plain text value, so it never
+    // needed the second-row treatment "Override Price" and batch/serial
+    // genuinely do (a toggle action and a variable-height allocation
+    // block, respectively).
+    final overrideReasonField = overrideReasonVisible
+        ? SakalFieldCard(
+            label: 'Override Reason', required: true, editable: true,
+            child: TextFormField(controller: row.overrideReasonCtrl, decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle),
+          )
+        : const SizedBox.shrink();
     final batchSerialVisible = _dispatchStock && (row.isBatchTracked || row.isSerialTracked);
-    final hasExtraBody = overrideVisible || overrideReasonVisible || batchSerialVisible;
+    final hasExtraBody = overrideVisible || batchSerialVisible;
     final extraBody = hasExtraBody
         ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             if (overrideVisible)
               Padding(padding: const EdgeInsets.only(bottom: 6),
                   child: TextButton(onPressed: () => setState(() => row.priceSource = 'MANUAL_OVERRIDE'), child: const Text('Override Price'))),
-            if (overrideReasonVisible)
-              Padding(padding: const EdgeInsets.only(bottom: 6),
-                  child: TextFormField(controller: row.overrideReasonCtrl, decoration: InputDecoration(border: const OutlineInputBorder(), isDense: true, label: _req('Override Reason')))),
             if (batchSerialVisible) _buildBatchSerialSection(row, locked, isMobile),
           ])
         : null;
@@ -2226,6 +2241,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
           SizedBox(width: 100, child: discField),
           SizedBox(width: 150, child: taxField),
           SizedBox(width: 120, child: amountField),
+          if (overrideReasonVisible) SizedBox(width: double.infinity, child: overrideReasonField),
         ],
         body: extraBody,
       );
@@ -2252,6 +2268,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
           Expanded(flex: 2, child: taxField),
           const SizedBox(width: 10),
           SizedBox(width: 120, child: amountField),
+          if (showOverrideReasonColumn) ...[const SizedBox(width: 10), SizedBox(width: 180, child: overrideReasonField)],
           if (showActions) ...[
             const SizedBox(width: 4),
             IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line'),

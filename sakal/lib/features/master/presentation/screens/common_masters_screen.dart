@@ -60,7 +60,7 @@ class _CommonMastersScreenState extends ConsumerState<CommonMastersScreen>
   @override
   ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(
         title: 'Common Masters',
-        subtitle: 'Shared lookup values used in various screens',
+        helpText: 'Shared lookup values used in various screens',
       );
 
   List<CommonMasterTypeModel> _types   = [];

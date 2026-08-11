@@ -33,7 +33,7 @@ class _PaymentTermsScreenState extends ConsumerState<PaymentTermsScreen>
     final offline = ref.read(sessionProvider)?.offlineMode ?? false;
     return ScreenHeaderInfo(
       title: 'Payment Terms',
-      subtitle: 'Installment schedules referenced by Sales Order and future documents.',
+      helpText: 'Installment schedules referenced by Sales Order and future documents.',
       actions: (canAdd && !offline)
           ? [
               Padding(

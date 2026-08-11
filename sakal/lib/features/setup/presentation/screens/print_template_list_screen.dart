@@ -35,7 +35,7 @@ class _PrintTemplateListScreenState extends ConsumerState<PrintTemplateListScree
     final offline = ref.read(sessionProvider)?.offlineMode ?? false;
     return ScreenHeaderInfo(
       title: 'Print Templates',
-      subtitle: 'Customize what prints for each document type — layout, fields, and paper size '
+      helpText: 'Customize what prints for each document type — layout, fields, and paper size '
           '(A4/Letter or 58mm/80mm receipt).',
       actions: (canAdd && !offline)
           ? [

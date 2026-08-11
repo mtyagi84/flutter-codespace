@@ -58,9 +58,27 @@ class _SakalScrollableTableState extends State<SakalScrollableTable> {
         child: SingleChildScrollView(
           controller: _controller,
           scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: constraints.maxWidth),
-            child: IntrinsicWidth(
+          // Real gap found live 2026-08-11: with ConstrainedBox(minWidth:)
+          // wrapping IntrinsicWidth (the old order), IntrinsicWidth's own
+          // layout tightens its child's constraints to the child's natural
+          // width — silently discarding the outer minWidth. Whenever the
+          // table's own columns summed to LESS than the viewport (Sales
+          // Order: ~828-948px vs. a 1200-1600px desktop), the header/rows
+          // stayed at their narrow natural width and left-aligned, while
+          // this scroll view still reported the full viewport width —
+          // dead space on the right, with the columns never stretching to
+          // fill it. Purchase Order's own wider columns (~1650px) never
+          // exposed this, since IntrinsicWidth's natural-width value was
+          // already >= the viewport minWidth in that case. Swapping the
+          // nesting order — IntrinsicWidth now wraps ConstrainedBox,
+          // instead of the reverse — lets the minWidth constraint reach
+          // the Column before IntrinsicWidth's own measurement pass, so it
+          // actually stretches to fill the viewport when narrower, while
+          // still growing normally (and scrolling, via the Scrollbar
+          // above) when the table's natural content is wider.
+          child: IntrinsicWidth(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [widget.header, ...widget.rows]),
             ),
           ),

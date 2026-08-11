@@ -54,7 +54,7 @@ class _SalesPendingApprovalsScreenState extends ConsumerState<SalesPendingApprov
   @override
   ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
         title: 'Pending Approvals',
-        subtitle: 'DRAFT Invoices, Returns, Deliveries, and Cash Receipts awaiting online approval.',
+        helpText: 'DRAFT Invoices, Returns, Deliveries, and Cash Receipts awaiting online approval.',
         actions: (_items.isNotEmpty && canApprove)
             ? [
                 Padding(

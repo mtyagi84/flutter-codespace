@@ -23,6 +23,7 @@ import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_financial_summary_card.dart';
+import '../../../../core/widgets/sakal_header_action_button.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
@@ -169,13 +170,40 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
   @override
   ScreenHeaderInfo buildScreenHeader() {
     final locked = _status != 'DRAFT';
+    // Desktop-only (user-confirmed) — all action buttons consolidated into
+    // the TopBar via SakalHeaderActionButton for consistent label+icon
+    // styling app-wide. Mobile keeps the body-level Wrap row (see
+    // _buildActionButtons/build()) since there's no spare AppBar width
+    // there — same reasoning as the company-name fix.
+    final isOffline   = ref.read(sessionProvider)?.offlineMode ?? false;
+    final canSaveNow   = _status == 'DRAFT' && (_grnNo == null ? canAdd : canEdit);
+    final canApproveNow = _status == 'DRAFT' && !isOffline && canApprove && _grnNo != null;
+    final showDesktopActions = !Responsive.isMobile(context);
     return ScreenHeaderInfo(
       title: _grnNo != null ? 'Goods Receipt · $_grnNo' : 'New Goods Receipt',
       subtitle: locked ? null : (_grnNo != null ? 'Draft' : 'Unsaved draft'),
       badgeText: locked ? _status : null,
       badgeColor: locked ? (_status == 'APPROVED' ? AppColors.positive : AppColors.secondary) : null,
       trailingBadge: _grnNo != null ? PendingSyncBadge(documentType: 'GRN', documentId: _grnNo!) : null,
-      actions: _grnNo != null ? [_buildPrintButton()] : const [],
+      actions: showDesktopActions
+          ? [
+              if (canSaveNow)
+                SakalHeaderActionButton(
+                  label: 'Save Draft', icon: Icons.save_outlined, kind: SakalActionKind.save,
+                  loading: _saving, onPressed: _saving ? null : () => _saveDraft(),
+                ),
+              if (canApproveNow)
+                SakalHeaderActionButton(
+                  label: 'Approve', icon: Icons.check_circle_outline, kind: SakalActionKind.approve,
+                  loading: _approving, onPressed: _approving ? null : _approveGrn,
+                ),
+              if (_grnNo != null)
+                SakalHeaderActionButton(
+                  label: 'Print', icon: Icons.print_outlined, kind: SakalActionKind.neutral,
+                  loading: _printing, onPressed: _printing ? null : _printGrn,
+                ),
+            ]
+          : (_grnNo != null ? [_buildPrintButton()] : const []),
     );
   }
 
@@ -1325,10 +1353,11 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     final showApprove  = _status == 'DRAFT' && !isOffline && canApprove && _grnNo != null;
     final locked       = _status != 'DRAFT';
 
-    // Title/subtitle/status-badge/Print now live in the shared TopBar via
-    // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. Save/
-    // Approve stay here as a slim body row (same reasoning as Sales
-    // Quotation Entry's own migration).
+    // Title/subtitle/status-badge/actions now live in the shared TopBar via
+    // ScreenHeaderMixin on desktop — see CLAUDE.md's "Screen header"
+    // pattern. Mobile keeps the body-level Save/Approve row below (no
+    // spare AppBar width there — user-confirmed, same reasoning as the
+    // company-name fix).
     refreshScreenHeader();
 
     return Column(
@@ -1336,7 +1365,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
       children: [
         if (isOffline) const OfflineBanner(),
 
-        if (canSave || showApprove)
+        if (isMobile && (canSave || showApprove))
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
             child: _buildActionButtons(canSave: canSave, canApprove: showApprove),

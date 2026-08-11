@@ -22,7 +22,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
   @override
   ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(
         title: 'User Permissions',
-        subtitle: 'Control what each user can view, edit, approve, copy and upload.',
+        helpText: 'Control what each user can view, edit, approve, copy and upload.',
       );
 
   List<Map<String, dynamic>>         _users    = [];

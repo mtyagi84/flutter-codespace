@@ -41,7 +41,7 @@ class _ItemAccountLinksScreenState extends ConsumerState<ItemAccountLinksScreen>
   @override
   ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(
         title: 'Item Account Links',
-        subtitle: 'View or override which GL account each posting type uses for a specific item.',
+        helpText: 'View or override which GL account each posting type uses for a specific item.',
       );
 
   List<Map<String, dynamic>> _products  = [];

@@ -42,7 +42,7 @@ class _DepartmentConsumptionAreaScreenState extends ConsumerState<DepartmentCons
     final canEdit = !isOffline && canAdd;
     return ScreenHeaderInfo(
       title: 'Consumption Area Setup',
-      subtitle: 'Link each Consumption Area to one Department and one expense account',
+      helpText: 'Link each Consumption Area to one Department and one expense account',
       actions: (canEdit && !_loading)
           ? [
               Padding(

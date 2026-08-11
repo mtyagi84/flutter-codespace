@@ -88,7 +88,7 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
       // one line via _buildDesktopTitle, always visible regardless of
       // whether a screen has registered its own header.
       title: mobile
-          ? (header != null ? _buildScreenTitle(header) : null)
+          ? (header != null ? _buildScreenTitle(context, header) : null)
           : _buildDesktopTitle(context, header, session),
       actions: [
         const MasterDataSyncIndicator(),
@@ -346,17 +346,51 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
   // on mobile only (no room there for a composited company-name line — see
   // _buildDesktopTitle below for the desktop equivalent, which reuses
   // _buildSubtitleRow for its own second line instead of duplicating it).
-  Widget _buildScreenTitle(ScreenHeaderInfo header) {
+  Widget _buildScreenTitle(BuildContext context, ScreenHeaderInfo header) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(header.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          Flexible(
+            child: Text(header.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+          ),
+          if (_buildHelpIcon(context, header) case final icon?) icon,
+        ]),
         if (_buildSubtitleRow(header) case final row?) row,
       ],
+    );
+  }
+
+  // A screen's static "what this screen is for" description (helpText) —
+  // shown as a small tappable icon next to the title instead of a
+  // permanent subtitle line, since it never changes and shouldn't compete
+  // for header space with real status info (see ScreenHeaderInfo.helpText's
+  // own doc comment for the subtitle-vs-helpText distinction).
+  Widget? _buildHelpIcon(BuildContext context, ScreenHeaderInfo header) {
+    if (header.helpText == null) return null;
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(header.title),
+            content: Text(header.helpText!),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Close')),
+            ],
+          ),
+        ),
+        child: const Padding(
+          padding: EdgeInsets.all(4),
+          child: Icon(Icons.help_outline, size: 15, color: AppColors.sidebarText),
+        ),
+      ),
     );
   }
 
@@ -411,25 +445,30 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(mainAxisSize: MainAxisSize.min, children: [
+          // Company name and screen title render at equal weight/size
+          // (user-requested) — one continuous title line rather than a
+          // label + a title, distinguished only by the separator between
+          // them, not by different type styles.
           InkWell(
             onTap: () => context.go(RouteNames.dashboard),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 220),
+              constraints: const BoxConstraints(maxWidth: 260),
               child: Text(session.companyName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13, color: AppColors.sidebarText, fontWeight: FontWeight.w500)),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
             ),
           ),
           if (header != null) ...[
             const Text(' : ',
-                style: TextStyle(fontSize: 13, color: AppColors.sidebarText, fontWeight: FontWeight.w500)),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
             Flexible(
               child: Text(header.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
             ),
+            if (_buildHelpIcon(context, header) case final icon?) icon,
           ],
         ]),
         if (header != null)

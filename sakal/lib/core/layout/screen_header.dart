@@ -8,6 +8,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class ScreenHeaderInfo {
   final String title;
   final String? subtitle;
+
+  /// Static, descriptive "what this screen is for" prose (e.g. "Edit your
+  /// company profile, contact details and tax information.") — rendered as
+  /// a small tappable help icon next to the title instead of a permanent
+  /// subtitle line, since it never changes and doesn't need to occupy
+  /// screen-header space at all times. Use [subtitle] instead for anything
+  /// that reflects live state (Draft/Approved, a source-document
+  /// reference, a live count) — that keeps reflecting real information the
+  /// user needs to see at a glance, not a description of the screen itself.
+  final String? helpText;
   final String? badgeText;
   final Color? badgeColor;
 
@@ -27,6 +37,7 @@ class ScreenHeaderInfo {
   const ScreenHeaderInfo({
     required this.title,
     this.subtitle,
+    this.helpText,
     this.badgeText,
     this.badgeColor,
     this.trailingBadge,

@@ -44,7 +44,7 @@ class _BackdatedEntryControlScreenState extends ConsumerState<BackdatedEntryCont
     final offline = ref.read(sessionProvider)?.offlineMode ?? false;
     return ScreenHeaderInfo(
       title: 'Backdated Entry Control',
-      subtitle: 'Per-screen guardrail for how far back a new entry can normally be '
+      helpText: 'Per-screen guardrail for how far back a new entry can normally be '
           'dated. Leave Max Days blank for unlimited. This is separate from Period '
           'Close — a locked period always blocks posting regardless of this setting.',
       actions: canEdit && !offline ? [_buildSaveButton()] : const [],

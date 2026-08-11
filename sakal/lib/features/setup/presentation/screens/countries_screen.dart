@@ -23,7 +23,7 @@ class _CountriesScreenState extends ConsumerState<CountriesScreen>
     final activeCount = _allRows.where((r) => r['is_active'] as bool? ?? false).length;
     return ScreenHeaderInfo(
       title: 'Country Master',
-      subtitle: 'Activate the countries your company buys from or sells to.',
+      helpText: 'Activate the countries your company buys from or sells to.',
       trailingBadge: !_loading && total > 0
           ? _ActiveBadge(active: activeCount, total: total)
           : null,

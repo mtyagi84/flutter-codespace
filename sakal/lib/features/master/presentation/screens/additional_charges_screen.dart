@@ -33,7 +33,7 @@ class _AdditionalChargesScreenState extends ConsumerState<AdditionalChargesScree
     final offline = ref.read(sessionProvider)?.offlineMode ?? false;
     return ScreenHeaderInfo(
       title: 'Additional Charges',
-      subtitle: 'Shared charge types for Sales and Purchase — freight, loading, handling, insurance…',
+      helpText: 'Shared charge types for Sales and Purchase — freight, loading, handling, insurance…',
       actions: (canAdd && !offline)
           ? [
               Padding(

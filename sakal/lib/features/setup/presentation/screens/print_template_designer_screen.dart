@@ -177,7 +177,7 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
   @override
   ScreenHeaderInfo buildScreenHeader() => const ScreenHeaderInfo(
         title: 'Template Designer',
-        subtitle: 'Design a custom print layout — use Preview to see it with sample data before saving.',
+        helpText: 'Design a custom print layout — use Preview to see it with sample data before saving.',
       );
 
   static const _colorChoices = {

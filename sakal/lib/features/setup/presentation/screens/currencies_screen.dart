@@ -62,7 +62,7 @@ class _CurrenciesScreenState extends ConsumerState<CurrenciesScreen>
     final activeCount = _allRows.where((r) => r.isActive).length;
     return ScreenHeaderInfo(
       title: 'Currency Master',
-      subtitle: 'Activate the currencies your company transacts in. '
+      helpText: 'Activate the currencies your company transacts in. '
           'Base and local currencies are active by default.',
       trailingBadge: !_loading && total > 0
           ? _ActiveBadge(active: activeCount, total: total)

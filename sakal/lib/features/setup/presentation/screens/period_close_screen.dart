@@ -36,7 +36,7 @@ class _PeriodCloseScreenState extends ConsumerState<PeriodCloseScreen>
     final offline = ref.read(sessionProvider)?.offlineMode ?? false;
     return ScreenHeaderInfo(
       title: 'Period Close',
-      subtitle: 'Lock a date range once it has been filed/reported — no transaction can post '
+      helpText: 'Lock a date range once it has been filed/reported — no transaction can post '
           'against a locked period, company-wide, regardless of when it is entered.',
       actions: (canEdit && !offline)
           ? [
