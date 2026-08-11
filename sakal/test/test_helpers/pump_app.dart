@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/providers/session_provider.dart';
 
 /// Shared widget-test harness — every real screen in this app needs at
@@ -29,7 +30,29 @@ Future<void> pumpApp(
         if (session != null) sessionProvider.overrideWith((ref) => session),
         ...overrides,
       ],
-      child: MaterialApp(home: Scaffold(body: child)),
+      // Real gap found live 2026-08-11: the production TopBar renders
+      // ScreenHeaderInfo.actions (Save/Approve/Print/... on desktop, per
+      // the "Screen header" mandatory pattern) inside its own AppBar —
+      // this bare Scaffold never did, so any screen that moved a button
+      // into header.actions (rather than the body) became untappable/
+      // unfindable in every widget test, even though it renders correctly
+      // in the real app. A minimal Consumer + AppBar here, showing exactly
+      // header.actions, closes that gap without needing the full TopBar's
+      // styling/menu/avatar machinery — tests only need the buttons to
+      // exist and be tappable, not to look identical to production chrome.
+      child: MaterialApp(
+        home: Consumer(
+          builder: (context, ref, _) {
+            final header = ref.watch(screenHeaderProvider);
+            return Scaffold(
+              appBar: (header != null && header.actions.isNotEmpty)
+                  ? AppBar(title: Text(header.title), actions: header.actions)
+                  : null,
+              body: child,
+            );
+          },
+        ),
+      ),
     ),
   );
 }

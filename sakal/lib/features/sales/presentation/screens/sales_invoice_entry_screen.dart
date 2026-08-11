@@ -1854,7 +1854,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                         padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
                         sliver: SliverList(
                           delegate: SliverChildBuilderDelegate(
-                            (context, index) => _buildLineTile(_lines[index], locked, showLooseQty, showBarcode, isMobile),
+                            (context, index) => _buildLineTile(_lines[index], locked, showLooseQty, showBarcode, isMobile, _showOverrideReasonColumn),
                             childCount: _lines.length,
                           ),
                         ),
