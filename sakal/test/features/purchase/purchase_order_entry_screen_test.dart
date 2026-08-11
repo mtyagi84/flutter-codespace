@@ -188,10 +188,12 @@ void main() {
       expect(find.text('No payment terms added.'), findsOneWidget);
       expect(find.text('Add Term'), findsNothing); // no configured payment-term masters in this fixture
 
+      // Save Draft now lives in the TopBar's own actions on desktop (button-
+      // consolidation pilot) — a brand-new, never-saved order has no order
+      // number yet, so no copy button, no print button, and no approve
+      // button, but Save Draft itself is legitimately present.
       expect(find.text('Save Draft'), findsOneWidget);
-      // A brand-new, never-saved order has no order number yet, so no copy
-      // button, no print button, and no approve button.
-      expect(header?.actions, isEmpty);
+      expect(header?.actions.length, 1);
       expect(find.text('Approve'), findsNothing);
     });
 
@@ -319,12 +321,15 @@ void main() {
       expect(find.text('Bill To Address'), findsOneWidget);
       expect(find.text('Ship To Address'), findsOneWidget);
 
+      // Save Draft + Print both live in ScreenHeaderInfo.actions now (button-
+      // consolidation pilot) — pumpApp() renders them in its own minimal
+      // AppBar, so both are directly findable/tappable in this test too.
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Approve'), findsNothing); // canApprove defaults false from the harness's empty menuProvider
       // _canCopy also requires canCopy (copyAllowed), which the harness's
-      // empty menuProvider leaves false — same reasoning as Approve above, so
-      // only the print button is present (a saved order is printable).
-      expect(header?.actions.length, 1);
+      // empty menuProvider leaves false, so Copy is absent — only Save
+      // Draft + Print remain (a saved-but-still-DRAFT order is both).
+      expect(header?.actions.length, 2);
     });
 
     testWidgets('editing remarks and saving calls the repository with the updated payload', (tester) async {

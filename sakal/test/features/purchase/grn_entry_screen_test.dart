@@ -293,12 +293,12 @@ void main() {
       expect(find.text('Bill To Address'), findsOneWidget);
       expect(find.text('Ship To Address'), findsOneWidget);
 
+      // Save Draft + Print both live in ScreenHeaderInfo.actions now (button-
+      // consolidation pilot) — pumpApp() renders them in its own minimal
+      // AppBar, so both are directly findable/tappable in this test too.
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Approve'), findsNothing); // canApprove defaults false from the harness's empty menuProvider
-      // The print button lives in ScreenHeaderInfo.actions (rendered by
-      // TopBar, which pumpApp() never mounts) rather than inline in the
-      // body — assert on the posted header data instead of find.byIcon.
-      expect(header?.actions.length, 1); // a saved GRN is printable
+      expect(header?.actions.length, 2); // Save Draft + Print — a saved-but-still-DRAFT GRN is both
     });
 
     testWidgets('editing remarks and saving calls the repository with the updated payload', (tester) async {

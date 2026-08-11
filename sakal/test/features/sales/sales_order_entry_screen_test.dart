@@ -202,10 +202,13 @@ void main() {
       // charge-type master data has been configured yet.
       expect(find.text('Add Charge'), findsOneWidget);
 
+      // Save Draft now lives in the TopBar's own actions on desktop (button-
+      // consolidation pilot) — a brand-new, never-saved order still has no
+      // order number yet, so no print/approve/cancel button, but Save
+      // Draft itself is legitimately present since the document is
+      // save-able the moment the screen opens.
       expect(find.text('Save Draft'), findsOneWidget);
-      // A brand-new, never-saved order has no order number yet, so no
-      // print button, no approve button, and no cancel button.
-      expect(header?.actions, isEmpty);
+      expect(header?.actions.length, 1);
       expect(find.text('Approve'), findsNothing);
       expect(find.text('Cancel Order'), findsNothing);
     });
@@ -336,10 +339,13 @@ void main() {
       expect(find.text('10.0'), findsOneWidget); // qtyPackCtrl set via sl['qty_pack'].toString()
       expect(find.text('25.0'), findsOneWidget); // rateCtrl set via sl['rate'].toString()
 
+      // Save Draft + Print both live in ScreenHeaderInfo.actions now (button-
+      // consolidation pilot) — pumpApp() renders them in its own minimal
+      // AppBar, so both are directly findable/tappable in this test too.
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Approve'), findsNothing); // canApprove defaults false from the harness's empty menuProvider
       expect(find.text('Cancel Order'), findsNothing); // showCancel also gated on canApprove
-      expect(header?.actions.length, 1); // a saved order is printable
+      expect(header?.actions.length, 2); // Save Draft + Print — a saved-but-still-DRAFT order is both
     });
 
     testWidgets('editing remarks and saving calls the repository with the updated payload', (tester) async {

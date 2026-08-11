@@ -40,13 +40,19 @@ Future<void> pumpApp(
       // header.actions, closes that gap without needing the full TopBar's
       // styling/menu/avatar machinery — tests only need the buttons to
       // exist and be tappable, not to look identical to production chrome.
+      // Deliberately NO title: here — every test that checks the header's
+      // title already does so via _readHeader() reading screenHeaderProvider
+      // directly, never via find.text(); several screens' title happens to
+      // equal a doc-number string ALSO rendered as its own field in the
+      // body (e.g. "JV-001"), and rendering it a second time here as an
+      // AppBar title broke those with a spurious "found 2 widgets" match.
       child: MaterialApp(
         home: Consumer(
           builder: (context, ref, _) {
             final header = ref.watch(screenHeaderProvider);
             return Scaffold(
               appBar: (header != null && header.actions.isNotEmpty)
-                  ? AppBar(title: Text(header.title), actions: header.actions)
+                  ? AppBar(actions: header.actions)
                   : null,
               body: child,
             );
