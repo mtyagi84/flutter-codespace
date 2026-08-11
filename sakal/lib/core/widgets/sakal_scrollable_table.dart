@@ -18,21 +18,51 @@ import 'package:flutter/material.dart';
 /// ScrollControllers) so they always stay column-aligned while scrolling
 /// — both are children of the same scrolled Column, never synced via two
 /// separate scrollables.
-class SakalScrollableTable extends StatelessWidget {
+///
+/// Real gap found live 2026-08-11: the SingleChildScrollView below had no
+/// Scrollbar at all — dragging technically worked, but with no visible
+/// thumb/track there was no discoverable affordance that the table even
+/// scrolled, so columns past the viewport edge (e.g. Department,
+/// Consumption Area) read as simply inaccessible. Flutter's default
+/// MaterialScrollBehavior only auto-draws a scrollbar on desktop-class
+/// platforms, and even then it's a transient hover/drag thumb, not a
+/// static one — not reliable on Flutter Web. Fixed with an explicit
+/// Scrollbar(thumbVisibility: true, ...) tied to an owned controller, same
+/// recipe as the reporting engine's own horizontal scrollbar fix
+/// (sakal_report_table.dart).
+class SakalScrollableTable extends StatefulWidget {
   final Widget header;
   final List<Widget> rows;
 
   const SakalScrollableTable({super.key, required this.header, required this.rows});
 
   @override
+  State<SakalScrollableTable> createState() => _SakalScrollableTableState();
+}
+
+class _SakalScrollableTableState extends State<SakalScrollableTable> {
+  final ScrollController _controller = ScrollController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
-      return SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minWidth: constraints.maxWidth),
-          child: IntrinsicWidth(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [header, ...rows]),
+      return Scrollbar(
+        controller: _controller,
+        thumbVisibility: true,
+        child: SingleChildScrollView(
+          controller: _controller,
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: IntrinsicWidth(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [widget.header, ...widget.rows]),
+            ),
           ),
         ),
       );

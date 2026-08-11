@@ -81,31 +81,15 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
       // caught live on a 360px-wide screen because the company-name Text
       // here was a bare Row child with no Flexible/ellipsis, rendering at
       // its full natural width regardless of what was actually left.
-      // Simplest correct fix on mobile is to not compete for that space at
-      // all (the drawer/sidebar already carries company context there);
-      // desktop keeps the title but now truncates instead of overflowing.
-      title: header != null
-          ? _buildScreenTitle(header)
-          : mobile
-              ? null
-              : Row(
-                  children: [
-                    const Icon(Icons.business_outlined,
-                        size: 15, color: AppColors.sidebarText),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        session?.companyName ?? '',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.sidebarText,
-                            fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                  ],
-                ),
+      // Mobile therefore still shows only the registered screen title (or
+      // nothing) — company name lives in the avatar menu instead (see
+      // itemBuilder's disabled header item below), not competing for this
+      // space at all. Desktop composites company name + screen title on
+      // one line via _buildDesktopTitle, always visible regardless of
+      // whether a screen has registered its own header.
+      title: mobile
+          ? (header != null ? _buildScreenTitle(header) : null)
+          : _buildDesktopTitle(context, header, session),
       actions: [
         const MasterDataSyncIndicator(),
         const SyncStatusIndicator(),
@@ -193,6 +177,23 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Mobile has no room for a persistent company-name
+                    // element in the AppBar itself (see the `title:`
+                    // comment above) — shown here instead, at the top of
+                    // the one menu that's always one tap away on any
+                    // screen, so it's still never more than a tap from
+                    // being visible even on the narrowest layout.
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.business_outlined, size: 12, color: AppColors.textSecondary),
+                        const SizedBox(width: 4),
+                        Text(session?.companyName ?? '',
+                            style: const TextStyle(
+                                color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
                     Text(session?.fullName ?? '',
                         style: const TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 13)),
@@ -341,9 +342,10 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
     );
   }
 
-  // Screen-registered title (+ optional subtitle/status badge), replacing
-  // the company-name title entirely once a screen opts in via
-  // ScreenHeaderMixin — see screen_header.dart.
+  // Screen-registered title (+ optional subtitle/status badge), used as-is
+  // on mobile only (no room there for a composited company-name line — see
+  // _buildDesktopTitle below for the desktop equivalent, which reuses
+  // _buildSubtitleRow for its own second line instead of duplicating it).
   Widget _buildScreenTitle(ScreenHeaderInfo header) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -353,32 +355,85 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
-        if (header.subtitle != null || header.badgeText != null)
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            if (header.subtitle != null)
-              Flexible(
-                child: Text(header.subtitle!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11, color: AppColors.sidebarText)),
-              ),
-            if (header.badgeText != null) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(
-                  color: (header.badgeColor ?? AppColors.positive).withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(header.badgeText!,
-                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: header.badgeColor ?? AppColors.positive)),
-              ),
-            ],
-            if (header.trailingBadge != null) ...[
-              const SizedBox(width: 6),
-              header.trailingBadge!,
-            ],
-          ]),
+        if (_buildSubtitleRow(header) case final row?) row,
+      ],
+    );
+  }
+
+  // The subtitle/badge/trailingBadge line beneath a screen's own title —
+  // extracted so both _buildScreenTitle (mobile) and _buildDesktopTitle
+  // (desktop) can render it identically without duplicating the layout.
+  Widget? _buildSubtitleRow(ScreenHeaderInfo header) {
+    if (header.subtitle == null && header.badgeText == null && header.trailingBadge == null) return null;
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      if (header.subtitle != null)
+        Flexible(
+          child: Text(header.subtitle!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, color: AppColors.sidebarText)),
+        ),
+      if (header.badgeText != null) ...[
+        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+          decoration: BoxDecoration(
+            color: (header.badgeColor ?? AppColors.positive).withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(header.badgeText!,
+              style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: header.badgeColor ?? AppColors.positive)),
+        ),
+      ],
+      if (header.trailingBadge != null) ...[
+        const SizedBox(width: 6),
+        header.trailingBadge!,
+      ],
+    ]);
+  }
+
+  // Desktop title area: company name (tappable -> Dashboard) always shown,
+  // optionally followed by " : <screen title>" when a screen has
+  // registered one, with that screen's own subtitle/badge row beneath.
+  // Real gap fixed 2026-08-11: company name previously vanished entirely
+  // once ANY screen registered a header — a genuine safety concern in a
+  // multi-company ERP, since a user had no persistent way to confirm which
+  // company's books a transaction would post to. Mobile deliberately does
+  // NOT get this treatment (see the `leading`/`actions` comment above) —
+  // there is no spare width on a narrow AppBar for a third element
+  // alongside the back/menu icon and the already-crowded actions row;
+  // mobile users see the company name inside the avatar menu instead (see
+  // itemBuilder's disabled header item below).
+  Widget _buildDesktopTitle(BuildContext context, ScreenHeaderInfo? header, UserSession? session) {
+    if (session == null) return const SizedBox.shrink();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          InkWell(
+            onTap: () => context.go(RouteNames.dashboard),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220),
+              child: Text(session.companyName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, color: AppColors.sidebarText, fontWeight: FontWeight.w500)),
+            ),
+          ),
+          if (header != null) ...[
+            const Text(' : ',
+                style: TextStyle(fontSize: 13, color: AppColors.sidebarText, fontWeight: FontWeight.w500)),
+            Flexible(
+              child: Text(header.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+            ),
+          ],
+        ]),
+        if (header != null)
+          if (_buildSubtitleRow(header) case final row?) row,
       ],
     );
   }
