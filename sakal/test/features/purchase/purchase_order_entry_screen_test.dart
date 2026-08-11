@@ -188,12 +188,13 @@ void main() {
       expect(find.text('No payment terms added.'), findsOneWidget);
       expect(find.text('Add Term'), findsNothing); // no configured payment-term masters in this fixture
 
-      // Save Draft now lives in the TopBar's own actions on desktop (button-
-      // consolidation pilot) — a brand-new, never-saved order has no order
-      // number yet, so no copy button, no print button, and no approve
-      // button, but Save Draft itself is legitimately present.
+      // This test forces a MOBILE viewport (_useMobileViewport above) — the
+      // button-consolidation pilot is desktop-only, so Save Draft still
+      // comes from the body's own Wrap row here; header.actions stays
+      // exactly as it always was on mobile (empty, since there's no order
+      // number yet for a Print button either).
       expect(find.text('Save Draft'), findsOneWidget);
-      expect(header?.actions.length, 1);
+      expect(header?.actions, isEmpty);
       expect(find.text('Approve'), findsNothing);
     });
 
@@ -321,15 +322,13 @@ void main() {
       expect(find.text('Bill To Address'), findsOneWidget);
       expect(find.text('Ship To Address'), findsOneWidget);
 
-      // Save Draft + Print both live in ScreenHeaderInfo.actions now (button-
-      // consolidation pilot) — pumpApp() renders them in its own minimal
-      // AppBar, so both are directly findable/tappable in this test too.
+      // This test forces a MOBILE viewport (_useMobileViewport above) — the
+      // button-consolidation pilot is desktop-only, so Save Draft still
+      // comes from the body's own Wrap row here; header.actions stays
+      // exactly as it always was on mobile (Print only).
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Approve'), findsNothing); // canApprove defaults false from the harness's empty menuProvider
-      // _canCopy also requires canCopy (copyAllowed), which the harness's
-      // empty menuProvider leaves false, so Copy is absent — only Save
-      // Draft + Print remain (a saved-but-still-DRAFT order is both).
-      expect(header?.actions.length, 2);
+      expect(header?.actions.length, 1); // Print only, on mobile
     });
 
     testWidgets('editing remarks and saving calls the repository with the updated payload', (tester) async {

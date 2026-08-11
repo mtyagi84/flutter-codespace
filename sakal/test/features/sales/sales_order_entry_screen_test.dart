@@ -339,13 +339,14 @@ void main() {
       expect(find.text('10.0'), findsOneWidget); // qtyPackCtrl set via sl['qty_pack'].toString()
       expect(find.text('25.0'), findsOneWidget); // rateCtrl set via sl['rate'].toString()
 
-      // Save Draft + Print both live in ScreenHeaderInfo.actions now (button-
-      // consolidation pilot) — pumpApp() renders them in its own minimal
-      // AppBar, so both are directly findable/tappable in this test too.
+      // This test forces a MOBILE viewport (_useMobileViewport above) — the
+      // button-consolidation pilot is desktop-only, so Save Draft still
+      // comes from the body's own Wrap row here; header.actions stays
+      // exactly as it always was on mobile (Print only).
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Approve'), findsNothing); // canApprove defaults false from the harness's empty menuProvider
       expect(find.text('Cancel Order'), findsNothing); // showCancel also gated on canApprove
-      expect(header?.actions.length, 2); // Save Draft + Print — a saved-but-still-DRAFT order is both
+      expect(header?.actions.length, 1); // Print only, on mobile
     });
 
     testWidgets('editing remarks and saving calls the repository with the updated payload', (tester) async {

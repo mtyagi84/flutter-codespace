@@ -293,12 +293,15 @@ void main() {
       expect(find.text('Bill To Address'), findsOneWidget);
       expect(find.text('Ship To Address'), findsOneWidget);
 
-      // Save Draft + Print both live in ScreenHeaderInfo.actions now (button-
-      // consolidation pilot) — pumpApp() renders them in its own minimal
-      // AppBar, so both are directly findable/tappable in this test too.
+      // This test forces a MOBILE viewport (_useMobileViewport above) — the
+      // button-consolidation pilot is desktop-only, so Save Draft still
+      // comes from the body's own Wrap row here, unaffected; header.actions
+      // stays exactly as it always was on mobile (Print only, via the old
+      // icon-only _buildPrintButton — see buildScreenHeader()'s own
+      // mobile-vs-desktop split).
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Approve'), findsNothing); // canApprove defaults false from the harness's empty menuProvider
-      expect(header?.actions.length, 2); // Save Draft + Print — a saved-but-still-DRAFT GRN is both
+      expect(header?.actions.length, 1); // Print only, on mobile
     });
 
     testWidgets('editing remarks and saving calls the repository with the updated payload', (tester) async {

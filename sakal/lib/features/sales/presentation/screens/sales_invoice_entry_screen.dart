@@ -1707,14 +1707,6 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
 
   // ── UI helpers ───────────────────────────────────────────────────────────
 
-  static Widget _req(String text) => RichText(
-        text: TextSpan(
-          text: text,
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w400),
-          children: const [TextSpan(text: ' *', style: TextStyle(color: AppColors.negative, fontWeight: FontWeight.w600))],
-        ),
-      );
-
   Color _statusColor(String status) => switch (status) {
     'DRAFT' => AppColors.badgeDraft,
     'APPROVED' => AppColors.positive,
