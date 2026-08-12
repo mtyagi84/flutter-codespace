@@ -23,6 +23,7 @@ import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_financial_summary_card.dart';
 import '../../../../core/widgets/sakal_formatted_number_field.dart';
+import '../../../../core/widgets/sakal_header_action_button.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../../../core/widgets/sakal_scrollable_table.dart';
@@ -185,6 +186,15 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
       if (_invoiceNo != null) PendingSyncBadge(documentType: 'SALES_INVOICE', documentId: _invoiceNo!),
       if (_deliveryStatus != null) _deliveryStatusBadge()!,
     ];
+    // Desktop-only (user-confirmed) — all action buttons consolidated into
+    // the TopBar via SakalHeaderActionButton for consistent label+icon
+    // styling app-wide. Mobile keeps the body-level Wrap row (see
+    // _buildActionButtons/build()) since there's no spare AppBar width
+    // there — same reasoning as the company-name fix.
+    final isOffline = ref.read(sessionProvider)?.offlineMode ?? false;
+    final canSaveNow   = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
+    final showCancelNow = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
+    final showDesktopActions = !Responsive.isMobile(context);
     return ScreenHeaderInfo(
       title: _invoiceNo != null ? 'Quick Invoice · $_invoiceNo' : 'New Quick Invoice',
       subtitle: subtitleParts.join(' · '),
@@ -193,7 +203,25 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
       trailingBadge: extraBadges.isEmpty
           ? null
           : Wrap(spacing: 6, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: extraBadges),
-      actions: _invoiceNo != null ? [_buildPrintButton()] : const [],
+      actions: showDesktopActions
+          ? [
+              if (canSaveNow)
+                SakalHeaderActionButton(
+                  label: 'Save Invoice', icon: Icons.save_outlined, kind: SakalActionKind.save,
+                  loading: _saving, onPressed: _saving ? null : _saveAndApprove,
+                ),
+              if (showCancelNow)
+                SakalHeaderActionButton(
+                  label: 'Cancel', icon: Icons.cancel_outlined, kind: SakalActionKind.cancel,
+                  loading: _cancelling, onPressed: _cancelling ? null : _cancel,
+                ),
+              if (_invoiceNo != null)
+                SakalHeaderActionButton(
+                  label: 'Print', icon: Icons.print_outlined, kind: SakalActionKind.neutral,
+                  loading: _printing, onPressed: _printing ? null : _printInvoice,
+                ),
+            ]
+          : (_invoiceNo != null ? [_buildPrintButton()] : const []),
     );
   }
 
@@ -1765,10 +1793,10 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
   @override
   Widget build(BuildContext context) {
     // Title/status badge/sale-type/source/Pending-sync/delivery-status/
-    // Print now live in the shared TopBar via ScreenHeaderMixin — see
-    // CLAUDE.md's "Screen header" pattern. The Save/Cancel action buttons
-    // deliberately stay here as their own body row (both can be visible at
-    // once, and the AppBar's actions row has no reflow mechanism).
+    // Save/Cancel/Print now live in the shared TopBar via ScreenHeaderMixin
+    // on desktop (SakalHeaderActionButton, see buildScreenHeader) — see
+    // CLAUDE.md's "Screen header" pattern. Mobile keeps this body-level Wrap
+    // row since there's no spare AppBar width there.
     refreshScreenHeader();
     if (!_loading) _recompute();
     final session = ref.watch(sessionProvider);
@@ -1784,7 +1812,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
-        if (canSave || showCancel)
+        if (isMobile && (canSave || showCancel))
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
             child: _buildActionButtons(canSave: canSave, showCancel: showCancel),

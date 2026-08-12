@@ -22,6 +22,7 @@ import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_header_action_button.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
@@ -126,13 +127,30 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
   ScreenHeaderInfo buildScreenHeader() {
     final locked = _status != 'DRAFT';
     final statusColor = _status == 'SUBMITTED' ? AppColors.secondary : AppColors.positive;
+    final showDesktopActions = !Responsive.isMobile(context);
+    final canSaveNow = _status == 'DRAFT' && (_isNew ? canAdd : canEdit) && _hasStarted;
+    final canSubmitNow = _status == 'DRAFT' && canApprove && _hasStarted;
     return ScreenHeaderInfo(
       title: _countNo != null ? 'Stock Count · $_countNo' : 'New Stock Count',
       subtitle: locked ? null : (_countNo != null ? 'Draft' : 'Unsaved draft'),
       badgeText: locked ? _status : null,
       badgeColor: locked ? statusColor : null,
       trailingBadge: _countNo != null ? PendingSyncBadge(documentType: 'STOCK_COUNT', documentId: _countNo!) : null,
-      actions: _countNo != null ? [_buildPrintButton()] : const [],
+      actions: showDesktopActions
+          ? [
+              if (_countNo != null) _buildPrintButton(),
+              if (canSaveNow)
+                SakalHeaderActionButton(
+                  label: 'Save Draft', icon: Icons.save_outlined, kind: SakalActionKind.save,
+                  loading: _saving, onPressed: _saving ? null : () => _saveDraft(),
+                ),
+              if (canSubmitNow)
+                SakalHeaderActionButton(
+                  label: 'Submit', icon: Icons.task_alt, kind: SakalActionKind.save,
+                  loading: _submitting, onPressed: _submitting ? null : _submitCount,
+                ),
+            ]
+          : (_countNo != null ? [_buildPrintButton()] : const []),
     );
   }
 
@@ -597,7 +615,7 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
-        if ((canSave && _hasStarted) || showSubmit)
+        if (isMobile && ((canSave && _hasStarted) || showSubmit))
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
             child: _buildActionButtons(canSave: canSave && _hasStarted, canSubmit: showSubmit),

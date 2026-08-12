@@ -214,10 +214,14 @@ void main() {
       expect(find.text('Collect Payment'), findsOneWidget);
 
       expect(find.text('Save Invoice'), findsOneWidget);
-      // A brand-new, never-saved invoice has no invoice number yet, so no
-      // print button; Cancel is gated on `!isOffline && status==DRAFT &&
-      // canApprove && !_isNew` — _isNew alone already rules it out here.
-      expect(header?.actions, isEmpty);
+      // Desktop consolidates Save/Cancel/Print into the TopBar via
+      // SakalHeaderActionButton (see buildScreenHeader) — a brand-new,
+      // never-saved invoice has no invoice number yet, so no Print button;
+      // Cancel is gated on `!isOffline && status==DRAFT && canApprove &&
+      // !_isNew` — _isNew alone already rules it out here. Save Invoice
+      // itself IS shown (canSaveNow true for a new DRAFT), so actions holds
+      // exactly that one button.
+      expect(header?.actions.length, 1);
       expect(find.text('Cancel'), findsNothing);
     });
 
@@ -371,7 +375,9 @@ void main() {
 
       expect(find.text('Save Invoice'), findsOneWidget);
       expect(find.text('Cancel'), findsNothing); // canApprove defaults false from the harness's empty menuProvider
-      expect(header?.actions.length, 1); // a saved invoice is printable
+      // Desktop TopBar now holds both Save Invoice (canSaveNow true — still
+      // DRAFT) and Print (invoiceNo != null) via SakalHeaderActionButton.
+      expect(header?.actions.length, 2);
     });
 
     testWidgets('editing remarks and saving calls the repository with the updated payload', (tester) async {

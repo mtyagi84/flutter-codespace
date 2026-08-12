@@ -16,6 +16,7 @@ import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_header_action_button.dart';
 import '../../../../core/widgets/sakal_reciprocal_rate_field.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
@@ -45,13 +46,35 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
   String get screenName => RouteNames.contraVoucherList;
 
   @override
-  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
-        title: _transNo ?? 'New Contra Voucher',
-        subtitle: _flavorLabel,
-        badgeText: _isPosted ? 'Posted' : 'Draft',
-        badgeColor: _isPosted ? AppColors.positive : AppColors.secondary,
-        actions: _transNo != null ? [_buildPrintButton()] : const [],
-      );
+  ScreenHeaderInfo buildScreenHeader() {
+    // Desktop-only consolidation into the TopBar (see PO/GRN/Sales Order
+    // pilots) — mobile keeps the body-level Wrap row unchanged.
+    final showDesktopActions = !Responsive.isMobile(context);
+    final canSaveNow = !_locked && (_isNew ? canAdd : canEdit);
+    final showApproveNow = !_locked && canApprove && !_isNew;
+    final showReverseNow = _locked && canApprove;
+    final showCopyNow = !_locked && !_isNew;
+    return ScreenHeaderInfo(
+      title: _transNo ?? 'New Contra Voucher',
+      subtitle: _flavorLabel,
+      badgeText: _isPosted ? 'Posted' : 'Draft',
+      badgeColor: _isPosted ? AppColors.positive : AppColors.secondary,
+      actions: showDesktopActions
+          ? [
+              if (showCopyNow)
+                SakalHeaderActionButton(label: 'Copy', icon: Icons.copy_outlined, kind: SakalActionKind.neutral, onPressed: _applyCopy),
+              if (showReverseNow)
+                SakalHeaderActionButton(label: 'Reverse', icon: Icons.undo, kind: SakalActionKind.neutral, loading: _reversing, onPressed: _reversing ? null : _reverse),
+              if (canSaveNow)
+                SakalHeaderActionButton(label: 'Save Draft', icon: Icons.save_outlined, kind: SakalActionKind.save, loading: _saving, onPressed: _saving ? null : () => _saveDraft()),
+              if (showApproveNow)
+                SakalHeaderActionButton(label: 'Approve', icon: Icons.check_circle_outline, kind: SakalActionKind.approve, loading: _approving, onPressed: _approving ? null : _approve),
+              if (_transNo != null)
+                SakalHeaderActionButton(label: 'Print', icon: Icons.print_outlined, kind: SakalActionKind.neutral, loading: _printing, onPressed: _printing ? null : _print),
+            ]
+          : (_transNo != null ? [_buildPrintButton()] : const []),
+    );
+  }
 
   FinanceVoucherRepository get _ds => ref.read(financeVoucherRepositoryProvider);
 
@@ -764,7 +787,7 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (canSave || showApprove || showReverse || showCopy)
+        if (isMobile && (canSave || showApprove || showReverse || showCopy))
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
             child: Wrap(spacing: 8, runSpacing: 8, children: _buildActionButtons(canSave, showApprove, showReverse)),

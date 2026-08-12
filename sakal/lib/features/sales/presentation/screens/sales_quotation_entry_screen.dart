@@ -24,6 +24,7 @@ import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_financial_summary_card.dart';
+import '../../../../core/widgets/sakal_header_action_button.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
@@ -109,6 +110,17 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
   @override
   ScreenHeaderInfo buildScreenHeader() {
     final badge = _status != 'DRAFT' || _quotationNo != null ? (_isExpired ? 'EXPIRED' : _status) : null;
+    // Desktop-only (user-confirmed) — all action buttons consolidated into
+    // the TopBar via SakalHeaderActionButton for consistent label+icon
+    // styling app-wide. Mobile keeps the body-level Wrap row (see
+    // _buildActionButtons/build()) since there's no spare AppBar width
+    // there — same reasoning as the company-name fix.
+    final isOffline = ref.read(sessionProvider)?.offlineMode ?? false;
+    final canSaveNow          = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
+    final showApproveNow      = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
+    final showSendNow         = !isOffline && _status == 'APPROVED' && canEdit;
+    final showAcceptRejectNow = !isOffline && _status == 'SENT' && canEdit;
+    final showDesktopActions  = !Responsive.isMobile(context);
     return ScreenHeaderInfo(
       title: _quotationNo != null ? 'Sales Quotation · $_quotationNo' : 'New Sales Quotation',
       subtitle: badge == null ? 'Unsaved draft' : null,
@@ -117,7 +129,45 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
       trailingBadge: _quotationNo != null
           ? PendingSyncBadge(documentType: 'SALES_QUOTATION', documentId: _quotationNo!)
           : null,
-      actions: _quotationNo != null ? [_buildPrintButton()] : const [],
+      actions: showDesktopActions
+          ? [
+              if (canSaveNow)
+                SakalHeaderActionButton(
+                  label: 'Save Draft', icon: Icons.save_outlined, kind: SakalActionKind.save,
+                  loading: _saving, onPressed: _saving ? null : _saveDraft,
+                ),
+              // Deliberate exception to the usual Approve=green convention:
+              // this screen's own pre-existing FilledButton used
+              // AppColors.secondary (amber) for Approve, not
+              // AppColors.positive — SakalActionKind.save maps to the same
+              // amber, preserving the exact prior color.
+              if (showApproveNow)
+                SakalHeaderActionButton(
+                  label: 'Approve', icon: Icons.check_circle_outline, kind: SakalActionKind.save,
+                  loading: _approving, onPressed: _approving ? null : _approve,
+                ),
+              if (showSendNow)
+                SakalHeaderActionButton(
+                  label: 'Send to Customer', icon: Icons.send_outlined, kind: SakalActionKind.neutral,
+                  onPressed: _statusUpdating ? null : () => _updateStatus('SENT'),
+                ),
+              if (showAcceptRejectNow) ...[
+                SakalHeaderActionButton(
+                  label: 'Mark Accepted', icon: Icons.check_circle_outline, kind: SakalActionKind.approve,
+                  onPressed: _statusUpdating ? null : () => _updateStatus('ACCEPTED'),
+                ),
+                SakalHeaderActionButton(
+                  label: 'Mark Rejected', icon: Icons.cancel_outlined, kind: SakalActionKind.cancel,
+                  onPressed: _statusUpdating ? null : () => _updateStatus('REJECTED'),
+                ),
+              ],
+              if (_quotationNo != null)
+                SakalHeaderActionButton(
+                  label: 'Print', icon: Icons.print_outlined, kind: SakalActionKind.neutral,
+                  loading: _printing, onPressed: _printing ? null : _printQuotation,
+                ),
+            ]
+          : (_quotationNo != null ? [_buildPrintButton()] : const []),
     );
   }
 
@@ -921,21 +971,18 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
     final showAcceptReject = !isOffline && _status == 'SENT' && canEdit;
     final locked       = _status != 'DRAFT';
 
-    // Title/subtitle/status-badge/Print now live in the shared TopBar via
-    // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. The
-    // Save/Approve/Send/Accept/Reject action buttons deliberately stay
-    // here as a slim body row rather than also moving into the TopBar's
-    // actions: up to 3 can be visible at once (e.g. Accept+Reject), and
-    // the AppBar's actions row has no reflow mechanism the way this
-    // existing Wrap does — moving them would risk reintroducing an
-    // overflow on exactly the class of bug this session fixed elsewhere.
+    // Title/subtitle/status-badge/Save/Approve/Send/Accept/Reject/Print now
+    // live in the shared TopBar via ScreenHeaderMixin on desktop
+    // (SakalHeaderActionButton, see buildScreenHeader) — see CLAUDE.md's
+    // "Screen header" pattern. Mobile keeps this body-level Wrap row since
+    // there's no spare AppBar width there.
     refreshScreenHeader();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
-        if (canSave || showApprove || showSend || showAcceptReject)
+        if (isMobile && (canSave || showApprove || showSend || showAcceptReject))
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
             child: _buildActionButtons(canSave: canSave, showApprove: showApprove, showSend: showSend, showAcceptReject: showAcceptReject),

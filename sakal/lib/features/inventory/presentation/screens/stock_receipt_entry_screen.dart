@@ -22,6 +22,7 @@ import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_header_action_button.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
@@ -115,14 +116,26 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
   @override String get screenName => RouteNames.stockReceipts;
 
   @override
-  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
-        title: _receiptNo != null ? 'Stock Receipt · $_receiptNo' : 'New Stock Receipt',
-        subtitle: _status == 'APPROVED' ? null : (_receiptNo != null ? 'Draft' : 'Unsaved draft'),
-        badgeText: _status == 'APPROVED' ? 'APPROVED' : null,
-        badgeColor: _status == 'APPROVED' ? AppColors.positive : null,
-        trailingBadge: _receiptNo != null ? PendingSyncBadge(documentType: 'STOCK_RECEIPT', documentId: _receiptNo!) : null,
-        actions: _receiptNo != null ? [_buildPrintButton()] : const [],
-      );
+  ScreenHeaderInfo buildScreenHeader() {
+    final isOffline = ref.read(sessionProvider)?.offlineMode ?? false;
+    final canSaveNow = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
+    final canApproveNow = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
+    final showDesktopActions = !Responsive.isMobile(context);
+    return ScreenHeaderInfo(
+      title: _receiptNo != null ? 'Stock Receipt · $_receiptNo' : 'New Stock Receipt',
+      subtitle: _status == 'APPROVED' ? null : (_receiptNo != null ? 'Draft' : 'Unsaved draft'),
+      badgeText: _status == 'APPROVED' ? 'APPROVED' : null,
+      badgeColor: _status == 'APPROVED' ? AppColors.positive : null,
+      trailingBadge: _receiptNo != null ? PendingSyncBadge(documentType: 'STOCK_RECEIPT', documentId: _receiptNo!) : null,
+      actions: showDesktopActions
+          ? [
+              if (canSaveNow) SakalHeaderActionButton(label: 'Save Draft', icon: Icons.save_outlined, kind: SakalActionKind.save, loading: _saving, onPressed: _saving ? null : () => _saveDraft()),
+              if (canApproveNow) SakalHeaderActionButton(label: 'Approve', icon: Icons.check_circle_outline, kind: SakalActionKind.approve, loading: _approving, onPressed: _approving ? null : _approveReceipt),
+              if (_receiptNo != null) SakalHeaderActionButton(label: 'Print', icon: Icons.print_outlined, kind: SakalActionKind.neutral, loading: _printing, onPressed: _printing ? null : _printReceipt),
+            ]
+          : (_receiptNo != null ? [_buildPrintButton()] : const []),
+    );
+  }
 
   StockReceiptRepository get _ds => ref.read(stockReceiptRepositoryProvider);
 
@@ -639,7 +652,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
-        if (canSave || showApprove)
+        if (isMobile && (canSave || showApprove))
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
             child: Align(

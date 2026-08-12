@@ -84,7 +84,11 @@ void main() {
       expect(find.text('Add Line'), findsNothing);
 
       expect(find.text('Save Draft'), findsOneWidget);
-      expect(header?.actions, isEmpty);
+      // Default (desktop) viewport now routes Save Draft into the TopBar's
+      // own header actions (button-consolidation rollout) — a brand-new,
+      // never-saved receipt has no Approve/Print yet (both require a real
+      // receiptNo), so exactly one action (Save Draft) is expected here.
+      expect(header?.actions.length, 1);
       expect(find.text('Approve'), findsNothing);
     });
 

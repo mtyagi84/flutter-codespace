@@ -144,9 +144,13 @@ void main() {
       expect(find.text('Pending Invoices'), findsNothing);
 
       expect(find.text('Save & Collect'), findsOneWidget);
-      // A brand-new, never-saved receipt has no receipt number yet, and
-      // this screen only ever prints an APPROVED receipt.
-      expect(header?.actions, isEmpty);
+      // Desktop consolidates Save & Collect/Print into the TopBar via
+      // SakalHeaderActionButton (see buildScreenHeader) — a brand-new,
+      // never-saved receipt has no receipt number yet, and this screen only
+      // ever prints an APPROVED receipt, so Print is absent; Save & Collect
+      // itself IS shown (canSaveNow true for a DRAFT), so actions holds
+      // exactly that one button.
+      expect(header?.actions.length, 1);
     });
 
     testWidgets('blocks save and shows a validation message when no customer is selected', (tester) async {
@@ -257,8 +261,11 @@ void main() {
 
       expect(find.text('Save & Collect'), findsOneWidget);
       // Still DRAFT (queued offline, never yet approved) — this screen only
-      // prints an APPROVED receipt, even once a receipt number exists.
-      expect(header?.actions, isEmpty);
+      // prints an APPROVED receipt, even once a receipt number exists, so
+      // Print is absent; Save & Collect itself IS shown on desktop via
+      // SakalHeaderActionButton (canSaveNow true), so actions holds exactly
+      // that one button.
+      expect(header?.actions.length, 1);
     });
 
     testWidgets('editing remarks and saving calls save+approve with the updated payload', (tester) async {

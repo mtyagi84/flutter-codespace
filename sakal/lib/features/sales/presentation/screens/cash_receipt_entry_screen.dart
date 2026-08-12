@@ -18,6 +18,7 @@ import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_header_action_button.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../domain/repositories/cash_receipt_repository.dart';
@@ -69,12 +70,35 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
   String get screenName => RouteNames.salesReceipts;
 
   @override
-  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
-        title: _receiptNo ?? 'New Cash Receipt',
-        badgeText: _status,
-        badgeColor: _status == 'APPROVED' ? AppColors.positive : AppColors.secondary,
-        actions: (_receiptNo != null && _status == 'APPROVED') ? [_buildPrintButton()] : const [],
-      );
+  ScreenHeaderInfo buildScreenHeader() {
+    // Desktop-only (user-confirmed) — all action buttons consolidated into
+    // the TopBar via SakalHeaderActionButton for consistent label+icon
+    // styling app-wide. Mobile keeps the body-level button (see
+    // _buildSaveButton/build()) since there's no spare AppBar width there —
+    // same reasoning as the company-name fix.
+    final locked = _status != 'DRAFT';
+    final canSaveNow = !locked && canAdd;
+    final showDesktopActions = !Responsive.isMobile(context);
+    return ScreenHeaderInfo(
+      title: _receiptNo ?? 'New Cash Receipt',
+      badgeText: _status,
+      badgeColor: _status == 'APPROVED' ? AppColors.positive : AppColors.secondary,
+      actions: showDesktopActions
+          ? [
+              if (canSaveNow)
+                SakalHeaderActionButton(
+                  label: 'Save & Collect', icon: Icons.check_circle_outline, kind: SakalActionKind.save,
+                  loading: _saving, onPressed: _saving ? null : () => _saveAndApprove(),
+                ),
+              if (_receiptNo != null && _status == 'APPROVED')
+                SakalHeaderActionButton(
+                  label: 'Print', icon: Icons.print_outlined, kind: SakalActionKind.neutral,
+                  loading: _printing, onPressed: _printing ? null : _printReceipt,
+                ),
+            ]
+          : ((_receiptNo != null && _status == 'APPROVED') ? [_buildPrintButton()] : const []),
+    );
+  }
 
   CashReceiptRepository get _ds => ref.read(cashReceiptRepositoryProvider);
 
@@ -585,18 +609,19 @@ class _CashReceiptEntryScreenState extends ConsumerState<CashReceiptEntryScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Title/status badge/Print now live in the shared TopBar via
-    // ScreenHeaderMixin — see CLAUDE.md's "Screen header" pattern. The
-    // Save & Collect button deliberately stays here as its own body row
-    // (same convention as every other entry screen's Save/Approve row).
+    // Title/status badge/Save & Collect/Print now live in the shared TopBar
+    // via ScreenHeaderMixin on desktop (SakalHeaderActionButton, see
+    // buildScreenHeader) — see CLAUDE.md's "Screen header" pattern. Mobile
+    // keeps this body-level button since there's no spare AppBar width there.
     refreshScreenHeader();
     final locked = _status != 'DRAFT';
     final canSave = !locked && canAdd;
+    final isMobile = Responsive.isMobile(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (canSave)
+        if (isMobile && canSave)
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
             child: _buildSaveButton(),

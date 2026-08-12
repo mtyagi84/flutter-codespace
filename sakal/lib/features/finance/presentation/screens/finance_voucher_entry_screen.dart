@@ -27,6 +27,7 @@ import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_header_action_button.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../providers/finance_voucher_providers.dart';
 
@@ -127,6 +128,18 @@ class _FinanceVoucherEntryScreenState
     } else {
       title = 'New Finance Voucher';
     }
+    // Desktop-only consolidation into the TopBar (see PO/GRN/Sales Order
+    // pilots) — mobile keeps the body-level Wrap row unchanged. Mirrors
+    // build()'s own canSave/canApprove/isOffline computation exactly —
+    // this method only actually runs (via refreshScreenHeader()) once
+    // build() has already passed its own `feature == null` early return.
+    final showDesktopActions = !Responsive.isMobile(context);
+    final isOffline = ref.watch(sessionProvider)?.offlineMode ?? false;
+    final menus = ref.watch(menuProvider);
+    final feature = _findFeature(menus, RouteNames.voucherList);
+    final canSaveNow = feature != null && !_isPosted && (_voucherNo == null ? feature.addAllowed : feature.editAllowed);
+    final canApproveNow = feature != null && !_isPosted && !isOffline && feature.approveAllowed;
+    final showCopyNow = _voucherNo != null && _isOnAccount;
     return ScreenHeaderInfo(
       title: title,
       subtitle: _isPosted ? null : (_voucherNo != null ? 'Draft' : 'Unsaved draft'),
@@ -135,7 +148,18 @@ class _FinanceVoucherEntryScreenState
       trailingBadge: (!_isPosted && _voucherNo != null)
           ? PendingSyncBadge(documentType: 'FINANCE_VOUCHER', documentId: _voucherNo!)
           : null,
-      actions: _voucherNo != null ? [_buildPrintButton()] : const [],
+      actions: showDesktopActions
+          ? [
+              if (showCopyNow)
+                SakalHeaderActionButton(label: 'Copy', icon: Icons.copy_outlined, kind: SakalActionKind.neutral, onPressed: _applyCopy),
+              if (canSaveNow)
+                SakalHeaderActionButton(label: 'Save Draft', icon: Icons.save_outlined, kind: SakalActionKind.save, loading: _saving, onPressed: (_saving || _posting) ? null : _saveDraft),
+              if (canApproveNow)
+                SakalHeaderActionButton(label: 'Post Voucher', icon: Icons.check_circle_outline, kind: SakalActionKind.save, loading: _posting, onPressed: (_saving || _posting) ? null : _postVoucher),
+              if (_voucherNo != null)
+                SakalHeaderActionButton(label: 'Print', icon: Icons.print_outlined, kind: SakalActionKind.neutral, loading: _printing, onPressed: _printing ? null : _printVoucher),
+            ]
+          : (_voucherNo != null ? [_buildPrintButton()] : const []),
     );
   }
 
@@ -1121,7 +1145,7 @@ class _FinanceVoucherEntryScreenState
       children: [
         if (isOffline) const OfflineBanner(),
 
-        if ((_voucherNo != null && _isOnAccount) || canSave || canApprove)
+        if (isMobile && ((_voucherNo != null && _isOnAccount) || canSave || canApprove))
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
             child: Wrap(spacing: 12, runSpacing: 8, children: [

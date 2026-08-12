@@ -74,7 +74,11 @@ void main() {
       expect(find.text('No lines yet — add a product, scan a barcode, or upload an Excel file.'), findsOneWidget);
       expect(find.text('Add Line'), findsOneWidget);
       expect(find.text('Save Draft'), findsOneWidget);
-      expect(header?.actions, isEmpty);
+      // Default (desktop) viewport now routes Save Draft into the TopBar's
+      // own header actions (button-consolidation rollout) — a brand-new,
+      // never-saved opening stock has no Approve/Print yet (both require a
+      // real openingNo), so exactly one action (Save Draft) is expected.
+      expect(header?.actions.length, 1);
       expect(find.text('Approve'), findsNothing);
     });
 

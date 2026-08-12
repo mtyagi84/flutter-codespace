@@ -111,7 +111,11 @@ void main() {
       expect(find.text('Add Charge'), findsNothing); // no configured charge types in this fixture
 
       expect(find.text('Save Draft'), findsOneWidget);
-      expect(header?.actions, isEmpty);
+      // Default (desktop) viewport now routes Save Draft into the TopBar's
+      // own header actions (button-consolidation rollout) — a brand-new,
+      // never-saved transfer has no Approve/Print yet (both require a real
+      // transferNo), so exactly one action (Save Draft) is expected here.
+      expect(header?.actions.length, 1);
       expect(find.text('Approve'), findsNothing);
     });
 

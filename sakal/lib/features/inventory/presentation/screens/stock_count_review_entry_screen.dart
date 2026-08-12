@@ -18,6 +18,7 @@ import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_header_action_button.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../domain/repositories/stock_count_review_repository.dart';
 import '../providers/stock_count_review_providers.dart';
@@ -36,13 +37,33 @@ class _StockCountReviewEntryScreenState extends ConsumerState<StockCountReviewEn
   @override String get screenName => RouteNames.stockCountReview;
 
   @override
-  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
-        title: _reviewNo != null ? 'Stock Count Review · $_reviewNo' : 'New Stock Count Review',
-        subtitle: _status == 'APPROVED' ? null : (_reviewNo != null ? 'Draft' : 'Unsaved draft'),
-        badgeText: _status == 'APPROVED' ? 'APPROVED' : null,
-        badgeColor: _status == 'APPROVED' ? AppColors.positive : null,
-        actions: _reviewNo != null ? [_buildPrintButton()] : const [],
-      );
+  ScreenHeaderInfo buildScreenHeader() {
+    final showDesktopActions = !Responsive.isMobile(context);
+    final isOffline = ref.read(sessionProvider)?.offlineMode ?? false;
+    final canSaveNow = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
+    final canPostNow = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
+    return ScreenHeaderInfo(
+      title: _reviewNo != null ? 'Stock Count Review · $_reviewNo' : 'New Stock Count Review',
+      subtitle: _status == 'APPROVED' ? null : (_reviewNo != null ? 'Draft' : 'Unsaved draft'),
+      badgeText: _status == 'APPROVED' ? 'APPROVED' : null,
+      badgeColor: _status == 'APPROVED' ? AppColors.positive : null,
+      actions: showDesktopActions
+          ? [
+              if (_reviewNo != null) _buildPrintButton(),
+              if (canSaveNow)
+                SakalHeaderActionButton(
+                  label: 'Save Draft', icon: Icons.save_outlined, kind: SakalActionKind.save,
+                  loading: _saving, onPressed: _saving ? null : () => _saveDraft(),
+                ),
+              if (canPostNow)
+                SakalHeaderActionButton(
+                  label: 'Approve', icon: Icons.check_circle_outline, kind: SakalActionKind.save,
+                  loading: _approving, onPressed: _approving ? null : _approve,
+                ),
+            ]
+          : (_reviewNo != null ? [_buildPrintButton()] : const []),
+    );
+  }
 
   StockCountReviewRepository get _ds => ref.read(stockCountReviewRepositoryProvider);
 
@@ -374,7 +395,7 @@ class _StockCountReviewEntryScreenState extends ConsumerState<StockCountReviewEn
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
-        if (canSave || canPost)
+        if (isMobile && (canSave || canPost))
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
             child: Align(

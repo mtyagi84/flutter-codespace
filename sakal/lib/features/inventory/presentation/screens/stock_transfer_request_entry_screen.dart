@@ -22,6 +22,7 @@ import '../../../../core/widgets/pending_sync_badge.dart';
 import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_header_action_button.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../../../core/widgets/sakal_scrollable_table.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
@@ -69,13 +70,23 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
   @override
   ScreenHeaderInfo buildScreenHeader() {
     final badgeColor = _status == 'CLOSED' ? AppColors.textSecondary : AppColors.positive;
+    final isOffline = ref.read(sessionProvider)?.offlineMode ?? false;
+    final canSaveNow = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
+    final canApproveNow = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
+    final showDesktopActions = !Responsive.isMobile(context);
     return ScreenHeaderInfo(
       title: _requestNo != null ? 'Stock Transfer Request · $_requestNo' : 'New Stock Transfer Request',
       subtitle: _status == 'DRAFT' ? (_requestNo != null ? 'Draft' : 'Unsaved draft') : null,
       badgeText: _status != 'DRAFT' ? _status.replaceAll('_', ' ') : null,
       badgeColor: _status != 'DRAFT' ? badgeColor : null,
       trailingBadge: _requestNo != null ? PendingSyncBadge(documentType: 'STOCK_TRANSFER_REQUEST', documentId: _requestNo!) : null,
-      actions: _requestNo != null ? [_buildPrintButton()] : const [],
+      actions: showDesktopActions
+          ? [
+              if (canSaveNow) SakalHeaderActionButton(label: 'Save Draft', icon: Icons.save_outlined, kind: SakalActionKind.save, loading: _saving, onPressed: _saving ? null : () => _saveDraft()),
+              if (canApproveNow) SakalHeaderActionButton(label: 'Approve', icon: Icons.check_circle_outline, kind: SakalActionKind.approve, loading: _approving, onPressed: _approving ? null : _approve),
+              if (_requestNo != null) SakalHeaderActionButton(label: 'Print', icon: Icons.print_outlined, kind: SakalActionKind.neutral, loading: _printing, onPressed: _printing ? null : _printRequest),
+            ]
+          : (_requestNo != null ? [_buildPrintButton()] : const []),
     );
   }
 
@@ -421,7 +432,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
-        if (canSave || showApprove)
+        if (isMobile && (canSave || showApprove))
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
             child: Align(

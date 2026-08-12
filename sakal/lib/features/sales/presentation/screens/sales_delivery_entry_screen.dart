@@ -21,6 +21,7 @@ import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/sakal_autocomplete.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_header_action_button.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../../../core/widgets/sakal_scrollable_table.dart';
@@ -113,13 +114,24 @@ class _SalesDeliveryEntryScreenState extends ConsumerState<SalesDeliveryEntryScr
   @override String get screenName => RouteNames.salesDeliveries;
 
   @override
-  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
-        title: _deliveryNo != null ? 'Sales Delivery · $_deliveryNo' : 'New Sales Delivery',
-        subtitle: _status != 'APPROVED' ? (_deliveryNo != null ? 'Draft' : 'Unsaved draft') : null,
-        badgeText: _status == 'APPROVED' ? _status : null,
-        badgeColor: _status == 'APPROVED' ? AppColors.positive : null,
-        actions: _deliveryNo != null ? [_buildPrintButton()] : const [],
-      );
+  ScreenHeaderInfo buildScreenHeader() {
+    final canSaveNow    = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
+    final canApproveNow = _status == 'DRAFT' && canApprove && !_isNew;
+    final showDesktopActions = !Responsive.isMobile(context);
+    return ScreenHeaderInfo(
+      title: _deliveryNo != null ? 'Sales Delivery · $_deliveryNo' : 'New Sales Delivery',
+      subtitle: _status != 'APPROVED' ? (_deliveryNo != null ? 'Draft' : 'Unsaved draft') : null,
+      badgeText: _status == 'APPROVED' ? _status : null,
+      badgeColor: _status == 'APPROVED' ? AppColors.positive : null,
+      actions: showDesktopActions
+          ? [
+              if (canSaveNow) SakalHeaderActionButton(label: 'Save Draft', icon: Icons.save_outlined, kind: SakalActionKind.save, loading: _saving, onPressed: _saving ? null : () => _saveDraft()),
+              if (canApproveNow) SakalHeaderActionButton(label: 'Approve', icon: Icons.check_circle_outline, kind: SakalActionKind.approve, loading: _approving, onPressed: _approving ? null : _approveDelivery),
+              if (_deliveryNo != null) SakalHeaderActionButton(label: 'Print', icon: Icons.print_outlined, kind: SakalActionKind.neutral, loading: _printing, onPressed: _printing ? null : _printDelivery),
+            ]
+          : (_deliveryNo != null ? [_buildPrintButton()] : const []),
+    );
+  }
 
   SalesDeliveryRepository get _ds => ref.read(salesDeliveryRepositoryProvider);
 
@@ -853,7 +865,7 @@ class _SalesDeliveryEntryScreenState extends ConsumerState<SalesDeliveryEntryScr
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (canSave || showApprove)
+        if (isMobile && (canSave || showApprove))
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
             child: _buildActionButtons(canSave: canSave, canApprove: showApprove),

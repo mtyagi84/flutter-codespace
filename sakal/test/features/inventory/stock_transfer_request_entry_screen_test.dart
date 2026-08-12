@@ -97,8 +97,10 @@ void main() {
       expect(find.text('Add Line'), findsOneWidget);
       expect(find.text('Save Draft'), findsOneWidget);
       // A brand-new, never-saved request has no request number yet, so no
-      // print button and no approve button (approve requires !_isNew).
-      expect(header?.actions, isEmpty);
+      // print button and no approve button (approve requires !_isNew). Default
+      // (desktop) viewport now routes Save Draft into the TopBar's own header
+      // actions (button-consolidation rollout) — exactly one action expected.
+      expect(header?.actions.length, 1);
       expect(find.text('Approve'), findsNothing);
     });
 

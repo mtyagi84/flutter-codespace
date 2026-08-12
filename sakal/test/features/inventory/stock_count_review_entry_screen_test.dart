@@ -89,7 +89,11 @@ void main() {
 
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Approve'), findsNothing);
-      expect(header?.actions, isEmpty);
+      // Desktop-tier default viewport: Save/Approve moved into the TopBar's
+      // own actions row (see CLAUDE.md's "button consolidation" pattern) —
+      // canAdd defaults true with an empty menuProvider, so Save Draft is
+      // the one action present; no Review No yet means no Print button.
+      expect(header?.actions.length, 1);
     });
 
     testWidgets('blocks Save Draft and shows a validation message when no source count is selected', (tester) async {
