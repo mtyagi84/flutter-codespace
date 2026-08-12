@@ -86,7 +86,7 @@ void main() {
       expect(find.text('No lines yet — add a product.'), findsOneWidget);
       expect(find.text('Add Line'), findsOneWidget);
       expect(find.text('Save Draft'), findsOneWidget);
-      expect(header?.actions, isEmpty);
+      expect(header?.actions.length, 1); // Save Draft now shows in the desktop TopBar
       expect(find.text('Approve'), findsNothing);
     });
 

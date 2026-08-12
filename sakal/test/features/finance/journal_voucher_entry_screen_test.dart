@@ -143,7 +143,7 @@ void main() {
       expect(find.text('Save Draft'), findsOneWidget);
       // A brand-new, never-saved voucher has no voucher number yet, so no
       // print button, no copy button, no approve, no reverse.
-      expect(header?.actions, isEmpty);
+      expect(header?.actions.length, 1); // Save Draft now shows in the desktop TopBar
       expect(find.text('Copy'), findsNothing);
       expect(find.text('Approve'), findsNothing);
       expect(find.text('Reverse'), findsNothing);
@@ -273,7 +273,7 @@ void main() {
 
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Approve'), findsNothing); // canApprove defaults false from the harness's empty menuProvider
-      expect(header?.actions.length, 1); // a saved voucher is printable
+      expect(header?.actions.length, 3); // Copy + Save Draft + Print all show in the desktop TopBar
       expect(find.text('Copy'), findsOneWidget); // a saved voucher can be copied
       expect(find.text('Reverse'), findsNothing); // only shown once posted
     });

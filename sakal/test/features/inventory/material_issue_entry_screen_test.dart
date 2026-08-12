@@ -74,7 +74,7 @@ void main() {
       expect(find.text('No fulfillable requisitions at this location.'), findsOneWidget);
       expect(find.text('No lines yet — pick a requisition above.'), findsOneWidget);
       expect(find.text('Save Draft'), findsOneWidget);
-      expect(header?.actions, isEmpty);
+      expect(header?.actions.length, 1); // Save Draft now shows in the desktop TopBar
       expect(find.text('Approve'), findsNothing);
     });
 

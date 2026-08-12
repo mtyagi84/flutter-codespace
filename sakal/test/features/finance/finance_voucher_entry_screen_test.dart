@@ -177,7 +177,7 @@ void main() {
       // A brand-new, never-saved voucher has no voucher number yet, so no
       // copy button, no print button, and no post/approve button.
       expect(find.byIcon(Icons.copy_outlined), findsNothing);
-      expect(header?.actions, isEmpty);
+      expect(header?.actions.length, 1); // Save Draft now shows in the desktop TopBar
       expect(find.text('Post Voucher'), findsNothing);
     });
 
@@ -307,7 +307,7 @@ void main() {
 
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Post Voucher'), findsNothing); // approveAllowed=false in this fixture
-      expect(header?.actions.length, 1); // a saved voucher is printable
+      expect(header?.actions.length, 3); // Copy + Save Draft + Print all show in the desktop TopBar
       expect(find.byIcon(Icons.copy_outlined), findsOneWidget); // saved + On Account → copy allowed
     });
 
@@ -540,7 +540,7 @@ void main() {
 
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.byIcon(Icons.copy_outlined), findsNothing);
-      expect(header?.actions, isEmpty);
+      expect(header?.actions.length, 1); // Save Draft now shows in the desktop TopBar
       expect(find.text('Post Voucher'), findsNothing);
     });
 
@@ -582,7 +582,7 @@ void main() {
 
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.byIcon(Icons.copy_outlined), findsNothing);
-      expect(header?.actions, isEmpty);
+      expect(header?.actions.length, 1); // Save Draft now shows in the desktop TopBar
       expect(find.text('Post Voucher'), findsNothing);
     });
 
@@ -624,7 +624,7 @@ void main() {
 
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.byIcon(Icons.copy_outlined), findsNothing);
-      expect(header?.actions, isEmpty);
+      expect(header?.actions.length, 1); // Save Draft now shows in the desktop TopBar
       expect(find.text('Post Voucher'), findsNothing);
     });
   });

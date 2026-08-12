@@ -119,7 +119,7 @@ void main() {
       expect(find.text('Save Draft'), findsOneWidget);
       // A brand-new, never-saved return has no return number yet, so no
       // print button and no approve button (approve requires !_isNew).
-      expect(header?.actions, isEmpty);
+      expect(header?.actions.length, 1); // Save Draft now shows in the desktop TopBar
       expect(find.text('Approve'), findsNothing);
     });
 
@@ -281,7 +281,7 @@ void main() {
 
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Approve'), findsNothing); // canApprove defaults false from the harness's empty menuProvider
-      expect(header?.actions.length, 1); // a saved return is printable
+      expect(header?.actions.length, 2); // Save Draft + Print now show in the desktop TopBar
     });
 
     testWidgets('editing remarks and saving calls the repository with the updated payload', (tester) async {

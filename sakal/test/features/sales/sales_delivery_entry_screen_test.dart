@@ -113,7 +113,7 @@ void main() {
       expect(find.text('Save Draft'), findsOneWidget);
       // A brand-new, never-saved delivery has no delivery number yet, so no
       // print button and no approve button (approve requires !_isNew).
-      expect(header?.actions, isEmpty);
+      expect(header?.actions.length, 1); // Save Draft now shows in the desktop TopBar
       expect(find.text('Approve'), findsNothing);
     });
 
