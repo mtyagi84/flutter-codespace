@@ -259,6 +259,9 @@ Material 3. Sidebar navigation on Web/Desktop. Bottom navigation on Mobile.
 - Increment `schemaVersion` in `app_database.dart`
 - Add migration step in `MigrationStrategy`
 
+### Plan-mode plans — always persist to `sakal/docs/screens/`
+Whenever Claude produces an implementation plan (via plan mode) and the user approves it, save the plan itself as a markdown file under `sakal/docs/screens/` before implementation starts — not just left in the ephemeral `~/.claude/plans/` file, which doesn't survive as project history. Name it `plan_<topic>.md` (snake_case, `plan_` prefix) to stay distinguishable from this same folder's existing per-screen requirement docs (`journal_voucher.md`, `sales_quotation.md`, etc. — the 5-section Screen Name/Description/Layout/Functionality/Data Flow format, a different document type). Include a `Status:` line at the top (e.g. "Approved, not yet implemented" / "Implemented <date>") so the file stays a useful record of what was decided and why, not just a snapshot of the moment it was written.
+
 ---
 
 ## Key Coding Conventions
