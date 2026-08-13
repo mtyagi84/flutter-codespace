@@ -17,7 +17,8 @@ import '../../../../core/utils/voucher_logic.dart';
 import '../../../../core/models/menu_models.dart';
 import '../../../../core/providers/master_cache_providers.dart'
     show accountsProvider, baseCurrencyProvider, localCurrencyProvider,
-         paymentModesProvider, companyDetailsProvider;
+         paymentModesProvider, companyDetailsProvider,
+         interLocationModelProvider, userAccessibleLocationsProvider;
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/router/route_names.dart';
