@@ -299,7 +299,8 @@ begin
         (p_client_id, p_company_id, v_fn, 'FN-PNL', 'Profit & Loss',            '/finance/profit-loss',        1, 'FN-RPT', 'Reports',      1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-BSH', 'Balance Sheet',            '/finance/balance-sheet',      2, 'FN-RPT', 'Reports',      1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-RPT-PBR', 'Pending Bills Register',      '/reports/PENDING_BILLS_REGISTER',      3, 'FN-RPT', 'Reports', 1, false, false, false),
-        (p_client_id, p_company_id, v_fn, 'FN-RPT-PBG', 'Pending Bills by Customer',   '/reports/PENDING_BILLS_BY_CUSTOMER',   4, 'FN-RPT', 'Reports', 1, false, false, false)
+        (p_client_id, p_company_id, v_fn, 'FN-RPT-PBG', 'Pending Bills by Customer',   '/reports/PENDING_BILLS_BY_CUSTOMER',   4, 'FN-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-RPT-LDG', 'Account Ledger',              '/reports/ACCOUNT_LEDGER',              5, 'FN-RPT', 'Reports', 1, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set module_id       = excluded.module_id,
             feature_name    = excluded.feature_name,

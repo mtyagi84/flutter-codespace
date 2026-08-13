@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../network/dio_client.dart';
+import '../providers/master_cache_providers.dart';
 import '../theme/app_colors.dart';
 import '../widgets/sakal_reflow_row.dart';
+import '../../features/finance/presentation/widgets/finance_account_picker.dart';
 import 'report_models.dart';
 
 /// Generic filter bar, built entirely from a report's own declared
@@ -15,7 +18,7 @@ import 'report_models.dart';
 /// TEXT filters debounce (~350ms) rather than re-running the report on
 /// every keystroke; every other filter type applies immediately on
 /// change — same convention noted in the design doc.
-class SakalReportFilterBar extends StatefulWidget {
+class SakalReportFilterBar extends ConsumerStatefulWidget {
   final List<ReportFilter> filters;
   final Map<String, dynamic> initialValues;
   final ValueChanged<Map<String, dynamic>> onApply;
@@ -28,10 +31,10 @@ class SakalReportFilterBar extends StatefulWidget {
   });
 
   @override
-  State<SakalReportFilterBar> createState() => _SakalReportFilterBarState();
+  ConsumerState<SakalReportFilterBar> createState() => _SakalReportFilterBarState();
 }
 
-class _SakalReportFilterBarState extends State<SakalReportFilterBar> {
+class _SakalReportFilterBarState extends ConsumerState<SakalReportFilterBar> {
   late Map<String, dynamic> _values;
   Timer? _debounce;
   final Map<String, List<Map<String, dynamic>>> _lookupOptionsCache = {};
@@ -106,13 +109,23 @@ class _SakalReportFilterBarState extends State<SakalReportFilterBar> {
   @override
   Widget build(BuildContext context) {
     if (widget.filters.isEmpty) return const SizedBox.shrink();
+    // Only fetched when a filter actually needs it — accountsProvider is
+    // already session/offline-aware (master_cache_providers.dart), so this
+    // reuses the same cached fetch every other Finance account picker uses
+    // rather than hand-rolling a second one here.
+    final needsAccountPicker = widget.filters.any((f) => f.filterType == 'FINANCE_ACCOUNT_PICKER');
+    final postableAccounts = needsAccountPicker
+        ? (ref.watch(accountsProvider).valueOrNull ?? const <Map<String, dynamic>>[])
+            .where((a) => a['posting_allowed'] == true)
+            .toList()
+        : const <Map<String, dynamic>>[];
     return SakalReflowRow(
       flexWeights: widget.filters.map(_flexFor).toList(),
-      children: widget.filters.map(_buildField).toList(),
+      children: widget.filters.map((f) => _buildField(f, postableAccounts)).toList(),
     );
   }
 
-  Widget _buildField(ReportFilter f) {
+  Widget _buildField(ReportFilter f, List<Map<String, dynamic>> postableAccounts) {
     switch (f.filterType) {
       case 'DATE_RANGE':
         final range = _values[f.filterKey] as Map<String, DateTime>?;
@@ -179,6 +192,31 @@ class _SakalReportFilterBarState extends State<SakalReportFilterBar> {
             ...options.map((o) => DropdownMenuItem(value: o['id'] as String, child: Text('${o[labelCol]}'))),
           ],
           onChanged: (v) => _set(f.filterKey, v),
+        );
+
+      case 'FINANCE_ACCOUNT_PICKER':
+        // The real 3-column Code/Name/Parent-Group searchable picker (see
+        // CLAUDE.md's "Account pickers" rule) — never DropdownButton for
+        // accounts, even inside the generic reporting engine. Distinct
+        // from the plain-dropdown ACCOUNT_PICKER above, which stays as-is
+        // for reports (e.g. Sales Register's Customer filter) that don't
+        // need Finance's Code/Name/Parent-Group disambiguation.
+        final selectedId = _values[f.filterKey] as String?;
+        Map<String, dynamic>? selected;
+        if (selectedId != null) {
+          for (final a in postableAccounts) {
+            if (a['id'] == selectedId) {
+              selected = a;
+              break;
+            }
+          }
+        }
+        return FinanceAccountPicker(
+          key: ValueKey(selectedId),
+          accounts: postableAccounts,
+          initialValue: selected != null ? FinanceAccountPicker.displayString(selected) : null,
+          onSelected: (a) => _set(f.filterKey, a['id'] as String),
+          decoration: InputDecoration(labelText: f.label, isDense: true, border: const OutlineInputBorder()),
         );
 
       case 'BOOLEAN':
