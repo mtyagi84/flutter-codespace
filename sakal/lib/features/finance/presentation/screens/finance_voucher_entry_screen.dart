@@ -169,6 +169,16 @@ class _FinanceVoucherEntryScreenState
   DateTime  _transDate  = DateTime.now();
   bool      _isOnAccount = false;
   bool      _isPosted    = false;
+  // Defaults from session.locationId (see _init()); every existing
+  // session.locationId call site in this file is replaced with _locationId
+  // so a picked location — not just the session default — actually flows
+  // into exchange-rate lookups, pending-bills, save, and post.
+  String?   _locationId;
+  // Location picker only matters (and only renders) under INTER_ENTITY
+  // accounting — see CLAUDE.md's "Inter-Location Model". Under SIMPLE
+  // (the default) these stay at their defaults and nothing changes.
+  String    _interLocationModel = 'SIMPLE';
+  List<Map<String, dynamic>> _accessibleLocations = const [];
 
   // ── Cash / Bank (header level) ────────────────────────────────────────────
   String?   _cashBankId;
@@ -258,6 +268,11 @@ class _FinanceVoucherEntryScreenState
     setState(() { _loading = true; _error = null; });
     final session = ref.read(sessionProvider)!;
     try {
+      _locationId = session.locationId;
+      _interLocationModel = await ref.read(interLocationModelProvider.future);
+      if (_interLocationModel == 'INTER_ENTITY') {
+        _accessibleLocations = await ref.read(userAccessibleLocationsProvider.future);
+      }
       // accountsProvider handles the offline/online branch (and offline
       // caching) centrally now — see core/providers/master_cache_providers.dart.
       final accounts = await ref.read(accountsProvider.future);
@@ -403,6 +418,7 @@ class _FinanceVoucherEntryScreenState
         if (header.chequeDate.isNotEmpty) {
           _chequeDate = DateTime.tryParse(header.chequeDate);
         }
+        _locationId           = header.locationId;
         _cashBankId           = cashBankId;
         _transCurrency        = transCurrency;
         _rateCtrl.text        = _fmtRate(displayRate);
@@ -660,11 +676,11 @@ class _FinanceVoucherEntryScreenState
   Future<double?> _fetchCrossRate(String from, String to) async {
     if (from.isEmpty || to.isEmpty || from == to) return 1.0;
     final session = ref.read(sessionProvider)!;
-    if (session.locationId == null) return null;
+    if (_locationId == null) return null;
     try {
       return await ref.read(financeVoucherRepositoryProvider).fetchExchangeRate(
         companyId:    session.companyId,
-        locationId:   session.locationId!,
+        locationId:   _locationId!,
         fromCurrency: from,
         toCurrency:   to,
         rateDate:     _fmtDate(_transDate),
@@ -699,12 +715,12 @@ class _FinanceVoucherEntryScreenState
   Future<void> _loadPendingBills({Map<String, double>? savedPaid}) async {
     if (_partyId == null) return;
     final session = ref.read(sessionProvider)!;
-    if (session.locationId == null) return;
+    if (_locationId == null) return;
     setState(() => _loadingBills = true);
     try {
       final rows = await ref.read(financeVoucherRepositoryProvider).getPendingBills(
         companyId:  session.companyId,
-        locationId: session.locationId!,
+        locationId: _locationId!,
         accountId:  _partyId!,
       );
       // Deferred disposal — see _applyVoucherType's comment above.
@@ -768,6 +784,10 @@ class _FinanceVoucherEntryScreenState
       return false;
     }
     if (_totalTransAmount <= 0) { _showSnack('Enter at least one payment amount.'); return false; }
+    if (_interLocationModel == 'INTER_ENTITY' && _locationId == null) {
+      _showSnack('Select a location.');
+      return false;
+    }
 
     setState(() { _saving = true; _actionError = null; });
     try {
@@ -782,7 +802,7 @@ class _FinanceVoucherEntryScreenState
       final header = {
         'client_id':         session.clientId,
         'company_id':        session.companyId,
-        'location_id':       session.locationId,
+        'location_id':       _locationId,
         'trans_no':          _voucherNo ?? '',
         'trans_date':        _fmtDate(_transDate),
         'voucher_type_code': _voucherType,
@@ -961,7 +981,7 @@ class _FinanceVoucherEntryScreenState
       await ref.read(financeVoucherRepositoryProvider).post(
         clientId:   session.clientId,
         companyId:  session.companyId,
-        locationId: session.locationId ?? '',
+        locationId: _locationId ?? '',
         transNo:    _voucherNo!,
         transDate:  _fmtDate(_transDate),
         postedBy:   session.userId,
@@ -1320,6 +1340,26 @@ class _FinanceVoucherEntryScreenState
       child: TextFormField(controller: _remarksCtrl, enabled: !locked, decoration: bare, style: style),
     );
 
+    // Guard the dropdown's initialValue separately from _locationId itself —
+    // a resumed voucher's already-saved location can fall outside the
+    // CURRENT user's access grants (e.g. grants changed since, or a
+    // different user opens the draft); showing it unselected here is safe
+    // (never crashes, never silently mutates _locationId) even though the
+    // underlying value is left untouched and still saves correctly.
+    final locationInitial = _accessibleLocations.any((l) => l['id'] == _locationId) ? _locationId : null;
+    final locationField = SakalFieldCard(
+      label: 'Location',
+      required: true,
+      editable: !locked,
+      child: DropdownButtonFormField<String>(
+        key: ValueKey(_locationId),
+        decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
+        initialValue: locationInitial,
+        items: _accessibleLocations.map((l) => DropdownMenuItem(value: l['id'] as String, child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis, style: style))).toList(),
+        onChanged: locked ? null : (v) => setState(() => _locationId = v),
+      ),
+    );
+
     final chequeNoField = SakalFieldCard(
       label: 'Cheque No', editable: !locked,
       child: TextFormField(controller: _chequeNoCtrl, enabled: !locked, decoration: bare, style: style),
@@ -1350,7 +1390,10 @@ class _FinanceVoucherEntryScreenState
           const SizedBox(height: 12),
           SakalFieldRow(isMobile: isMobile, spans: const [6, 2, 4], children: [cashBankField, currencyField, rateField]),
           const SizedBox(height: 12),
-          SakalFieldRow(isMobile: isMobile, children: [paymentModeField, refNoField, refDateField, remarksField]),
+          SakalFieldRow(isMobile: isMobile, children: [
+            paymentModeField, refNoField, refDateField, remarksField,
+            if (_interLocationModel == 'INTER_ENTITY') locationField,
+          ]),
 
           // Cheque row — only for CHEQUE payment mode
           if (_paymentMode == 'CHEQUE') ...[

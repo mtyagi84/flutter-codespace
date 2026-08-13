@@ -123,6 +123,11 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
   DateTime _transDate = DateTime.now();
   bool _isPosted = false;
   String? _locationId;
+  // Location picker only matters (and only renders) under INTER_ENTITY
+  // accounting — see CLAUDE.md's "Inter-Location Model". Under SIMPLE
+  // (the default) these stay at their defaults and nothing changes.
+  String _interLocationModel = 'SIMPLE';
+  List<Map<String, dynamic>> _accessibleLocations = const [];
 
   String _baseCcy = '';
   String _localCcy = '';
@@ -195,6 +200,10 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
     });
     try {
       _locationId = session.locationId;
+      _interLocationModel = await ref.read(interLocationModelProvider.future);
+      if (_interLocationModel == 'INTER_ENTITY') {
+        _accessibleLocations = await ref.read(userAccessibleLocationsProvider.future);
+      }
       _baseCcy = await ref.read(baseCurrencyProvider.future);
       _localCcy = await ref.read(localCurrencyProvider.future);
       _currencies = await ref.read(currenciesProvider.future);
@@ -426,6 +435,10 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
   Future<bool> _saveDraft() async {
     if (_currencyId == null) {
       _showSnack('Select a currency.', color: AppColors.negative);
+      return false;
+    }
+    if (_interLocationModel == 'INTER_ENTITY' && _locationId == null) {
+      _showSnack('Select a location.', color: AppColors.negative);
       return false;
     }
     final validLines = _lines.where((l) => l.accountId != null && l.amount > 0).toList();
@@ -853,6 +866,29 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
     );
     final remarksField = SakalFieldCard(label: 'Remarks', editable: !_locked, child: TextFormField(controller: _remarksCtrl, enabled: !_locked, decoration: SakalFieldCard.bareDecoration));
 
+    // Guard the dropdown's initialValue separately from _locationId itself —
+    // a resumed voucher's already-saved location can fall outside the
+    // CURRENT user's access grants (e.g. grants changed since, or a
+    // different user opens the draft); showing it unselected here is safe
+    // (never crashes, never silently mutates _locationId) even though the
+    // underlying value is left untouched and still saves correctly.
+    final locationInitial = _accessibleLocations.any((l) => l['id'] == _locationId) ? _locationId : null;
+    final locationField = SakalFieldCard(
+      label: 'Location',
+      required: true,
+      editable: !_locked,
+      child: DropdownButtonFormField<String>(
+        initialValue: locationInitial,
+        isExpanded: true,
+        isDense: true,
+        itemHeight: null,
+        decoration: SakalFieldCard.bareDecoration,
+        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+        items: _accessibleLocations.map((l) => DropdownMenuItem(value: l['id'] as String, child: Text(l['location_name'] as String, overflow: TextOverflow.ellipsis))).toList(),
+        onChanged: _locked ? null : (v) => setState(() => _locationId = v),
+      ),
+    );
+
     // Rate fields only appear once a cross-currency voucher currency is
     // picked — 0, 1, or 2 of them depending on how base/local/voucher
     // currencies relate, so this row is built dynamically and skipped
@@ -865,7 +901,10 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
     ];
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      SakalFieldRow(isMobile: isMobile, children: [voucherNoField, voucherDateField, currencyField]),
+      SakalFieldRow(isMobile: isMobile, children: [
+        voucherNoField, voucherDateField, currencyField,
+        if (_interLocationModel == 'INTER_ENTITY') locationField,
+      ]),
       if (rateFields.isNotEmpty) ...[
         const SizedBox(height: 12),
         SakalFieldRow(isMobile: isMobile, children: rateFields),

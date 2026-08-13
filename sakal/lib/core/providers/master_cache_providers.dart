@@ -240,6 +240,36 @@ final companyDetailsProvider = FutureProvider<Map<String, dynamic>?>((ref) async
   return list.isNotEmpty ? list.first : null;
 });
 
+// Governs whether a Finance voucher screen shows a Location picker at all —
+// SIMPLE (the default) means one company-wide P&L/Balance Sheet, so location
+// is just record-keeping and every screen keeps silently inheriting
+// session.locationId as before. Only INTER_ENTITY (each location group is
+// its own entity with its own books) makes the choice actually matter.
+// Defaults to 'SIMPLE' on no-session/fetch failure — the fail-safe that
+// keeps every consuming screen behaving exactly as it does today.
+final interLocationModelProvider = FutureProvider<String>((ref) async {
+  final session = ref.watch(sessionProvider);
+  if (session == null) return 'SIMPLE';
+  final res = await DioClient.instance.get('/ric_companies', queryParameters: {
+    'id': 'eq.${session.companyId}', 'select': 'inter_location_model', 'limit': '1',
+  });
+  final list = List<Map<String, dynamic>>.from(res.data as List);
+  return (list.isNotEmpty ? list.first['inter_location_model'] as String? : null) ?? 'SIMPLE';
+});
+
+// v_user_accessible_locations (127_sales_register_report.sql) already scopes
+// by ric_user_location_access — zero active rows for this user = every
+// location; any active rows = only those. Reused as-is rather than a second
+// query, same convention Sales Register's own Location filter relies on.
+final userAccessibleLocationsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final session = ref.watch(sessionProvider);
+  if (session == null) return [];
+  final res = await DioClient.instance.get('/v_user_accessible_locations', queryParameters: {
+    'select': 'id,location_name', 'order': 'location_name.asc',
+  });
+  return List<Map<String, dynamic>>.from(res.data as List);
+});
+
 // Includes country_code because ChartOfAccounts needs it for division/city lookups.
 // Customer and Supplier screens ignore the extra field — it's harmless.
 final countriesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {

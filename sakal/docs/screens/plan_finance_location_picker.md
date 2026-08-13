@@ -1,6 +1,8 @@
 # Plan: Location picker on Finance vouchers (INTER_ENTITY-only)
 
-Status: **Approved, not yet implemented** — user is running `flutter test` on the current baseline first; implementation starts only after that's confirmed green.
+Status: **Implemented 2026-08-13** — pending `flutter test`/`flutter analyze` verification and manual app testing (see Verification section below).
+
+Implementation note beyond the original design: `finance_voucher_entry_screen.dart` (Payment/Receipt Voucher) never cached a `_locationId` state field at all — it read `session.locationId` directly at every call site (exchange-rate lookups, pending-bills, save, post). Introducing the picker there required adding that field and replacing all of those direct reads with `_locationId`, so a picked location — not just the session default — actually flows through exchange-rate/pending-bills lookups too, not just the header's own `location_id`. Also required overriding the new `interLocationModelProvider` to `'SIMPLE'` in all 4 screens' existing widget-test `overrides()` lists (documented gotcha already known in this codebase: an unmocked provider hits real DioClient during a test).
 
 ## Context
 

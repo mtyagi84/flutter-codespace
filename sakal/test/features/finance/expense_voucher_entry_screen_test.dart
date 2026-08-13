@@ -62,6 +62,10 @@ void main() {
   List<Override> overrides() => [
         expenseVoucherRepositoryProvider.overrideWithValue(mockRepo),
         syncEngineProvider.overrideWithValue(SyncEngine(null)),
+        // SIMPLE (the default) keeps the Location field hidden — matches
+        // every existing assertion in this file, which predates the
+        // Location-picker feature and never expects that field to appear.
+        interLocationModelProvider.overrideWith((ref) async => 'SIMPLE'),
         accountsProvider.overrideWith((ref) async => [
               {'id': 'sup-001', 'account_code': 'SUP-001', 'account_name': 'Test Supplier', 'account_nature': 'Supplier', 'posting_allowed': true},
               {'id': 'exp-001', 'account_code': 'EXP-01', 'account_name': 'Electricity Expense', 'account_nature': 'Expense', 'posting_allowed': true},
