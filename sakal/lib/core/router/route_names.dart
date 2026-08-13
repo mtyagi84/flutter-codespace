@@ -108,6 +108,7 @@ class RouteNames {
   static const String accountLinkSetup     = '/master/account-link-setup';
   static const String accountLinkConfigure = '/master/account-link-configure';
   static const String itemAccountLinks     = '/master/item-account-links';
+  static const String openingBalances      = '/master/opening-balances';
 
   // Finance
   static const String exchangeRates  = '/finance/exchange-rates';

@@ -270,6 +270,38 @@ final userAccessibleLocationsProvider = FutureProvider<List<Map<String, dynamic>
   return List<Map<String, dynamic>>.from(res.data as List);
 });
 
+// Location groups for the current company — used by the Opening Balance
+// screen's group picker (required under INTER_ENTITY) and any future
+// group-scoped screen. Plain table fetch, no offline branch (setup/master
+// data, same online-only convention as accountLinkSetup/taxGroupsProvider).
+final locationGroupsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final session = ref.watch(sessionProvider);
+  if (session == null) return [];
+  final res = await DioClient.instance.get('/ric_location_groups', queryParameters: {
+    'client_id':  'eq.${session.clientId}',
+    'company_id': 'eq.${session.companyId}',
+    'is_deleted': 'eq.false',
+    'select':     'id,group_code,group_name',
+    'order':      'group_name.asc',
+  });
+  return List<Map<String, dynamic>>.from(res.data as List);
+});
+
+// Financial years for the current company — used by the Opening Balance
+// screen's FY picker. Most-recent-first so the active/newest FY defaults
+// to the top of the dropdown.
+final financialYearsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final session = ref.watch(sessionProvider);
+  if (session == null) return [];
+  final res = await DioClient.instance.get('/rim_financial_years', queryParameters: {
+    'client_id':  'eq.${session.clientId}',
+    'company_id': 'eq.${session.companyId}',
+    'select':     'id,fy_name,fy_start_date,fy_end_date,is_active,is_closed',
+    'order':      'fy_start_date.desc',
+  });
+  return List<Map<String, dynamic>>.from(res.data as List);
+});
+
 // Includes country_code because ChartOfAccounts needs it for division/city lookups.
 // Customer and Supplier screens ignore the extra field — it's harmless.
 final countriesProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {

@@ -192,7 +192,8 @@ begin
         (p_client_id, p_company_id, v_ad, 'MST-ALS', 'Account Link Setup',  '/master/account-link-setup',  3, 'FN-MST', 'Finance Masters', 5, false, false, false),
         (p_client_id, p_company_id, v_ad, 'MST-IAL', 'Item Account Links',  '/master/item-account-links',  4, 'FN-MST', 'Finance Masters', 5, false, false, false),
         (p_client_id, p_company_id, v_ad, 'MST-CHG', 'Additional Charges',  '/master/additional-charges',  5, 'FN-MST', 'Finance Masters', 5, false, false, false),
-        (p_client_id, p_company_id, v_ad, 'FN-EX',   'Exchange Rates',      '/finance/exchange-rates',     6, 'FN-MST', 'Finance Masters', 5, false, false, false)
+        (p_client_id, p_company_id, v_ad, 'FN-EX',   'Exchange Rates',      '/finance/exchange-rates',     6, 'FN-MST', 'Finance Masters', 5, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-OB',  'Opening Balance',     '/master/opening-balances',    7, 'FN-MST', 'Finance Masters', 5, false, false, true)
     on conflict (client_id, company_id, feature_code) do update
         set module_id       = excluded.module_id,
             feature_name    = excluded.feature_name,
