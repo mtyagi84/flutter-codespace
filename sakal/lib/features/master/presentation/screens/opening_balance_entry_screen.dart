@@ -509,14 +509,16 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
         final defaultCurrency = currencies is Map<String, dynamic> ? currencies['currency_id'] as String? : null;
         sheet.appendRow([
           xls.TextCellValue(groupName), xls.TextCellValue(code), xls.TextCellValue(name),
-          xls.TextCellValue('0'), xls.TextCellValue('0'), xls.TextCellValue('0'),
+          xls.DoubleCellValue(0), xls.DoubleCellValue(0), xls.DoubleCellValue(0),
           xls.TextCellValue(defaultCurrency ?? ''), xls.TextCellValue(''), xls.TextCellValue(''), xls.TextCellValue(''),
         ]);
       } else {
         for (final l in existing) {
           sheet.appendRow([
             xls.TextCellValue(groupName), xls.TextCellValue(code), xls.TextCellValue(name),
-            xls.TextCellValue(l.baseAmountCtrl.text), xls.TextCellValue(l.localAmountCtrl.text), xls.TextCellValue(l.partyAmountCtrl.text),
+            xls.DoubleCellValue(double.tryParse(l.baseAmountCtrl.text) ?? 0),
+            xls.DoubleCellValue(double.tryParse(l.localAmountCtrl.text) ?? 0),
+            xls.DoubleCellValue(double.tryParse(l.partyAmountCtrl.text) ?? 0),
             xls.TextCellValue(l.partyCurrencyCtrl.text), xls.TextCellValue(l.obType),
             xls.TextCellValue(l.invBillNoCtrl.text), xls.TextCellValue(l.invBillDate != null ? _fmtDate(l.invBillDate!) : ''),
           ]);

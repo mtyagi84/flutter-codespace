@@ -36,13 +36,15 @@ Future<void> _saveWorkbookBytes(List<int> bytes, String filename, String dialogT
 /// package was already a dependency before this engine, just never used
 /// for a report-shaped multi-row export until now.
 ///
-/// Cells are written as `TextCellValue` only, not the numeric/date
-/// `CellValue` subclasses the package also exposes — a deliberate,
-/// conservative choice: `TextCellValue` is the one cell type already
-/// confirmed working in this exact pinned package version elsewhere in
-/// the codebase. Native numeric Excel cells (so a user could sum a column
-/// in Excel itself) are a safe follow-up enhancement, not attempted here
-/// without a way to verify the additional API surface compiles.
+/// NUMBER columns are written as real `xls.DoubleCellValue` cells (not
+/// `TextCellValue`) so the downloaded sheet supports SUM/formulas directly
+/// — Excel's own "number stored as text" warning was a real bug, not a
+/// display nuance (found live 2026-08-14). A NUMBER column that also
+/// carries a per-row currency code (`currencyCodeColumn`, e.g. Account
+/// Ledger's Party Amount) drops the inline "CODE 123.45" text prefix in
+/// the Excel export specifically — the currency is already a separate
+/// column on every report that uses this — so the amount cell can stay a
+/// pure number. Every other column type stays `TextCellValue`.
 ///
 /// Same v1 note as report_pdf_export.dart: generation runs synchronously,
 /// not via `compute()` — `max_export_rows` already bounds the work.
@@ -66,13 +68,13 @@ class ReportExcelExport {
         // the synthetic subtotal row only carries a value for its
         // aggregate columns plus the one group-label column.
         sheet.appendRow(visibleColumns.map((c) {
-          if (c.aggregateFn != null) return xls.TextCellValue(_cellText(c, row));
+          if (c.aggregateFn != null) return _cellValue(c, row);
           final v = row[c.columnKey];
           return xls.TextCellValue(v != null ? 'Subtotal: $v' : '');
         }).toList());
         continue;
       }
-      sheet.appendRow(visibleColumns.map((c) => xls.TextCellValue(_cellText(c, row))).toList());
+      sheet.appendRow(visibleColumns.map((c) => _cellValue(c, row)).toList());
     }
 
     if (totalsRow != null) {
@@ -80,7 +82,7 @@ class ReportExcelExport {
         final c = visibleColumns[i];
         if (i == 0) return xls.TextCellValue('Total');
         if (c.aggregateFn == null) return xls.TextCellValue('');
-        return xls.TextCellValue(_cellText(c, totalsRow));
+        return _cellValue(c, totalsRow);
       }));
     }
 
@@ -128,16 +130,16 @@ class ReportExcelExport {
       final values = pivot.rowKeyValues[rowKey]!;
       sheet.appendRow([
         ...values.map((v) => xls.TextCellValue('${v ?? ''}')),
-        ...pivot.dimensionValues.map((d) => xls.TextCellValue((pivot.cells['$rowKey||$d'] ?? 0).toStringAsFixed(2))),
-        xls.TextCellValue((pivot.rowTotals[rowKey] ?? 0).toStringAsFixed(2)),
+        ...pivot.dimensionValues.map((d) => xls.DoubleCellValue((pivot.cells['$rowKey||$d'] ?? 0).toDouble())),
+        xls.DoubleCellValue((pivot.rowTotals[rowKey] ?? 0).toDouble()),
       ]);
     }
 
     sheet.appendRow([
       xls.TextCellValue('Total'),
       ...List.generate(pivotCols.rowGroupCols.length - 1, (_) => xls.TextCellValue('')),
-      ...pivot.dimensionValues.map((d) => xls.TextCellValue((pivot.columnTotals[d] ?? 0).toStringAsFixed(2))),
-      xls.TextCellValue(pivot.grandTotal.toStringAsFixed(2)),
+      ...pivot.dimensionValues.map((d) => xls.DoubleCellValue((pivot.columnTotals[d] ?? 0).toDouble())),
+      xls.DoubleCellValue(pivot.grandTotal.toDouble()),
     ]);
 
     final bytes = workbook.encode();
@@ -155,5 +157,15 @@ class ReportExcelExport {
       return code != null ? '$code $numText' : numText;
     }
     return '$value';
+  }
+
+  /// Real numeric cell for a NUMBER column (so Excel SUM/formulas work);
+  /// `TextCellValue` for everything else. See the class doc comment above.
+  static xls.CellValue _cellValue(ReportColumn c, ReportRow row) {
+    final value = row[c.columnKey];
+    if (c.dataType == 'NUMBER' && value is num) {
+      return xls.DoubleCellValue(value.toDouble());
+    }
+    return xls.TextCellValue(_cellText(c, row));
   }
 }
