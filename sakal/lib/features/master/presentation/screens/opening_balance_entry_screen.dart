@@ -44,6 +44,10 @@ class _OBLineRow implements DisposableRow {
   // 'Customer'/'Supplier'/'Cash'/'Bank'/'General'/etc. (rim_accounts.account_nature)
   // — gates whether Bill No/Bill Date are editable on this row.
   String accountNature = '';
+  // Immediate parent group's account_name — display-only, never uploaded/
+  // matched against (Account Code is still the only match key), helps the
+  // user identify an account by its group context on-screen and in Excel.
+  String groupName = '';
   final baseAmountCtrl = TextEditingController(text: '0');
   final localAmountCtrl = TextEditingController(text: '0');
   final partyAmountCtrl = TextEditingController(text: '0');
@@ -182,6 +186,8 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
         final acc = r['rim_accounts'] as Map<String, dynamic>?;
         row.accountDisplay = acc != null ? '[${acc['account_code']}] ${acc['account_name']}' : '';
         row.accountNature = acc?['account_nature'] as String? ?? '';
+        final parent = acc?['parent'] as Map<String, dynamic>?;
+        row.groupName = parent?['account_name'] as String? ?? '';
         row.baseAmountCtrl.text = '${r['base_amount'] ?? 0}';
         row.localAmountCtrl.text = '${r['local_amount'] ?? 0}';
         row.partyAmountCtrl.text = '${r['party_amount'] ?? 0}';
@@ -219,6 +225,8 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
       row.accountId = account['id'] as String?;
       row.accountDisplay = FinanceAccountPicker.displayString(account);
       row.accountNature = account['account_nature'] as String? ?? '';
+      final parent = account['parent'] as Map<String, dynamic>?;
+      row.groupName = parent?['account_name'] as String? ?? '';
       final currencies = account['rim_currencies'];
       final currencyCode = currencies is Map<String, dynamic> ? currencies['currency_id'] as String? : null;
       if (row.partyCurrencyCtrl.text.isEmpty && currencyCode != null) {
@@ -252,6 +260,11 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
         _showSnack('Enter a Party Currency for "${l.accountDisplay}".', color: AppColors.negative);
         return;
       }
+    }
+    final validationError = _validateLines(validLines);
+    if (validationError != null) {
+      _showSnack(validationError, color: AppColors.negative);
+      return;
     }
 
     setState(() { _saving = true; _actionError = null; });
@@ -288,6 +301,46 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
         });
       }
     }
+  }
+
+  // Enforced at Save, not at Excel upload (explicit instruction — upload
+  // always succeeds; the user finds out exactly which account is wrong
+  // when they try to save, not mid-upload). Returns the first problem
+  // found, or null if every line is clean.
+  String? _validateLines(List<_OBLineRow> validLines) {
+    for (final l in validLines) {
+      final allZero = l.baseAmount == 0 && l.localAmount == 0 && l.partyAmount == 0;
+      final allNonZero = l.baseAmount != 0 && l.localAmount != 0 && l.partyAmount != 0;
+      if (!allZero && !allNonZero) {
+        return 'Account "${l.accountDisplay}": enter Base, Local, and Party amounts together, or leave all three as 0.';
+      }
+    }
+
+    final byAccount = <String, List<_OBLineRow>>{};
+    for (final l in validLines) {
+      byAccount.putIfAbsent(l.accountId!, () => []).add(l);
+    }
+    for (final rows in byAccount.values) {
+      if (rows.length <= 1) continue;
+      final nature = rows.first.accountNature;
+      if (nature != 'Customer' && nature != 'Supplier') {
+        return 'Account "${rows.first.accountDisplay}" has ${rows.length} lines — only Customer/Supplier accounts can have more than one line.';
+      }
+      // Duplicate Bill No + Bill Date within the same account — only
+      // checked when a Bill No was actually entered; two blank-bill rows
+      // aren't a "duplicate reference," just missing data on both.
+      final seen = <String>{};
+      for (final r in rows) {
+        final billNo = r.invBillNoCtrl.text.trim();
+        if (billNo.isEmpty) continue;
+        final key = '${billNo.toLowerCase()}|${r.invBillDate != null ? _fmtDate(r.invBillDate!) : ''}';
+        if (!seen.add(key)) {
+          final dateStr = r.invBillDate != null ? ' dated ${_fmtDate(r.invBillDate!)}' : '';
+          return 'Account "${r.accountDisplay}" has duplicate Invoice/Bill No "$billNo"$dateStr.';
+        }
+      }
+    }
+    return null;
   }
 
   Future<void> _uploadExcel() async {
@@ -337,6 +390,17 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
       // the current worksheet (see _downloadTemplate), so re-uploading the
       // edited copy should reflect exactly what's in the sheet, not pile
       // duplicate rows for the same account on top of what was already here.
+      //
+      // A row is treated as an untouched placeholder (silently skipped, no
+      // error) ONLY when Opening Balance Type is blank — that's the one
+      // signal a freshly-downloaded, never-edited row always has. Once a
+      // real Dr/Cr type is present the row is a deliberate entry and is
+      // uploaded as-is, INCLUDING an explicit zero balance — a user
+      // correcting a wrongly-uploaded non-zero figure back to 0 needs that
+      // to actually save, not be silently dropped. Duplicate-account/
+      // duplicate-bill/all-3-or-none-amount checks are NOT done here —
+      // per explicit instruction, upload always succeeds; those are
+      // enforced at Save time instead, with a clear per-account message.
       final parsedRows = <_OBLineRow>[];
       var skippedBlank = 0;
       final errors = <String>[];
@@ -347,25 +411,20 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
         final account = byCode[code.toUpperCase()];
         if (account == null) { errors.add('Row ${r + 1}: account code "$code" not found (or not a postable account).'); continue; }
         final type = cellStr(row, idxType);
+        if (type.isEmpty) { skippedBlank++; continue; }
         if (type != 'Dr' && type != 'Cr') { errors.add('Row ${r + 1}: Opening Balance Type must be "Dr" or "Cr", got "$type".'); continue; }
 
         final baseStr  = idxBase == -1 ? '' : cellStr(row, idxBase);
         final localStr = idxLocal == -1 ? '' : cellStr(row, idxLocal);
         final partyStr = idxParty == -1 ? '' : cellStr(row, idxParty);
         final billNoStr = idxBillNo == -1 ? '' : cellStr(row, idxBillNo);
-        final base  = double.tryParse(baseStr) ?? 0;
-        final local = double.tryParse(localStr) ?? 0;
-        final party = double.tryParse(partyStr) ?? 0;
-        // Every account gets an export row even with nothing entered yet
-        // (see _downloadTemplate) — an untouched placeholder row (every
-        // amount 0, no bill no) is skipped rather than becoming a real
-        // persisted zero-value line.
-        if (base == 0 && local == 0 && party == 0 && billNoStr.isEmpty) { skippedBlank++; continue; }
 
         final newRow = _OBLineRow();
         newRow.accountId = account['id'] as String?;
         newRow.accountDisplay = FinanceAccountPicker.displayString(account);
         newRow.accountNature = account['account_nature'] as String? ?? '';
+        final parent = account['parent'] as Map<String, dynamic>?;
+        newRow.groupName = parent?['account_name'] as String? ?? '';
         newRow.baseAmountCtrl.text = baseStr.isEmpty ? '0' : baseStr;
         newRow.localAmountCtrl.text = localStr.isEmpty ? '0' : localStr;
         newRow.partyAmountCtrl.text = partyStr.isEmpty ? '0' : partyStr;
@@ -417,7 +476,7 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
     final sheetName = workbook.getDefaultSheet()!;
     final sheet = workbook[sheetName];
     const headers = [
-      'Account Code', 'Account Name', 'Base Amount', 'Local Amount', 'Party Amount',
+      'Group Name', 'Account Code', 'Account Name', 'Base Amount', 'Local Amount', 'Party Amount',
       'Party Currency', 'Opening Balance Type', 'Invoice/Bill No', 'Invoice/Bill Date',
     ];
     sheet.appendRow(headers.map((h) => xls.TextCellValue(h)).toList());
@@ -427,6 +486,9 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
     // an account with several, one blank amount row for an account with
     // none yet — so the user edits/fills the real sheet instead of
     // starting from a blank template and re-typing every account code.
+    // Group Name is display-only context (helps identify an account by its
+    // parent group) — never matched against on upload, Account Code alone
+    // is the match key, same as Account Name already was.
     final linesByAccount = <String, List<_OBLineRow>>{};
     for (final l in _lines) {
       if (l.accountId == null) continue;
@@ -436,6 +498,8 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
       final accountId = account['id'] as String;
       final code = account['account_code'] as String? ?? '';
       final name = account['account_name'] as String? ?? '';
+      final parent = account['parent'] as Map<String, dynamic>?;
+      final groupName = parent?['account_name'] as String? ?? '';
       final existing = linesByAccount[accountId];
       if (existing == null || existing.isEmpty) {
         // Party Currency is always the account's own account_currency_id —
@@ -444,14 +508,14 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
         final currencies = account['rim_currencies'];
         final defaultCurrency = currencies is Map<String, dynamic> ? currencies['currency_id'] as String? : null;
         sheet.appendRow([
-          xls.TextCellValue(code), xls.TextCellValue(name),
+          xls.TextCellValue(groupName), xls.TextCellValue(code), xls.TextCellValue(name),
           xls.TextCellValue('0'), xls.TextCellValue('0'), xls.TextCellValue('0'),
           xls.TextCellValue(defaultCurrency ?? ''), xls.TextCellValue(''), xls.TextCellValue(''), xls.TextCellValue(''),
         ]);
       } else {
         for (final l in existing) {
           sheet.appendRow([
-            xls.TextCellValue(code), xls.TextCellValue(name),
+            xls.TextCellValue(groupName), xls.TextCellValue(code), xls.TextCellValue(name),
             xls.TextCellValue(l.baseAmountCtrl.text), xls.TextCellValue(l.localAmountCtrl.text), xls.TextCellValue(l.partyAmountCtrl.text),
             xls.TextCellValue(l.partyCurrencyCtrl.text), xls.TextCellValue(l.obType),
             xls.TextCellValue(l.invBillNoCtrl.text), xls.TextCellValue(l.invBillDate != null ? _fmtDate(l.invBillDate!) : ''),
@@ -629,12 +693,37 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
     // (the original implementation) let fields drop to a second line even
     // on wide desktop viewports — this is the fix.
     final lineWidgets = visible.map((row) => _buildLineCard(row, style, bare, isMobile)).toList();
+    // Total Debit/Credit across ALL lines (not just the search-filtered
+    // subset), Base and Local only — Party amounts are in each account's
+    // own currency, so summing them across accounts would mix currencies
+    // meaninglessly. Lets the user cross-check against their own Excel
+    // sheet's own totals.
+    var totalBaseDr = 0.0, totalBaseCr = 0.0, totalLocalDr = 0.0, totalLocalCr = 0.0;
+    for (final l in _lines) {
+      if (l.accountId == null) continue;
+      if (l.obType == 'Dr') {
+        totalBaseDr += l.baseAmount;
+        totalLocalDr += l.localAmount;
+      } else {
+        totalBaseCr += l.baseAmount;
+        totalLocalCr += l.localAmount;
+      }
+    }
+    String fmt(double v) => v.toStringAsFixed(2);
+
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         const Expanded(child: Text('Opening Balance Lines', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700))),
         if (_editable) IconButton(onPressed: _addLine, icon: const Icon(Icons.add_circle_outline), tooltip: 'Add Line'),
       ]),
-      const SizedBox(height: 8),
+      if (_lines.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Wrap(spacing: 16, runSpacing: 4, children: [
+            Text('Base — Dr ${fmt(totalBaseDr)} / Cr ${fmt(totalBaseCr)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+            Text('Local — Dr ${fmt(totalLocalDr)} / Cr ${fmt(totalLocalCr)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+          ]),
+        ),
       SakalFieldCard(
         label: 'Search', editable: true,
         child: TextFormField(
@@ -669,6 +758,8 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
   // Row below, so the two stay pixel-aligned.
   Widget _buildLinesHeader() {
     return SakalTableHeaderBar(cells: [
+      SizedBox(width: 180, child: SakalTableHeaderBar.label('Group')),
+      const SizedBox(width: 8),
       SizedBox(width: 320, child: SakalTableHeaderBar.label('Account')),
       const SizedBox(width: 8),
       SizedBox(width: 90, child: SakalTableHeaderBar.label('Type')),
@@ -694,6 +785,7 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
     // reference. Column stays in the layout either way (alignment), the
     // input itself is disabled when it doesn't apply.
     final showBill = row.accountNature == 'Customer' || row.accountNature == 'Supplier';
+    final groupField = SakalFieldCard.readOnly(label: 'Group', value: row.groupName.isEmpty ? '—' : row.groupName);
     final accountField = SakalFieldCard(
       label: 'Account', required: true, editable: _editable,
       child: FinanceAccountPicker(
@@ -754,6 +846,8 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
         onDelete: _editable ? () => _removeLine(row) : null,
         fields: const [],
         body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          groupField,
+          const SizedBox(height: 8),
           accountField,
           const SizedBox(height: 8),
           ...pairedRows,
@@ -767,6 +861,8 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
       padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(width: 180, child: groupField),
+        const SizedBox(width: 8),
         SizedBox(width: 320, child: accountField),
         const SizedBox(width: 8),
         SizedBox(width: 90, child: typeField),

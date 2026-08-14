@@ -17,7 +17,8 @@ class OpeningBalanceRemoteDs {
       'is_deleted': 'eq.false',
       'select':     'id,account_id,fy_id,location_group_id,base_amount,local_amount,'
                     'party_amount,party_currency,ob_type,inv_bill_no,inv_bill_date,'
-                    'rim_accounts!account_id(account_code,account_name,account_nature)',
+                    'rim_accounts!account_id(account_code,account_name,account_nature,'
+                    'parent:rim_accounts!parent_id(account_name))',
       'order':      'created_at.asc',
     };
     params['location_group_id'] = locationGroupId != null ? 'eq.$locationGroupId' : 'is.null';
