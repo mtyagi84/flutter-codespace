@@ -522,7 +522,7 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
         final defaultCurrency = currencies is Map<String, dynamic> ? currencies['currency_id'] as String? : null;
         sheet.appendRow([
           xls.TextCellValue(groupName), xls.TextCellValue(code), xls.TextCellValue(name),
-          xls.DoubleCellValue(0), xls.DoubleCellValue(0), xls.DoubleCellValue(0),
+          const xls.DoubleCellValue(0), const xls.DoubleCellValue(0), const xls.DoubleCellValue(0),
           xls.TextCellValue(defaultCurrency ?? ''), xls.TextCellValue(''), xls.TextCellValue(''), xls.TextCellValue(''),
         ]);
       } else {
