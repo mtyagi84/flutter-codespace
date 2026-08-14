@@ -15,10 +15,17 @@ class OpeningBalanceRemoteDs {
       'company_id': 'eq.$companyId',
       'fy_id':      'eq.$fyId',
       'is_deleted': 'eq.false',
+      // Deliberately a single-level embed only — a two-level-deep
+      // self-referencing embed (rid_opening_balance_lines -> rim_accounts
+      // -> rim_accounts via parent_id) turned out to be unreliable against
+      // real PostgREST (found live 2026-08-14, "Unable to load opening
+      // balance lines" on every screen open). Group Name is resolved
+      // client-side instead, from the already-loaded, already-proven
+      // single-level `parent` embed on accountsProvider's own account list
+      // (see _loadLines()'s _groupNameForAccount lookup).
       'select':     'id,account_id,fy_id,location_group_id,base_amount,local_amount,'
                     'party_amount,party_currency,ob_type,inv_bill_no,inv_bill_date,'
-                    'rim_accounts!account_id(account_code,account_name,account_nature,'
-                    'parent:rim_accounts!parent_id(account_name))',
+                    'rim_accounts!account_id(account_code,account_name,account_nature)',
       'order':      'created_at.asc',
     };
     params['location_group_id'] = locationGroupId != null ? 'eq.$locationGroupId' : 'is.null';

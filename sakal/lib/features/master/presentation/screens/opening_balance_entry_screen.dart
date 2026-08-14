@@ -168,6 +168,20 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
     }
   }
 
+  // Group Name lookup keyed off the already-loaded, already-proven
+  // single-level `parent` embed on _postableAccounts (accountsProvider) —
+  // see the "single-level embed only" note in OpeningBalanceRemoteDs.getLines().
+  String _groupNameForAccount(String? accountId) {
+    if (accountId == null) return '';
+    for (final a in _postableAccounts) {
+      if (a['id'] == accountId) {
+        final parent = a['parent'] as Map<String, dynamic>?;
+        return parent?['account_name'] as String? ?? '';
+      }
+    }
+    return '';
+  }
+
   Future<void> _loadLines() async {
     if (_fyId == null) return;
     final session = ref.read(sessionProvider)!;
@@ -186,8 +200,7 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
         final acc = r['rim_accounts'] as Map<String, dynamic>?;
         row.accountDisplay = acc != null ? '[${acc['account_code']}] ${acc['account_name']}' : '';
         row.accountNature = acc?['account_nature'] as String? ?? '';
-        final parent = acc?['parent'] as Map<String, dynamic>?;
-        row.groupName = parent?['account_name'] as String? ?? '';
+        row.groupName = _groupNameForAccount(row.accountId);
         row.baseAmountCtrl.text = '${r['base_amount'] ?? 0}';
         row.localAmountCtrl.text = '${r['local_amount'] ?? 0}';
         row.partyAmountCtrl.text = '${r['party_amount'] ?? 0}';
