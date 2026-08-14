@@ -438,10 +438,15 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
       final name = account['account_name'] as String? ?? '';
       final existing = linesByAccount[accountId];
       if (existing == null || existing.isEmpty) {
+        // Party Currency is always the account's own account_currency_id —
+        // default it here too, not just when a line is picked interactively
+        // on-screen, so a blank row doesn't leave the user guessing.
+        final currencies = account['rim_currencies'];
+        final defaultCurrency = currencies is Map<String, dynamic> ? currencies['currency_id'] as String? : null;
         sheet.appendRow([
           xls.TextCellValue(code), xls.TextCellValue(name),
           xls.TextCellValue('0'), xls.TextCellValue('0'), xls.TextCellValue('0'),
-          xls.TextCellValue(''), xls.TextCellValue(''), xls.TextCellValue(''), xls.TextCellValue(''),
+          xls.TextCellValue(defaultCurrency ?? ''), xls.TextCellValue(''), xls.TextCellValue(''), xls.TextCellValue(''),
         ]);
       } else {
         for (final l in existing) {
