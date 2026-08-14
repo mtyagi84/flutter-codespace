@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -62,7 +61,10 @@ class _OBLineRow implements DisposableRow {
 }
 
 class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryScreen>
-    with ScreenPermissionMixin<OpeningBalanceEntryScreen>, DeferredRowDisposal<OpeningBalanceEntryScreen> {
+    with
+        ScreenPermissionMixin<OpeningBalanceEntryScreen>,
+        ScreenHeaderMixin<OpeningBalanceEntryScreen>,
+        DeferredRowDisposal<OpeningBalanceEntryScreen> {
   @override
   String get screenName => '/master/opening-balances';
 
