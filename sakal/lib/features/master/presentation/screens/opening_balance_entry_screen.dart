@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,7 @@ import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
+import '../../../../core/reporting/web_download.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/app_logger.dart';
@@ -16,6 +18,9 @@ import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_header_action_button.dart';
+import '../../../../core/widgets/sakal_line_item_card.dart';
+import '../../../../core/widgets/sakal_scrollable_table.dart';
+import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../../finance/presentation/widgets/finance_account_picker.dart';
 import '../providers/opening_balance_providers.dart';
 
@@ -82,6 +87,8 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
   List<Map<String, dynamic>> _postableAccounts = const [];
 
   final List<_OBLineRow> _lines = [];
+  final _searchCtrl = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -95,7 +102,20 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
       l.dispose();
     }
     disposeDeferredRows();
+    _searchCtrl.dispose();
     super.dispose();
+  }
+
+  // Client-side filter over already-loaded lines — a company can have
+  // thousands of accounts, so a search box is needed to find one to edit
+  // without scrolling. Matches on account code/name (from accountDisplay,
+  // e.g. "[111001001] Cash USD") or Invoice/Bill No.
+  List<_OBLineRow> get _visibleLines {
+    if (_searchQuery.isEmpty) return _lines;
+    final q = _searchQuery.toLowerCase();
+    return _lines.where((l) =>
+        l.accountDisplay.toLowerCase().contains(q) ||
+        l.invBillNoCtrl.text.toLowerCase().contains(q)).toList();
   }
 
   Future<void> _init() async {
@@ -344,9 +364,22 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
     sheet.appendRow(headers.map((h) => xls.TextCellValue(h)).toList());
     final bytes = workbook.encode();
     if (bytes == null) return;
+    await _saveWorkbookBytes(bytes, 'opening_balance_template.xlsx', 'Save Opening Balance template');
+  }
+
+  // FilePicker.platform.saveFile() goes through Chrome's File System Access
+  // API on web, which requires a still-valid "user activation" — timing-
+  // sensitive enough that it silently fails here. Same fix already proven
+  // in lib/core/reporting/report_excel_export.dart: a Blob+anchor download
+  // on web, FilePicker unchanged on every other platform.
+  Future<void> _saveWorkbookBytes(List<int> bytes, String filename, String dialogTitle) async {
+    if (kIsWeb) {
+      downloadBytesOnWeb(bytes, filename);
+      return;
+    }
     await FilePicker.platform.saveFile(
-      dialogTitle: 'Save Opening Balance template',
-      fileName: 'opening_balance_template.xlsx',
+      dialogTitle: dialogTitle,
+      fileName: filename,
       bytes: Uint8List.fromList(bytes),
       type: FileType.custom, allowedExtensions: ['xlsx'],
     );
@@ -418,7 +451,7 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
                     if (_actionError != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_actionError!, style: const TextStyle(color: AppColors.negative))),
                     _buildHeaderCard(isMobile, style, bare),
                     const SizedBox(height: 20),
-                    _buildLinesSection(style, bare),
+                    _buildLinesSection(isMobile, style, bare),
                   ]),
                 ),
         ),
@@ -472,89 +505,160 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
     );
   }
 
-  Widget _buildLinesSection(TextStyle style, InputDecoration bare) {
+  Widget _buildLinesSection(bool isMobile, TextStyle style, InputDecoration bare) {
+    final visible = _visibleLines;
+    // Computed once, then embedded either as a plain vertical spread
+    // (mobile) or wrapped in SakalScrollableTable (desktop) — see
+    // CLAUDE.md's "Line-items grid" mandatory pattern. A bare Wrap here
+    // (the original implementation) let fields drop to a second line even
+    // on wide desktop viewports — this is the fix.
+    final lineWidgets = visible.map((row) => _buildLineCard(row, style, bare, isMobile)).toList();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         const Expanded(child: Text('Opening Balance Lines', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700))),
         IconButton(onPressed: _addLine, icon: const Icon(Icons.add_circle_outline), tooltip: 'Add Line'),
       ]),
       const SizedBox(height: 8),
-      for (final row in _lines) _buildLineCard(row, style, bare),
+      SakalFieldCard(
+        label: 'Search', editable: true,
+        child: TextFormField(
+          controller: _searchCtrl,
+          decoration: bare.copyWith(
+            hintText: 'Search by account code/name or Invoice/Bill No…',
+            prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
+          ),
+          style: style,
+          onChanged: (v) => setState(() => _searchQuery = v.trim()),
+        ),
+      ),
+      const SizedBox(height: 12),
       if (_lines.isEmpty)
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 24),
           child: Center(child: Text('No lines yet — add one, or upload an Excel sheet.', style: TextStyle(color: AppColors.textSecondary))),
-        ),
+        )
+      else if (visible.isEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Center(child: Text('No lines match this search.', style: TextStyle(color: AppColors.textSecondary))),
+        )
+      else if (isMobile)
+        ...lineWidgets
+      else
+        SakalScrollableTable(header: _buildLinesHeader(), rows: lineWidgets),
     ]);
   }
 
-  Widget _buildLineCard(_OBLineRow row, TextStyle style, InputDecoration bare) {
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          SizedBox(
-            width: 320,
-            child: SakalFieldCard(
-              label: 'Account', required: true, editable: true,
-              child: FinanceAccountPicker(
-                accounts: _postableAccounts,
-                initialValue: row.accountDisplay.isEmpty ? null : row.accountDisplay,
-                focusNode: row.accountFocusNode,
-                decoration: bare,
-                onSelected: (a) => _onAccountSelected(row, a),
-              ),
-            ),
-          ),
-          SizedBox(
-            width: 90,
-            child: SakalFieldCard(
-              label: 'Type', editable: true,
-              child: DropdownButtonFormField<String>(
-                initialValue: row.obType,
-                isExpanded: true, isDense: true, itemHeight: null,
-                decoration: bare, style: style,
-                items: const [DropdownMenuItem(value: 'Dr', child: Text('Dr')), DropdownMenuItem(value: 'Cr', child: Text('Cr'))],
-                onChanged: (v) => setState(() => row.obType = v ?? 'Dr'),
-              ),
-            ),
-          ),
-          SizedBox(width: 110, child: _amountField('Base Amount', row.baseAmountCtrl, bare)),
-          SizedBox(width: 110, child: _amountField('Local Amount', row.localAmountCtrl, bare)),
-          SizedBox(width: 110, child: _amountField('Party Amount', row.partyAmountCtrl, bare)),
-          SizedBox(
-            width: 90,
-            child: SakalFieldCard(
-              label: 'Party Ccy', required: true, editable: true,
-              child: TextFormField(controller: row.partyCurrencyCtrl, decoration: bare, style: style),
-            ),
-          ),
-          SizedBox(
-            width: 140,
-            child: SakalFieldCard(
-              label: 'Bill No', editable: true,
-              child: TextFormField(controller: row.invBillNoCtrl, decoration: bare, style: style),
-            ),
-          ),
-          SizedBox(
-            width: 130,
-            child: SakalFieldCard(
-              label: 'Bill Date', editable: true,
-              child: InkWell(
-                onTap: () async {
-                  final d = await showDatePicker(context: context, initialDate: row.invBillDate ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
-                  if (d != null) setState(() => row.invBillDate = d);
-                },
-                child: Text(row.invBillDate != null ? _fmtDate(row.invBillDate!) : '—', style: style),
-              ),
-            ),
-          ),
-          IconButton(onPressed: () => _removeLine(row), icon: const Icon(Icons.delete_outline, color: AppColors.negative), tooltip: 'Remove'),
-        ]),
+  // Same left-to-right column order/widths as _buildLineCard's own desktop
+  // Row below, so the two stay pixel-aligned.
+  Widget _buildLinesHeader() {
+    return SakalTableHeaderBar(cells: [
+      SizedBox(width: 320, child: SakalTableHeaderBar.label('Account')),
+      const SizedBox(width: 8),
+      SizedBox(width: 90, child: SakalTableHeaderBar.label('Type')),
+      const SizedBox(width: 8),
+      SizedBox(width: 110, child: SakalTableHeaderBar.label('Base Amount')),
+      const SizedBox(width: 8),
+      SizedBox(width: 110, child: SakalTableHeaderBar.label('Local Amount')),
+      const SizedBox(width: 8),
+      SizedBox(width: 110, child: SakalTableHeaderBar.label('Party Amount')),
+      const SizedBox(width: 8),
+      SizedBox(width: 90, child: SakalTableHeaderBar.label('Party Ccy')),
+      const SizedBox(width: 8),
+      SizedBox(width: 140, child: SakalTableHeaderBar.label('Bill No')),
+      const SizedBox(width: 8),
+      SizedBox(width: 130, child: SakalTableHeaderBar.label('Bill Date')),
+      const SizedBox(width: 40), // reserves the delete-icon column's width
+    ]);
+  }
+
+  Widget _buildLineCard(_OBLineRow row, TextStyle style, InputDecoration bare, bool isMobile) {
+    final accountField = SakalFieldCard(
+      label: 'Account', required: true, editable: true,
+      child: FinanceAccountPicker(
+        accounts: _postableAccounts,
+        initialValue: row.accountDisplay.isEmpty ? null : row.accountDisplay,
+        focusNode: row.accountFocusNode,
+        decoration: bare,
+        onSelected: (a) => _onAccountSelected(row, a),
       ),
+    );
+    final typeField = SakalFieldCard(
+      label: 'Type', editable: true,
+      child: DropdownButtonFormField<String>(
+        initialValue: row.obType,
+        isExpanded: true, isDense: true, itemHeight: null,
+        decoration: bare, style: style,
+        items: const [DropdownMenuItem(value: 'Dr', child: Text('Dr')), DropdownMenuItem(value: 'Cr', child: Text('Cr'))],
+        onChanged: (v) => setState(() => row.obType = v ?? 'Dr'),
+      ),
+    );
+    final baseField = _amountField('Base Amount', row.baseAmountCtrl, bare);
+    final localField = _amountField('Local Amount', row.localAmountCtrl, bare);
+    final partyField = _amountField('Party Amount', row.partyAmountCtrl, bare);
+    final currencyField = SakalFieldCard(
+      label: 'Party Ccy', required: true, editable: true,
+      child: TextFormField(controller: row.partyCurrencyCtrl, decoration: bare, style: style),
+    );
+    final billNoField = SakalFieldCard(
+      label: 'Bill No', editable: true,
+      child: TextFormField(controller: row.invBillNoCtrl, decoration: bare, style: style),
+    );
+    final billDateField = SakalFieldCard(
+      label: 'Bill Date', editable: true,
+      child: InkWell(
+        onTap: () async {
+          final d = await showDatePicker(context: context, initialDate: row.invBillDate ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
+          if (d != null) setState(() => row.invBillDate = d);
+        },
+        child: Text(row.invBillDate != null ? _fmtDate(row.invBillDate!) : '—', style: style),
+      ),
+    );
+
+    if (isMobile) {
+      // 2-column grid instead of a loose Wrap — same convention as GRN's
+      // own mobile line-card fix (see CLAUDE.md's "Line-items grid").
+      final secondaryFields = <Widget>[typeField, baseField, localField, partyField, currencyField, billNoField, billDateField];
+      final pairedRows = <Widget>[];
+      for (var i = 0; i < secondaryFields.length; i += 2) {
+        pairedRows.add(SakalFieldRow(isMobile: true, children: secondaryFields.sublist(i, (i + 2).clamp(0, secondaryFields.length))));
+        if (i + 2 < secondaryFields.length) pairedRows.add(const SizedBox(height: 8));
+      }
+      return SakalLineItemCard(
+        title: row.accountDisplay.isEmpty ? 'New Line' : row.accountDisplay,
+        onDelete: () => _removeLine(row),
+        fields: const [],
+        body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          accountField,
+          const SizedBox(height: 8),
+          ...pairedRows,
+        ]),
+      );
+    }
+
+    // Desktop — a continuous row under _buildLinesHeader's dark bar, same
+    // column widths so the two stay pixel-aligned.
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(width: 320, child: accountField),
+        const SizedBox(width: 8),
+        SizedBox(width: 90, child: typeField),
+        const SizedBox(width: 8),
+        SizedBox(width: 110, child: baseField),
+        const SizedBox(width: 8),
+        SizedBox(width: 110, child: localField),
+        const SizedBox(width: 8),
+        SizedBox(width: 110, child: partyField),
+        const SizedBox(width: 8),
+        SizedBox(width: 90, child: currencyField),
+        const SizedBox(width: 8),
+        SizedBox(width: 140, child: billNoField),
+        const SizedBox(width: 8),
+        SizedBox(width: 130, child: billDateField),
+        SizedBox(width: 40, child: IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line')),
+      ]),
     );
   }
 

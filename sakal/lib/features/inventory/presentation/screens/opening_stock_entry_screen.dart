@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:excel/excel.dart' as xls;
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
@@ -12,6 +13,7 @@ import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
+import '../../../../core/reporting/web_download.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -410,9 +412,23 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
     sheet.appendRow(headers.map((h) => xls.TextCellValue(h)).toList());
     final bytes = workbook.encode();
     if (bytes == null) return;
+    await _saveWorkbookBytes(bytes, 'opening_stock_template.xlsx', 'Save Opening Stock template');
+  }
+
+  // FilePicker.platform.saveFile() goes through Chrome's File System Access
+  // API on web, which requires a still-valid "user activation" — timing-
+  // sensitive enough that it silently failed here (real bug, caught live).
+  // Same fix already proven in lib/core/reporting/report_excel_export.dart:
+  // a Blob+anchor download on web, FilePicker unchanged on every other
+  // platform.
+  Future<void> _saveWorkbookBytes(List<int> bytes, String filename, String dialogTitle) async {
+    if (kIsWeb) {
+      downloadBytesOnWeb(bytes, filename);
+      return;
+    }
     await FilePicker.platform.saveFile(
-      dialogTitle: 'Save Opening Stock template',
-      fileName: 'opening_stock_template.xlsx',
+      dialogTitle: dialogTitle,
+      fileName: filename,
       bytes: Uint8List.fromList(bytes),
       type: FileType.custom, allowedExtensions: ['xlsx'],
     );
