@@ -41,6 +41,9 @@ class OpeningBalanceEntryScreen extends ConsumerStatefulWidget {
 class _OBLineRow implements DisposableRow {
   String? accountId;
   String accountDisplay = '';
+  // 'Customer'/'Supplier'/'Cash'/'Bank'/'General'/etc. (rim_accounts.account_nature)
+  // — gates whether Bill No/Bill Date are editable on this row.
+  String accountNature = '';
   final baseAmountCtrl = TextEditingController(text: '0');
   final localAmountCtrl = TextEditingController(text: '0');
   final partyAmountCtrl = TextEditingController(text: '0');
@@ -80,11 +83,19 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
   String? _actionError;
 
   String? _fyId;
+  // The FY with the earliest fy_start_date — the only one this screen ever
+  // allows editing. Later years' opening balances are meant to be
+  // auto-generated at FY-closing time (not built yet); until then, picking
+  // a later year in the dropdown just shows whatever exists, read-only.
+  String? _earliestFyId;
   String? _locationGroupId;
   String _interLocationModel = 'SIMPLE';
   List<Map<String, dynamic>> _accessibleGroups = const [];
   List<Map<String, dynamic>> _financialYears = const [];
   List<Map<String, dynamic>> _postableAccounts = const [];
+
+  bool get _isEditableFy => _fyId != null && _fyId == _earliestFyId;
+  bool get _editable => canEdit && _isEditableFy;
 
   final List<_OBLineRow> _lines = [];
   final _searchCtrl = TextEditingController();
@@ -129,11 +140,16 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
       final accounts = await ref.read(accountsProvider.future);
       _postableAccounts = accounts.where((a) => a['posting_allowed'] == true).toList();
 
-      // Default to the active FY if there is one, else the most recent.
-      final active = _financialYears.where((f) => f['is_active'] == true).toList();
-      _fyId = active.isNotEmpty
-          ? active.first['id'] as String
-          : (_financialYears.isNotEmpty ? _financialYears.first['id'] as String : null);
+      // financialYearsProvider orders fy_start_date DESC — the earliest FY
+      // (the only one this screen ever allows editing) is the last entry.
+      // ISO date strings ('YYYY-MM-DD') sort correctly as plain strings.
+      if (_financialYears.isNotEmpty) {
+        final sorted = [..._financialYears]..sort((a, b) => (a['fy_start_date'] as String).compareTo(b['fy_start_date'] as String));
+        _earliestFyId = sorted.first['id'] as String;
+      }
+      // Default to the earliest (editable) year — that's what this screen
+      // is for; other years are reachable via the dropdown, view-only.
+      _fyId = _earliestFyId ?? (_financialYears.isNotEmpty ? _financialYears.first['id'] as String : null);
 
       if (_fyId != null) await _loadLines();
       if (mounted) setState(() => _loading = false);
@@ -165,6 +181,7 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
         row.accountId = r['account_id'] as String?;
         final acc = r['rim_accounts'] as Map<String, dynamic>?;
         row.accountDisplay = acc != null ? '[${acc['account_code']}] ${acc['account_name']}' : '';
+        row.accountNature = acc?['account_nature'] as String? ?? '';
         row.baseAmountCtrl.text = '${r['base_amount'] ?? 0}';
         row.localAmountCtrl.text = '${r['local_amount'] ?? 0}';
         row.partyAmountCtrl.text = '${r['party_amount'] ?? 0}';
@@ -201,15 +218,26 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
     setState(() {
       row.accountId = account['id'] as String?;
       row.accountDisplay = FinanceAccountPicker.displayString(account);
+      row.accountNature = account['account_nature'] as String? ?? '';
       final currencies = account['rim_currencies'];
       final currencyCode = currencies is Map<String, dynamic> ? currencies['currency_id'] as String? : null;
       if (row.partyCurrencyCtrl.text.isEmpty && currencyCode != null) {
         row.partyCurrencyCtrl.text = currencyCode;
       }
+      // Bill No/Date only apply to Customer/Supplier accounts — clear any
+      // stale value left over from picking a different account on this row.
+      if (row.accountNature != 'Customer' && row.accountNature != 'Supplier') {
+        row.invBillNoCtrl.clear();
+        row.invBillDate = null;
+      }
     });
   }
 
   Future<void> _save() async {
+    if (!_isEditableFy) {
+      _showSnack('Only the earliest financial year can be edited.', color: AppColors.negative);
+      return;
+    }
     final validLines = _lines.where((l) => l.accountId != null).toList();
     if (validLines.isEmpty) {
       _showSnack('Add at least one account line.', color: AppColors.negative);
@@ -263,6 +291,10 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
   }
 
   Future<void> _uploadExcel() async {
+    if (!_isEditableFy) {
+      _showSnack('Only the earliest financial year can be edited.', color: AppColors.negative);
+      return;
+    }
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom, allowedExtensions: ['xlsx'], withData: true,
     );
@@ -301,7 +333,12 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
       String cellStr(List<xls.Data?> row, int idx) =>
           (idx == -1 || idx >= row.length) ? '' : (row[idx]?.value?.toString().trim() ?? '');
 
-      var added = 0;
+      // Replace, not append — the template is now a round-trip export of
+      // the current worksheet (see _downloadTemplate), so re-uploading the
+      // edited copy should reflect exactly what's in the sheet, not pile
+      // duplicate rows for the same account on top of what was already here.
+      final parsedRows = <_OBLineRow>[];
+      var skippedBlank = 0;
       final errors = <String>[];
       for (var r = 1; r < sheet.maxRows; r++) {
         final row = sheet.row(r);
@@ -312,28 +349,50 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
         final type = cellStr(row, idxType);
         if (type != 'Dr' && type != 'Cr') { errors.add('Row ${r + 1}: Opening Balance Type must be "Dr" or "Cr", got "$type".'); continue; }
 
+        final baseStr  = idxBase == -1 ? '' : cellStr(row, idxBase);
+        final localStr = idxLocal == -1 ? '' : cellStr(row, idxLocal);
+        final partyStr = idxParty == -1 ? '' : cellStr(row, idxParty);
+        final billNoStr = idxBillNo == -1 ? '' : cellStr(row, idxBillNo);
+        final base  = double.tryParse(baseStr) ?? 0;
+        final local = double.tryParse(localStr) ?? 0;
+        final party = double.tryParse(partyStr) ?? 0;
+        // Every account gets an export row even with nothing entered yet
+        // (see _downloadTemplate) — an untouched placeholder row (every
+        // amount 0, no bill no) is skipped rather than becoming a real
+        // persisted zero-value line.
+        if (base == 0 && local == 0 && party == 0 && billNoStr.isEmpty) { skippedBlank++; continue; }
+
         final newRow = _OBLineRow();
         newRow.accountId = account['id'] as String?;
         newRow.accountDisplay = FinanceAccountPicker.displayString(account);
-        newRow.baseAmountCtrl.text = idxBase == -1 ? '0' : (cellStr(row, idxBase).isEmpty ? '0' : cellStr(row, idxBase));
-        newRow.localAmountCtrl.text = idxLocal == -1 ? '0' : (cellStr(row, idxLocal).isEmpty ? '0' : cellStr(row, idxLocal));
-        newRow.partyAmountCtrl.text = idxParty == -1 ? '0' : (cellStr(row, idxParty).isEmpty ? '0' : cellStr(row, idxParty));
+        newRow.accountNature = account['account_nature'] as String? ?? '';
+        newRow.baseAmountCtrl.text = baseStr.isEmpty ? '0' : baseStr;
+        newRow.localAmountCtrl.text = localStr.isEmpty ? '0' : localStr;
+        newRow.partyAmountCtrl.text = partyStr.isEmpty ? '0' : partyStr;
         final currencies = account['rim_currencies'];
         final defaultCurrency = currencies is Map<String, dynamic> ? currencies['currency_id'] as String? : null;
         final sheetCurrency = idxCurrency == -1 ? '' : cellStr(row, idxCurrency);
         newRow.partyCurrencyCtrl.text = sheetCurrency.isNotEmpty ? sheetCurrency : (defaultCurrency ?? '');
         newRow.obType = type;
-        newRow.invBillNoCtrl.text = idxBillNo == -1 ? '' : cellStr(row, idxBillNo);
-        final billDateStr = idxBillDate == -1 ? '' : cellStr(row, idxBillDate);
-        newRow.invBillDate = billDateStr.isEmpty ? null : DateTime.tryParse(billDateStr);
-        _lines.add(newRow);
-        added++;
+        if (newRow.accountNature == 'Customer' || newRow.accountNature == 'Supplier') {
+          newRow.invBillNoCtrl.text = billNoStr;
+          final billDateStr = idxBillDate == -1 ? '' : cellStr(row, idxBillDate);
+          newRow.invBillDate = billDateStr.isEmpty ? null : DateTime.tryParse(billDateStr);
+        }
+        parsedRows.add(newRow);
       }
 
       if (!mounted) return;
-      setState(() {});
+      for (final l in _lines) {
+        deferRowDisposal(l);
+      }
+      setState(() {
+        _lines
+          ..clear()
+          ..addAll(parsedRows);
+      });
       if (errors.isNotEmpty) {
-        _showSnack('$added row(s) added, ${errors.length} row(s) skipped.', color: Colors.orange);
+        _showSnack('${parsedRows.length} row(s) loaded, ${errors.length} row(s) skipped.', color: Colors.orange);
         await showDialog<void>(
           context: context,
           builder: (_) => AlertDialog(
@@ -343,7 +402,7 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
           ),
         );
       } else {
-        _showSnack('$added row(s) added from Excel.', color: AppColors.positive);
+        _showSnack('${parsedRows.length} row(s) loaded from Excel ($skippedBlank blank row(s) ignored).', color: AppColors.positive);
       }
     } catch (e, st) {
       AppLogger.error('OpeningBalanceExcelUpload', e, st);
@@ -362,6 +421,40 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
       'Party Currency', 'Opening Balance Type', 'Invoice/Bill No', 'Invoice/Bill Date',
     ];
     sheet.appendRow(headers.map((h) => xls.TextCellValue(h)).toList());
+
+    // Pre-filled with every posting-allowed account's CURRENT opening
+    // balance for this FY+Group scope — one row per existing bill-line for
+    // an account with several, one blank amount row for an account with
+    // none yet — so the user edits/fills the real sheet instead of
+    // starting from a blank template and re-typing every account code.
+    final linesByAccount = <String, List<_OBLineRow>>{};
+    for (final l in _lines) {
+      if (l.accountId == null) continue;
+      linesByAccount.putIfAbsent(l.accountId!, () => []).add(l);
+    }
+    for (final account in _postableAccounts) {
+      final accountId = account['id'] as String;
+      final code = account['account_code'] as String? ?? '';
+      final name = account['account_name'] as String? ?? '';
+      final existing = linesByAccount[accountId];
+      if (existing == null || existing.isEmpty) {
+        sheet.appendRow([
+          xls.TextCellValue(code), xls.TextCellValue(name),
+          xls.TextCellValue('0'), xls.TextCellValue('0'), xls.TextCellValue('0'),
+          xls.TextCellValue(''), xls.TextCellValue(''), xls.TextCellValue(''), xls.TextCellValue(''),
+        ]);
+      } else {
+        for (final l in existing) {
+          sheet.appendRow([
+            xls.TextCellValue(code), xls.TextCellValue(name),
+            xls.TextCellValue(l.baseAmountCtrl.text), xls.TextCellValue(l.localAmountCtrl.text), xls.TextCellValue(l.partyAmountCtrl.text),
+            xls.TextCellValue(l.partyCurrencyCtrl.text), xls.TextCellValue(l.obType),
+            xls.TextCellValue(l.invBillNoCtrl.text), xls.TextCellValue(l.invBillDate != null ? _fmtDate(l.invBillDate!) : ''),
+          ]);
+        }
+      }
+    }
+
     final bytes = workbook.encode();
     if (bytes == null) return;
     await _saveWorkbookBytes(bytes, 'opening_balance_template.xlsx', 'Save Opening Balance template');
@@ -399,19 +492,21 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
       title: 'Opening Balance',
       helpText: 'Enter each account\'s opening balance for a financial year — one or more rows per account, '
           'optionally tied to a historical Invoice/Bill No and Date.',
+      // Template/Upload/Save all require the earliest (editable) FY — a
+      // later, view-only year has nothing to export-for-editing or save.
       actions: showDesktopActions
           ? [
-              if (canExcelUpload)
+              if (canExcelUpload && _editable)
                 SakalHeaderActionButton(
                   label: 'Template', icon: Icons.download_outlined, kind: SakalActionKind.neutral,
                   onPressed: _downloadTemplate,
                 ),
-              if (canExcelUpload)
+              if (canExcelUpload && _editable)
                 SakalHeaderActionButton(
                   label: 'Upload Excel', icon: Icons.upload_file_outlined, kind: SakalActionKind.neutral,
                   loading: _uploadingExcel, onPressed: _uploadingExcel ? null : _uploadExcel,
                 ),
-              if (canEdit)
+              if (_editable)
                 SakalHeaderActionButton(
                   label: 'Save', icon: Icons.save_outlined, kind: SakalActionKind.save,
                   loading: _saving, onPressed: _saving ? null : _save,
@@ -432,7 +527,7 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (isMobile && canEdit)
+        if (isMobile && _editable)
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
             child: Wrap(spacing: 8, runSpacing: 8, children: [
@@ -440,6 +535,22 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
               if (canExcelUpload) OutlinedButton.icon(onPressed: _uploadingExcel ? null : _uploadExcel, icon: const Icon(Icons.upload_file_outlined, size: 16), label: const Text('Upload Excel')),
               FilledButton.icon(onPressed: _saving ? null : _save, icon: _saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.save_outlined), label: const Text('Save')),
             ]),
+          ),
+        if (!_isEditableFy && !_loading)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: AppColors.secondary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+              child: const Row(children: [
+                Icon(Icons.info_outline, size: 16, color: AppColors.secondary),
+                SizedBox(width: 8),
+                Expanded(child: Text(
+                  'This is not the earliest financial year — shown read-only. Only the earliest year can be edited.',
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                )),
+              ]),
+            ),
           ),
         Expanded(
           child: _loading
@@ -516,7 +627,7 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         const Expanded(child: Text('Opening Balance Lines', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700))),
-        IconButton(onPressed: _addLine, icon: const Icon(Icons.add_circle_outline), tooltip: 'Add Line'),
+        if (_editable) IconButton(onPressed: _addLine, icon: const Icon(Icons.add_circle_outline), tooltip: 'Add Line'),
       ]),
       const SizedBox(height: 8),
       SakalFieldCard(
@@ -573,45 +684,54 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
   }
 
   Widget _buildLineCard(_OBLineRow row, TextStyle style, InputDecoration bare, bool isMobile) {
+    // Invoice/Bill No + Date only make sense for Customer/Supplier accounts
+    // — a Cash/Bank/General account's opening balance has no bill to
+    // reference. Column stays in the layout either way (alignment), the
+    // input itself is disabled when it doesn't apply.
+    final showBill = row.accountNature == 'Customer' || row.accountNature == 'Supplier';
     final accountField = SakalFieldCard(
-      label: 'Account', required: true, editable: true,
+      label: 'Account', required: true, editable: _editable,
       child: FinanceAccountPicker(
         accounts: _postableAccounts,
         initialValue: row.accountDisplay.isEmpty ? null : row.accountDisplay,
+        enabled: _editable,
         focusNode: row.accountFocusNode,
         decoration: bare,
         onSelected: (a) => _onAccountSelected(row, a),
       ),
     );
     final typeField = SakalFieldCard(
-      label: 'Type', editable: true,
+      label: 'Type', editable: _editable,
       child: DropdownButtonFormField<String>(
         initialValue: row.obType,
         isExpanded: true, isDense: true, itemHeight: null,
         decoration: bare, style: style,
         items: const [DropdownMenuItem(value: 'Dr', child: Text('Dr')), DropdownMenuItem(value: 'Cr', child: Text('Cr'))],
-        onChanged: (v) => setState(() => row.obType = v ?? 'Dr'),
+        onChanged: _editable ? (v) => setState(() => row.obType = v ?? 'Dr') : null,
       ),
     );
-    final baseField = _amountField('Base Amount', row.baseAmountCtrl, bare);
-    final localField = _amountField('Local Amount', row.localAmountCtrl, bare);
-    final partyField = _amountField('Party Amount', row.partyAmountCtrl, bare);
+    final baseField = _amountField('Base Amount', row.baseAmountCtrl, bare, _editable);
+    final localField = _amountField('Local Amount', row.localAmountCtrl, bare, _editable);
+    final partyField = _amountField('Party Amount', row.partyAmountCtrl, bare, _editable);
     final currencyField = SakalFieldCard(
-      label: 'Party Ccy', required: true, editable: true,
-      child: TextFormField(controller: row.partyCurrencyCtrl, decoration: bare, style: style),
+      label: 'Party Ccy', required: true, editable: _editable,
+      child: TextFormField(controller: row.partyCurrencyCtrl, enabled: _editable, decoration: bare, style: style),
     );
     final billNoField = SakalFieldCard(
-      label: 'Bill No', editable: true,
-      child: TextFormField(controller: row.invBillNoCtrl, decoration: bare, style: style),
+      label: 'Bill No', editable: _editable && showBill,
+      child: TextFormField(controller: row.invBillNoCtrl, enabled: _editable && showBill, decoration: bare, style: style),
     );
     final billDateField = SakalFieldCard(
-      label: 'Bill Date', editable: true,
+      label: 'Bill Date', editable: _editable && showBill,
       child: InkWell(
-        onTap: () async {
-          final d = await showDatePicker(context: context, initialDate: row.invBillDate ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
-          if (d != null) setState(() => row.invBillDate = d);
-        },
-        child: Text(row.invBillDate != null ? _fmtDate(row.invBillDate!) : '—', style: style),
+        onTap: (_editable && showBill)
+            ? () async {
+                final d = await showDatePicker(context: context, initialDate: row.invBillDate ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
+                if (d != null) setState(() => row.invBillDate = d);
+              }
+            : null,
+        child: Text(row.invBillDate != null ? _fmtDate(row.invBillDate!) : '—',
+            style: style.copyWith(color: showBill ? style.color : AppColors.textDisabled)),
       ),
     );
 
@@ -626,7 +746,7 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
       }
       return SakalLineItemCard(
         title: row.accountDisplay.isEmpty ? 'New Line' : row.accountDisplay,
-        onDelete: () => _removeLine(row),
+        onDelete: _editable ? () => _removeLine(row) : null,
         fields: const [],
         body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           accountField,
@@ -657,15 +777,19 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
         SizedBox(width: 140, child: billNoField),
         const SizedBox(width: 8),
         SizedBox(width: 130, child: billDateField),
-        SizedBox(width: 40, child: IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line')),
+        SizedBox(
+          width: 40,
+          child: _editable ? IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line') : null,
+        ),
       ]),
     );
   }
 
-  Widget _amountField(String label, TextEditingController ctrl, InputDecoration bare) => SakalFieldCard(
-        label: label, editable: true, numeric: true,
+  Widget _amountField(String label, TextEditingController ctrl, InputDecoration bare, bool editable) => SakalFieldCard(
+        label: label, editable: editable, numeric: true,
         child: TextFormField(
           controller: ctrl,
+          enabled: editable,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,4}'))],
           decoration: bare,

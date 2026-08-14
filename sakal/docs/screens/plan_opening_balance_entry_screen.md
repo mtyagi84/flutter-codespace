@@ -90,3 +90,17 @@ No local Flutter/Postgres toolchain here:
 3. Add several rows for one account (including two rows sharing the same account with different Bill Nos), save, reload the screen for the same FY — confirm all rows restore correctly.
 4. Download the Excel template, fill it, upload — confirm rows populate the worksheet correctly and bad rows report clearly, matching Opening Stock's own error-reporting behavior.
 5. Query `v_opening_balance_summary` directly and confirm it correctly nets Dr/Cr across multiple rows for the same account into one signed figure per currency.
+
+## Follow-up fixes, 2026-08-14
+
+Live testing surfaced three real gaps beyond the original design, all implemented in the same session:
+
+1. **Line-items layout** — the original `Wrap`-based Card-per-row implementation (see the implementation note at the top) let fields wrap onto a second line even on wide desktop viewports, missing this codebase's own mandatory "Line-items grid" pattern. Rebuilt using the actual pattern: `SakalTableHeaderBar` + `SakalScrollableTable` (one continuous row per line on desktop, horizontal scroll instead of wrapping) and `SakalLineItemCard` 2-column grid on mobile — matching Sales/Purchase Order.
+2. **Excel template downloaded blank** — root cause shared with Opening Stock's own template download: `FilePicker.platform.saveFile()` uses Chrome's File System Access API on web, which needs a still-valid user activation and silently fails once that window passes. Fixed both screens using `web_download.dart`'s `downloadBytesOnWeb` (already built for the Reporting Engine's own Excel export, never applied back to either Opening screen).
+3. **No way to find one account among thousands** — added a client-side search box filtering by account code/name or Invoice/Bill No.
+
+Then three more real requirements surfaced:
+
+4. **Editing restricted to the earliest financial year** — `_earliestFyId` computed from `financialYearsProvider` (min `fy_start_date`); `_editable = canEdit && _fyId == _earliestFyId`. The FY dropdown stays fully populated and selectable (per explicit user choice — later years, once FY-closing auto-generation exists, should still be browsable) but every field/button that mutates data is disabled when a non-earliest year is selected, with an inline banner explaining why.
+5. **Excel template now pre-fills every posting-allowed account** with its current opening balance (one row per existing bill-line; a blank amount row for an account with nothing yet) instead of downloading empty — `_downloadTemplate` now reads `_postableAccounts` + `_lines`. Re-uploading **replaces** the on-screen worksheet rather than appending (matches an export→edit→re-import round trip without creating duplicate rows) — `_uploadExcel` clears `_lines` before populating, and skips any parsed row where every amount is 0 and Bill No is empty (untouched placeholder rows from the export don't become real persisted zero-value lines).
+6. **Invoice/Bill No + Date gated to Customer/Supplier accounts** — `_OBLineRow` gained `accountNature` (from `rim_accounts.account_nature`, now also selected in `OpeningBalanceRemoteDs.getLines()`'s embed), set on account selection, on load, and on Excel upload. Bill fields stay in the grid for column alignment but render disabled/greyed for any other account nature, and any stale value is cleared when a line's account is changed away from Customer/Supplier.
