@@ -288,7 +288,19 @@ class _SakalAutocompleteState<T extends Object> extends State<SakalAutocomplete<
           child: OverflowBox(
             alignment: Alignment.topLeft,
             minWidth: 0,
-            maxWidth: double.infinity,
+            // A REAL, urgent regression (found live 2026-08-17): this was
+            // `double.infinity`, which handed the Material/Column/ListView
+            // chain below a genuinely UNBOUNDED max width — Flutter can't
+            // lay that out (Column/Text/ListView all need a finite width
+            // to work with), so the ENTIRE inline dropdown broke for every
+            // SakalAutocomplete consumer app-wide that doesn't use
+            // desktopDialogMode (every Product picker, every generic
+            // Account picker, etc.) — only FinanceAccountPicker was
+            // shielded, since it had already moved to the separate dialog.
+            // A large-but-FINITE bound fixes the original width bug
+            // (RawAutocomplete's ambient maxWidth being too narrow)
+            // without ever going unbounded.
+            maxWidth: 900,
             child: Material(
               elevation: 4,
               borderRadius: BorderRadius.circular(4),
