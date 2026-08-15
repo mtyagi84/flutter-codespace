@@ -12,6 +12,12 @@ import '../print_models.dart';
 ///
 /// x/y here are ordering/grouping keys for the flowing canvas renderer, not
 /// literal coordinates — see pdf_canvas_renderer.dart's class comment.
+///
+/// Visual design pass (2026-08-19): accent-colored section rules (a `line`
+/// element's h/font.colorHex become thickness/color overrides — see
+/// pdf_canvas_renderer.dart's line case), a short "sign above the line"
+/// rule pair over Prepared/Authorised By, and a rule directly above the
+/// totals block to separate it from the line-items table.
 const journalVoucherDefaultTemplate = PrintTemplate(
   documentType: 'JOURNAL_VOUCHER',
   templateName: 'Default',
@@ -34,17 +40,17 @@ const journalVoucherDefaultTemplate = PrintTemplate(
     ),
     PrintElement(
       id: 'company_name', type: PrintElementType.field, bind: 'company.company_name',
-      x: 2, y: 1, w: 140, font: PrintFont(size: 16, bold: true, colorHex: '#1B3A6B'),
+      x: 2, y: 1, w: 140, font: PrintFont(size: 17, bold: true, colorHex: '#1B3A6B'),
     ),
     PrintElement(
       id: 'title', type: PrintElementType.field, bind: 'header.voucher_type_label',
       x: 3, y: 1, w: 70,
-      font: PrintFont(size: 16, bold: true, align: PrintAlign.right, colorHex: '#1B3A6B'),
+      font: PrintFont(size: 17, bold: true, align: PrintAlign.right, colorHex: '#1B3A6B'),
     ),
     PrintElement(id: 'spacer_2', type: PrintElementType.text, text: '', x: 1, y: 2, w: 35),
     PrintElement(
       id: 'company_address', type: PrintElementType.field, bind: 'company.address',
-      x: 2, y: 2, w: 140, font: PrintFont(size: 9),
+      x: 2, y: 2, w: 140, font: PrintFont(size: 9, colorHex: '#4A5568'),
     ),
     PrintElement(
       id: 'voucher_no', type: PrintElementType.field, bind: 'header.voucher_no', label: 'Voucher No: ',
@@ -53,37 +59,46 @@ const journalVoucherDefaultTemplate = PrintTemplate(
     PrintElement(id: 'spacer_3', type: PrintElementType.text, text: '', x: 1, y: 3, w: 35),
     PrintElement(
       id: 'company_city', type: PrintElementType.field, bind: 'company.city_name',
-      x: 2, y: 3, w: 140, font: PrintFont(size: 9),
+      x: 2, y: 3, w: 140, font: PrintFont(size: 9, colorHex: '#4A5568'),
     ),
     PrintElement(
       id: 'trans_date', type: PrintElementType.field, bind: 'header.trans_date', label: 'Date: ',
       x: 3, y: 3, w: 70, font: PrintFont(size: 10, align: PrintAlign.right),
     ),
-    PrintElement(id: 'div1', type: PrintElementType.line, x: 1, y: 4, w: 180),
+    // Accent rule under the letterhead — thicker + navy, not the default
+    // thin grey divider, so the letterhead reads as a distinct block.
+    PrintElement(
+      id: 'div1', type: PrintElementType.line, x: 1, y: 4, w: 180,
+      h: 1.4, font: PrintFont(colorHex: '#1B3A6B'),
+    ),
     PrintElement(
       id: 'ref_no', type: PrintElementType.field, bind: 'header.ref_no', label: 'Ref No: ',
       x: 1, y: 8, w: 90, font: PrintFont(size: 10),
     ),
     PrintElement(
-      id: 'currency_line', type: PrintElementType.field, bind: 'header.currency_line',
+      id: 'currency_line', type: PrintElementType.field, bind: 'header.currency_line', label: 'Currency: ',
       x: 2, y: 8, w: 85, font: PrintFont(size: 10),
     ),
     PrintElement(
       id: 'remarks', type: PrintElementType.field, bind: 'header.remarks', label: 'Remarks: ',
-      x: 1, y: 9, w: 180, font: PrintFont(size: 9),
+      x: 1, y: 9, w: 180, font: PrintFont(size: 9, colorHex: '#4A5568'),
     ),
     PrintElement(id: 'div2', type: PrintElementType.line, x: 1, y: 11, w: 180),
     PrintElement(
       id: 'lines_table', type: PrintElementType.table, bind: 'lines',
       x: 1, y: 12, w: 180,
       columns: [
-        PrintTableColumn(bind: 'particulars', label: 'Particulars', width: 65),
+        PrintTableColumn(bind: 'particulars', label: 'Particulars', width: 63),
         PrintTableColumn(bind: 'debit', label: 'Debit', width: 33, align: PrintAlign.right, format: PrintDataFormat.currency),
         PrintTableColumn(bind: 'credit', label: 'Credit', width: 33, align: PrintAlign.right, format: PrintDataFormat.currency),
-        PrintTableColumn(bind: 'party_amount', label: 'Party Amt', width: 24, align: PrintAlign.right),
+        PrintTableColumn(bind: 'party_amount', label: 'Party Amt', width: 26, align: PrintAlign.right, format: PrintDataFormat.currency),
         PrintTableColumn(bind: 'remarks', label: 'Remarks', width: 25),
       ],
     ),
+    // A rule directly above the totals block separates it from the table
+    // above — otherwise "Total Debit"/"Total Credit" reads as just two more
+    // (unbordered) table-less rows with no visual anchor.
+    PrintElement(id: 'div_totals', type: PrintElementType.line, x: 1, y: 12.5, w: 180, h: 0.5),
     // Right-aligned via a wide empty spacer + two narrower value fields
     // stacked as their own rows, same trick as the shared voucher
     // template's totals block, but split into Dr/Cr since a JV's own
@@ -101,7 +116,16 @@ const journalVoucherDefaultTemplate = PrintTemplate(
       x: 2, y: 14, w: 70,
       font: PrintFont(size: 12, bold: true, align: PrintAlign.right, colorHex: '#1B3A6B'),
     ),
-    PrintElement(id: 'div3', type: PrintElementType.line, x: 1, y: 15, w: 180),
+    PrintElement(
+      id: 'div3', type: PrintElementType.line, x: 1, y: 15, w: 180,
+      h: 1.4, font: PrintFont(colorHex: '#1B3A6B'),
+    ),
+    // Short "sign above the line" rules, one per signature column, sitting
+    // directly above the Prepared/Authorised By labels below — a plain rule
+    // spanning the whole row's own flex slot inside its Row/Expanded, same
+    // mechanism as any other 2-up row.
+    PrintElement(id: 'sig_line_1', type: PrintElementType.line, x: 1, y: 15.6, w: 90, h: 0.5),
+    PrintElement(id: 'sig_line_2', type: PrintElementType.line, x: 2, y: 15.6, w: 90, h: 0.5),
     PrintElement(
       id: 'prepared_by', type: PrintElementType.field, bind: 'signatures.prepared_by', label: 'Prepared By: ',
       x: 1, y: 16, w: 90, font: PrintFont(size: 9, align: PrintAlign.center),

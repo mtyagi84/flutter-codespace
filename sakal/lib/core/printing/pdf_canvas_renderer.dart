@@ -52,7 +52,18 @@ class PdfCanvasRenderer {
       build: (context) => [
         for (final y in sortedYs) ...[
           _buildRow(rowsByY[y]!..sort((a, b) => a.x.compareTo(b.x)), document),
-          pw.SizedBox(height: 4),
+          // Extra breathing room after a FULL-WIDTH single-line divider — a
+          // plain 4pt gap everywhere reads cramped right after a section
+          // separator. A short line (or a row of several short lines, e.g.
+          // a per-column "sign above the line" pair) is deliberately meant
+          // to sit close to whatever follows it, so it keeps the tighter
+          // default gap instead.
+          pw.SizedBox(
+            height: rowsByY[y]!.length == 1 &&
+                    rowsByY[y]!.first.type == PrintElementType.line &&
+                    rowsByY[y]!.first.w >= 170
+                ? 8 : 4,
+          ),
         ],
       ],
       footer: (context) => _footer(context, printedByName, printedOn),
@@ -139,7 +150,18 @@ class PdfCanvasRenderer {
         }
 
       case PrintElementType.line:
-        return pw.Divider(thickness: 0.75, color: PdfColors.grey600);
+        // Default look (thickness 0.75, grey) is preserved for every
+        // existing template that doesn't override h/font.colorHex — this
+        // element type's own defaults (h: 10, colorHex: '#000000') are
+        // deliberately never hit in practice by a plain divider, so reusing
+        // them as opt-in thickness/color overrides is backward-compatible:
+        // a template only gets a custom-styled rule if it explicitly asks
+        // for one (see journal_voucher_default_template.dart's accent
+        // dividers) by setting h to something other than the type default.
+        return pw.Divider(
+          thickness: el.h != 10 ? el.h : 0.75,
+          color: el.font.colorHex != '#000000' ? PdfColor.fromHex(el.font.colorHex) : PdfColors.grey600,
+        );
 
       case PrintElementType.rect:
         return pw.Container(
@@ -190,6 +212,11 @@ class PdfCanvasRenderer {
         .cast<Map<String, dynamic>>();
     if (rows.isEmpty) return pw.SizedBox(); // skip an empty table entirely rather than a lone header row
 
+    // Brand navy (#1B3A6B, AppColors.primary) tinted header instead of plain
+    // grey — a light tint keeps body text legible while still reading as a
+    // deliberate, branded header band rather than a generic grid.
+    final headerTint = PdfColor.fromHex('#E8EDF5');
+    final headerNavy = PdfColor.fromHex('#1B3A6B');
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
       columnWidths: {
@@ -199,11 +226,11 @@ class PdfCanvasRenderer {
       children: [
         if (el.showHeader)
           pw.TableRow(
-            decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+            decoration: pw.BoxDecoration(color: headerTint),
             children: el.columns.map((c) => pw.Padding(
-              padding: const pw.EdgeInsets.all(4),
+              padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
               child: pw.Text(c.label,
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
+                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9, color: headerNavy),
                   textAlign: _align(c.align)),
             )).toList(),
           ),
@@ -211,7 +238,7 @@ class PdfCanvasRenderer {
           pw.TableRow(
             decoration: pw.BoxDecoration(color: entry.key.isOdd ? PdfColors.grey50 : PdfColors.white),
             children: el.columns.map((c) => pw.Padding(
-              padding: const pw.EdgeInsets.all(4),
+              padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 4.5),
               child: pw.Text(formatPrintValue(entry.value[c.bind], c.format),
                   style: const pw.TextStyle(fontSize: 9),
                   textAlign: _align(c.align)),

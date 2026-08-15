@@ -304,7 +304,10 @@ String formatPrintValue(dynamic value, PrintDataFormat format) {
   switch (format) {
     case PrintDataFormat.currency:
       final n = value is num ? value : (num.tryParse(value.toString()) ?? 0);
-      return n.toStringAsFixed(2);
+      final negative = n < 0;
+      final parts = n.abs().toStringAsFixed(2).split('.');
+      final grouped = '${_groupThousands(parts[0])}.${parts[1]}';
+      return negative ? '-$grouped' : grouped;
     case PrintDataFormat.number:
       final n = value is num ? value : (num.tryParse(value.toString()) ?? 0);
       return n.toString();
@@ -312,4 +315,18 @@ String formatPrintValue(dynamic value, PrintDataFormat format) {
     case PrintDataFormat.text:
       return value.toString();
   }
+}
+
+/// "1234567" -> "1,234,567" — plain digit grouping, no locale/intl
+/// dependency needed since every printed document in this app is already
+/// shown in a fixed international grouping style regardless of company
+/// locale (see AppNumberFormat.amount for the equivalent on-screen rule).
+String _groupThousands(String digits) {
+  final buf = StringBuffer();
+  final len = digits.length;
+  for (var i = 0; i < len; i++) {
+    if (i > 0 && (len - i) % 3 == 0) buf.write(',');
+    buf.write(digits[i]);
+  }
+  return buf.toString();
 }
