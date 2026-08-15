@@ -164,20 +164,21 @@ final accountsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async 
     'or':         '(posting_allowed.eq.true,'
                   'account_nature.eq.Customer,'
                   'account_nature.eq.Supplier)',
-    // REVERTED 2026-08-16 — 'rim_accounts_parent_id_fkey' was a GUESSED
-    // constraint name (Postgres's *usual* auto-generated pattern), not a
-    // verified one, and it was wrong: live PostgREST rejected it outright
-    // ("no matches were found"), breaking every account picker app-wide
-    // (Opening Balance, Journal Voucher, everything using accountsProvider)
-    // instead of just fixing Group Name. Back to !parent_id (the
-    // previously-working, if direction-suspect, form) until the real
-    // constraint name is confirmed from the live schema — see
-    // sakal/docs/screens/plan_opening_balance_entry_screen.md's round 5/6
-    // notes. DO NOT re-guess a constraint name again without running
-    // `SELECT conname FROM pg_constraint WHERE conrelid =
-    // 'rim_accounts'::regclass AND contype = 'f';` against the real DB first.
+    // Self-referencing embed disambiguated by FK CONSTRAINT NAME
+    // (rim_accounts_parent_id_fkey) instead of the column name — !parent_id
+    // resolved to the REVERSE relationship (children, not parent) for this
+    // self-join. The constraint name was verified directly against the
+    // live schema (`SELECT conname FROM pg_constraint WHERE conrelid =
+    // 'rim_accounts'::regclass AND contype = 'f' AND confrelid =
+    // 'rim_accounts'::regclass;` -> rim_accounts_parent_id_fkey, confirmed
+    // 2026-08-16) after a FIRST attempt at this exact name failed live with
+    // "no matches were found" — that failure turned out to be PostgREST's
+    // schema cache being stale (needs `NOTIFY pgrst, 'reload schema';`
+    // after any DDL change), not a wrong name. If this ever fails again
+    // with the same "no matches were found" error, reload the schema cache
+    // first before assuming the name itself is wrong.
     'select':     'id,account_code,account_name,account_nature,posting_allowed,'
-                  'parent:rim_accounts!parent_id(account_name),'
+                  'parent:rim_accounts!rim_accounts_parent_id_fkey(account_name),'
                   'rim_currencies!account_currency_id(currency_id)',
     'order':      'account_code.asc',
     'limit':      '500',

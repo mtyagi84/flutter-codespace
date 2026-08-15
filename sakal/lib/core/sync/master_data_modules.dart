@@ -87,12 +87,12 @@ Future<int> _syncCustomersSuppliers(AppDatabase db, UserSession session) async {
     'is_deleted': 'eq.false',
     'is_active': 'eq.true',
     'or': '(posting_allowed.eq.true,account_nature.eq.Customer,account_nature.eq.Supplier)',
-    // REVERTED 2026-08-16 — see master_cache_providers.dart's
-    // accountsProvider for why: the constraint-name hint was a guess and
-    // broke live PostgREST outright. Back to !parent_id.
+    // See master_cache_providers.dart's accountsProvider for the full story
+    // — FK constraint name verified against the live schema, prior failure
+    // was a stale PostgREST schema cache, not a wrong name.
     'select': 'id,account_code,account_name,account_nature,posting_allowed,credit_limit,credit_days,'
         'is_credit_blocked,phone,email,address_line1,address_line2,'
-        'parent:rim_accounts!parent_id(account_name),'
+        'parent:rim_accounts!rim_accounts_parent_id_fkey(account_name),'
         'rim_currencies!account_currency_id(currency_id)',
     'order': 'account_code.asc',
     'limit': '2000',
