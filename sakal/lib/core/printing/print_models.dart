@@ -49,7 +49,7 @@ extension PaperProfileCodec on PaperProfile {
   };
 }
 
-enum PrintElementType { text, field, image, table, line, rect, barcode, watermark }
+enum PrintElementType { text, field, image, table, line, rect, barcode, watermark, block }
 
 enum PrintAlign { left, center, right }
 
@@ -192,6 +192,18 @@ class PrintElement {
 
   final PrintCondition? showWhen; // any element type — most useful on watermark
 
+  // type=block — a fixed vertical stack of sub-elements (each rendered via
+  // the SAME field/text logic as a top-level element) treated as ONE atomic
+  // unit within its row. Exists specifically so a multi-line, multiple-font
+  // text group (e.g. company name + address + city, each its own size/
+  // color) can sit beside another element (e.g. a logo) with its internal
+  // line spacing coming from ONE Column, not from matching x/y/w across
+  // several separate rows — the latter turned out not to reliably stay
+  // aligned in practice (real bug, reported live 2026-08-19, three
+  // separate attempts at row-matching all failed). A sub-element's own x/y
+  // are ignored; only list order matters.
+  final List<PrintElement> lines;
+
   const PrintElement({
     required this.id,
     required this.type,
@@ -208,6 +220,7 @@ class PrintElement {
     this.showHeader = true,
     this.barcodeFormat = PrintBarcodeFormat.code128,
     this.showWhen,
+    this.lines = const [],
   });
 
   factory PrintElement.fromJson(Map<String, dynamic> j) => PrintElement(
@@ -227,6 +240,8 @@ class PrintElement {
     showHeader:    j['showHeader'] as bool? ?? true,
     barcodeFormat: j['barcodeFormat'] == 'qr' ? PrintBarcodeFormat.qr : PrintBarcodeFormat.code128,
     showWhen:      j['showWhen'] != null ? PrintCondition.fromJson(j['showWhen'] as Map<String, dynamic>) : null,
+    lines:         (j['lines'] as List<dynamic>? ?? [])
+        .map((l) => PrintElement.fromJson(l as Map<String, dynamic>)).toList(),
   );
 
   Map<String, dynamic> toJson() => {
@@ -240,6 +255,7 @@ class PrintElement {
     'showHeader': showHeader,
     'barcodeFormat': barcodeFormat.name,
     if (showWhen != null) 'showWhen': showWhen!.toJson(),
+    if (lines.isNotEmpty) 'lines': lines.map((l) => l.toJson()).toList(),
   };
 }
 

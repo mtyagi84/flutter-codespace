@@ -222,6 +222,22 @@ class PdfCanvasRenderer {
                 style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.red800)),
           ),
         );
+
+      case PrintElementType.block:
+        // A fixed vertical stack of sub-elements, each rendered by the SAME
+        // _content() dispatch as any top-level element (so a nested `field`
+        // gets its own label/bind/format/font exactly as usual) — stacking
+        // them in one pw.Column guarantees line 2 sits directly under line
+        // 1 by construction, not by matching x/y/w against a sibling row.
+        return pw.Column(
+          crossAxisAlignment: el.font.align == PrintAlign.right
+              ? pw.CrossAxisAlignment.end
+              : pw.CrossAxisAlignment.start,
+          children: [
+            for (final line in el.lines)
+              if (line.showWhen == null || line.showWhen!.evaluate(document)) _content(line, document),
+          ],
+        );
     }
   }
 

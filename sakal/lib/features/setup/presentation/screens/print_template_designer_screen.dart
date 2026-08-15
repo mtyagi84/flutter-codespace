@@ -71,6 +71,7 @@ class _ElementDraft {
   String? condField;
   bool condIsNotEquals;
   String condValue;
+  List<_ElementDraft> lines;
 
   _ElementDraft({
     required this.id,
@@ -93,7 +94,8 @@ class _ElementDraft {
     this.condField,
     this.condIsNotEquals = false,
     this.condValue = '',
-  }) : columns = columns ?? [];
+    List<_ElementDraft>? lines,
+  }) : columns = columns ?? [], lines = lines ?? [];
 
   factory _ElementDraft.fromElement(PrintElement el) => _ElementDraft(
         id: el.id,
@@ -116,6 +118,10 @@ class _ElementDraft {
         condField: el.showWhen?.field,
         condIsNotEquals: el.showWhen?.notEquals != null,
         condValue: el.showWhen?.notEquals ?? el.showWhen?.equals ?? '',
+        // Preserved as-is (no dedicated per-line editor UI yet) so opening
+        // a block element (e.g. the JV letterhead's company/title blocks)
+        // in the designer and saving doesn't silently discard its content.
+        lines: el.lines.map((l) => _ElementDraft.fromElement(l)).toList(),
       );
 
   factory _ElementDraft.blank(PrintElementType type) => _ElementDraft(
@@ -150,6 +156,7 @@ class _ElementDraft {
                 notEquals: condIsNotEquals ? condValue : null,
               )
             : null,
+        lines: lines.map((l) => l.toElement(0, 0)).toList(),
       );
 }
 
@@ -627,6 +634,7 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
         PrintElementType.rect => Icons.crop_square,
         PrintElementType.barcode => Icons.qr_code_2,
         PrintElementType.watermark => Icons.water_drop_outlined,
+        PrintElementType.block => Icons.view_agenda_outlined,
       };
 
   String _chipLabel(_ElementDraft el) {
@@ -648,6 +656,8 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
         return 'Barcode: ${el.bind ?? '(unbound)'}';
       case PrintElementType.watermark:
         return 'Watermark: ${el.text.isEmpty ? '(text)' : el.text}';
+      case PrintElementType.block:
+        return 'Info Block (${el.lines.length} line${el.lines.length == 1 ? '' : 's'})';
     }
   }
 
@@ -665,8 +675,15 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
     );
   }
 
+  // A block element's own font.align controls whether its internal Column
+  // is left- or right-aligned (see pdf_canvas_renderer.dart's block case) —
+  // size/bold/italic/color don't apply to the block itself (each line has
+  // its own), but showing the full font panel anyway is harmless (those
+  // controls are simply unused for this type) and avoids a second,
+  // align-only control just for this one case.
   bool _usesFont(PrintElementType t) =>
-      t == PrintElementType.text || t == PrintElementType.field || t == PrintElementType.watermark;
+      t == PrintElementType.text || t == PrintElementType.field ||
+      t == PrintElementType.watermark || t == PrintElementType.block;
 
   Widget _buildElementEditor(_ElementDraft el) {
     return Container(
@@ -688,7 +705,15 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
                     contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8), labelText: 'Element Type'),
                 isExpanded: true,
                 initialValue: el.type,
-                items: PrintElementType.values.map((t) => DropdownMenuItem(value: t, child: Text(_typeLabel(t)))).toList(),
+                // 'block' is excluded from selection here unless the
+                // element already IS one (loaded from a default template,
+                // e.g. JV's letterhead) — there's no per-line editor yet
+                // (see _typeSpecificFields), so offering it as something an
+                // admin can freely switch ANY element to would just create
+                // an empty, invisible dead end.
+                items: PrintElementType.values
+                    .where((t) => t != PrintElementType.block || el.type == PrintElementType.block)
+                    .map((t) => DropdownMenuItem(value: t, child: Text(_typeLabel(t)))).toList(),
                 onChanged: (v) { if (v != null) setState(() => el.type = v); },
               ),
             ),
@@ -738,6 +763,7 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
         PrintElementType.rect => 'Box',
         PrintElementType.barcode => 'Barcode / QR',
         PrintElementType.watermark => 'Watermark',
+        PrintElementType.block => 'Info Block (multi-line)',
       };
 
   List<Widget> _typeSpecificFields(_ElementDraft el) {
@@ -807,6 +833,19 @@ class _PrintTemplateDesignerScreenState extends ConsumerState<PrintTemplateDesig
       case PrintElementType.line:
       case PrintElementType.rect:
         return const [];
+      case PrintElementType.block:
+        // No dedicated per-line editor yet (Phase 2) — the block's own
+        // lines are preserved on load/save (see _ElementDraft.fromElement/
+        // toElement above), just not editable from this screen. Width and
+        // the Alignment control (in the font panel below, since block
+        // opts into _usesFont) are the only things adjustable here today.
+        return [
+          Text(
+            '${el.lines.length} line${el.lines.length == 1 ? '' : 's'} — '
+            'built from the document\'s default template; not yet editable here.',
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
+          ),
+        ];
     }
   }
 

@@ -85,6 +85,18 @@ class PdfFlowRenderer {
 
       case PrintElementType.watermark:
         return pw.SizedBox(); // no watermark concept on a receipt roll
+
+      case PrintElementType.block:
+        // A receipt already stacks every element top-to-bottom full width,
+        // so a block's sub-elements just render in place via the same
+        // recursive dispatch — no separate Column wrapper needed here.
+        return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            for (final line in el.lines)
+              if (line.showWhen == null || line.showWhen!.evaluate(document)) _content(line, document),
+          ],
+        );
     }
   }
 
