@@ -19,6 +19,7 @@ class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
     required String fromDate,
     required String toDate,
     String? voucherTypeCode,
+    List<String>? voucherTypeCodes,
     bool? isPosted,
     String? search,
     int limit = 50,
@@ -28,7 +29,8 @@ class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
       return _local.listHeaders(
         clientId: clientId, companyId: companyId, locationId: locationId,
         fromDate: fromDate, toDate: toDate,
-        voucherTypeCode: voucherTypeCode, isPosted: isPosted, search: search,
+        voucherTypeCode: voucherTypeCode, voucherTypeCodes: voucherTypeCodes,
+        isPosted: isPosted, search: search,
         limit: limit, offset: offset,
       );
     }
@@ -39,7 +41,8 @@ class FinanceVoucherRepositoryImpl implements FinanceVoucherRepository {
     return _remote.listHeaders(
       clientId: clientId, companyId: companyId, locationId: locationId,
       fromDate: fromDate, toDate: toDate,
-      voucherTypeCode: voucherTypeCode, isPosted: isPosted, search: search,
+      voucherTypeCode: voucherTypeCode, voucherTypeCodes: voucherTypeCodes,
+      isPosted: isPosted, search: search,
       limit: limit, offset: offset,
     );
   }

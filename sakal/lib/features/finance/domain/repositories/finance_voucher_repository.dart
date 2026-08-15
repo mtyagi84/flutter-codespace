@@ -8,6 +8,7 @@ abstract class FinanceVoucherRepository {
     required String fromDate,
     required String toDate,
     String? voucherTypeCode,
+    List<String>? voucherTypeCodes,
     bool? isPosted,
     String? search,
     int limit = 50,

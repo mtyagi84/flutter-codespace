@@ -15,6 +15,7 @@ class FinanceVoucherLocalDs {
     required String fromDate,
     required String toDate,
     String? voucherTypeCode,
+    List<String>? voucherTypeCodes,
     bool? isPosted,
     String? search,
     int limit = 50,
@@ -26,7 +27,11 @@ class FinanceVoucherLocalDs {
       ..where((t) => t.locationId.equals(locationId))
       ..where((t) => t.isDeleted.equals(false))
       ..orderBy([(t) => OrderingTerm.desc(t.transDate), (t) => OrderingTerm.desc(t.transNo)]);
-    if (voucherTypeCode != null) q.where((t) => t.voucherTypeCode.equals(voucherTypeCode));
+    if (voucherTypeCodes != null && voucherTypeCodes.isNotEmpty) {
+      q.where((t) => t.voucherTypeCode.isIn(voucherTypeCodes));
+    } else if (voucherTypeCode != null) {
+      q.where((t) => t.voucherTypeCode.equals(voucherTypeCode));
+    }
     if (isPosted != null) q.where((t) => t.isPosted.equals(isPosted));
     final rows = await q.get();
     // Date range filtered in Dart, not SQL — this is a small local cache

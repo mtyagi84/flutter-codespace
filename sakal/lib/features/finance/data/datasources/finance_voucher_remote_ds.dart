@@ -10,6 +10,7 @@ class FinanceVoucherRemoteDs {
     required String fromDate,
     required String toDate,
     String? voucherTypeCode,
+    List<String>? voucherTypeCodes,
     bool? isPosted,
     String? search,
     int limit = 50,
@@ -31,7 +32,18 @@ class FinanceVoucherRemoteDs {
       'limit':       '$limit',
       'offset':      '$offset',
     };
-    if (voucherTypeCode != null) params['voucher_type_code'] = 'eq.$voucherTypeCode';
+    // voucherTypeCodes takes priority — used by the Payment/Receipt Voucher
+    // list screen to constrain results to its own CRV/BRV/CPV/BPV set (real
+    // bug found live 2026-08-19: with no filter at all, "All Types" also
+    // returned manually-entered JV/CTR/EXV rows — posting_source='MANUAL'
+    // alone doesn't distinguish them from a hand-entered Payment/Receipt
+    // Voucher — and opening one crashed FinanceVoucherEntryScreen's own
+    // Voucher Type dropdown, which only has CRV/BRV/CPV/BPV items).
+    if (voucherTypeCodes != null && voucherTypeCodes.isNotEmpty) {
+      params['voucher_type_code'] = 'in.(${voucherTypeCodes.join(',')})';
+    } else if (voucherTypeCode != null) {
+      params['voucher_type_code'] = 'eq.$voucherTypeCode';
+    }
     if (isPosted != null) params['is_posted'] = 'eq.$isPosted';
     if (search != null && search.isNotEmpty) {
       params['or'] = '(trans_no.ilike.*$search*,remarks.ilike.*$search*)';

@@ -381,6 +381,20 @@ class _FinanceVoucherEntryScreenState
         setState(() => _loading = false);
         return;
       }
+      // Defense-in-depth: this screen only knows how to render CRV/BRV/CPV/
+      // BPV (see _supportedTypes) — a JV/CTR/EXV row should never reach here
+      // (the list screen's own query is the real fix, see
+      // finance_voucher_remote_ds.dart), but if one ever does, fail with a
+      // clear message instead of crashing the Voucher Type dropdown's
+      // "exactly one matching item" assertion.
+      if (!_supportedTypes.contains(header.voucherTypeCode)) {
+        setState(() {
+          _loading = false;
+          _error = 'This document (${header.voucherTypeCode} ${header.transNo}) is not a Payment/Receipt '
+              'Voucher — open it from the correct screen (Journal Entry / Contra Voucher / Expense Voucher) instead.';
+        });
+        return;
+      }
       final lineObjs = await repo.getLines(
         clientId:  session.clientId,
         companyId: session.companyId,

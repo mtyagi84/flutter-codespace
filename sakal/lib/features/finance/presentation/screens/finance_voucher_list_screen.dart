@@ -103,6 +103,12 @@ class _FinanceVoucherListScreenState
           fromDate:  _fmtDate(_fromDate),
           toDate:    _fmtDate(_toDate),
           voucherTypeCode: _filterType,
+          // Always constrain to this screen's own CRV/BRV/CPV/BPV set when
+          // no specific type is picked — see finance_voucher_remote_ds.dart's
+          // listHeaders() comment for why relying on posting_source alone
+          // let a hand-entered JV/CTR leak into "All Types" and crash the
+          // Voucher Type dropdown on open.
+          voucherTypeCodes: _filterType == null ? _types : null,
           isPosted:  _filterPosted,
           // Preserves this screen's pre-pagination behavior — only Journal
           // Voucher's own list screen has been converted to real paging so
