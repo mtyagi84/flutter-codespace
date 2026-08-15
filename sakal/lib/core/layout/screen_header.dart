@@ -86,7 +86,20 @@ mixin ScreenHeaderMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> im
 
   void refreshScreenHeader() {
     _headerController ??= ref.read(screenHeaderProvider.notifier);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Deferred via a microtask, not addPostFrameCallback — real bug found
+    // live 2026-08-16 via /dev/logs: "Tried to modify a provider while the
+    // widget tree was building" was being thrown from inside this exact
+    // callback during a route transition (a Navigator page-list diff can
+    // still have BuildOwner.building==true during some of its own internal
+    // callback-phase work, particularly around route-transition teardown/
+    // rebuild). When that throw happens mid-notification, the provider's
+    // OWN `.state` field may already be updated but listeners (TopBar's
+    // `ref.watch`) never get properly notified — the TopBar keeps
+    // rendering whatever it last successfully rendered, i.e. a stale
+    // title, exactly the symptom reported. A microtask runs in a genuinely
+    // separate Dart event-loop turn, never inside Flutter's own frame
+    // pipeline, so it can't collide with BuildOwner's building flag.
+    Future.microtask(() {
       if (!mounted) {
         AppLogger.info('ScreenHeader', 'refreshScreenHeader SKIPPED (unmounted) for $runtimeType');
         return;
@@ -121,13 +134,24 @@ mixin ScreenHeaderMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> im
     // push/pop cover) to a screen that doesn't use this mixin. The
     // ownership check makes both cases safe at once — see
     // design_system_guide.md §5.1 for the full trace of both scenarios.
-    if (identical(_screenHeaderOwner, this)) {
-      AppLogger.info('ScreenHeader', 'CLEAR (dispose, still owner) by $runtimeType');
-      _screenHeaderOwner = null;
-      _headerController?.state = null;
-    } else {
-      AppLogger.info('ScreenHeader', 'dispose, NOT owner ($runtimeType) — leaving header as-is');
-    }
+    //
+    // Deferred via microtask (2026-08-16, same reasoning as
+    // refreshScreenHeader) — checking ownership AT the deferred point
+    // (rather than synchronously here, mid-dispose) also means a
+    // same-frame competing claim from a newly-navigated-to screen is
+    // correctly seen as already having taken ownership, so this won't
+    // clobber it even if this dispose() call happened to run first.
+    final controller = _headerController;
+    final owner = this;
+    Future.microtask(() {
+      if (identical(_screenHeaderOwner, owner)) {
+        AppLogger.info('ScreenHeader', 'CLEAR (dispose, still owner) by $runtimeType');
+        _screenHeaderOwner = null;
+        controller?.state = null;
+      } else {
+        AppLogger.info('ScreenHeader', 'dispose, NOT owner ($runtimeType) — leaving header as-is');
+      }
+    });
     super.dispose();
   }
 

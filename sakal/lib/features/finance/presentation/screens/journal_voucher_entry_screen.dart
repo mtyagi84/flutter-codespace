@@ -823,7 +823,7 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_error!, style: const TextStyle(color: AppColors.negative))),
                     if (_actionError != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_actionError!, style: const TextStyle(color: AppColors.negative))),
@@ -877,10 +877,19 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
         items: _currencies.map((c) => DropdownMenuItem(value: c['id'] as String, child: Text(c['currency_id'] as String))).toList(),
         onChanged: _locked
             ? null
-            : (v) {
+            : (v) async {
                 final match = _currencies.firstWhere((c) => c['id'] == v, orElse: () => const {});
-                if (match.isNotEmpty) _onCurrencySelected(match);
-                _refNoFocusNode.requestFocus();
+                // Awaited BEFORE moving focus — _onCurrencySelected does
+                // several awaits + setState calls of its own (rate
+                // lookups), each rebuilding this section; requesting focus
+                // on Reference No BEFORE that churn settles let a
+                // still-in-flight rebuild detach the just-focused field's
+                // real text-input connection, landing focus on Remarks
+                // instead (Flutter's own next-best-target fallback) with a
+                // visible focus ring but no working keyboard input until a
+                // real click re-opened it (found live 2026-08-16).
+                if (match.isNotEmpty) await _onCurrencySelected(match);
+                if (mounted) _refNoFocusNode.requestFocus();
               },
       ),
     );
@@ -901,7 +910,30 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
           : null,
       child: SakalFieldCard.readOnly(label: 'Reference Date', value: _refDate != null ? _displayDate(_refDate) : '—'),
     );
-    final remarksField = SakalFieldCard(label: 'Remarks', editable: !_locked, child: TextFormField(controller: _remarksCtrl, focusNode: _remarksFocusNode, enabled: !_locked, decoration: SakalFieldCard.bareDecoration));
+    final remarksField = SakalFieldCard(
+      label: 'Remarks',
+      editable: !_locked,
+      child: TextFormField(
+        controller: _remarksCtrl,
+        focusNode: _remarksFocusNode,
+        enabled: !_locked,
+        decoration: SakalFieldCard.bareDecoration,
+        // Live-propagates to any line whose own Remarks is still empty —
+        // covers BOTH directions: a line added before the user gets to
+        // Header Remarks (the common case — the first line is auto-added
+        // on screen open, before this field has anything in it, so
+        // _addLine's own "seed from current header text" never applied to
+        // it) and a line added after. Never overwrites a line the user has
+        // already typed something into. Found live 2026-08-16 — the
+        // one-time copy-at-creation alone missed the single-line-JV case,
+        // by far the most common one.
+        onChanged: (v) => setState(() {
+          for (final l in _lines) {
+            if (l.remarksCtrl.text.isEmpty) l.remarksCtrl.text = v;
+          }
+        }),
+      ),
+    );
 
     // Guard the dropdown's initialValue separately from _locationId itself —
     // a resumed voucher's already-saved location can fall outside the
