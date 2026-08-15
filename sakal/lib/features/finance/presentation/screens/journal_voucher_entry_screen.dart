@@ -124,6 +124,12 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
   String? _transNo;
   DateTime _transDate = DateTime.now();
   bool _isPosted = false;
+  // Set only by _reverse() (client-side draft, never a server round-trip —
+  // see that method's own comment) so the eventual Save carries this
+  // traceability tag through to fn_save_finance_voucher's header JSONB,
+  // same key fn_reverse_voucher itself used to set server-side. Cleared by
+  // _applyCopy() — a copy of a reversal isn't itself "the" reversal.
+  String? _reversalOfTransNo;
   String? _locationId;
   // Location picker only matters (and only renders) under INTER_ENTITY
   // accounting — see CLAUDE.md's "Inter-Location Model". Under SIMPLE
@@ -509,6 +515,7 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
             'reference_no': refNo,
             'reference_date': refDate,
             'remarks': _remarksCtrl.text.trim(),
+            if (_reversalOfTransNo != null) 'reversal_of_trans_no': _reversalOfTransNo,
           };
 
       Map<String, dynamic> buildLine(_JVLineRow l, int serial, {String? billNo, String? billDate}) => {
@@ -682,6 +689,7 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
     setState(() {
       _transNo = null;
       _isPosted = false;
+      _reversalOfTransNo = null;
       _transDate = DateTime.now();
       _refNoCtrl.clear();
       _refDate = null;
@@ -689,14 +697,27 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
     _showSnack('Copied as a new unsaved draft — Save to assign a new voucher number.', color: AppColors.secondary);
   }
 
+  // Client-side, mirroring _applyCopy() exactly (no server round-trip until
+  // the user actually hits Save/Approve) — deliberate redesign, replacing
+  // the old fn_reverse_voucher RPC call, which flipped Dr/Cr AND posted the
+  // reversal atomically in one step, on CURRENT_DATE, with zero chance for
+  // the user to review or adjust the date first (real bug reported live
+  // 2026-08-17). _reversalOfTransNo carries the traceability tag through to
+  // buildHeader()'s own payload once the user does Save, so the eventual
+  // saved voucher is still tagged reversal_of_trans_no exactly like the old
+  // RPC-driven flow — only the immediate, unreviewable auto-post is gone.
+  // Deliberately does NOT re-check for an existing reversal of this voucher
+  // (the old RPC's ALREADY_REVERSED guard) — accepted trade-off of going
+  // fully client-side; Save-time server validation is still the backstop
+  // for double-posting, just not for double-*reversing* specifically.
   Future<void> _reverse() async {
     if (_transNo == null) return;
-    final session = ref.read(sessionProvider)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Reverse Journal Voucher'),
-        content: const Text('This posts a new voucher with every line\'s Debit/Credit flipped, exactly mirroring this one. Continue?'),
+        content: const Text(
+            'Loads this voucher\'s lines into a new unsaved draft with every line\'s Debit/Credit flipped. Edit the date, lines, or remarks as needed, then Save Draft / Approve whenever you\'re ready. Continue?'),
         actions: [
           TextButton(onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(false), child: const Text('Cancel')),
           FilledButton(style: FilledButton.styleFrom(backgroundColor: AppColors.negative), onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(true), child: const Text('Reverse')),
@@ -705,25 +726,23 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
     );
     if (confirmed != true || !mounted) return;
 
+    final originalTransNo = _transNo!;
     setState(() {
-      _reversing = true;
-      _actionError = null;
+      _reversalOfTransNo = originalTransNo;
+      _transNo = null;
+      _isPosted = false;
+      _transDate = DateTime.now();
+      _refNoCtrl.clear();
+      _refDate = null;
+      _remarksCtrl.text = 'Reversal of $originalTransNo';
+      for (final l in _lines) {
+        l.natureDrCr = l.natureDrCr == 'DR' ? 'CR' : 'DR';
+        l.settleAgainstBill = false;
+        l.selectedBill = null;
+        l.remarksCtrl.text = 'Reversal of $originalTransNo';
+      }
     });
-    try {
-      final res = await ref.read(financeVoucherRepositoryProvider).reverseVoucher(
-            clientId: session.clientId,
-            companyId: session.companyId,
-            transNo: _transNo!,
-            transDate: _fmtDate(_transDate),
-            userId: session.userId,
-          );
-      if (mounted) _showSnack('Reversal voucher $res posted.', color: AppColors.positive);
-    } catch (e, st) {
-      AppLogger.error('JournalVoucherReverse', e, st);
-      setState(() => _actionError = ErrorPresenter.format(e, action: 'reverse the voucher'));
-    } finally {
-      if (mounted) setState(() => _reversing = false);
-    }
+    _showSnack('Reversal loaded as a new unsaved draft, every line\'s Dr/Cr flipped — edit as needed, then Save/Approve.', color: AppColors.secondary);
   }
 
   // ── Print ─────────────────────────────────────────────────────────────
@@ -1160,20 +1179,21 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
         child: Padding(
           padding: const EdgeInsets.all(12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              SizedBox(width: 320, child: accountField),
-              SizedBox(width: 150, child: parentGroupField),
-              SizedBox(width: 90, child: currencyField),
-              SizedBox(width: 130, child: amountField),
-              SizedBox(width: 90, child: drCrField),
-              SizedBox(width: 120, child: baseAmountField),
-              SizedBox(width: 120, child: localAmountField),
-              SizedBox(width: 120, child: partyAmountField),
-              SizedBox(width: 200, child: remarksField),
-              if (!_locked) addButton,
-              if (!_locked && _lines.length > 1) removeButton,
-            ]),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            // Every field full-width, one per row — a Wrap of fixed-width
+            // SizedBoxes let 2-3 short fields (e.g. Parent Group + Currency)
+            // pack onto the same line at a 440px mobile width, cramped and
+            // inconsistent with how wide the longer fields (Account,
+            // Remarks) rendered. Found live 2026-08-17.
+            for (final field in [accountField, parentGroupField, currencyField, amountField, drCrField, baseAmountField, localAmountField, partyAmountField, remarksField]) ...[
+              field,
+              const SizedBox(height: 8),
+            ],
+            if (!_locked)
+              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                addButton,
+                if (_lines.length > 1) removeButton,
+              ]),
             extraContent,
           ]),
         ),

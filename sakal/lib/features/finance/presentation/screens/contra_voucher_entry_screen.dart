@@ -81,6 +81,11 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
   String? _transNo;
   DateTime _transDate = DateTime.now();
   bool _isPosted = false;
+  // Set only by _reverse() (client-side draft, see that method) so the
+  // eventual Save carries this traceability tag through to
+  // fn_save_finance_voucher's header JSONB — same key fn_reverse_voucher
+  // itself used to set server-side. Cleared by _applyCopy().
+  String? _reversalOfTransNo;
   String? _locationId;
   // Location picker only matters (and only renders) under INTER_ENTITY
   // accounting — see CLAUDE.md's "Inter-Location Model". Under SIMPLE
@@ -521,6 +526,7 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
             'reference_no': _refNoCtrl.text.trim(),
             'reference_date': _refDate != null ? _fmtDate(_refDate!) : '',
             'remarks': _remarksCtrl.text.trim(),
+            if (_reversalOfTransNo != null) 'reversal_of_trans_no': _reversalOfTransNo,
           };
 
       final lines = <Map<String, dynamic>>[
@@ -666,6 +672,7 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
     setState(() {
       _transNo = null;
       _isPosted = false;
+      _reversalOfTransNo = null;
       _transDate = DateTime.now();
       _refNoCtrl.clear();
       _refDate = null;
@@ -673,14 +680,24 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
     _showSnack('Copied as a new unsaved draft — Save to assign a new voucher number.', color: AppColors.secondary);
   }
 
+  // Client-side, mirroring _applyCopy() (no server round-trip until the
+  // user hits Save/Approve) — replaces the old fn_reverse_voucher RPC call,
+  // which flipped Dr/Cr AND posted the reversal atomically in one step, on
+  // CURRENT_DATE, with zero chance to review or adjust the date first (real
+  // bug reported live 2026-08-17, same fix applied across every voucher
+  // screen using this pattern). Reusing _swapFromTo() — reversing a
+  // transfer between two accounts genuinely IS swapping From/To, and that
+  // method already correctly re-resolves base/local rates for the new From
+  // currency. _reversalOfTransNo carries the traceability tag through to
+  // buildHeader()'s payload once the user does Save.
   Future<void> _reverse() async {
     if (_transNo == null) return;
-    final session = ref.read(sessionProvider)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Reverse Contra Voucher'),
-        content: const Text('This posts a new voucher with every line\'s Debit/Credit flipped, exactly mirroring this one. Continue?'),
+        content: const Text(
+            'Loads this voucher into a new unsaved draft with From/To swapped. Edit the date, amounts, or remarks as needed, then Save Draft / Approve whenever you\'re ready. Continue?'),
         actions: [
           TextButton(onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(false), child: const Text('Cancel')),
           FilledButton(style: FilledButton.styleFrom(backgroundColor: AppColors.negative), onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(true), child: const Text('Reverse')),
@@ -689,25 +706,18 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
     );
     if (confirmed != true || !mounted) return;
 
+    final originalTransNo = _transNo!;
     setState(() {
-      _reversing = true;
-      _actionError = null;
+      _reversalOfTransNo = originalTransNo;
+      _transNo = null;
+      _isPosted = false;
+      _transDate = DateTime.now();
+      _refNoCtrl.clear();
+      _refDate = null;
+      _remarksCtrl.text = 'Reversal of $originalTransNo';
     });
-    try {
-      final res = await ref.read(financeVoucherRepositoryProvider).reverseVoucher(
-            clientId: session.clientId,
-            companyId: session.companyId,
-            transNo: _transNo!,
-            transDate: _fmtDate(_transDate),
-            userId: session.userId,
-          );
-      if (mounted) _showSnack('Reversal voucher $res posted.', color: AppColors.positive);
-    } catch (e, st) {
-      AppLogger.error('ContraVoucherReverse', e, st);
-      setState(() => _actionError = ErrorPresenter.format(e, action: 'reverse the voucher'));
-    } finally {
-      if (mounted) setState(() => _reversing = false);
-    }
+    await _swapFromTo();
+    if (mounted) _showSnack('Reversal loaded as a new unsaved draft, From/To swapped — edit as needed, then Save/Approve.', color: AppColors.secondary);
   }
 
   // ── Print ─────────────────────────────────────────────────────────────
