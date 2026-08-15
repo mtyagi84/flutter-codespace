@@ -77,22 +77,26 @@ class PdfCanvasRenderer {
   // print path that hasn't resolved the current user yet) — in that case
   // only the page-number segment renders.
   static pw.Widget _footer(pw.Context context, String? printedByName, DateTime? printedOn) {
-    final parts = <String>[
+    final leftParts = <String>[
       if (printedByName != null && printedByName.isNotEmpty) 'Printed By: $printedByName',
       if (printedOn != null) 'Printed On: ${_formatDateTime(printedOn)}',
-      'Page ${context.pageNumber} of ${context.pagesCount}',
     ];
+    const footerStyle = pw.TextStyle(fontSize: 8, color: PdfColors.grey600);
     return pw.Container(
       width: double.infinity,
-      alignment: pw.Alignment.centerLeft,
       margin: const pw.EdgeInsets.only(top: 6),
       padding: const pw.EdgeInsets.only(top: 4),
       decoration: const pw.BoxDecoration(
         border: pw.Border(top: pw.BorderSide(color: PdfColors.grey400, width: 0.5)),
       ),
-      child: pw.Text(
-        parts.join('   |   '),
-        style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+      // Printed By/On on the left, Page N of M on the right — opposite ends
+      // of the same line, not one long string all pinned to one side.
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(leftParts.join('   |   '), style: footerStyle),
+          pw.Text('Page ${context.pageNumber} of ${context.pagesCount}', style: footerStyle),
+        ],
       ),
     );
   }
