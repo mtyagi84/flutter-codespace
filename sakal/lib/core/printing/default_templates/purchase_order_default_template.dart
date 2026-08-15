@@ -20,19 +20,19 @@ const purchaseOrderDefaultTemplate = PrintTemplate(
   elements: [
     PrintElement(
       id: 'logo', type: PrintElementType.image, bind: 'company.logo',
-      x: 1, y: 1, w: 35, h: 20,
+      x: 1, y: 1, w: 35,
     ),
     PrintElement(
-      id: 'company_name', type: PrintElementType.field, bind: 'company.company_name',
-      x: 2, y: 1, w: 140, font: PrintFont(size: 16, bold: true, colorHex: '#1B3A6B'),
-    ),
-    PrintElement(
-      id: 'company_address', type: PrintElementType.field, bind: 'company.address',
-      x: 1, y: 2, w: 180, font: PrintFont(size: 9),
-    ),
-    PrintElement(
-      id: 'company_city', type: PrintElementType.field, bind: 'company.city_name',
-      x: 1, y: 3, w: 180, font: PrintFont(size: 9),
+      id: 'company_block', type: PrintElementType.block,
+      x: 2, y: 1, w: 140,
+      lines: [
+        PrintElement(id: 'company_name', type: PrintElementType.field, bind: 'company.company_name',
+            font: PrintFont(size: 16, bold: true, colorHex: '#1B3A6B')),
+        PrintElement(id: 'company_address', type: PrintElementType.field, bind: 'company.address',
+            font: PrintFont(size: 9, colorHex: '#4A5568')),
+        PrintElement(id: 'company_city', type: PrintElementType.field, bind: 'company.city_name',
+            font: PrintFont(size: 9, colorHex: '#4A5568')),
+      ],
     ),
     PrintElement(id: 'div1', type: PrintElementType.line, x: 1, y: 4, w: 180),
     PrintElement(
