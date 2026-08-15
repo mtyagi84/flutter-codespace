@@ -108,6 +108,13 @@ abstract class StockTransferRepository {
     required String barcode,
   });
 
+  /// Print's "Prepared By"/"Authorised Signatory" data supply — resolved
+  /// against created_by/approved_by on the header.
+  Future<List<Map<String, dynamic>>> getUsersForAutocomplete({
+    required String clientId,
+    required String companyId,
+  });
+
   Future<String> save({
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,

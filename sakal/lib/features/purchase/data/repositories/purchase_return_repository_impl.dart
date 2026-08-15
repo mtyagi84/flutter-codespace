@@ -242,4 +242,10 @@ class PurchaseReturnRepositoryImpl implements PurchaseReturnRepository {
         clientId: clientId, companyId: companyId, returnNo: returnNo, returnDate: returnDate,
         reopenPo: reopenPo, approvedBy: approvedBy,
       );
+
+  @override
+  Future<List<Map<String, dynamic>>> getUsers({
+    required String clientId,
+    required String companyId,
+  }) => _remote.getUsers(clientId: clientId, companyId: companyId);
 }

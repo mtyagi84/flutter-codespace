@@ -6,6 +6,8 @@ class StockTransferRequestHeader {
   final String toLocationId;
   final String toLocationName;
   final String status;
+  final String? createdBy;
+  final String? approvedBy;
 
   const StockTransferRequestHeader({
     required this.requestNo,
@@ -15,6 +17,8 @@ class StockTransferRequestHeader {
     required this.toLocationId,
     required this.toLocationName,
     required this.status,
+    this.createdBy,
+    this.approvedBy,
   });
 
   factory StockTransferRequestHeader.fromJson(Map<String, dynamic> j) {
@@ -28,6 +32,8 @@ class StockTransferRequestHeader {
       toLocationId:     j['to_location_id']   as String? ?? '',
       toLocationName:   to?['location_name']  as String? ?? '',
       status:           j['status']           as String? ?? 'DRAFT',
+      createdBy:        j['created_by']  as String?,
+      approvedBy:       j['approved_by'] as String?,
     );
   }
 }

@@ -78,4 +78,10 @@ class PurchaseInvoiceRepositoryImpl implements PurchaseInvoiceRepository {
   }) => _remote.approve(
         clientId: clientId, companyId: companyId, invoiceNo: invoiceNo, invoiceDate: invoiceDate, approvedBy: approvedBy,
       );
+
+  @override
+  Future<List<Map<String, dynamic>>> getUsers({
+    required String clientId,
+    required String companyId,
+  }) => _remote.getUsers(clientId: clientId, companyId: companyId);
 }

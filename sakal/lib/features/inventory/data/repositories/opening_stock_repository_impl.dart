@@ -86,6 +86,12 @@ class OpeningStockRepositoryImpl implements OpeningStockRepository {
   }) => _remote.getCurrentStockAndCost(clientId: clientId, companyId: companyId, locationId: locationId, productId: productId);
 
   @override
+  Future<List<Map<String, dynamic>>> getUsers({
+    required String clientId,
+    required String companyId,
+  }) => _remote.getUsers(clientId: clientId, companyId: companyId);
+
+  @override
   Future<String> save({
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,

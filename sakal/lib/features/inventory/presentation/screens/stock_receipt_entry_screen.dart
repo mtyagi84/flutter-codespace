@@ -152,6 +152,12 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
   bool _loadingTransfers = false;
   final List<_ReceiptLineRow> _lines = [];
 
+  List<Map<String, dynamic>> _users = [];
+  // Resolved once in _init (against _users, already loaded before it) —
+  // print's "Prepared By"/"Authorised Signatory" data supply.
+  String? _preparedByName;
+  String? _authorisedByName;
+
   bool    _loading = true;
   String? _error;
   String? _actionError;
@@ -183,6 +189,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });
     try {
+      _users = await _ds.getUsersForAutocomplete(clientId: session.clientId, companyId: session.companyId);
       if (widget.editReceiptNo != null) {
         final header = await _ds.getHeader(
           clientId: session.clientId, companyId: session.companyId,
@@ -199,6 +206,8 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
           _fromLocationName = from?['location_name'] as String?;
           _toLocationName   = to?['location_name'] as String?;
           _remarksCtrl.text = header['remarks'] as String? ?? '';
+          _preparedByName   = _resolveUserName(header['created_by'] as String?);
+          _authorisedByName = _resolveUserName(header['approved_by'] as String?);
 
           // Fetch the transfer's own lines first — they're the source of
           // truth for each line's dispatched-qty ceiling.
@@ -568,6 +577,15 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
     return e.message ?? e.toString();
   }
 
+  // _users is loaded once in _init (getUsersForAutocomplete, id+full_name)
+  // — reused here rather than a fresh query, same as every other
+  // UUID->name resolution already done on this screen.
+  String? _resolveUserName(String? userId) {
+    if (userId == null) return null;
+    final match = _users.firstWhere((u) => u['id'] == userId, orElse: () => const {});
+    return match['full_name'] as String?;
+  }
+
   Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) => {
     'company': company,
     'header': {
@@ -585,6 +603,10 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
       'received_qty':    l.receivedQty,
       'shortfall_qty':   l.shortfallQty,
     }).toList(),
+    'signatures': {
+      'prepared_by': _preparedByName,
+      'authorised_by': _authorisedByName,
+    },
   };
 
   Future<void> _printReceipt() async {

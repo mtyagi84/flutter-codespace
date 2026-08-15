@@ -188,6 +188,12 @@ class StockTransferRepositoryImpl implements StockTransferRepository {
   }
 
   @override
+  Future<List<Map<String, dynamic>>> getUsersForAutocomplete({
+    required String clientId,
+    required String companyId,
+  }) => _remote.getUsersForAutocomplete(clientId: clientId, companyId: companyId);
+
+  @override
   Future<String> save({
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,

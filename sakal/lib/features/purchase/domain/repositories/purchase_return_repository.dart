@@ -165,4 +165,9 @@ abstract class PurchaseReturnRepository {
     required bool   reopenPo,
     required String approvedBy,
   });
+
+  Future<List<Map<String, dynamic>>> getUsers({
+    required String clientId,
+    required String companyId,
+  });
 }

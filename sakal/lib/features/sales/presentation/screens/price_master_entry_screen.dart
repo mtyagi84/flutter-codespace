@@ -114,7 +114,13 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
   String _localCurrency = '';
   List<Map<String, dynamic>> _products   = [];
   List<Map<String, dynamic>> _belowCostReasons = [];
+  List<Map<String, dynamic>> _users = [];
   final List<_PriceLineRow> _lines = [];
+
+  // Resolved once in _loadExisting (against _users, already loaded before
+  // it) — print's "Prepared By"/"Authorised Signatory" data supply.
+  String? _preparedByName;
+  String? _authorisedByName;
 
   bool    _loading = true;
   String? _error;
@@ -154,6 +160,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
         ref.read(currenciesProvider.future),
         ref.read(baseCurrencyProvider.future),
         ref.read(localCurrencyProvider.future),
+        _ds.getUsers(clientId: session.clientId, companyId: session.companyId),
       ]);
       _products         = results[0] as List<Map<String, dynamic>>;
       _belowCostReasons = results[1] as List<Map<String, dynamic>>;
@@ -161,6 +168,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
       _currencies       = results[3] as List<Map<String, dynamic>>;
       _baseCurrency     = results[4] as String;
       _localCurrency    = results[5] as String;
+      _users            = results[6] as List<Map<String, dynamic>>;
 
       if (widget.editEntryNo != null) {
         await _loadExisting(widget.editEntryNo!, widget.editEntryDate);
@@ -207,6 +215,8 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
     _rateToBaseCtrl.text  = (header['rate_to_base']  as num? ?? 1).toString();
     _rateToLocalCtrl.text = (header['rate_to_local'] as num? ?? 1).toString();
     _remarksCtrl.text = header['remarks'] as String? ?? '';
+    _preparedByName   = _resolveUserName(header['created_by'] as String?);
+    _authorisedByName = _resolveUserName(header['approved_by'] as String?);
 
     final savedLines = await _ds.getLines(
       clientId: session.clientId, companyId: session.companyId,
@@ -665,6 +675,15 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
     return match.isNotEmpty ? match.first['location_name'] as String? ?? '' : '';
   }
 
+  // _users is loaded once in _init() (getUsers, id+full_name) — reused here
+  // rather than a fresh query, same as every other UUID->name resolution
+  // already done on this screen.
+  String? _resolveUserName(String? userId) {
+    if (userId == null) return null;
+    final match = _users.firstWhere((u) => u['id'] == userId, orElse: () => const {});
+    return match['full_name'] as String?;
+  }
+
   Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) => {
     'company': company,
     'header': {
@@ -685,6 +704,10 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
       'margin_percent': double.tryParse(l.marginPercentCtrl.text) ?? 0,
       'selling_price':  l.sellingPrice,
     }).toList(),
+    'signatures': {
+      'prepared_by':   _preparedByName,
+      'authorised_by': _authorisedByName,
+    },
   };
 
   Future<void> _printBatch() async {

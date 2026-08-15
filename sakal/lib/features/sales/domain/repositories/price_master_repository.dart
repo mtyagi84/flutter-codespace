@@ -68,6 +68,13 @@ abstract class PriceMasterRepository {
     required String rateDate,
   });
 
+  /// id+full_name lookup — resolves created_by/approved_by UUIDs into
+  /// display names for the printed document's signature block.
+  Future<List<Map<String, dynamic>>> getUsers({
+    required String clientId,
+    required String companyId,
+  });
+
   Future<String> save({
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,

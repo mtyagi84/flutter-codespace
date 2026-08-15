@@ -7,6 +7,8 @@ class StockReceiptHeader {
   final String  toLocationName;
   final String? sourceTransferNo;
   final String  status;
+  final String? createdBy;
+  final String? approvedBy;
 
   const StockReceiptHeader({
     required this.receiptNo,
@@ -17,6 +19,8 @@ class StockReceiptHeader {
     required this.toLocationName,
     required this.sourceTransferNo,
     required this.status,
+    this.createdBy,
+    this.approvedBy,
   });
 
   factory StockReceiptHeader.fromJson(Map<String, dynamic> j) {
@@ -31,6 +35,8 @@ class StockReceiptHeader {
       toLocationName:   to?['location_name']    as String? ?? '',
       sourceTransferNo: j['source_transfer_no'] as String?,
       status:           j['status']             as String? ?? 'DRAFT',
+      createdBy:        j['created_by']  as String?,
+      approvedBy:       j['approved_by'] as String?,
     );
   }
 }

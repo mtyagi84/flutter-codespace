@@ -451,4 +451,18 @@ class PurchaseReturnRemoteDs {
       'p_approved_by': approvedBy,
     });
   }
+
+  Future<List<Map<String, dynamic>>> getUsers({
+    required String clientId,
+    required String companyId,
+  }) async {
+    final res = await _dio.get('/rim_users', queryParameters: {
+      'client_id':  'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'is_deleted': 'eq.false',
+      'select':     'id,full_name',
+      'order':      'full_name.asc',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
+  }
 }

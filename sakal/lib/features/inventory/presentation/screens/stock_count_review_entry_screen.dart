@@ -82,6 +82,12 @@ class _StockCountReviewEntryScreenState extends ConsumerState<StockCountReviewEn
   final Map<String, List<Map<String, dynamic>>> _countLinesByKey = {};
   List<Map<String, dynamic>> _variance = [];
   String? _postedAdjustmentNo;
+  List<Map<String, dynamic>> _users = [];
+
+  // Resolved once in _init (against _users, already loaded before it) —
+  // print's "Prepared By"/"Authorised Signatory" data supply.
+  String? _preparedByName;
+  String? _authorisedByName;
 
   bool    _loading = true;
   bool    _refreshingVariance = false;
@@ -115,6 +121,7 @@ class _StockCountReviewEntryScreenState extends ConsumerState<StockCountReviewEn
       _locationId = session.locationId;
       _locations  = await _ds.getLocations(clientId: session.clientId, companyId: session.companyId);
       _reasons    = await _ds.getReasons(clientId: session.clientId, companyId: session.companyId);
+      _users      = await _ds.getUsers(clientId: session.clientId, companyId: session.companyId);
       final defaultReason = _reasons.where((r) => (r['description'] as String?) == 'Physical Count Variance').toList();
       _reasonId = defaultReason.isNotEmpty ? defaultReason.first['id'] as String : null;
 
@@ -132,6 +139,8 @@ class _StockCountReviewEntryScreenState extends ConsumerState<StockCountReviewEn
           _reasonId    = header['reason_id'] as String?;
           _remarksCtrl.text = header['remarks'] as String? ?? '';
           _postedAdjustmentNo = header['posted_adjustment_no'] as String?;
+          _preparedByName   = _resolveUserName(header['created_by'] as String?);
+          _authorisedByName = _resolveUserName(header['approved_by'] as String?);
 
           final sources = await _ds.getSources(
             clientId: session.clientId, companyId: session.companyId,
@@ -309,6 +318,15 @@ class _StockCountReviewEntryScreenState extends ConsumerState<StockCountReviewEn
     return match.isNotEmpty ? match.first['location_name'] as String? ?? '' : '';
   }
 
+  // _users is loaded once in _init() (getUsers, id+full_name) — reused here
+  // rather than a fresh query, same as every other UUID->name resolution
+  // already done on this screen.
+  String? _resolveUserName(String? userId) {
+    if (userId == null) return null;
+    final match = _users.firstWhere((u) => u['id'] == userId, orElse: () => const {});
+    return match['full_name'] as String?;
+  }
+
   Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) => {
     'company': company,
     'header': {
@@ -329,6 +347,10 @@ class _StockCountReviewEntryScreenState extends ConsumerState<StockCountReviewEn
       'variance_qty': r['variance_qty'],
       'adjust_flag':  r['adjust_flag'],
     }).toList(),
+    'signatures': {
+      'prepared_by':   _preparedByName,
+      'authorised_by': _authorisedByName,
+    },
   };
 
   Future<void> _printReview() async {

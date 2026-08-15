@@ -218,6 +218,11 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
   // ── GRN picker + lines/charges ────────────────────────────────────────────
   List<Map<String, dynamic>> _suppliers   = [];
   List<Map<String, dynamic>> _pendingGrns = [];
+  List<Map<String, dynamic>> _users       = [];
+  // Resolved once in _init (against _users, already loaded before it) —
+  // print's "Prepared By"/"Authorised Signatory" data supply.
+  String? _preparedByName;
+  String? _authorisedByName;
   Set<String> _fullyReturnedGrnKeys = {};
   final Set<String> _selectedGrnKeys = {};
   final List<_ReturnLineRow> _lines = [];
@@ -268,6 +273,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
       final reasonRows = await _ds.getCommonMastersByType(
           clientId: session.clientId, companyId: session.companyId, typeKey: 'PURCHASE_RETURN_REASON');
       _reasons = reasonRows.map((r) => r['description'] as String).toList();
+      _users = await _ds.getUsers(clientId: session.clientId, companyId: session.companyId);
 
       if (widget.editReturnNo != null) {
         final header = await _ds.getHeader(
@@ -289,6 +295,8 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
           _taxAmountCtrl.text     = header.taxAmount.toString();
           _reason             = header.reason;
           _remarksCtrl.text   = header.remarks ?? '';
+          _preparedByName   = _resolveUserName(header.createdBy);
+          _authorisedByName = _resolveUserName(header.approvedBy);
 
           if (_supplierId != null) {
             _pendingGrns = await _ds.getGrnsForSupplier(
@@ -870,6 +878,15 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
 
   // ── Print ─────────────────────────────────────────────────────────────────
 
+  // _users is loaded once in _init() (getUsers, id+full_name) — reused here
+  // rather than a fresh query, same as every other UUID->name resolution
+  // already done on this screen.
+  String? _resolveUserName(String? userId) {
+    if (userId == null) return null;
+    final match = _users.firstWhere((u) => u['id'] == userId, orElse: () => const {});
+    return match['full_name'] as String?;
+  }
+
   Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) {
     return {
       'company': company,
@@ -881,6 +898,10 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
         'currency_code': _returnCurrencyCode ?? '',
         'reason':       _reason ?? '',
         'remarks':      _remarksCtrl.text,
+      },
+      'signatures': {
+        'prepared_by': _preparedByName,
+        'authorised_by': _authorisedByName,
       },
       'lines': _lines.where((l) => l.returnQty > 0).map((l) => {
         'product_name': l.productDisplay.contains('] ') ? l.productDisplay.split('] ').last : l.productDisplay,

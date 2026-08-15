@@ -8,6 +8,8 @@ class StockTransferHeader {
   final bool    againstRequest;
   final String? postingMode;
   final String  status;
+  final String? createdBy;
+  final String? approvedBy;
 
   const StockTransferHeader({
     required this.transferNo,
@@ -19,6 +21,8 @@ class StockTransferHeader {
     required this.againstRequest,
     required this.postingMode,
     required this.status,
+    this.createdBy,
+    this.approvedBy,
   });
 
   factory StockTransferHeader.fromJson(Map<String, dynamic> j) {
@@ -34,6 +38,8 @@ class StockTransferHeader {
       againstRequest:   j['against_request']  as bool?   ?? false,
       postingMode:      j['posting_mode']     as String?,
       status:           j['status']           as String? ?? 'DRAFT',
+      createdBy:        j['created_by']  as String?,
+      approvedBy:       j['approved_by'] as String?,
     );
   }
 

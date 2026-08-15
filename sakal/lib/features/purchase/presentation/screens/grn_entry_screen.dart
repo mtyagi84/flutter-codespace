@@ -243,6 +243,11 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
   List<Map<String, dynamic>> _departments  = [];
   List<Map<String, dynamic>> _consumptionAreas = [];
   List<Map<String, dynamic>> _locations    = [];
+  List<Map<String, dynamic>> _users        = [];
+  // Resolved once in _loadExisting (against _users, already loaded before
+  // it) — print's "Prepared By"/"Authorised Signatory" data supply.
+  String? _preparedByName;
+  String? _authorisedByName;
   Map<String, double> _taxGroupRatePct = {};
   Map<String, double> _taxRatePct      = {};
   String _baseCurrency  = '';
@@ -295,6 +300,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
         ref.read(locationsProvider.future),
         ref.read(baseCurrencyProvider.future),
         ref.read(localCurrencyProvider.future),
+        _ds.getUsers(clientId: session.clientId, companyId: session.companyId),
       ]);
 
       final accounts = results[0] as List<Map<String, dynamic>>;
@@ -308,6 +314,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
       _locations           = results[7] as List<Map<String, dynamic>>;
       _baseCurrency        = results[8] as String;
       _localCurrency       = results[9] as String;
+      _users               = results[10] as List<Map<String, dynamic>>;
 
       await _loadTaxRates();
 
@@ -427,6 +434,8 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
           _remarksCtrl.text = header.remarks ?? '';
           _postedVoucherNo   = header.postedVoucherNo;
           _postedVoucherDate = header.postedVoucherDate;
+          _preparedByName   = _resolveUserName(header.createdBy);
+          _authorisedByName = _resolveUserName(header.approvedBy);
           _loading = false;
         });
       }
@@ -1193,6 +1202,15 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
 
   // ── Print ─────────────────────────────────────────────────────────────────
 
+  // _users is loaded once in _init() (getUsers, id+full_name) — reused here
+  // rather than a fresh query, same as every other UUID->name resolution
+  // already done on this screen.
+  String? _resolveUserName(String? userId) {
+    if (userId == null) return null;
+    final match = _users.firstWhere((u) => u['id'] == userId, orElse: () => const {});
+    return match['full_name'] as String?;
+  }
+
   Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) {
     return {
       'company': company,
@@ -1207,6 +1225,10 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
         'bill_to':               _billToCtrl.text,
         'ship_to':               _shipToCtrl.text,
         'remarks':               _remarksCtrl.text,
+      },
+      'signatures': {
+        'prepared_by': _preparedByName,
+        'authorised_by': _authorisedByName,
       },
       'lines': _lines.where((l) => l.productId != null).map((l) {
         final desc = l.productDisplay.contains('] ') ? l.productDisplay.split('] ').last : l.productDisplay;

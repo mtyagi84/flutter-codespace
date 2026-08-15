@@ -291,4 +291,13 @@ class GrnRepositoryImpl implements GrnRepository {
     required String productId,
     required String locationId,
   }) => _remote.getProductLastCostPrice(productId: productId, locationId: locationId);
+
+  @override
+  Future<List<Map<String, dynamic>>> getUsers({
+    required String clientId,
+    required String companyId,
+  }) => _cachedLookup(
+        cacheKey: 'GRN_USERS',
+        fetchRemote: () => _remote.getUsers(clientId: clientId, companyId: companyId),
+      );
 }

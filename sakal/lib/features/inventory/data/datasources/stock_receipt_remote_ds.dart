@@ -181,6 +181,21 @@ class StockReceiptRemoteDs {
     return List<Map<String, dynamic>>.from(res.data as List);
   }
 
+  Future<List<Map<String, dynamic>>> getUsersForAutocomplete({
+    required String clientId,
+    required String companyId,
+  }) async {
+    final res = await _dio.get('/rim_users', queryParameters: {
+      'client_id':  'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'is_active':  'eq.true',
+      'is_deleted': 'eq.false',
+      'select':     'id,full_name',
+      'order':      'full_name.asc',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
+  }
+
   Future<String> save({
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> lines,

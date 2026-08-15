@@ -67,6 +67,12 @@ class StockCountReviewRepositoryImpl implements StockCountReviewRepository {
   }) => _remote.getCountLines(clientId: clientId, companyId: companyId, countNo: countNo, countDate: countDate);
 
   @override
+  Future<List<Map<String, dynamic>>> getUsers({
+    required String clientId,
+    required String companyId,
+  }) => _remote.getUsers(clientId: clientId, companyId: companyId);
+
+  @override
   Future<String> save({
     required Map<String, dynamic> header,
     required List<Map<String, dynamic>> sourceRefs,

@@ -171,7 +171,15 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
   List<Map<String, dynamic>> _locations = [];
   List<ItemCategoryModel> _categories = [];
   Map<String, String> _categoryPaths = {};
+  List<Map<String, dynamic>> _users = [];
   final List<_WorksheetRow> _lines = [];
+
+  // Resolved once in _init (against _users, already loaded before it) —
+  // print's "Prepared By"/"Authorised Signatory" data supply. Stock Count
+  // has no approve step of its own (only Submit), so authorised_by binds
+  // to submitted_by — the closest equivalent on this document.
+  String? _preparedByName;
+  String? _authorisedByName;
 
   bool    _loading = true;
   bool    _starting = false;
@@ -212,6 +220,7 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
       _locations  = await _ds.getLocations(clientId: session.clientId, companyId: session.companyId);
       _categories = await ref.read(itemCategoriesRepositoryProvider).getCategories(clientId: session.clientId, companyId: session.companyId);
       _categoryPaths = _buildCategoryPaths(_categories);
+      _users = await _ds.getUsers(clientId: session.clientId, companyId: session.companyId);
 
       if (widget.editCountNo != null) {
         final header = await _ds.getHeader(
@@ -227,6 +236,8 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
           _natureFilter = header['nature_filter'] as String?;
           _remarksCtrl.text = header['remarks'] as String? ?? '';
           if (_categoryId != null) _categoryDisplay = _categoryPaths[_categoryId] ?? '';
+          _preparedByName   = _resolveUserName(header['created_by'] as String?);
+          _authorisedByName = _resolveUserName(header['submitted_by'] as String?);
 
           final savedLines = await _ds.getLines(
             clientId: session.clientId, companyId: session.companyId,
@@ -531,6 +542,15 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
     return match.isNotEmpty ? match.first['location_name'] as String? ?? '' : '';
   }
 
+  // _users is loaded once in _init() (getUsers, id+full_name) — reused here
+  // rather than a fresh query, same as every other UUID->name resolution
+  // already done on this screen.
+  String? _resolveUserName(String? userId) {
+    if (userId == null) return null;
+    final match = _users.firstWhere((u) => u['id'] == userId, orElse: () => const {});
+    return match['full_name'] as String?;
+  }
+
   Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) => {
     'company': company,
     'header': {
@@ -545,6 +565,10 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
       'product_name': '[${l.productCode}] ${l.productName}',
       'counted_qty':  l.baseQty,
     }).toList(),
+    'signatures': {
+      'prepared_by':   _preparedByName,
+      'authorised_by': _authorisedByName,
+    },
   };
 
   Future<void> _printCount() async {

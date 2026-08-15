@@ -170,6 +170,12 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
   final List<_TransferChargeRow> _charges = [];
   List<Map<String, dynamic>> _additionalCharges = [];
 
+  List<Map<String, dynamic>> _users = [];
+  // Resolved once in _init (against _users, already loaded before it) —
+  // print's "Prepared By"/"Authorised Signatory" data supply.
+  String? _preparedByName;
+  String? _authorisedByName;
+
   bool    _loading = true;
   String? _error;
   String? _actionError;
@@ -216,10 +222,12 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
         _ds.getLocations(clientId: session.clientId, companyId: session.companyId),
         _ds.getInterLocationModel(clientId: session.clientId, companyId: session.companyId),
         _ds.getAdditionalCharges(clientId: session.clientId, companyId: session.companyId),
+        _ds.getUsersForAutocomplete(clientId: session.clientId, companyId: session.companyId),
       ]);
       _locations           = results[0] as List<Map<String, dynamic>>;
       _interLocationModel  = results[1] as String;
       _additionalCharges   = results[2] as List<Map<String, dynamic>>;
+      _users               = results[3] as List<Map<String, dynamic>>;
 
       if (widget.editTransferNo != null) {
         final header = await _ds.getHeader(
@@ -236,6 +244,8 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
           _sourceRequestNo          = header['source_request_no'] as String?;
           _sourceRequestDate         = header['source_request_date'] as String?;
           _remarksCtrl.text = header['remarks'] as String? ?? '';
+          _preparedByName   = _resolveUserName(header['created_by'] as String?);
+          _authorisedByName = _resolveUserName(header['approved_by'] as String?);
 
           final savedLines = await _ds.getLines(
             clientId: session.clientId, companyId: session.companyId,
@@ -745,6 +755,15 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
   String _locationLabel(String? id) =>
       _locations.firstWhere((l) => l['id'] == id, orElse: () => const {})['location_name'] as String? ?? '';
 
+  // _users is loaded once in _init (getUsersForAutocomplete, id+full_name)
+  // — reused here rather than a fresh query, same as every other
+  // UUID->name resolution already done on this screen.
+  String? _resolveUserName(String? userId) {
+    if (userId == null) return null;
+    final match = _users.firstWhere((u) => u['id'] == userId, orElse: () => const {});
+    return match['full_name'] as String?;
+  }
+
   Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) => {
     'company': company,
     'header': {
@@ -768,6 +787,10 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
     }).toList(),
     'totals': {
       'charges_amount': _chargesTotal,
+    },
+    'signatures': {
+      'prepared_by': _preparedByName,
+      'authorised_by': _authorisedByName,
     },
   };
 

@@ -159,6 +159,12 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
   final Set<String> _selectedRequisitionKeys = {};
   final List<_IssueLineRow> _lines = [];
 
+  List<Map<String, dynamic>> _users = [];
+  // Resolved once in _init (against _users, already loaded before it) —
+  // print's "Prepared By"/"Authorised Signatory" data supply.
+  String? _preparedByName;
+  String? _authorisedByName;
+
   bool    _loading = true;
   String? _error;
   String? _actionError;
@@ -192,6 +198,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
     setState(() { _loading = true; _error = null; });
     try {
       _locationId = session.locationId;
+      _users = await _ds.getUsersForAutocomplete(clientId: session.clientId, companyId: session.companyId);
 
       if (widget.editIssueNo != null) {
         final header = await _ds.getHeader(
@@ -205,6 +212,8 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
           _locationId = header['location_id'] as String?;
           _locationName = (header['location'] as Map<String, dynamic>?)?['location_name'] as String?;
           _remarksCtrl.text = header['remarks'] as String? ?? '';
+          _preparedByName   = _resolveUserName(header['created_by'] as String?);
+          _authorisedByName = _resolveUserName(header['approved_by'] as String?);
         }
       }
 
@@ -495,6 +504,15 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
     return e.message ?? e.toString();
   }
 
+  // _users is loaded once in _init (getUsersForAutocomplete, id+full_name)
+  // — reused here rather than a fresh query, same as every other
+  // UUID->name resolution already done on this screen.
+  String? _resolveUserName(String? userId) {
+    if (userId == null) return null;
+    final match = _users.firstWhere((u) => u['id'] == userId, orElse: () => const {});
+    return match['full_name'] as String?;
+  }
+
   Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) => {
     'company': company,
     'header': {
@@ -511,6 +529,10 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
       'department_name':       l.departmentLabel ?? '',
       'area_name':             l.consumptionAreaLabel ?? '',
     }).toList(),
+    'signatures': {
+      'prepared_by': _preparedByName,
+      'authorised_by': _authorisedByName,
+    },
   };
 
   Future<void> _printIssue() async {

@@ -88,6 +88,11 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
   // ── GRN picker ────────────────────────────────────────────────────────────
   List<Map<String, dynamic>> _suppliers    = [];
   List<Map<String, dynamic>> _pendingGrns  = [];
+  List<Map<String, dynamic>> _users        = [];
+  // Resolved once in _init (against _users, already loaded before it) —
+  // print's "Prepared By"/"Authorised Signatory" data supply.
+  String? _preparedByName;
+  String? _authorisedByName;
   final Set<String> _selectedGrnKeys = {};
 
   String _grnKey(Map<String, dynamic> g) => '${g['grn_no']}|${g['grn_date']}';
@@ -135,6 +140,7 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
       _locationId = session.locationId;
       _suppliers = await _ds.getSuppliersWithPendingGrns(
           clientId: session.clientId, companyId: session.companyId);
+      _users = await _ds.getUsers(clientId: session.clientId, companyId: session.companyId);
 
       if (widget.editInvoiceNo != null) {
         final header = await _ds.getHeader(
@@ -159,6 +165,8 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
           _remarksCtrl.text    = header.remarks ?? '';
           _postedVoucherNo     = header.postedVoucherNo;
           _postedVoucherDate   = header.postedVoucherDate;
+          _preparedByName   = _resolveUserName(header.createdBy);
+          _authorisedByName = _resolveUserName(header.approvedBy);
 
           if (_supplierId != null) {
             _pendingGrns = await _ds.getPendingGrnsForSupplier(
@@ -372,6 +380,15 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
 
   // ── Print ─────────────────────────────────────────────────────────────────
 
+  // _users is loaded once in _init() (getUsers, id+full_name) — reused here
+  // rather than a fresh query, same as every other UUID->name resolution
+  // already done on this screen.
+  String? _resolveUserName(String? userId) {
+    if (userId == null) return null;
+    final match = _users.firstWhere((u) => u['id'] == userId, orElse: () => const {});
+    return match['full_name'] as String?;
+  }
+
   Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) {
     final linkedGrns = _pendingGrns.where((g) => _selectedGrnKeys.contains(_grnKey(g)));
     return {
@@ -385,6 +402,10 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
         'supplier_invoice_no':   _supplierInvoiceNoCtrl.text,
         'supplier_invoice_date': _displayDate(_supplierInvoiceDate),
         'remarks':               _remarksCtrl.text,
+      },
+      'signatures': {
+        'prepared_by': _preparedByName,
+        'authorised_by': _authorisedByName,
       },
       'grns': linkedGrns.map((g) {
         final currency = g['currency'] as Map<String, dynamic>?;

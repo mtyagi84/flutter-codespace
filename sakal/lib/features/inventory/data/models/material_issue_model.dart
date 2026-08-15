@@ -4,6 +4,8 @@ class MaterialIssueHeader {
   final String locationId;
   final String locationName;
   final String status;
+  final String? createdBy;
+  final String? approvedBy;
 
   const MaterialIssueHeader({
     required this.issueNo,
@@ -11,6 +13,8 @@ class MaterialIssueHeader {
     required this.locationId,
     required this.locationName,
     required this.status,
+    this.createdBy,
+    this.approvedBy,
   });
 
   factory MaterialIssueHeader.fromJson(Map<String, dynamic> j) {
@@ -21,6 +25,8 @@ class MaterialIssueHeader {
       locationId:   j['location_id'] as String? ?? '',
       locationName: location?['location_name'] as String? ?? '',
       status:       j['status']       as String? ?? 'DRAFT',
+      createdBy:    j['created_by']  as String?,
+      approvedBy:   j['approved_by'] as String?,
     );
   }
 }

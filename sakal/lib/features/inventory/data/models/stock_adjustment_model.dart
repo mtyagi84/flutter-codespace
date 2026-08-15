@@ -6,6 +6,8 @@ class StockAdjustmentHeader {
   final String reasonId;
   final String reasonLabel;
   final String status;
+  final String? createdBy;
+  final String? approvedBy;
 
   const StockAdjustmentHeader({
     required this.adjustmentNo,
@@ -15,6 +17,8 @@ class StockAdjustmentHeader {
     required this.reasonId,
     required this.reasonLabel,
     required this.status,
+    this.createdBy,
+    this.approvedBy,
   });
 
   factory StockAdjustmentHeader.fromJson(Map<String, dynamic> j) {
@@ -28,6 +32,8 @@ class StockAdjustmentHeader {
       reasonId:       j['reason_id']       as String? ?? '',
       reasonLabel:    reason?['description'] as String? ?? '',
       status:         j['status']          as String? ?? 'DRAFT',
+      createdBy:      j['created_by']  as String?,
+      approvedBy:     j['approved_by'] as String?,
     );
   }
 }

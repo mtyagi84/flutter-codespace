@@ -145,6 +145,11 @@ abstract class GrnRepository {
     required String rateDate,
   });
 
+  Future<List<Map<String, dynamic>>> getUsers({
+    required String clientId,
+    required String companyId,
+  });
+
   /// Product's moving-average cost at this location, in base currency —
   /// baseline for the GRN rate cost-variance warning. Null if no prior
   /// stock/cost exists yet for this product+location.

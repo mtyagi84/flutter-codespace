@@ -22,6 +22,7 @@ class PurchaseInvoiceModel {
   final double  exchangeDiffBase;
   final String? remarks;
   final String  status; // DRAFT / APPROVED
+  final String? createdBy;
   final String? approvedBy;
   final String? approvedAt;
   final String? postedVoucherNo;
@@ -50,6 +51,7 @@ class PurchaseInvoiceModel {
     this.exchangeDiffBase = 0,
     this.remarks,
     this.status = 'DRAFT',
+    this.createdBy,
     this.approvedBy,
     this.approvedAt,
     this.postedVoucherNo,
@@ -83,6 +85,7 @@ class PurchaseInvoiceModel {
       exchangeDiffBase:    (j['exchange_diff_base'] as num? ?? 0).toDouble(),
       remarks:             j['remarks'] as String?,
       status:              j['status'] as String? ?? 'DRAFT',
+      createdBy:           j['created_by'] as String?,
       approvedBy:          j['approved_by'] as String?,
       approvedAt:          j['approved_at'] as String?,
       postedVoucherNo:     j['posted_voucher_no'] as String?,

@@ -102,6 +102,12 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
   List<Map<String, dynamic>> _locations = [];
   final List<_RequestLineRow> _lines = [];
 
+  List<Map<String, dynamic>> _users = [];
+  // Resolved once in _init (against _users, already loaded before it) —
+  // print's "Prepared By"/"Authorised Signatory" data supply.
+  String? _preparedByName;
+  String? _authorisedByName;
+
   bool    _loading = true;
   String? _error;
   String? _actionError;
@@ -130,6 +136,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
     try {
       _fromLocationId = session.locationId;
       _locations = await _ds.getLocations(clientId: session.clientId, companyId: session.companyId);
+      _users = await _ds.getUsersForAutocomplete(clientId: session.clientId, companyId: session.companyId);
 
       if (widget.editRequestNo != null) {
         final header = await _ds.getHeader(
@@ -143,6 +150,8 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
           _fromLocationId = header['from_location_id'] as String?;
           _toLocationId   = header['to_location_id'] as String?;
           _remarksCtrl.text = header['remarks'] as String? ?? '';
+          _preparedByName   = _resolveUserName(header['created_by'] as String?);
+          _authorisedByName = _resolveUserName(header['approved_by'] as String?);
 
           final savedLines = await _ds.getLines(
             clientId: session.clientId, companyId: session.companyId,
@@ -347,6 +356,15 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
   String _locationLabel(String? id) =>
       _locations.firstWhere((l) => l['id'] == id, orElse: () => const {})['location_name'] as String? ?? '';
 
+  // _users is loaded once in _init (getUsersForAutocomplete, id+full_name)
+  // — reused here rather than a fresh query, same as every other
+  // UUID->name resolution already done on this screen.
+  String? _resolveUserName(String? userId) {
+    if (userId == null) return null;
+    final match = _users.firstWhere((u) => u['id'] == userId, orElse: () => const {});
+    return match['full_name'] as String?;
+  }
+
   Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) => {
     'company': company,
     'header': {
@@ -363,6 +381,10 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
       'base_qty':     l.baseQty,
       'remarks':      l.remarksCtrl.text,
     }).toList(),
+    'signatures': {
+      'prepared_by': _preparedByName,
+      'authorised_by': _authorisedByName,
+    },
   };
 
   Future<void> _printRequest() async {
