@@ -814,7 +814,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
           const SizedBox(width: 8),
           Expanded(flex: 2, child: deptAreaField),
           const SizedBox(width: 8),
-          SizedBox(width: 70, height: 56, child: unitField),
+          SizedBox(width: 70, child: unitField),
           const SizedBox(width: 8),
           SizedBox(width: 110, child: qtyPackField),
           if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 110, child: qtyLooseField)],

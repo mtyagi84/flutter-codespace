@@ -1158,7 +1158,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     SizedBox(width: 220, child: productField),
                     const SizedBox(width: 8),
-                    SizedBox(width: 140, height: 56, child: uomField),
+                    SizedBox(width: 140, child: uomField),
                     const SizedBox(width: 8),
                     SizedBox(width: 100, child: costPriceField),
                     const SizedBox(width: 8),
@@ -1167,10 +1167,10 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
                     SizedBox(width: 110, child: sellingPriceField),
                     if (showBelowCostReason) ...[
                       const SizedBox(width: 8),
-                      SizedBox(width: 180, height: 56, child: row.isBelowCost ? belowCostReasonField : const SizedBox.shrink()),
+                      SizedBox(width: 180, child: row.isBelowCost ? belowCostReasonField : const SizedBox.shrink()),
                     ],
                     const SizedBox(width: 8),
-                    SizedBox(width: 150, height: 56, child: taxInclusiveField),
+                    SizedBox(width: 150, child: taxInclusiveField),
                     SizedBox(
                       width: 40,
                       child: locked ? null : IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line'),

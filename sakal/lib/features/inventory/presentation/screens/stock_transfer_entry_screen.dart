@@ -1158,13 +1158,13 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
         fields: [
           if (_mode == 'DIRECT') SizedBox(width: 240, child: productField),
           if (_mode == 'DIRECT' && showBarcode) SizedBox(width: 140, child: barcodeField),
-          SizedBox(width: 70, height: 56, child: unitField),
+          SizedBox(width: 70, child: unitField),
           SizedBox(width: 100, child: qtyPackField),
           if (showLooseQty) SizedBox(width: 100, child: qtyLooseField),
           if (_isLikelyInterEntity) SizedBox(width: 100, child: salesPriceField),
           SizedBox(width: 160, child: remarksField),
-          if (row.costPriceHint > 0) SizedBox(width: 100, height: 56, child: costField),
-          if (row.chargeAmount > 0) SizedBox(width: 110, height: 56, child: chargeField),
+          if (row.costPriceHint > 0) SizedBox(width: 100, child: costField),
+          if (row.chargeAmount > 0) SizedBox(width: 110, child: chargeField),
         ],
         body: batchSerialBody,
       );
@@ -1184,7 +1184,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
           if (_mode == 'DIRECT' && showBarcode) ...[const SizedBox(width: 8), SizedBox(width: 140, child: barcodeField)],
           if (_mode == 'AGAINST_REQUEST') ...[const SizedBox(width: 8), SizedBox(width: 130, child: remainingField)],
           const SizedBox(width: 8),
-          SizedBox(width: 70, height: 56, child: unitField),
+          SizedBox(width: 70, child: unitField),
           const SizedBox(width: 8),
           SizedBox(width: 100, child: qtyPackField),
           if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 100, child: qtyLooseField)],
@@ -1193,11 +1193,11 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
           SizedBox(width: 160, child: remarksField),
           if (showCostColumn) ...[
             const SizedBox(width: 8),
-            SizedBox(width: 100, height: 56, child: row.costPriceHint > 0 ? costField : const SizedBox.shrink()),
+            SizedBox(width: 100, child: row.costPriceHint > 0 ? costField : const SizedBox.shrink()),
           ],
           if (showChargeColumn) ...[
             const SizedBox(width: 8),
-            SizedBox(width: 110, height: 56, child: row.chargeAmount > 0 ? chargeField : const SizedBox.shrink()),
+            SizedBox(width: 110, child: row.chargeAmount > 0 ? chargeField : const SizedBox.shrink()),
           ],
           SizedBox(
             width: 40,

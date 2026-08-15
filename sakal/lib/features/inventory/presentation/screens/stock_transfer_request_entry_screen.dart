@@ -692,7 +692,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
         SizedBox(width: 220, child: remarksField),
         if (showTransferredColumn) ...[
           const SizedBox(width: 8),
-          SizedBox(width: 130, height: 56, child: row.transferredQty > 0 ? transferredField : const SizedBox.shrink()),
+          SizedBox(width: 130, child: row.transferredQty > 0 ? transferredField : const SizedBox.shrink()),
         ],
         SizedBox(
           width: 40,

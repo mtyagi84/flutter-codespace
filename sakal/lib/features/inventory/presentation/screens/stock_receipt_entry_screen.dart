@@ -899,9 +899,9 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SizedBox(width: 240, child: productField),
           const SizedBox(width: 8),
-          SizedBox(width: 140, height: 56, child: dispatchedField),
+          SizedBox(width: 140, child: dispatchedField),
           const SizedBox(width: 8),
-          SizedBox(width: 70, height: 56, child: unitField),
+          SizedBox(width: 70, child: unitField),
           const SizedBox(width: 8),
           SizedBox(width: 110, child: qtyPackField),
           if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 110, child: qtyLooseField)],

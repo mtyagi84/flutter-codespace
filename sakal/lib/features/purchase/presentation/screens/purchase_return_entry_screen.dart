@@ -1362,14 +1362,14 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SizedBox(width: 260, child: productField),
           const SizedBox(width: 8),
-          SizedBox(width: 70, height: 56, child: unitField),
+          SizedBox(width: 70, child: unitField),
           const SizedBox(width: 8),
           SizedBox(width: 110, child: qtyPackField),
           if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 110, child: qtyLooseField)],
           const SizedBox(width: 8),
-          SizedBox(width: 100, height: 56, child: rateField),
+          SizedBox(width: 100, child: rateField),
           const SizedBox(width: 8),
-          SizedBox(width: 110, height: 56, child: amountField),
+          SizedBox(width: 110, child: amountField),
           SizedBox(
             width: 40,
             child: locked ? null : IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line'),

@@ -1246,13 +1246,13 @@ class _SalesDeliveryEntryScreenState extends ConsumerState<SalesDeliveryEntryScr
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 220, height: 56, child: productField),
+          SizedBox(width: 220, child: productField),
           const SizedBox(width: 8),
-          SizedBox(width: 90, height: 56, child: pendingField),
+          SizedBox(width: 90, child: pendingField),
           const SizedBox(width: 8),
-          SizedBox(width: 70, height: 56, child: unitField),
+          SizedBox(width: 70, child: unitField),
           const SizedBox(width: 8),
-          SizedBox(width: 130, height: 56, child: barcodeField),
+          SizedBox(width: 130, child: barcodeField),
           const SizedBox(width: 8),
           SizedBox(width: 110, child: qtyPackField),
           if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 110, child: qtyLooseField)],

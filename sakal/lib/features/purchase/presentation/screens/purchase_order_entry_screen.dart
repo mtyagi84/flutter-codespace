@@ -1631,15 +1631,20 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
           const SizedBox(width: 8),
           SizedBox(width: 100, child: discField),
           const SizedBox(width: 8),
-          SizedBox(width: 170, height: 56, child: taxGroupField),
+          // Stale height: 56 overrides removed (found live 2026-08-17) —
+          // predated the showLabel:isMobile shrink above, and once that
+          // landed, these 5 cells stayed forced at the old 56px while
+          // every sibling cell in the row shrank to SakalFieldCard's own
+          // new (smaller) resolved height, producing a visibly jagged row.
+          SizedBox(width: 170, child: taxGroupField),
           const SizedBox(width: 8),
-          SizedBox(width: 170, height: 56, child: departmentField),
+          SizedBox(width: 170, child: departmentField),
           const SizedBox(width: 8),
-          SizedBox(width: 170, height: 56, child: consumptionAreaField),
+          SizedBox(width: 170, child: consumptionAreaField),
           const SizedBox(width: 8),
-          SizedBox(width: 110, height: 56, child: finalAmountField),
+          SizedBox(width: 110, child: finalAmountField),
           const SizedBox(width: 8),
-          SizedBox(width: 110, height: 56, child: landedField),
+          SizedBox(width: 110, child: landedField),
           SizedBox(
             width: 40,
             child: locked ? null : IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove line'),

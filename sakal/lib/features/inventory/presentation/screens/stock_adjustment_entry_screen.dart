@@ -997,7 +997,7 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
           const SizedBox(width: 8),
           SizedBox(width: 130, child: directionField),
           const SizedBox(width: 8),
-          SizedBox(width: 70, height: 56, child: unitField),
+          SizedBox(width: 70, child: unitField),
           const SizedBox(width: 8),
           SizedBox(width: 100, child: qtyPackField),
           if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 100, child: qtyLooseField)],

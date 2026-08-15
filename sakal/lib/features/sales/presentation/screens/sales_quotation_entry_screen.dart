@@ -1413,7 +1413,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
                   SizedBox(width: 240, child: productField),
                   if (showBarcode) ...[const SizedBox(width: 8), SizedBox(width: 110, child: barcodeField)],
                   const SizedBox(width: 8),
-                  SizedBox(width: 70, height: 56, child: unitField),
+                  SizedBox(width: 70, child: unitField),
                   const SizedBox(width: 8),
                   SizedBox(width: 90, child: qtyPackField),
                   if (showLooseQty) ...[const SizedBox(width: 8), SizedBox(width: 90, child: qtyLooseField)],
@@ -1422,14 +1422,14 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
                   const SizedBox(width: 8),
                   SizedBox(width: 80, child: discField),
                   const SizedBox(width: 8),
-                  SizedBox(width: 170, height: 56, child: taxGroupField),
+                  SizedBox(width: 170, child: taxGroupField),
                   const SizedBox(width: 8),
-                  SizedBox(width: 100, height: 56, child: amountField),
+                  SizedBox(width: 100, child: amountField),
                   const SizedBox(width: 8),
-                  SizedBox(width: 110, height: 56, child: landedField),
+                  SizedBox(width: 110, child: landedField),
                   if (showConverted) ...[
                     const SizedBox(width: 8),
-                    SizedBox(width: 110, height: 56,
+                    SizedBox(width: 110,
                         child: row.convertedQty > 0
                             ? SakalFieldCard.readOnly(label: 'Converted', value: row.convertedQty.toStringAsFixed(2), numeric: true, showLabel: isMobile)
                             : const SizedBox.shrink()),
