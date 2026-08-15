@@ -404,18 +404,18 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
       // edited copy should reflect exactly what's in the sheet, not pile
       // duplicate rows for the same account on top of what was already here.
       //
-      // A row is treated as an untouched placeholder (silently skipped, no
-      // error) ONLY when Opening Balance Type is blank — that's the one
-      // signal a freshly-downloaded, never-edited row always has. Once a
-      // real Dr/Cr type is present the row is a deliberate entry and is
-      // uploaded as-is, INCLUDING an explicit zero balance — a user
-      // correcting a wrongly-uploaded non-zero figure back to 0 needs that
-      // to actually save, not be silently dropped. Duplicate-account/
+      // Every row with a real account code loads — a zero-balance account
+      // is a legitimate opening balance (explicit user correction, 2026-08-16:
+      // an earlier version treated a blank Opening Balance Type as "untouched
+      // placeholder, skip" and silently dropped it, but a genuinely zero-
+      // balance account may never have had a reason for the user to pick
+      // Dr vs Cr in the first place — that's not the same as "never
+      // touched"). A blank Type defaults to 'Dr' (harmless — Dr/Cr is
+      // meaningless for a zero value either way). Duplicate-account/
       // duplicate-bill/all-3-or-none-amount checks are NOT done here —
       // per explicit instruction, upload always succeeds; those are
       // enforced at Save time instead, with a clear per-account message.
       final parsedRows = <_OBLineRow>[];
-      var skippedBlank = 0;
       final errors = <String>[];
       for (var r = 1; r < sheet.maxRows; r++) {
         final row = sheet.row(r);
@@ -423,9 +423,9 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
         if (code.isEmpty) continue;
         final account = byCode[code.toUpperCase()];
         if (account == null) { errors.add('Row ${r + 1}: account code "$code" not found (or not a postable account).'); continue; }
-        final type = cellStr(row, idxType);
-        if (type.isEmpty) { skippedBlank++; continue; }
-        if (type != 'Dr' && type != 'Cr') { errors.add('Row ${r + 1}: Opening Balance Type must be "Dr" or "Cr", got "$type".'); continue; }
+        final rawType = cellStr(row, idxType);
+        if (rawType.isNotEmpty && rawType != 'Dr' && rawType != 'Cr') { errors.add('Row ${r + 1}: Opening Balance Type must be "Dr" or "Cr", got "$rawType".'); continue; }
+        final type = rawType.isEmpty ? 'Dr' : rawType;
 
         final baseStr  = idxBase == -1 ? '' : cellStr(row, idxBase);
         final localStr = idxLocal == -1 ? '' : cellStr(row, idxLocal);
@@ -481,7 +481,7 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
           ),
         );
       } else {
-        _showSnack('${parsedRows.length} row(s) loaded from Excel ($skippedBlank blank row(s) ignored).', color: AppColors.positive);
+        _showSnack('${parsedRows.length} row(s) loaded from Excel.', color: AppColors.positive);
       }
     } catch (e, st) {
       AppLogger.error('OpeningBalanceExcelUpload', e, st);
