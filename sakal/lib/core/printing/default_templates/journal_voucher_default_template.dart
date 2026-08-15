@@ -39,30 +39,30 @@ const journalVoucherDefaultTemplate = PrintTemplate(
     ),
     PrintElement(
       id: 'company_name', type: PrintElementType.field, bind: 'company.company_name',
-      x: 2, y: 1, w: 140, font: PrintFont(size: 17, bold: true, colorHex: '#1B3A6B'),
+      x: 2, y: 1, w: 120, font: PrintFont(size: 17, bold: true, colorHex: '#1B3A6B'),
     ),
     PrintElement(
       id: 'title', type: PrintElementType.field, bind: 'header.voucher_type_label',
-      x: 3, y: 1, w: 70,
+      x: 3, y: 1, w: 90,
       font: PrintFont(size: 17, bold: true, align: PrintAlign.right, colorHex: '#1B3A6B'),
     ),
     PrintElement(id: 'spacer_2', type: PrintElementType.text, text: '', x: 1, y: 2, w: 35),
     PrintElement(
       id: 'company_address', type: PrintElementType.field, bind: 'company.address',
-      x: 2, y: 2, w: 140, font: PrintFont(size: 9, colorHex: '#4A5568'),
+      x: 2, y: 2, w: 120, font: PrintFont(size: 9, colorHex: '#4A5568'),
     ),
     PrintElement(
       id: 'voucher_no', type: PrintElementType.field, bind: 'header.voucher_no', label: 'Voucher No: ',
-      x: 3, y: 2, w: 70, font: PrintFont(size: 10, bold: true, align: PrintAlign.right),
+      x: 3, y: 2, w: 90, font: PrintFont(size: 10, bold: true, align: PrintAlign.right),
     ),
     PrintElement(id: 'spacer_3', type: PrintElementType.text, text: '', x: 1, y: 3, w: 35),
     PrintElement(
       id: 'company_city', type: PrintElementType.field, bind: 'company.city_name',
-      x: 2, y: 3, w: 140, font: PrintFont(size: 9, colorHex: '#4A5568'),
+      x: 2, y: 3, w: 120, font: PrintFont(size: 9, colorHex: '#4A5568'),
     ),
     PrintElement(
       id: 'trans_date', type: PrintElementType.field, bind: 'header.trans_date', label: 'Date: ',
-      x: 3, y: 3, w: 70, font: PrintFont(size: 10, align: PrintAlign.right),
+      x: 3, y: 3, w: 90, font: PrintFont(size: 10, align: PrintAlign.right),
     ),
     // Accent rule under the letterhead — thicker + navy, not the default
     // thin grey divider, so the letterhead reads as a distinct block.
