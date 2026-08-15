@@ -164,20 +164,20 @@ final accountsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async 
     'or':         '(posting_allowed.eq.true,'
                   'account_nature.eq.Customer,'
                   'account_nature.eq.Supplier)',
-    // Self-referencing embed disambiguated by FK CONSTRAINT NAME
-    // (rim_accounts_parent_id_fkey, Postgres's default auto-generated name
-    // for the unnamed `parent_id UUID REFERENCES rim_accounts(id)` — see
-    // migration 013), not the column name. `!parent_id` looked correct per
-    // PostgREST's general M2O docs but resolved to the REVERSE relationship
-    // for a self-join in practice (found live 2026-08-16: every LEAF
-    // account, i.e. every account actually pickable in any picker, has no
-    // children, so `!parent_id` returned an empty children-list -> silently
-    // normalized to null "parent" -> Group Name always blank, even though
-    // Chart of Accounts genuinely had a parent group configured). The FK
-    // constraint name is PostgREST's unambiguous way to pin the direction
-    // for exactly this self-referencing case.
+    // REVERTED 2026-08-16 — 'rim_accounts_parent_id_fkey' was a GUESSED
+    // constraint name (Postgres's *usual* auto-generated pattern), not a
+    // verified one, and it was wrong: live PostgREST rejected it outright
+    // ("no matches were found"), breaking every account picker app-wide
+    // (Opening Balance, Journal Voucher, everything using accountsProvider)
+    // instead of just fixing Group Name. Back to !parent_id (the
+    // previously-working, if direction-suspect, form) until the real
+    // constraint name is confirmed from the live schema — see
+    // sakal/docs/screens/plan_opening_balance_entry_screen.md's round 5/6
+    // notes. DO NOT re-guess a constraint name again without running
+    // `SELECT conname FROM pg_constraint WHERE conrelid =
+    // 'rim_accounts'::regclass AND contype = 'f';` against the real DB first.
     'select':     'id,account_code,account_name,account_nature,posting_allowed,'
-                  'parent:rim_accounts!rim_accounts_parent_id_fkey(account_name),'
+                  'parent:rim_accounts!parent_id(account_name),'
                   'rim_currencies!account_currency_id(currency_id)',
     'order':      'account_code.asc',
     'limit':      '500',
