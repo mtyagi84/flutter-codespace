@@ -85,6 +85,23 @@ class _ExpenseVoucherListScreenState extends ConsumerState<ExpenseVoucherListScr
     super.dispose();
   }
 
+  // ScreenHeaderMixin already subscribes this State to the app's shared
+  // RouteObserver and calls didPopNext() to refresh the TopBar's header
+  // when a pushed entry screen is popped back to this list — but a screen
+  // covered by a push stays mounted (never disposed/rebuilt) the whole
+  // time it's covered, so _openNew()/_openEdit()'s own `await
+  // context.push(...) => _load()` is the ONLY thing that was refreshing
+  // the actual rows; it silently didn't fire on some real navigation paths
+  // back to this list (found live 2026-08-15 — "list does not get
+  // refreshed after saving and coming back"). Overriding didPopNext() here
+  // to also reload data makes the refresh unconditional on ANY return to
+  // this screen, not just the specific push()-await path.
+  @override
+  void didPopNext() {
+    super.didPopNext();
+    _load();
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;

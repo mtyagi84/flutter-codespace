@@ -231,8 +231,15 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
       _localCcy = await ref.read(localCurrencyProvider.future);
       _allAccounts = await ref.read(accountsProvider.future);
 
-      if (widget.editTransNo != null) {
-        final header = await _ds.getHeader(clientId: session.clientId, companyId: session.companyId, transNo: widget.editTransNo!, transDate: widget.editTransDate);
+      // Same fix as Expense/Journal Voucher's identical bug: a freshly-
+      // created-then-saved-then-approved voucher (same screen instance)
+      // has its trans_no in _transNo, not widget.editTransNo (immutable
+      // constructor param) — re-reading only the latter silently skipped
+      // this reload, so the post-approve status never reached the screen.
+      final effectiveTransNo = widget.editTransNo ?? _transNo;
+      final effectiveTransDate = widget.editTransNo != null ? widget.editTransDate : (_transNo != null ? _fmtDate(_transDate) : null);
+      if (effectiveTransNo != null) {
+        final header = await _ds.getHeader(clientId: session.clientId, companyId: session.companyId, transNo: effectiveTransNo, transDate: effectiveTransDate);
         if (header != null) {
           _transNo = header.transNo;
           _transDate = DateTime.parse(header.transDate);

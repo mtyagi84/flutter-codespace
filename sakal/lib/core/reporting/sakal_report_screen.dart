@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../errors/error_presenter.dart';
+import '../layout/screen_header.dart';
 import '../providers/master_cache_providers.dart';
 import '../providers/session_provider.dart';
 import '../theme/app_colors.dart';
@@ -31,9 +32,29 @@ class ReportScreen extends ConsumerStatefulWidget {
   ConsumerState<ReportScreen> createState() => _ReportScreenState();
 }
 
-class _ReportScreenState extends ConsumerState<ReportScreen> with ScreenPermissionMixin<ReportScreen> {
+class _ReportScreenState extends ConsumerState<ReportScreen>
+    with ScreenPermissionMixin<ReportScreen>, ScreenHeaderMixin<ReportScreen> {
   @override
   String get screenName => '/reports/${widget.reportKey}';
+
+  // This screen previously registered no TopBar header at all, relying
+  // entirely on whatever the PREVIOUS screen's own dispose() happened to
+  // clear — a real, live bug (found 2026-08-15): navigating here via the
+  // sidebar from an entry screen with its own ScreenHeaderMixin header
+  // (e.g. an Expense Voucher's "EXV/HO/2026/00003" + Reverse/Print
+  // buttons) left that stale header showing in the TopBar indefinitely,
+  // even though the correct report content was rendering underneath it.
+  // Registering a header here — even title-only, leaving the existing
+  // in-content title Row below untouched — makes every report screen
+  // unconditionally claim/overwrite the TopBar on mount, regardless of
+  // whatever the previous screen left behind. Folding the in-content
+  // title Row + PDF/Excel export buttons into this header properly (per
+  // CLAUDE.md's "Screen header" pattern) is a separate, later cleanup —
+  // same opportunistic-migration shape as every other screen still using
+  // the old pattern.
+  @override
+  ScreenHeaderInfo buildScreenHeader() =>
+      ScreenHeaderInfo(title: _bundle?.definition.reportName ?? 'Report');
 
   final _repository = const ReportRepository();
   ReportBundle? _bundle;
@@ -159,6 +180,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> with ScreenPermissi
 
   @override
   Widget build(BuildContext context) {
+    refreshScreenHeader(); // must run every build — see ScreenHeaderMixin's own contract
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_loadError != null) {
       return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_loadError!, style: const TextStyle(color: AppColors.negative))));

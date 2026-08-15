@@ -226,8 +226,18 @@ class _ExpenseVoucherEntryScreenState extends ConsumerState<ExpenseVoucherEntryS
       _currencies = await ref.read(currenciesProvider.future);
       _taxGroups = await ref.read(taxGroupsProvider.future);
 
-      if (widget.editTransNo != null) {
-        final header = await _ds.getHeader(clientId: session.clientId, companyId: session.companyId, transNo: widget.editTransNo!);
+      // widget.editTransNo is only set when this screen was OPENED to edit
+      // an existing voucher — a freshly-created-then-saved-then-approved
+      // voucher (same screen instance, never navigated away from) has its
+      // own trans_no in _transNo instead, which _init() must also reload
+      // from to pick up the post-approve status/posted-voucher-no — a
+      // widget constructor param can't be mutated, so re-reading only
+      // widget.editTransNo silently skipped this reload every time (real
+      // bug: Approve button stayed active, status stayed DRAFT on screen
+      // even though the backend had actually approved it).
+      final effectiveTransNo = widget.editTransNo ?? _transNo;
+      if (effectiveTransNo != null) {
+        final header = await _ds.getHeader(clientId: session.clientId, companyId: session.companyId, transNo: effectiveTransNo);
         if (header != null) {
           _transNo = header['trans_no'] as String?;
           _transDate = DateTime.parse(header['trans_date'] as String);

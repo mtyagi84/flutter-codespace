@@ -209,8 +209,17 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
       _currencies = await ref.read(currenciesProvider.future);
       _allAccounts = await ref.read(accountsProvider.future);
 
-      if (widget.editTransNo != null) {
-        final header = await _ds.getHeader(clientId: session.clientId, companyId: session.companyId, transNo: widget.editTransNo!, transDate: widget.editTransDate);
+      // widget.editTransNo only covers "opened to edit an existing voucher"
+      // — a freshly-created-then-saved-then-approved voucher (same screen
+      // instance) has its trans_no in _transNo instead; re-reading only
+      // widget.editTransNo (a constructor param, can't be mutated) silently
+      // skips this reload on every subsequent _init() call, so the
+      // post-approve status never made it back onto the screen. Same fix as
+      // Expense Voucher's identical bug — see that screen's own comment.
+      final effectiveTransNo = widget.editTransNo ?? _transNo;
+      final effectiveTransDate = widget.editTransNo != null ? widget.editTransDate : (_transNo != null ? _fmtDate(_transDate) : null);
+      if (effectiveTransNo != null) {
+        final header = await _ds.getHeader(clientId: session.clientId, companyId: session.companyId, transNo: effectiveTransNo, transDate: effectiveTransDate);
         if (header != null) {
           _transNo = header.transNo;
           _transDate = DateTime.parse(header.transDate);

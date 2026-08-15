@@ -75,6 +75,18 @@ class _SalesOrderListScreenState extends ConsumerState<SalesOrderListScreen>
     super.dispose();
   }
 
+  // See ExpenseVoucherListScreen's identical fix — a screen covered by a
+  // push stays mounted (never disposed/rebuilt) while covered, so relying
+  // solely on the entry screen's own `await context.push(...) => _load()`
+  // missed some real navigation paths back to this list. Overriding
+  // didPopNext() (already subscribed via ScreenHeaderMixin) makes the
+  // refresh unconditional on any return to this screen.
+  @override
+  void didPopNext() {
+    super.didPopNext();
+    _load();
+  }
+
   Future<void> _load() async {
     final session = ref.read(sessionProvider)!;
     setState(() { _loading = true; _error = null; });

@@ -67,7 +67,13 @@ class FinanceAccountPicker extends StatelessWidget {
       color: highlighted ? AppColors.primary.withValues(alpha: 0.08) : null,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(children: [
-        SizedBox(width: 70, child: Text(code, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
+        // Widened from a fixed 70px — this schema's hierarchical account
+        // codes routinely run to 10-13+ digits (e.g. "1120001001001"),
+        // which wrapped onto 2 lines at 70px and squeezed Name/Parent into
+        // near-unreadable widths (found live 2026-08-15, Account Ledger's
+        // own account filter). 110px + the wider optionsMinWidth below
+        // give every column real room regardless of code length.
+        SizedBox(width: 110, child: Text(code, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
         Expanded(flex: 2, child: Text(name, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis)),
         Expanded(flex: 1, child: Text(parent, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary), overflow: TextOverflow.ellipsis)),
       ]),
@@ -84,7 +90,7 @@ class FinanceAccountPicker extends StatelessWidget {
       displayStringForOption: displayString,
       optionsBuilder: _search,
       onSelected: onSelected,
-      optionsMinWidth: 380,
+      optionsMinWidth: 460, // widened alongside optionRow's own code column — see its comment
       optionBuilder: (context, option, isHighlighted) => optionRow(option, highlighted: isHighlighted),
     );
   }
