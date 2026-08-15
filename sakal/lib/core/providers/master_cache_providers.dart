@@ -164,39 +164,58 @@ final accountsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async 
     'or':         '(posting_allowed.eq.true,'
                   'account_nature.eq.Customer,'
                   'account_nature.eq.Supplier)',
-    // Self-referencing embed disambiguated by FK CONSTRAINT NAME
-    // (rim_accounts_parent_id_fkey) instead of the column name — !parent_id
-    // resolved to the REVERSE relationship (children, not parent) for this
-    // self-join. The constraint name was verified directly against the
-    // live schema (`SELECT conname FROM pg_constraint WHERE conrelid =
-    // 'rim_accounts'::regclass AND contype = 'f' AND confrelid =
-    // 'rim_accounts'::regclass;` -> rim_accounts_parent_id_fkey, confirmed
-    // 2026-08-16) after a FIRST attempt at this exact name failed live with
-    // "no matches were found" — that failure turned out to be PostgREST's
-    // schema cache being stale (needs `NOTIFY pgrst, 'reload schema';`
-    // after any DDL change), not a wrong name. If this ever fails again
-    // with the same "no matches were found" error, reload the schema cache
-    // first before assuming the name itself is wrong.
-    'select':     'id,account_code,account_name,account_nature,posting_allowed,'
-                  'parent:rim_accounts!rim_accounts_parent_id_fkey(account_name),'
+    // No embedded self-join for parent_id — see the comment on the
+    // separate parent-name lookup below for why.
+    'select':     'id,account_code,account_name,account_nature,posting_allowed,parent_id,'
                   'rim_currencies!account_currency_id(currency_id)',
     'order':      'account_code.asc',
     'limit':      '500',
   });
   final accounts = List<Map<String, dynamic>>.from(res.data as List);
 
-  // Defensive normalization: a to-one PostgREST embed (parent/rim_currencies)
-  // is expected to come back as an object or null, but returns a LIST if the
-  // embed relationship becomes ambiguous (e.g. a second FK added between the
-  // same two tables elsewhere in the schema). Sanitize once here, at the
+  // Defensive normalization: a to-one PostgREST embed (rim_currencies) is
+  // expected to come back as an object or null, but returns a LIST if the
+  // embed relationship becomes ambiguous. Sanitize once here, at the
   // source, so every current and future consumer of this shared provider
   // gets a guaranteed Map-or-null — never has to defensively re-check this
   // itself, and never crashes on an unguarded `as Map<String, dynamic>?`.
   for (final a in accounts) {
-    final parentRel = a['parent'];
-    if (parentRel is List) a['parent'] = parentRel.isNotEmpty ? parentRel.first as Map<String, dynamic>? : null;
     final currRel = a['rim_currencies'];
     if (currRel is List) a['rim_currencies'] = currRel.isNotEmpty ? currRel.first as Map<String, dynamic>? : null;
+  }
+
+  // Parent group name resolved via a SEPARATE flat query + client-side
+  // join, not a PostgREST embed — deliberately, after repeated live
+  // failures (found 2026-08-16): a `parent:rim_accounts!parent_id(...)`
+  // embed resolved to the REVERSE relationship (children, not parent) for
+  // this self-join; the fix (disambiguating via the FK CONSTRAINT name,
+  // `rim_accounts_parent_id_fkey` — independently verified correct against
+  // the live schema via `pg_constraint`) then failed outright with "no
+  // matches were found" even after a `NOTIFY pgrst, 'reload schema';`.
+  // Self-referencing embeds are evidently not reliable against this
+  // project's live PostgREST regardless of hint form — a flat lookup has
+  // no embedding ambiguity to trip over at all. Every consumer still reads
+  // `account['parent']['account_name']` exactly as before (FinanceAccountPicker,
+  // Opening Balance, etc.) — only how it gets populated changed.
+  final parentIds = accounts.map((a) => a['parent_id'] as String?).whereType<String>().toSet();
+  if (parentIds.isNotEmpty) {
+    final parentRes = await DioClient.instance.get('/rim_accounts', queryParameters: {
+      'client_id':  'eq.${session.clientId}',
+      'company_id': 'eq.${session.companyId}',
+      'id':         'in.(${parentIds.join(',')})',
+      'select':     'id,account_name',
+    });
+    final parentNames = <String, String>{
+      for (final p in List<Map<String, dynamic>>.from(parentRes.data as List))
+        p['id'] as String: p['account_name'] as String,
+    };
+    for (final a in accounts) {
+      final pid = a['parent_id'] as String?;
+      if (pid != null) {
+        final name = parentNames[pid];
+        if (name != null) a['parent'] = {'account_name': name};
+      }
+    }
   }
 
   if (!kIsWeb) {
