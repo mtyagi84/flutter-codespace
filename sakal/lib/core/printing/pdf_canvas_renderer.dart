@@ -233,29 +233,32 @@ class PdfCanvasRenderer {
         // gets its own label/bind/format/font exactly as usual) — stacking
         // them in one pw.Column guarantees line 2 sits directly under line
         // 1 by construction, not by matching x/y/w against a sibling row.
-        //
-        // Wrapped in a full-width SizedBox: a Column left to its own
-        // intrinsic sizing shrink-wraps to its widest line ("Journal
-        // Voucher"), so crossAxisAlignment.end would only right-align each
-        // line against THAT shrunken width, not against the true row/page
-        // margin — a real bug found live 2026-08-19: the title block's
-        // text sat noticeably short of the same right margin the table
-        // below it (and the logo's own left margin) reached. Forcing the
-        // SizedBox to double.infinity width claims the FULL width its
-        // parent Expanded slot offers, so crossAxisAlignment.end now
-        // pushes text against the row's real right edge.
-        return pw.SizedBox(
-          width: double.infinity,
-          child: pw.Column(
-            crossAxisAlignment: el.font.align == PrintAlign.right
-                ? pw.CrossAxisAlignment.end
-                : pw.CrossAxisAlignment.start,
-            children: [
-              for (final line in el.lines)
-                if (line.showWhen == null || line.showWhen!.evaluate(document)) _content(line, document),
-            ],
-          ),
+        final column = pw.Column(
+          crossAxisAlignment: el.font.align == PrintAlign.right
+              ? pw.CrossAxisAlignment.end
+              : pw.CrossAxisAlignment.start,
+          children: [
+            for (final line in el.lines)
+              if (line.showWhen == null || line.showWhen!.evaluate(document)) _content(line, document),
+          ],
         );
+        if (el.font.align != PrintAlign.right) return column;
+        // Right-aligned blocks: a bare Column shrink-wraps to its widest
+        // line, so crossAxisAlignment.end only right-aligns each line
+        // against THAT shrunken box — not the row's true right margin. A
+        // previous fix wrapped the Column in `SizedBox(width:
+        // double.infinity)`, expecting it to expand to fill the parent
+        // Expanded slot the way it would in Flutter — but this `pdf`
+        // package doesn't reliably honor that (real bug found live
+        // 2026-08-19: it happened to LOOK fixed for Journal Voucher only
+        // because "Journal Voucher" itself is wide enough to nearly reach
+        // the margin anyway; shorter text on other documents, e.g.
+        // "Purchase Return", exposed that the Column was still
+        // shrink-wrapping). Wrapping in `pw.Row(mainAxisAlignment: end)`
+        // instead uses Row's own, far more basic and reliable
+        // space-filling behavior to push the shrink-wrapped Column to the
+        // row's real right edge.
+        return pw.Row(mainAxisAlignment: pw.MainAxisAlignment.end, children: [column]);
     }
   }
 

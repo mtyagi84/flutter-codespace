@@ -234,6 +234,10 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
   List<Map<String, dynamic>> _paymentTermMasters = [];
   List<Map<String, dynamic>> _locations    = [];
   List<Map<String, dynamic>> _users        = [];
+  // Resolved once in _loadExisting (against _users, already loaded before
+  // it) — print's "Prepared By"/"Authorised Signatory" data supply.
+  String? _preparedByName;
+  String? _authorisedByName;
   Map<String, double> _taxGroupRatePct = {};
   Map<String, double> _taxRatePct      = {};
   String _baseCurrency  = '';
@@ -417,6 +421,8 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
           _billToCtrl.text  = header.billTo ?? '';
           _shipToCtrl.text  = header.shipTo ?? '';
           _remarksCtrl.text = header.remarks ?? '';
+          _preparedByName   = _resolveUserName(header.createdBy);
+          _authorisedByName = _resolveUserName(header.approvedBy);
           _loading = false;
         });
       }
@@ -851,6 +857,15 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
   // header.status != APPROVED. See default_templates/purchase_order_default_template.dart
   // for the field bindings this document map must satisfy.
 
+  // _users is loaded once in _init() (getUsersForAutocomplete, id+full_name)
+  // — reused here rather than a fresh query, same as every other
+  // UUID->name resolution already done on this screen (buyer, etc.).
+  String? _resolveUserName(String? userId) {
+    if (userId == null) return null;
+    final match = _users.firstWhere((u) => u['id'] == userId, orElse: () => const {});
+    return match['full_name'] as String?;
+  }
+
   Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company) {
     final buyerName = _users.where((u) => u['id'] == _buyerId).map((u) => u['full_name'] as String).firstOrNull;
     return {
@@ -866,6 +881,10 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         'bill_to':       _billToCtrl.text,
         'ship_to':       _shipToCtrl.text,
         'remarks':       _remarksCtrl.text,
+      },
+      'signatures': {
+        'prepared_by': _preparedByName,
+        'authorised_by': _authorisedByName,
       },
       'lines': _lines.where((l) => l.productId != null).map((l) {
         final desc = l.productDisplay.contains('] ') ? l.productDisplay.split('] ').last : l.productDisplay;

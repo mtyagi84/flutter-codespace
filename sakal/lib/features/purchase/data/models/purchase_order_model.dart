@@ -32,6 +32,7 @@ class PurchaseOrderModel {
   final String? buyerId;
   final String? buyerName;
   final String  status; // DRAFT / APPROVED / PARTIALLY_RECEIVED / CLOSED / CANCELLED
+  final String? createdBy;
   final String? approvedBy;
   final String? approvedAt;
   final String? orderSubject;
@@ -72,6 +73,7 @@ class PurchaseOrderModel {
     this.buyerId,
     this.buyerName,
     this.status = 'DRAFT',
+    this.createdBy,
     this.approvedBy,
     this.approvedAt,
     this.orderSubject,
@@ -118,6 +120,7 @@ class PurchaseOrderModel {
       buyerId:         j['buyer_id'] as String?,
       buyerName:       buyer?['full_name'] as String?,
       status:          j['status'] as String? ?? 'DRAFT',
+      createdBy:       j['created_by'] as String?,
       approvedBy:      j['approved_by'] as String?,
       approvedAt:      j['approved_at'] as String?,
       orderSubject:    j['order_subject'] as String?,
