@@ -135,15 +135,27 @@ mixin ScreenHeaderMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> im
     // ownership check makes both cases safe at once — see
     // design_system_guide.md §5.1 for the full trace of both scenarios.
     //
-    // Deferred via microtask (2026-08-16, same reasoning as
-    // refreshScreenHeader) — checking ownership AT the deferred point
-    // (rather than synchronously here, mid-dispose) also means a
-    // same-frame competing claim from a newly-navigated-to screen is
-    // correctly seen as already having taken ownership, so this won't
-    // clobber it even if this dispose() call happened to run first.
+    // A same-frame microtask was tried first (2026-08-16) and made things
+    // WORSE live: it cleared the header to blank (company-name fallback)
+    // instead of leaving it stale — meaning this dispose()'s clear-
+    // microtask was in practice running AFTER the newly-navigated screen's
+    // own claim-microtask, wiping it out, not before it as the frame-
+    // lifecycle analysis predicted (GoRouter's declarative Navigator
+    // page-list diffing + route-transition-animation teardown doesn't
+    // reliably keep dispose() inside the SAME synchronous frame as the
+    // revealed screen's build() — it can run one or more frames later,
+    // after the transition animation finishes, by which point the other
+    // screen has already claimed). A short, deliberate delay is the
+    // robust fix: give whatever screen the user actually navigated to
+    // generous time to claim ownership first — a real claim (another
+    // screen's own build()/didChangeDependencies()) happens within
+    // milliseconds, while this only fires at all if genuinely NOTHING
+    // else ever claims (e.g. navigating to a screen that doesn't use this
+    // mixin), which is the one case this clear exists for in the first
+    // place.
     final controller = _headerController;
     final owner = this;
-    Future.microtask(() {
+    Future.delayed(const Duration(milliseconds: 400), () {
       if (identical(_screenHeaderOwner, owner)) {
         AppLogger.info('ScreenHeader', 'CLEAR (dispose, still owner) by $runtimeType');
         _screenHeaderOwner = null;
