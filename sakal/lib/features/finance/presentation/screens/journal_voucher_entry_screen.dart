@@ -757,18 +757,27 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
         'currency_line': _currencyCode,
         'ref_no': _refNoCtrl.text,
         'remarks': _remarksCtrl.text,
-        'signatures': {
-          'prepared_by': _preparedByName,
-          'authorised_by': _approvedByName,
-        },
+      },
+      // Top-level, a SIBLING of 'header' — real bug found live 2026-08-17:
+      // this was nested INSIDE 'header', but the template (and every other
+      // working screen, e.g. finance_voucher_entry_screen.dart) binds
+      // 'signatures.prepared_by' against the document ROOT, so it silently
+      // resolved to nothing and Prepared/Authorised By always printed blank.
+      'signatures': {
+        'prepared_by': _preparedByName,
+        'authorised_by': _approvedByName,
       },
       'lines': _lines.where((l) => l.amount > 0).map((l) => {
             'particulars': l.accountDisplay,
-            'amount': l.amount,
+            'debit': l.natureDrCr == 'DR' ? l.amount : null,
+            'credit': l.natureDrCr == 'CR' ? l.amount : null,
             'party_amount': l.amount * _partyRateFor(l),
             'remarks': l.remarksCtrl.text,
           }).toList(),
-      'totals': {'total_display': AppNumberFormat.amount(_totalDr, 'INTERNATIONAL')},
+      'totals': {
+        'total_dr_display': AppNumberFormat.amount(_totalDr, 'INTERNATIONAL'),
+        'total_cr_display': AppNumberFormat.amount(_totalCr, 'INTERNATIONAL'),
+      },
     };
   }
 
@@ -777,9 +786,16 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
     setState(() => _printing = true);
     try {
       final company = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
-      final template = await ref.read(printTemplateProvider('VOUCHER').future);
+      final template = await ref.read(printTemplateProvider('JOURNAL_VOUCHER').future);
       final document = _buildPrintDocument(company);
-      await PrintEngine.printDocument(template: template, document: document, filename: '$_transNo.pdf');
+      final session = ref.read(sessionProvider);
+      await PrintEngine.printDocument(
+        template: template,
+        document: document,
+        filename: '$_transNo.pdf',
+        printedByName: session?.fullName,
+        printedOn: DateTime.now(),
+      );
     } catch (e, st) {
       AppLogger.error('JournalVoucherPrint', e, st);
       if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this voucher'), color: AppColors.negative);

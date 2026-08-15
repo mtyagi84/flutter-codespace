@@ -636,10 +636,14 @@ class _ExpenseVoucherEntryScreenState extends ConsumerState<ExpenseVoucherEntryS
         'bill_no': _billNoCtrl.text,
         'bill_date': _billDate != null ? _displayDate(_billDate) : '',
         'remarks': _remarksCtrl.text,
-        'signatures': {
-          'prepared_by': _preparedByName,
-          'authorised_by': _approvedByName,
-        },
+      },
+      // Top-level, a SIBLING of 'header' — same fix as Journal Voucher's
+      // identical bug: the template binds 'signatures.prepared_by' against
+      // the document ROOT, not 'header', so nesting it there silently
+      // resolved to nothing.
+      'signatures': {
+        'prepared_by': _preparedByName,
+        'authorised_by': _approvedByName,
       },
       'lines': _lines.where((l) => l.amount > 0).map((l) => {
             'account_name': l.accountDisplay,
@@ -661,7 +665,14 @@ class _ExpenseVoucherEntryScreenState extends ConsumerState<ExpenseVoucherEntryS
       final company = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
       final template = await ref.read(printTemplateProvider('EXPENSE_VOUCHER').future);
       final document = _buildPrintDocument(company);
-      await PrintEngine.printDocument(template: template, document: document, filename: '$_transNo.pdf');
+      final session = ref.read(sessionProvider);
+      await PrintEngine.printDocument(
+        template: template,
+        document: document,
+        filename: '$_transNo.pdf',
+        printedByName: session?.fullName,
+        printedOn: DateTime.now(),
+      );
     } catch (e, st) {
       AppLogger.error('ExpenseVoucherPrint', e, st);
       if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this voucher'), color: AppColors.negative);

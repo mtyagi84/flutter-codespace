@@ -24,6 +24,16 @@ const voucherDefaultTemplate = PrintTemplate(
   paperProfile: PaperProfile.a4,
   isDefault: true,
   elements: [
+    // Letterhead: company block (logo + name + address + city) on the
+    // left, document title + voucher no + date on the right — same 3
+    // rows so both sides stay vertically aligned. 'spacer_N' elements
+    // reserve the logo's own column width (x:1, w:35) on rows 2-3 so
+    // company_address/company_city land in the SAME x:2 slot as
+    // company_name above them, instead of sitting flush left under the
+    // logo (real bug found live 2026-08-17 — this row-based layout has no
+    // true multi-row "column" concept, so a row with no left-hand
+    // element renders its lone field starting at the page margin, not
+    // indented to match the row above).
     PrintElement(
       id: 'logo', type: PrintElementType.image, bind: 'company.logo',
       x: 1, y: 1, w: 35, h: 20,
@@ -33,27 +43,29 @@ const voucherDefaultTemplate = PrintTemplate(
       x: 2, y: 1, w: 140, font: PrintFont(size: 16, bold: true, colorHex: '#1B3A6B'),
     ),
     PrintElement(
-      id: 'company_address', type: PrintElementType.field, bind: 'company.address',
-      x: 1, y: 2, w: 180, font: PrintFont(size: 9),
-    ),
-    PrintElement(
-      id: 'company_city', type: PrintElementType.field, bind: 'company.city_name',
-      x: 1, y: 3, w: 180, font: PrintFont(size: 9),
-    ),
-    PrintElement(id: 'div1', type: PrintElementType.line, x: 1, y: 4, w: 180),
-    PrintElement(
       id: 'title', type: PrintElementType.field, bind: 'header.voucher_type_label',
-      x: 1, y: 5, w: 180,
-      font: PrintFont(size: 18, bold: true, align: PrintAlign.center, colorHex: '#1B3A6B'),
+      x: 3, y: 1, w: 70,
+      font: PrintFont(size: 16, bold: true, align: PrintAlign.right, colorHex: '#1B3A6B'),
+    ),
+    PrintElement(id: 'spacer_2', type: PrintElementType.text, text: '', x: 1, y: 2, w: 35),
+    PrintElement(
+      id: 'company_address', type: PrintElementType.field, bind: 'company.address',
+      x: 2, y: 2, w: 140, font: PrintFont(size: 9),
     ),
     PrintElement(
       id: 'voucher_no', type: PrintElementType.field, bind: 'header.voucher_no', label: 'Voucher No: ',
-      x: 1, y: 6, w: 90, font: PrintFont(size: 10, bold: true),
+      x: 3, y: 2, w: 70, font: PrintFont(size: 10, bold: true, align: PrintAlign.right),
+    ),
+    PrintElement(id: 'spacer_3', type: PrintElementType.text, text: '', x: 1, y: 3, w: 35),
+    PrintElement(
+      id: 'company_city', type: PrintElementType.field, bind: 'company.city_name',
+      x: 2, y: 3, w: 140, font: PrintFont(size: 9),
     ),
     PrintElement(
       id: 'trans_date', type: PrintElementType.field, bind: 'header.trans_date', label: 'Date: ',
-      x: 2, y: 6, w: 85, font: PrintFont(size: 10),
+      x: 3, y: 3, w: 70, font: PrintFont(size: 10, align: PrintAlign.right),
     ),
+    PrintElement(id: 'div1', type: PrintElementType.line, x: 1, y: 4, w: 180),
     PrintElement(
       id: 'cash_bank_account', type: PrintElementType.field, bind: 'header.cash_bank_account', label: 'Account: ',
       x: 1, y: 7, w: 90, font: PrintFont(size: 10),

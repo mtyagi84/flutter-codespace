@@ -14,10 +14,12 @@ class PrintEngine {
     required PrintTemplate template,
     required Map<String, dynamic> document,
     required String filename,
+    String? printedByName,
+    DateTime? printedOn,
   }) async {
     final doc = template.paperProfile.isReceipt
         ? PdfFlowRenderer.render(template, document)
-        : PdfCanvasRenderer.render(template, document);
+        : PdfCanvasRenderer.render(template, document, printedByName: printedByName, printedOn: printedOn);
     final bytes = await doc.save();
 
     // Real bug found live: kIsWeb is true even when the app is opened in a

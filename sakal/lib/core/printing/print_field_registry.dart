@@ -220,6 +220,19 @@ class PrintFieldRegistry {
     // listed here specifically, to avoid a duplicate dropdown entry.
   ];
 
+  static const _journalVoucherScalarFields = [
+    PrintFieldDef('header.voucher_type_label', 'Voucher Type'),
+    PrintFieldDef('header.voucher_no', 'Voucher No'),
+    PrintFieldDef('header.trans_date', 'Date'),
+    PrintFieldDef('header.ref_no', 'Ref No'),
+    PrintFieldDef('header.currency_line', 'Currency Line (pre-formatted)'),
+    PrintFieldDef('header.remarks', 'Remarks'),
+    PrintFieldDef('totals.total_dr_display', 'Total Debit (pre-formatted)'),
+    PrintFieldDef('totals.total_cr_display', 'Total Credit (pre-formatted)'),
+    // signatures.* fields are appended to EVERY document type by
+    // scalarFields() below (same idiom as _companyFields).
+  ];
+
   static const _materialRequisitionScalarFields = [
     PrintFieldDef('header.requisition_no', 'Requisition Number'),
     PrintFieldDef('header.requisition_date', 'Requisition Date'),
@@ -417,6 +430,16 @@ class PrintFieldRegistry {
     ],
   };
 
+  static const _journalVoucherTableRowFields = {
+    'lines': [
+      PrintFieldDef('particulars', 'Particulars'),
+      PrintFieldDef('debit', 'Debit', PrintDataFormat.currency),
+      PrintFieldDef('credit', 'Credit', PrintDataFormat.currency),
+      PrintFieldDef('party_amount', 'Party Amount (pre-formatted)'),
+      PrintFieldDef('remarks', 'Remarks'),
+    ],
+  };
+
   static const _purchaseInvoiceTableRowFields = {
     'grns': [
       PrintFieldDef('grn_no', 'GRN Number'),
@@ -588,6 +611,7 @@ class PrintFieldRegistry {
       'PURCHASE_RETURN'         => _purchaseReturnScalarFields,
       'EXPENSE_VOUCHER'         => _expenseVoucherScalarFields,
       'VOUCHER'                 => _voucherScalarFields,
+      'JOURNAL_VOUCHER'         => _journalVoucherScalarFields,
       'MATERIAL_REQUISITION'    => _materialRequisitionScalarFields,
       'MATERIAL_ISSUE'          => _materialIssueScalarFields,
       'STOCK_TRANSFER_REQUEST'  => _stockTransferRequestScalarFields,
@@ -618,6 +642,7 @@ class PrintFieldRegistry {
     'PURCHASE_RETURN'         => const ['lines'],
     'EXPENSE_VOUCHER'         => const ['lines'],
     'VOUCHER'                 => const ['lines'],
+    'JOURNAL_VOUCHER'         => const ['lines'],
     'MATERIAL_REQUISITION'    => const ['lines'],
     'MATERIAL_ISSUE'          => const ['lines'],
     'STOCK_TRANSFER_REQUEST'  => const ['lines'],
@@ -645,6 +670,7 @@ class PrintFieldRegistry {
     'PURCHASE_RETURN'         => _purchaseReturnTableRowFields[tableName] ?? const [],
     'EXPENSE_VOUCHER'         => _expenseVoucherTableRowFields[tableName] ?? const [],
     'VOUCHER'                 => _voucherTableRowFields[tableName] ?? const [],
+    'JOURNAL_VOUCHER'         => _journalVoucherTableRowFields[tableName] ?? const [],
     'MATERIAL_REQUISITION'    => _materialRequisitionTableRowFields[tableName] ?? const [],
     'MATERIAL_ISSUE'          => _materialIssueTableRowFields[tableName] ?? const [],
     'STOCK_TRANSFER_REQUEST'  => _stockTransferRequestTableRowFields[tableName] ?? const [],
@@ -668,7 +694,7 @@ class PrintFieldRegistry {
   /// when a new document's print support is built.
   static const documentTypes = [
     'SALES_QUOTATION', 'SALES_ORDER',
-    'PURCHASE_ORDER', 'GRN', 'PURCHASE_INVOICE', 'PURCHASE_RETURN', 'VOUCHER',
+    'PURCHASE_ORDER', 'GRN', 'PURCHASE_INVOICE', 'PURCHASE_RETURN', 'VOUCHER', 'JOURNAL_VOUCHER',
     'MATERIAL_REQUISITION', 'MATERIAL_ISSUE', 'STOCK_TRANSFER_REQUEST', 'STOCK_TRANSFER', 'STOCK_RECEIPT',
     'STOCK_ADJUSTMENT', 'OPENING_STOCK', 'STOCK_COUNT', 'STOCK_COUNT_REVIEW', 'PRICE_MASTER',
     'SALES_INVOICE', 'SALES_RETURN', 'SALES_DELIVERY', 'CASH_RECEIPT', 'EXPENSE_VOUCHER',
@@ -683,6 +709,7 @@ class PrintFieldRegistry {
     'PURCHASE_RETURN'         => 'Purchase Return',
     'EXPENSE_VOUCHER'         => 'Expense Voucher',
     'VOUCHER'                 => 'Finance Voucher',
+    'JOURNAL_VOUCHER'         => 'Journal Voucher',
     'MATERIAL_REQUISITION'    => 'Material Requisition',
     'MATERIAL_ISSUE'          => 'Material Issue',
     'STOCK_TRANSFER_REQUEST'  => 'Stock Transfer Request',

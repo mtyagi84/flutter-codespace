@@ -18,7 +18,12 @@ import 'print_models.dart';
 /// Uses pw.MultiPage (not pw.Page) so content that genuinely exceeds one
 /// page continues onto a real page 2 instead of silently clipping.
 class PdfCanvasRenderer {
-  static pw.Document render(PrintTemplate template, Map<String, dynamic> document) {
+  static pw.Document render(
+    PrintTemplate template,
+    Map<String, dynamic> document, {
+    String? printedByName,
+    DateTime? printedOn,
+  }) {
     final pageFormat = template.paperProfile == PaperProfile.letter
         ? PdfPageFormat.letter
         : PdfPageFormat.a4;
@@ -50,8 +55,38 @@ class PdfCanvasRenderer {
           pw.SizedBox(height: 4),
         ],
       ],
+      footer: (context) => _footer(context, printedByName, printedOn),
     ));
     return doc;
+  }
+
+  // Printed By / Printed On / Page N of M — shared across every document
+  // type via this one renderer, so no per-template element is needed.
+  // printedByName/printedOn are optional (null on an offline/manager-review
+  // print path that hasn't resolved the current user yet) — in that case
+  // only the page-number segment renders.
+  static pw.Widget _footer(pw.Context context, String? printedByName, DateTime? printedOn) {
+    final parts = <String>[
+      if (printedByName != null && printedByName.isNotEmpty) 'Printed By: $printedByName',
+      if (printedOn != null) 'Printed On: ${_formatDateTime(printedOn)}',
+      'Page ${context.pageNumber} of ${context.pagesCount}',
+    ];
+    return pw.Container(
+      alignment: pw.Alignment.centerRight,
+      margin: const pw.EdgeInsets.only(top: 6),
+      child: pw.Text(
+        parts.join('   |   '),
+        style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+      ),
+    );
+  }
+
+  static String _formatDateTime(DateTime dt) {
+    final d = dt.day.toString().padLeft(2, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final h = dt.hour.toString().padLeft(2, '0');
+    final min = dt.minute.toString().padLeft(2, '0');
+    return '$d-$m-${dt.year} $h:$min';
   }
 
   static pw.Widget _buildRow(List<PrintElement> rowElements, Map<String, dynamic> document) {

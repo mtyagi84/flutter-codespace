@@ -592,8 +592,13 @@ class _FinanceVoucherEntryScreenState
       final company  = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
       final template = await ref.read(printTemplateProvider('VOUCHER').future);
       final document = _buildPrintDocument(company);
+      final session = ref.read(sessionProvider);
       await PrintEngine.printDocument(
-          template: template, document: document, filename: '$_voucherType-$_voucherNo.pdf');
+          template: template,
+          document: document,
+          filename: '$_voucherType-$_voucherNo.pdf',
+          printedByName: session?.fullName,
+          printedOn: DateTime.now());
     } catch (e, st) {
       AppLogger.error('FinanceVoucherPrint', e, st);
       if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this voucher'), color: AppColors.negative);

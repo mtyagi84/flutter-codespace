@@ -8,6 +8,7 @@ import 'default_templates/grn_default_template.dart';
 import 'default_templates/purchase_invoice_default_template.dart';
 import 'default_templates/purchase_return_default_template.dart';
 import 'default_templates/voucher_default_template.dart';
+import 'default_templates/journal_voucher_default_template.dart';
 import 'default_templates/material_requisition_default_template.dart';
 import 'default_templates/material_issue_default_template.dart';
 import 'default_templates/stock_transfer_request_default_template.dart';
@@ -65,6 +66,7 @@ PrintTemplate defaultTemplateFor(String documentType) => switch (documentType) {
   'PURCHASE_INVOICE'        => purchaseInvoiceDefaultTemplate,
   'PURCHASE_RETURN'         => purchaseReturnDefaultTemplate,
   'VOUCHER'                 => voucherDefaultTemplate,
+  'JOURNAL_VOUCHER'         => journalVoucherDefaultTemplate,
   'MATERIAL_REQUISITION'    => materialRequisitionDefaultTemplate,
   'MATERIAL_ISSUE'          => materialIssueDefaultTemplate,
   'STOCK_TRANSFER_REQUEST'  => stockTransferRequestDefaultTemplate,
