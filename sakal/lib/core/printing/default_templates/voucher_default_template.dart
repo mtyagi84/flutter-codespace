@@ -24,84 +24,89 @@ const voucherDefaultTemplate = PrintTemplate(
   paperProfile: PaperProfile.a4,
   isDefault: true,
   elements: [
-    // Letterhead: logo beside company name/title (row 1), with
-    // company_address/company_city on rows 2-3 lining up under
-    // company_name via 'spacer_N' elements that reserve the logo's own
-    // column width — this only stays tight (no dead space below the short
-    // name/title text) because pdf_canvas_renderer.dart's image case caps
-    // the LETTERHEAD's displayed logo size to a compact 0.5in box
-    // regardless of the company's configured print size — see that file's
-    // comment for the two-directions-of-wasted-space bug this fixes
-    // (real bug reported live 2026-08-19, twice).
+    // Letterhead: the logo sits ALONE on its own row (no company_name/title
+    // beside it). This is deliberate, not the earlier attempt: putting
+    // company_address/company_city on separate rows that only VISUALLY
+    // matched company_name's own column via identical flex weights (or
+    // even a fixed-width shared column) turned out not to reliably align
+    // in the real renderer (real bug, reported live 2026-08-19, THREE
+    // times — flex-ratio matching and a fixed-width column both failed to
+    // fix it in practice). Putting the logo on its own row removes the
+    // dependency entirely: company_name/company_address/company_city all
+    // sit at x:1 in their OWN 2-element rows (paired with
+    // title/voucher_no/trans_date at x:2) — there is no second row to
+    // stay in sync with, so alignment can't drift. The only cost is a
+    // small amount of blank space beside the logo at the top — kept small
+    // because the logo itself is capped to a compact 0.5in box by
+    // pdf_canvas_renderer.dart's image case, regardless of the company's
+    // configured print size.
     PrintElement(
       id: 'logo', type: PrintElementType.image, bind: 'company.logo',
       x: 1, y: 1, w: 35,
     ),
     PrintElement(
       id: 'company_name', type: PrintElementType.field, bind: 'company.company_name',
-      x: 2, y: 1, w: 120, font: PrintFont(size: 16, bold: true, colorHex: '#1B3A6B'),
+      x: 1, y: 2, w: 130, font: PrintFont(size: 16, bold: true, colorHex: '#1B3A6B'),
     ),
     PrintElement(
       id: 'title', type: PrintElementType.field, bind: 'header.voucher_type_label',
-      x: 3, y: 1, w: 90,
+      x: 2, y: 2, w: 90,
       font: PrintFont(size: 16, bold: true, align: PrintAlign.right, colorHex: '#1B3A6B'),
     ),
-    PrintElement(id: 'spacer_2', type: PrintElementType.text, text: '', x: 1, y: 2, w: 35),
     PrintElement(
       id: 'company_address', type: PrintElementType.field, bind: 'company.address',
-      x: 2, y: 2, w: 120, font: PrintFont(size: 9, colorHex: '#4A5568'),
+      x: 1, y: 3, w: 130, font: PrintFont(size: 9, colorHex: '#4A5568'),
     ),
     PrintElement(
       id: 'voucher_no', type: PrintElementType.field, bind: 'header.voucher_no', label: 'Voucher No: ',
-      x: 3, y: 2, w: 90, font: PrintFont(size: 10, bold: true, align: PrintAlign.right),
+      x: 2, y: 3, w: 90, font: PrintFont(size: 10, bold: true, align: PrintAlign.right),
     ),
-    PrintElement(id: 'spacer_3', type: PrintElementType.text, text: '', x: 1, y: 3, w: 35),
     PrintElement(
       id: 'company_city', type: PrintElementType.field, bind: 'company.city_name',
-      x: 2, y: 3, w: 120, font: PrintFont(size: 9, colorHex: '#4A5568'),
+      x: 1, y: 4, w: 130, font: PrintFont(size: 9, colorHex: '#4A5568'),
     ),
     PrintElement(
       id: 'trans_date', type: PrintElementType.field, bind: 'header.trans_date', label: 'Date: ',
-      x: 3, y: 3, w: 90, font: PrintFont(size: 10, align: PrintAlign.right),
+      x: 2, y: 4, w: 90, font: PrintFont(size: 10, align: PrintAlign.right),
     ),
     // Accent rule under the letterhead — thicker + navy, not the default
     // thin grey divider, so the letterhead reads as a distinct block.
     PrintElement(
-      id: 'div1', type: PrintElementType.line, x: 1, y: 4, w: 180,
+      id: 'div1', type: PrintElementType.line, x: 1, y: 5, w: 180,
       h: 1.4, font: PrintFont(colorHex: '#1B3A6B'),
     ),
     PrintElement(
       id: 'cash_bank_account', type: PrintElementType.field, bind: 'header.cash_bank_account', label: 'Account: ',
-      x: 1, y: 5, w: 90, font: PrintFont(size: 10),
-    ),
-    PrintElement(
-      id: 'payment_mode', type: PrintElementType.field, bind: 'header.payment_mode', label: 'Payment Mode: ',
-      x: 2, y: 5, w: 85, font: PrintFont(size: 10),
-    ),
-    PrintElement(
-      id: 'ref_no', type: PrintElementType.field, bind: 'header.ref_no', label: 'Ref No: ',
       x: 1, y: 6, w: 90, font: PrintFont(size: 10),
     ),
     PrintElement(
-      id: 'currency_line', type: PrintElementType.field, bind: 'header.currency_line', label: 'Currency: ',
+      id: 'payment_mode', type: PrintElementType.field, bind: 'header.payment_mode', label: 'Payment Mode: ',
       x: 2, y: 6, w: 85, font: PrintFont(size: 10),
     ),
     PrintElement(
+      id: 'ref_no', type: PrintElementType.field, bind: 'header.ref_no', label: 'Ref No: ',
+      x: 1, y: 7, w: 90, font: PrintFont(size: 10),
+    ),
+    PrintElement(
+      id: 'currency_line', type: PrintElementType.field, bind: 'header.currency_line', label: 'Currency: ',
+      x: 2, y: 7, w: 85, font: PrintFont(size: 10),
+    ),
+    PrintElement(
       id: 'remarks', type: PrintElementType.field, bind: 'header.remarks', label: 'Remarks: ',
-      x: 1, y: 7, w: 180, font: PrintFont(size: 9, colorHex: '#4A5568'),
+      x: 1, y: 8, w: 180, font: PrintFont(size: 9, colorHex: '#4A5568'),
     ),
     // Against Bill only — same "Party: X" line the old builder showed above
     // the bill table. is_on_account_str is a string ('true'/'false') since
     // PrintCondition compares against a string value.
     PrintElement(
       id: 'party_name', type: PrintElementType.field, bind: 'header.party_name', label: 'Party: ',
-      x: 1, y: 8, w: 180, font: PrintFont(size: 10, bold: true),
+      x: 1, y: 9, w: 180, font: PrintFont(size: 10, bold: true),
       showWhen: PrintCondition(field: 'header.is_on_account_str', equals: 'false'),
     ),
-    PrintElement(id: 'div2', type: PrintElementType.line, x: 1, y: 9, w: 180),
+    PrintElement(id: 'div2', type: PrintElementType.line, x: 1, y: 10, w: 180),
     PrintElement(
       id: 'lines_table', type: PrintElementType.table, bind: 'lines',
-      x: 1, y: 10, w: 180,
+      x: 1, y: 11, w: 180,
       columns: [
         PrintTableColumn(bind: 'particulars', label: 'Particulars', width: 70),
         PrintTableColumn(bind: 'amount', label: 'Amount', width: 40, align: PrintAlign.right, format: PrintDataFormat.currency),

@@ -105,12 +105,6 @@ class PdfCanvasRenderer {
     return '$d-$m-${dt.year} $h:$min';
   }
 
-  // Matches pdf_canvas_renderer's own letterhead logo cap (maxLetterheadLogoIn
-  // = 0.5in ≈ 36pt, see the image case below) — used to give the logo's own
-  // column a FIXED width instead of a flex share, so it's pixel-identical
-  // across every row that reserves it, not just proportionally similar.
-  static const _logoColumnWidthPt = 36.0;
-
   static pw.Widget _buildRow(List<PrintElement> rowElements, Map<String, dynamic> document) {
     if (rowElements.length == 1) return _content(rowElements.first, document);
     return pw.Row(
@@ -118,34 +112,14 @@ class PdfCanvasRenderer {
       children: [
         for (var i = 0; i < rowElements.length; i++) ...[
           if (i > 0) pw.SizedBox(width: 12),
-          if (_isLogoColumn(rowElements[i]))
-            // Fixed width, not flex — guarantees this column lines up
-            // exactly with the logo's own row, instead of depending on
-            // matching flex ratios across separately-laid-out Row
-            // instances (real bug reported live 2026-08-19: company_address
-            // wasn't lining up under company_name despite identical `w:`
-            // values on both rows).
-            pw.SizedBox(width: _logoColumnWidthPt, child: _content(rowElements[i], document))
-          else
-            pw.Expanded(
-              flex: rowElements[i].w.round().clamp(1, 1000),
-              child: _content(rowElements[i], document),
-            ),
+          pw.Expanded(
+            flex: rowElements[i].w.round().clamp(1, 1000),
+            child: _content(rowElements[i], document),
+          ),
         ],
       ],
     );
   }
-
-  // The logo itself, or an empty-text `spacer_*` element reserving the
-  // logo's own column on a row below it (journal_voucher_default_template.
-  // dart / voucher_default_template.dart's `spacer_2`/`spacer_3`). The
-  // `spacer_` id prefix is deliberately specific — every OTHER template's
-  // own empty-text spacer (the unrelated "push total right" trick) is named
-  // `totals_spacer_*`/`total_*_spacer` and must keep its existing flex
-  // behavior, not get pulled into this fixed-width treatment.
-  static bool _isLogoColumn(PrintElement el) =>
-      el.type == PrintElementType.image ||
-      (el.type == PrintElementType.text && (el.text ?? '').isEmpty && el.id.startsWith('spacer_'));
 
   static pw.Widget _content(PrintElement el, Map<String, dynamic> document) {
     switch (el.type) {
