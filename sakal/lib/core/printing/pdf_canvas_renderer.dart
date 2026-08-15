@@ -76,7 +76,7 @@ class PdfCanvasRenderer {
       margin: const pw.EdgeInsets.only(top: 6),
       child: pw.Text(
         parts.join('   |   '),
-        style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+        style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
       ),
     );
   }

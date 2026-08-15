@@ -148,7 +148,7 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
   String? _actionError;
   bool _saving = false;
   bool _approving = false;
-  bool _reversing = false;
+  final bool _reversing = false;
   bool _printing = false;
 
   String _preparedByName = '';

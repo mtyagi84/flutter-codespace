@@ -175,7 +175,7 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
   String? _actionError;
   bool _saving = false;
   bool _approving = false;
-  bool _reversing = false;
+  final bool _reversing = false;
   bool _printing = false;
 
   // FinanceVoucherHeader already resolves these via its own SQL join
