@@ -27,6 +27,7 @@ class FinanceAccountPicker extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onSelected;
   final FocusNode? focusNode;
   final InputDecoration? decoration;
+  final TextStyle? style;
 
   const FinanceAccountPicker({
     super.key,
@@ -36,6 +37,7 @@ class FinanceAccountPicker extends StatelessWidget {
     this.enabled = true,
     this.focusNode,
     this.decoration,
+    this.style,
   });
 
   static String _parentName(Map<String, dynamic> account) =>
@@ -114,6 +116,7 @@ class FinanceAccountPicker extends StatelessWidget {
       enabled: enabled,
       focusNode: focusNode,
       decoration: decoration ?? SakalFieldCard.bareDecoration,
+      style: style,
       displayStringForOption: displayString,
       optionsBuilder: _search,
       onSelected: onSelected,

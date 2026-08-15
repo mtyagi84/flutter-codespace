@@ -79,7 +79,11 @@ class _SakalScrollableTableState extends State<SakalScrollableTable> {
           child: IntrinsicWidth(
             child: ConstrainedBox(
               constraints: BoxConstraints(minWidth: constraints.maxWidth),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [widget.header, ...widget.rows]),
+              // Trailing gap so the horizontal scrollbar's own track/thumb
+              // doesn't render flush against the last row's bottom edge —
+              // found live 2026-08-16, read as the scrollbar "touching"
+              // the last line.
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [widget.header, ...widget.rows, const SizedBox(height: 10)]),
             ),
           ),
         ),

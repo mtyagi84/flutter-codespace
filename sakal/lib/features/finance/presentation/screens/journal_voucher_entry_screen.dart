@@ -1021,15 +1021,15 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
       const SizedBox(width: 8),
       SizedBox(width: 90, child: SakalTableHeaderBar.label('Currency')),
       const SizedBox(width: 8),
-      SizedBox(width: 130, child: SakalTableHeaderBar.label('Amount')),
+      SizedBox(width: 130, child: SakalTableHeaderBar.label('Amount', textAlign: TextAlign.right)),
       const SizedBox(width: 8),
       SizedBox(width: 90, child: SakalTableHeaderBar.label('Dr / Cr')),
       const SizedBox(width: 8),
-      SizedBox(width: 120, child: SakalTableHeaderBar.label('Base Amount')),
+      SizedBox(width: 120, child: SakalTableHeaderBar.label('Base Amount', textAlign: TextAlign.right)),
       const SizedBox(width: 8),
-      SizedBox(width: 120, child: SakalTableHeaderBar.label('Local Amount')),
+      SizedBox(width: 120, child: SakalTableHeaderBar.label('Local Amount', textAlign: TextAlign.right)),
       const SizedBox(width: 8),
-      SizedBox(width: 120, child: SakalTableHeaderBar.label('Party Amount')),
+      SizedBox(width: 120, child: SakalTableHeaderBar.label('Party Amount', textAlign: TextAlign.right)),
       const SizedBox(width: 8),
       SizedBox(width: 200, child: SakalTableHeaderBar.label('Remarks')),
       const SizedBox(width: 80), // reserves the Add/Remove icon columns' width
@@ -1037,6 +1037,12 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
   }
 
   Widget _buildLineCard(_JVLineRow row, int index, bool isMobile) {
+    // Shared value text style — every field in this row uses it (readonly
+    // cells already did automatically; the editable ones below were each
+    // silently falling back to Flutter's own default TextFormField/picker
+    // style, not bold like the readonly cells, which is exactly the
+    // per-field font-weight mismatch found live 2026-08-16).
+    final valueStyle = SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider));
     final accountField = SakalFieldCard(
       label: 'Account',
       required: true,
@@ -1048,6 +1054,7 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
         enabled: !_locked,
         focusNode: row.accountFocusNode,
         decoration: SakalFieldCard.bareDecoration,
+        style: valueStyle,
         onSelected: (a) => _onAccountSelected(row, a),
       ),
     );
@@ -1065,6 +1072,7 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,4}'))],
         decoration: SakalFieldCard.bareDecoration,
+        style: valueStyle,
         textAlign: TextAlign.right,
         onChanged: (_) => setState(() {}),
       ),
@@ -1079,7 +1087,7 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
         isDense: true,
         itemHeight: null,
         decoration: SakalFieldCard.bareDecoration,
-        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+        style: valueStyle,
         items: const [DropdownMenuItem(value: 'DR', child: Text('DR')), DropdownMenuItem(value: 'CR', child: Text('CR'))],
         onChanged: _locked ? null : (v) => setState(() => row.natureDrCr = v ?? 'DR'),
       ),
@@ -1095,6 +1103,7 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
         controller: row.remarksCtrl,
         enabled: !_locked,
         decoration: SakalFieldCard.bareDecoration,
+        style: valueStyle,
         textInputAction: index < _lines.length - 1 ? TextInputAction.next : TextInputAction.done,
         onFieldSubmitted: (_) {
           if (index < _lines.length - 1) {
