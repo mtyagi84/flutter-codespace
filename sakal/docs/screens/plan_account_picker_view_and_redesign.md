@@ -1,6 +1,14 @@
 # Account picker: SQL-view parent-name lookup + 3-column popup redesign
 
-Status: Approved 2026-08-16, implementation starting now.
+Status: Implemented 2026-08-16, with one mid-implementation design pivot on Part 2 (see below).
+
+## Follow-up: Part 2 pivoted from inline dropdown to a separate desktop dialog
+
+The first implementation of Part 2 (a header row + `OverflowBox` width fix on the existing inline `RawAutocomplete` dropdown) shipped but was still visibly broken live — the popup rendered at roughly the ANCHOR FIELD's own narrow width regardless of `optionsMinWidth`, wrapping the new header text character-by-character. Root cause: `RawAutocomplete`'s own `CompositedTransformFollower` hands `optionsViewBuilder` an incoming `maxWidth` already bounded to near the field's width — `ConstrainedBox(minWidth: ...)` gets silently clamped back down via `BoxConstraints.enforce()` (constraints only ever tighten going down the tree), so no `minWidth` value could ever actually take effect. An `OverflowBox` fix was attempted (a standard technique for escaping ambient constraints) — this WAS applied and kept, as a real, valid bug fix to `SakalAutocomplete`'s inline dropdown path for any other future caller — but the user, seeing the still-fundamentally-anchored-to-a-narrow-field design, asked instead for a genuinely separate popup window, independent of field size, confirmed desktop-only (mobile's existing bottom-sheet stays untouched).
+
+**Final design**: `SakalAutocomplete` gained a new opt-in `desktopDialogMode` flag (default `false` — every other consumer unaffected). When set, desktop tapping/focusing the field opens a centered modal `Dialog` (`_DesktopAutocompleteDialog`, new widget, closely mirrors the existing `_MobileAutocompleteSheet` but as a `Dialog` instead of a bottom sheet, with a fixed `640x560` max size independent of the field, PLUS Up/Down/Enter/Escape keyboard navigation reusing the same `Focus(onKeyEvent:)`-wrapping-the-TextField technique already proven in this file's inline dropdown path) instead of the inline `RawAutocomplete` overlay. `FinanceAccountPicker` sets `desktopDialogMode: true`; every other `SakalAutocomplete` consumer (product pickers, etc.) is unaffected since the flag defaults false.
+
+Files touched (final): `lib/core/widgets/sakal_autocomplete.dart` (OverflowBox fix retained + new `desktopDialogMode`/`_DesktopAutocompleteDialog`), `lib/features/finance/presentation/widgets/finance_account_picker.dart` (now passes `desktopDialogMode: true`, header/row-divider styling unchanged and reused inside the new dialog).
 
 ## Context
 

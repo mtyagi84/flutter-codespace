@@ -117,11 +117,16 @@ class FinanceAccountPicker extends StatelessWidget {
       displayStringForOption: displayString,
       optionsBuilder: _search,
       onSelected: onSelected,
-      optionsMinWidth: 460, // widened alongside optionRow's own code column — see its comment
       optionBuilder: (context, option, isHighlighted) => optionRow(option, highlighted: isHighlighted),
-      // Desktop-only — see SakalAutocomplete.optionsHeader's own doc
-      // comment for why this can never leak onto mobile's bottom sheet.
       optionsHeader: _headerRow(),
+      // A separate modal dialog (fixed 640px width, independent of the
+      // field's own width) instead of the inline dropdown — user-requested
+      // 2026-08-16 after the inline dropdown, even widened, still rendered
+      // at roughly the anchor field's own narrow width in practice (a
+      // RawAutocomplete follower-width quirk — see
+      // SakalAutocomplete.desktopDialogMode's own doc comment). Mobile is
+      // unaffected either way.
+      desktopDialogMode: true,
     );
   }
 }
