@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../utils/app_logger.dart';
 
 /// Data a screen supplies to the shared TopBar instead of building its own
 /// separate title block as body content — see the "Screen header" mandatory
@@ -86,9 +87,14 @@ mixin ScreenHeaderMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> im
   void refreshScreenHeader() {
     _headerController ??= ref.read(screenHeaderProvider.notifier);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted) {
+        AppLogger.info('ScreenHeader', 'refreshScreenHeader SKIPPED (unmounted) for $runtimeType');
+        return;
+      }
       _screenHeaderOwner = this;
-      _headerController!.state = buildScreenHeader();
+      final info = buildScreenHeader();
+      AppLogger.info('ScreenHeader', 'CLAIM "${info.title}" by $runtimeType');
+      _headerController!.state = info;
     });
   }
 
@@ -97,7 +103,10 @@ mixin ScreenHeaderMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> im
     super.didChangeDependencies();
     _headerController ??= ref.read(screenHeaderProvider.notifier);
     final route = ModalRoute.of(context);
-    if (route is PageRoute) routeObserver.subscribe(this, route);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+      AppLogger.info('ScreenHeader', 'didChangeDependencies: subscribed $runtimeType to route ${route.settings.name ?? route.hashCode}');
+    }
     refreshScreenHeader();
   }
 
@@ -113,8 +122,11 @@ mixin ScreenHeaderMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> im
     // ownership check makes both cases safe at once — see
     // design_system_guide.md §5.1 for the full trace of both scenarios.
     if (identical(_screenHeaderOwner, this)) {
+      AppLogger.info('ScreenHeader', 'CLEAR (dispose, still owner) by $runtimeType');
       _screenHeaderOwner = null;
       _headerController?.state = null;
+    } else {
+      AppLogger.info('ScreenHeader', 'dispose, NOT owner ($runtimeType) — leaving header as-is');
     }
     super.dispose();
   }
@@ -129,5 +141,8 @@ mixin ScreenHeaderMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> im
   @override
   void didPushNext() {}
   @override
-  void didPopNext() => refreshScreenHeader();
+  void didPopNext() {
+    AppLogger.info('ScreenHeader', 'didPopNext fired for $runtimeType');
+    refreshScreenHeader();
+  }
 }

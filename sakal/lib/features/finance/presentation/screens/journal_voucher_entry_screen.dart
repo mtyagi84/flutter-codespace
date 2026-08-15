@@ -18,6 +18,8 @@ import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_scrollable_table.dart';
+import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../../../core/widgets/sakal_header_action_button.dart';
 import '../../../../core/widgets/sakal_reciprocal_rate_field.dart';
 import '../../../../core/printing/print_engine.dart';
@@ -141,6 +143,16 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
   DateTime? _refDate;
   final _remarksCtrl = TextEditingController();
 
+  // Keyboard-chaining focus nodes — see the header field flow: screen
+  // opens focused on Currency (not the first line's Account field, which
+  // would otherwise immediately pop open FinanceAccountPicker's own
+  // desktop dialog on load); Currency -> Reference No; Reference Date ->
+  // Remarks (no FocusNode needed there, it's a tap-to-open date picker,
+  // not a real keyboard field).
+  final _currencyFocusNode = FocusNode();
+  final _refNoFocusNode = FocusNode();
+  final _remarksFocusNode = FocusNode();
+
   // All postable accounts (Customer/Supplier included even if not
   // posting_allowed) — the SAME shared cache Payment/Receipt Voucher and
   // Purchase Order use. Cash/Bank is filtered out client-side, only for
@@ -175,8 +187,11 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
   @override
   void initState() {
     super.initState();
-    _addLine();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _init());
+    _addLine(focusAccount: false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _currencyFocusNode.requestFocus();
+      _init();
+    });
   }
 
   @override
@@ -185,6 +200,9 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
     _localRateCtrl.dispose();
     _refNoCtrl.dispose();
     _remarksCtrl.dispose();
+    _currencyFocusNode.dispose();
+    _refNoFocusNode.dispose();
+    _remarksFocusNode.dispose();
     for (final l in _lines) {
       l.dispose();
     }
@@ -318,9 +336,14 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
 
   // ── Lines ────────────────────────────────────────────────────────────
 
-  void _addLine() {
+  void _addLine({bool focusAccount = true}) {
     final row = _JVLineRow();
+    // New lines pick up whatever's currently in the header Remarks field
+    // as a starting point — user can still edit/clear it per line. Not
+    // applied retroactively to already-existing lines.
+    row.remarksCtrl.text = _remarksCtrl.text;
     setState(() => _lines.add(row));
+    if (!focusAccount) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) row.accountFocusNode.requestFocus();
     });
@@ -806,7 +829,7 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
                     if (_actionError != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_actionError!, style: const TextStyle(color: AppColors.negative))),
                     _buildHeaderSection(isMobile),
                     const SizedBox(height: 20),
-                    _buildLinesSection(),
+                    _buildLinesSection(isMobile),
                   ]),
                 ),
         ),
@@ -845,6 +868,7 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
       editable: !_locked,
       child: DropdownButtonFormField<String>(
         initialValue: _currencyId,
+        focusNode: _currencyFocusNode,
         isExpanded: true,
         isDense: true,
         itemHeight: null,
@@ -856,24 +880,28 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
             : (v) {
                 final match = _currencies.firstWhere((c) => c['id'] == v, orElse: () => const {});
                 if (match.isNotEmpty) _onCurrencySelected(match);
+                _refNoFocusNode.requestFocus();
               },
       ),
     );
     final refNoField = SakalFieldCard(
       label: 'Reference No',
       editable: !_locked,
-      child: TextFormField(controller: _refNoCtrl, enabled: !_locked, decoration: SakalFieldCard.bareDecoration),
+      child: TextFormField(controller: _refNoCtrl, focusNode: _refNoFocusNode, enabled: !_locked, decoration: SakalFieldCard.bareDecoration),
     );
     final refDateField = InkWell(
       onTap: !_locked
           ? () async {
               final d = await showDatePicker(context: context, initialDate: _refDate ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
-              if (d != null) setState(() => _refDate = d);
+              if (d != null) {
+                setState(() => _refDate = d);
+                _remarksFocusNode.requestFocus();
+              }
             }
           : null,
       child: SakalFieldCard.readOnly(label: 'Reference Date', value: _refDate != null ? _displayDate(_refDate) : '—'),
     );
-    final remarksField = SakalFieldCard(label: 'Remarks', editable: !_locked, child: TextFormField(controller: _remarksCtrl, enabled: !_locked, decoration: SakalFieldCard.bareDecoration));
+    final remarksField = SakalFieldCard(label: 'Remarks', editable: !_locked, child: TextFormField(controller: _remarksCtrl, focusNode: _remarksFocusNode, enabled: !_locked, decoration: SakalFieldCard.bareDecoration));
 
     // Guard the dropdown's initialValue separately from _locationId itself —
     // a resumed voucher's already-saved location can fall outside the
@@ -910,7 +938,7 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
     ];
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      SakalFieldRow(isMobile: isMobile, children: [
+      SakalFieldRow(isMobile: isMobile, spacing: 24, children: [
         voucherNoField, voucherDateField, currencyField,
         if (_interLocationModel == 'INTER_ENTITY') locationField,
       ]),
@@ -925,7 +953,16 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
     ]);
   }
 
-  Widget _buildLinesSection() {
+  Widget _buildLinesSection(bool isMobile) {
+    // Desktop: one continuous horizontally-scrollable row per line under a
+    // dark SakalTableHeaderBar, instead of a Wrap that pushed fields onto a
+    // second line once the row's fixed column widths (~1340px) exceeded
+    // the viewport — see CLAUDE.md's "Line-items grid" mandatory pattern,
+    // same shape as Purchase Order's own product list. Mobile keeps the
+    // existing Wrap-based card (not the full SakalLineItemCard migration —
+    // out of scope for this fix, which is specifically about desktop
+    // wrapping).
+    final lineWidgets = [for (var i = 0; i < _lines.length; i++) _buildLineCard(_lines[i], i, isMobile)];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         const Expanded(child: Text('Account Lines', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700))),
@@ -935,134 +972,202 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
         ),
       ]),
       const SizedBox(height: 8),
-      for (var i = 0; i < _lines.length; i++) _buildLineCard(_lines[i], i),
+      if (isMobile)
+        ...lineWidgets
+      else
+        SakalScrollableTable(header: _buildLinesHeader(), rows: lineWidgets),
     ]);
   }
 
-  Widget _buildLineCard(_JVLineRow row, int index) {
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            SizedBox(
-              width: 320,
-              child: SakalFieldCard(
-                label: 'Account',
-                required: true,
-                editable: !_locked,
-                child: FinanceAccountPicker(
-                  accounts: _pickableAccounts,
-                  initialValue: row.accountDisplay.isEmpty ? null : row.accountDisplay,
-                  enabled: !_locked,
-                  focusNode: row.accountFocusNode,
-                  decoration: SakalFieldCard.bareDecoration,
-                  onSelected: (a) => _onAccountSelected(row, a),
-                ),
-              ),
-            ),
-            SizedBox(width: 150, child: SakalFieldCard.readOnly(label: 'Parent Group', value: row.parentName.isEmpty ? '—' : row.parentName)),
-            SizedBox(width: 90, child: SakalFieldCard.readOnly(label: 'Currency', value: row.accountCurrency.isEmpty ? '—' : row.accountCurrency)),
-            SizedBox(
-              width: 130,
-              child: SakalFieldCard(
-                label: 'Amount',
-                editable: !_locked,
-                numeric: true,
-                child: TextFormField(
-                  controller: row.amountCtrl,
-                  focusNode: row.amountFocusNode,
-                  enabled: !_locked,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,4}'))],
-                  decoration: SakalFieldCard.bareDecoration,
-                  textAlign: TextAlign.right,
-                  onChanged: (_) => setState(() {}),
-                ),
-              ),
-            ),
-            SizedBox(
-              width: 90,
-              child: SakalFieldCard(
-                label: 'Dr / Cr',
-                editable: !_locked,
-                child: DropdownButtonFormField<String>(
-                  initialValue: row.natureDrCr,
-                  isExpanded: true,
-                  isDense: true,
-                  itemHeight: null,
-                  decoration: SakalFieldCard.bareDecoration,
-                  style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
-                  items: const [DropdownMenuItem(value: 'DR', child: Text('DR')), DropdownMenuItem(value: 'CR', child: Text('CR'))],
-                  onChanged: _locked ? null : (v) => setState(() => row.natureDrCr = v ?? 'DR'),
-                ),
-              ),
-            ),
-            SizedBox(width: 120, child: SakalFieldCard.readOnly(label: 'Base Amount', value: AppNumberFormat.amount(row.amount * _baseRate, 'INTERNATIONAL'), numeric: true)),
-            SizedBox(width: 120, child: SakalFieldCard.readOnly(label: 'Local Amount', value: AppNumberFormat.amount(row.amount * _localRate, 'INTERNATIONAL'), numeric: true)),
-            SizedBox(width: 120, child: SakalFieldCard.readOnly(label: 'Party Amount', value: AppNumberFormat.amount(row.amount * _partyRateFor(row), 'INTERNATIONAL'), numeric: true)),
-            SizedBox(
-              width: 200,
-              child: SakalFieldCard(
-                label: 'Remarks',
-                editable: !_locked,
-                child: TextFormField(
-                  controller: row.remarksCtrl,
-                  enabled: !_locked,
-                  decoration: SakalFieldCard.bareDecoration,
-                  textInputAction: index < _lines.length - 1 ? TextInputAction.next : TextInputAction.done,
-                  onFieldSubmitted: (_) {
-                    if (index < _lines.length - 1) {
-                      _lines[index + 1].accountFocusNode.requestFocus();
-                    } else {
-                      row.addButtonFocusNode.requestFocus();
-                    }
-                  },
-                ),
-              ),
-            ),
-            if (!_locked)
-              IconButton(focusNode: row.addButtonFocusNode, icon: const Icon(Icons.add_circle_outline, size: 20, color: AppColors.primary), tooltip: 'Add line', onPressed: _addLine),
-            if (!_locked && _lines.length > 1) IconButton(icon: const Icon(Icons.close, size: 18, color: AppColors.negative), tooltip: 'Remove line', onPressed: () => _removeLine(row)),
-          ]),
-          if (row.autoCreatesBill)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                row.accountNature == 'Customer' ? 'This line creates a new receivable (Invoice) against this customer.' : 'This line creates a new payable (Bill) against this supplier.',
-                style: const TextStyle(fontSize: 11, color: AppColors.secondary, fontStyle: FontStyle.italic),
-              ),
-            ),
-          if (row.canOptIntoSettlement)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Row(children: [
-                Checkbox(
-                  value: row.settleAgainstBill,
-                  onChanged: _locked
-                      ? null
-                      : (v) {
-                          setState(() {
-                            row.settleAgainstBill = v ?? false;
-                            if (!row.settleAgainstBill) row.selectedBill = null;
-                          });
-                        },
-                ),
-                const Text('Settle against an existing bill', style: TextStyle(fontSize: 12)),
-                if (row.settleAgainstBill) ...[
-                  const SizedBox(width: 8),
-                  TextButton(
-                    onPressed: _locked ? null : () => _pickSettlementBill(row),
-                    child: Text(row.selectedBill != null ? 'Bill: ${row.selectedBill!['trans_no']}' : 'Pick a bill…'),
-                  ),
-                ],
-              ]),
-            ),
-        ]),
+  // Same left-to-right column order/widths as _buildLineCard's own desktop
+  // Row below, so the header stays pixel-aligned with the data.
+  Widget _buildLinesHeader() {
+    return SakalTableHeaderBar(cells: [
+      SizedBox(width: 320, child: SakalTableHeaderBar.label('Account')),
+      const SizedBox(width: 8),
+      SizedBox(width: 150, child: SakalTableHeaderBar.label('Parent Group')),
+      const SizedBox(width: 8),
+      SizedBox(width: 90, child: SakalTableHeaderBar.label('Currency')),
+      const SizedBox(width: 8),
+      SizedBox(width: 130, child: SakalTableHeaderBar.label('Amount')),
+      const SizedBox(width: 8),
+      SizedBox(width: 90, child: SakalTableHeaderBar.label('Dr / Cr')),
+      const SizedBox(width: 8),
+      SizedBox(width: 120, child: SakalTableHeaderBar.label('Base Amount')),
+      const SizedBox(width: 8),
+      SizedBox(width: 120, child: SakalTableHeaderBar.label('Local Amount')),
+      const SizedBox(width: 8),
+      SizedBox(width: 120, child: SakalTableHeaderBar.label('Party Amount')),
+      const SizedBox(width: 8),
+      SizedBox(width: 200, child: SakalTableHeaderBar.label('Remarks')),
+      const SizedBox(width: 80), // reserves the Add/Remove icon columns' width
+    ]);
+  }
+
+  Widget _buildLineCard(_JVLineRow row, int index, bool isMobile) {
+    final accountField = SakalFieldCard(
+      label: 'Account',
+      required: true,
+      editable: !_locked,
+      child: FinanceAccountPicker(
+        accounts: _pickableAccounts,
+        initialValue: row.accountDisplay.isEmpty ? null : row.accountDisplay,
+        enabled: !_locked,
+        focusNode: row.accountFocusNode,
+        decoration: SakalFieldCard.bareDecoration,
+        onSelected: (a) => _onAccountSelected(row, a),
       ),
+    );
+    final parentGroupField = SakalFieldCard.readOnly(label: 'Parent Group', value: row.parentName.isEmpty ? '—' : row.parentName);
+    final currencyField = SakalFieldCard.readOnly(label: 'Currency', value: row.accountCurrency.isEmpty ? '—' : row.accountCurrency);
+    final amountField = SakalFieldCard(
+      label: 'Amount',
+      editable: !_locked,
+      numeric: true,
+      child: TextFormField(
+        controller: row.amountCtrl,
+        focusNode: row.amountFocusNode,
+        enabled: !_locked,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,4}'))],
+        decoration: SakalFieldCard.bareDecoration,
+        textAlign: TextAlign.right,
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+    final drCrField = SakalFieldCard(
+      label: 'Dr / Cr',
+      editable: !_locked,
+      child: DropdownButtonFormField<String>(
+        initialValue: row.natureDrCr,
+        isExpanded: true,
+        isDense: true,
+        itemHeight: null,
+        decoration: SakalFieldCard.bareDecoration,
+        style: SakalFieldCard.valueTextStyle(ref.watch(isCompactDensityProvider)),
+        items: const [DropdownMenuItem(value: 'DR', child: Text('DR')), DropdownMenuItem(value: 'CR', child: Text('CR'))],
+        onChanged: _locked ? null : (v) => setState(() => row.natureDrCr = v ?? 'DR'),
+      ),
+    );
+    final baseAmountField = SakalFieldCard.readOnly(label: 'Base Amount', value: AppNumberFormat.amount(row.amount * _baseRate, 'INTERNATIONAL'), numeric: true);
+    final localAmountField = SakalFieldCard.readOnly(label: 'Local Amount', value: AppNumberFormat.amount(row.amount * _localRate, 'INTERNATIONAL'), numeric: true);
+    final partyAmountField = SakalFieldCard.readOnly(label: 'Party Amount', value: AppNumberFormat.amount(row.amount * _partyRateFor(row), 'INTERNATIONAL'), numeric: true);
+    final remarksField = SakalFieldCard(
+      label: 'Remarks',
+      editable: !_locked,
+      child: TextFormField(
+        controller: row.remarksCtrl,
+        enabled: !_locked,
+        decoration: SakalFieldCard.bareDecoration,
+        textInputAction: index < _lines.length - 1 ? TextInputAction.next : TextInputAction.done,
+        onFieldSubmitted: (_) {
+          if (index < _lines.length - 1) {
+            _lines[index + 1].accountFocusNode.requestFocus();
+          } else {
+            row.addButtonFocusNode.requestFocus();
+          }
+        },
+      ),
+    );
+    final addButton = IconButton(focusNode: row.addButtonFocusNode, icon: const Icon(Icons.add_circle_outline, size: 20, color: AppColors.primary), tooltip: 'Add line', onPressed: _addLine);
+    final removeButton = IconButton(icon: const Icon(Icons.close, size: 18, color: AppColors.negative), tooltip: 'Remove line', onPressed: () => _removeLine(row));
+
+    final extraContent = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      if (row.autoCreatesBill)
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(
+            row.accountNature == 'Customer' ? 'This line creates a new receivable (Invoice) against this customer.' : 'This line creates a new payable (Bill) against this supplier.',
+            style: const TextStyle(fontSize: 11, color: AppColors.secondary, fontStyle: FontStyle.italic),
+          ),
+        ),
+      if (row.canOptIntoSettlement)
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Row(children: [
+            Checkbox(
+              value: row.settleAgainstBill,
+              onChanged: _locked
+                  ? null
+                  : (v) {
+                      setState(() {
+                        row.settleAgainstBill = v ?? false;
+                        if (!row.settleAgainstBill) row.selectedBill = null;
+                      });
+                    },
+            ),
+            const Text('Settle against an existing bill', style: TextStyle(fontSize: 12)),
+            if (row.settleAgainstBill) ...[
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: _locked ? null : () => _pickSettlementBill(row),
+                child: Text(row.selectedBill != null ? 'Bill: ${row.selectedBill!['trans_no']}' : 'Pick a bill…'),
+              ),
+            ],
+          ]),
+        ),
+    ]);
+
+    if (isMobile) {
+      return Card(
+        elevation: 0,
+        margin: const EdgeInsets.only(bottom: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              SizedBox(width: 320, child: accountField),
+              SizedBox(width: 150, child: parentGroupField),
+              SizedBox(width: 90, child: currencyField),
+              SizedBox(width: 130, child: amountField),
+              SizedBox(width: 90, child: drCrField),
+              SizedBox(width: 120, child: baseAmountField),
+              SizedBox(width: 120, child: localAmountField),
+              SizedBox(width: 120, child: partyAmountField),
+              SizedBox(width: 200, child: remarksField),
+              if (!_locked) addButton,
+              if (!_locked && _lines.length > 1) removeButton,
+            ]),
+            extraContent,
+          ]),
+        ),
+      );
+    }
+
+    // Desktop — a continuous row under _buildLinesHeader's dark bar, same
+    // column widths so the two stay pixel-aligned (see CLAUDE.md's
+    // "Line-items grid" mandatory pattern). Horizontal scroll (via the
+    // SakalScrollableTable wrapping this in _buildLinesSection) replaces
+    // the old Wrap, which pushed fields onto a second line once the row's
+    // fixed column widths exceeded the viewport.
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(width: 320, child: accountField),
+          const SizedBox(width: 8),
+          SizedBox(width: 150, child: parentGroupField),
+          const SizedBox(width: 8),
+          SizedBox(width: 90, child: currencyField),
+          const SizedBox(width: 8),
+          SizedBox(width: 130, child: amountField),
+          const SizedBox(width: 8),
+          SizedBox(width: 90, child: drCrField),
+          const SizedBox(width: 8),
+          SizedBox(width: 120, child: baseAmountField),
+          const SizedBox(width: 8),
+          SizedBox(width: 120, child: localAmountField),
+          const SizedBox(width: 8),
+          SizedBox(width: 120, child: partyAmountField),
+          const SizedBox(width: 8),
+          SizedBox(width: 200, child: remarksField),
+          SizedBox(width: 40, child: !_locked ? addButton : null),
+          SizedBox(width: 40, child: (!_locked && _lines.length > 1) ? removeButton : null),
+        ]),
+        extraContent,
+      ]),
     );
   }
 }
