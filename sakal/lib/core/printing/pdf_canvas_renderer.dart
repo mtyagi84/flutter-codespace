@@ -83,8 +83,13 @@ class PdfCanvasRenderer {
       'Page ${context.pageNumber} of ${context.pagesCount}',
     ];
     return pw.Container(
+      width: double.infinity,
       alignment: pw.Alignment.centerRight,
       margin: const pw.EdgeInsets.only(top: 6),
+      padding: const pw.EdgeInsets.only(top: 4),
+      decoration: const pw.BoxDecoration(
+        border: pw.Border(top: pw.BorderSide(color: PdfColors.grey400, width: 0.5)),
+      ),
       child: pw.Text(
         parts.join('   |   '),
         style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),

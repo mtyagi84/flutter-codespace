@@ -24,80 +24,84 @@ const voucherDefaultTemplate = PrintTemplate(
   paperProfile: PaperProfile.a4,
   isDefault: true,
   elements: [
-    // Letterhead: company block (logo + name + address + city) on the
-    // left, document title + voucher no + date on the right — same 3
-    // rows so both sides stay vertically aligned. 'spacer_N' elements
-    // reserve the logo's own column width (x:1, w:35) on rows 2-3 so
-    // company_address/company_city land in the SAME x:2 slot as
-    // company_name above them, instead of sitting flush left under the
-    // logo (real bug found live 2026-08-17 — this row-based layout has no
-    // true multi-row "column" concept, so a row with no left-hand
-    // element renders its lone field starting at the page margin, not
-    // indented to match the row above).
+    // Letterhead: the logo sits ALONE on its own row rather than sharing a
+    // row with company_name/title — a row's height is set by its tallest
+    // child, and the logo's real print size (ric_companies.logo_width_inch/
+    // logo_height_inch, migration 125, defaults 1x1in ≈ 72pt) is routinely
+    // much taller than a line of text, so putting it beside the name/title
+    // left a large dead gap below the short text before the next row began
+    // (same fix as journal_voucher_default_template.dart, real bug reported
+    // live 2026-08-19 — "too much space wasted"). With the logo on its own
+    // row, the rows that follow are only as tall as their own text, so
+    // address sits tight under company_name and voucher_no/date sit tight
+    // under the title, as intended.
     PrintElement(
       id: 'logo', type: PrintElementType.image, bind: 'company.logo',
-      x: 1, y: 1, w: 35, h: 20,
+      x: 1, y: 1, w: 35,
     ),
     PrintElement(
       id: 'company_name', type: PrintElementType.field, bind: 'company.company_name',
-      x: 2, y: 1, w: 140, font: PrintFont(size: 16, bold: true, colorHex: '#1B3A6B'),
+      x: 1, y: 2, w: 140, font: PrintFont(size: 16, bold: true, colorHex: '#1B3A6B'),
     ),
     PrintElement(
       id: 'title', type: PrintElementType.field, bind: 'header.voucher_type_label',
-      x: 3, y: 1, w: 70,
+      x: 2, y: 2, w: 70,
       font: PrintFont(size: 16, bold: true, align: PrintAlign.right, colorHex: '#1B3A6B'),
     ),
-    PrintElement(id: 'spacer_2', type: PrintElementType.text, text: '', x: 1, y: 2, w: 35),
     PrintElement(
       id: 'company_address', type: PrintElementType.field, bind: 'company.address',
-      x: 2, y: 2, w: 140, font: PrintFont(size: 9),
+      x: 1, y: 3, w: 140, font: PrintFont(size: 9, colorHex: '#4A5568'),
     ),
     PrintElement(
       id: 'voucher_no', type: PrintElementType.field, bind: 'header.voucher_no', label: 'Voucher No: ',
-      x: 3, y: 2, w: 70, font: PrintFont(size: 10, bold: true, align: PrintAlign.right),
+      x: 2, y: 3, w: 70, font: PrintFont(size: 10, bold: true, align: PrintAlign.right),
     ),
-    PrintElement(id: 'spacer_3', type: PrintElementType.text, text: '', x: 1, y: 3, w: 35),
     PrintElement(
       id: 'company_city', type: PrintElementType.field, bind: 'company.city_name',
-      x: 2, y: 3, w: 140, font: PrintFont(size: 9),
+      x: 1, y: 4, w: 140, font: PrintFont(size: 9, colorHex: '#4A5568'),
     ),
     PrintElement(
       id: 'trans_date', type: PrintElementType.field, bind: 'header.trans_date', label: 'Date: ',
-      x: 3, y: 3, w: 70, font: PrintFont(size: 10, align: PrintAlign.right),
+      x: 2, y: 4, w: 70, font: PrintFont(size: 10, align: PrintAlign.right),
     ),
-    PrintElement(id: 'div1', type: PrintElementType.line, x: 1, y: 4, w: 180),
+    // Accent rule under the letterhead — thicker + navy, not the default
+    // thin grey divider, so the letterhead reads as a distinct block.
+    PrintElement(
+      id: 'div1', type: PrintElementType.line, x: 1, y: 5, w: 180,
+      h: 1.4, font: PrintFont(colorHex: '#1B3A6B'),
+    ),
     PrintElement(
       id: 'cash_bank_account', type: PrintElementType.field, bind: 'header.cash_bank_account', label: 'Account: ',
-      x: 1, y: 7, w: 90, font: PrintFont(size: 10),
+      x: 1, y: 6, w: 90, font: PrintFont(size: 10),
     ),
     PrintElement(
       id: 'payment_mode', type: PrintElementType.field, bind: 'header.payment_mode', label: 'Payment Mode: ',
-      x: 2, y: 7, w: 85, font: PrintFont(size: 10),
+      x: 2, y: 6, w: 85, font: PrintFont(size: 10),
     ),
     PrintElement(
       id: 'ref_no', type: PrintElementType.field, bind: 'header.ref_no', label: 'Ref No: ',
-      x: 1, y: 8, w: 90, font: PrintFont(size: 10),
+      x: 1, y: 7, w: 90, font: PrintFont(size: 10),
     ),
     PrintElement(
-      id: 'currency_line', type: PrintElementType.field, bind: 'header.currency_line',
-      x: 2, y: 8, w: 85, font: PrintFont(size: 10),
+      id: 'currency_line', type: PrintElementType.field, bind: 'header.currency_line', label: 'Currency: ',
+      x: 2, y: 7, w: 85, font: PrintFont(size: 10),
     ),
     PrintElement(
       id: 'remarks', type: PrintElementType.field, bind: 'header.remarks', label: 'Remarks: ',
-      x: 1, y: 9, w: 180, font: PrintFont(size: 9),
+      x: 1, y: 8, w: 180, font: PrintFont(size: 9, colorHex: '#4A5568'),
     ),
     // Against Bill only — same "Party: X" line the old builder showed above
     // the bill table. is_on_account_str is a string ('true'/'false') since
     // PrintCondition compares against a string value.
     PrintElement(
       id: 'party_name', type: PrintElementType.field, bind: 'header.party_name', label: 'Party: ',
-      x: 1, y: 10, w: 180, font: PrintFont(size: 10, bold: true),
+      x: 1, y: 9, w: 180, font: PrintFont(size: 10, bold: true),
       showWhen: PrintCondition(field: 'header.is_on_account_str', equals: 'false'),
     ),
-    PrintElement(id: 'div2', type: PrintElementType.line, x: 1, y: 11, w: 180),
+    PrintElement(id: 'div2', type: PrintElementType.line, x: 1, y: 10, w: 180),
     PrintElement(
       id: 'lines_table', type: PrintElementType.table, bind: 'lines',
-      x: 1, y: 12, w: 180,
+      x: 1, y: 11, w: 180,
       columns: [
         PrintTableColumn(bind: 'particulars', label: 'Particulars', width: 70),
         PrintTableColumn(bind: 'amount', label: 'Amount', width: 40, align: PrintAlign.right, format: PrintDataFormat.currency),
@@ -105,22 +109,33 @@ const voucherDefaultTemplate = PrintTemplate(
         PrintTableColumn(bind: 'remarks', label: 'Remarks', width: 35),
       ],
     ),
+    // A rule directly above the total block separates it from the table
+    // above — otherwise "Total" reads as just one more (unbordered)
+    // table-less row with no visual anchor.
+    PrintElement(id: 'div_total', type: PrintElementType.line, x: 1, y: 11.5, w: 180, h: 0.5),
     // Right-aligned via a wide empty spacer + a narrower value field, same
     // trick as the PO template's totals block.
-    PrintElement(id: 'total_spacer', type: PrintElementType.text, text: '', x: 1, y: 13, w: 110),
+    PrintElement(id: 'total_spacer', type: PrintElementType.text, text: '', x: 1, y: 12, w: 110),
     PrintElement(
       id: 'total', type: PrintElementType.field, bind: 'totals.total_display', label: 'Total: ',
-      x: 2, y: 13, w: 70,
+      x: 2, y: 12, w: 70,
       font: PrintFont(size: 13, bold: true, align: PrintAlign.right, colorHex: '#1B3A6B'),
     ),
-    PrintElement(id: 'div3', type: PrintElementType.line, x: 1, y: 14, w: 180),
+    PrintElement(
+      id: 'div3', type: PrintElementType.line, x: 1, y: 13, w: 180,
+      h: 1.4, font: PrintFont(colorHex: '#1B3A6B'),
+    ),
+    // Short "sign above the line" rules, one per signature column, sitting
+    // directly above the Prepared/Authorised By labels below.
+    PrintElement(id: 'sig_line_1', type: PrintElementType.line, x: 1, y: 13.6, w: 80, h: 0.5),
+    PrintElement(id: 'sig_line_2', type: PrintElementType.line, x: 2, y: 13.6, w: 80, h: 0.5),
     PrintElement(
       id: 'prepared_by', type: PrintElementType.field, bind: 'signatures.prepared_by', label: 'Prepared By: ',
-      x: 1, y: 15, w: 80, font: PrintFont(size: 9, align: PrintAlign.center),
+      x: 1, y: 14, w: 80, font: PrintFont(size: 9, align: PrintAlign.center),
     ),
     PrintElement(
       id: 'authorised_by', type: PrintElementType.field, bind: 'signatures.authorised_by', label: 'Authorised By: ',
-      x: 2, y: 15, w: 80, font: PrintFont(size: 9, align: PrintAlign.center),
+      x: 2, y: 14, w: 80, font: PrintFont(size: 9, align: PrintAlign.center),
     ),
   ],
 );
