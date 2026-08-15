@@ -35,6 +35,15 @@ class SakalAutocomplete<T extends Object> extends StatefulWidget {
   /// migrating onto this widget lose that unless it's exposed here too.
   final ValueChanged<String>? onChanged;
 
+  /// Optional fixed header row pinned above the (scrolling) options list —
+  /// desktop only. Mobile never renders it: `SakalAutocomplete` already
+  /// branches to a completely separate `_MobileAutocompleteSheet` (a tap-
+  /// to-open bottom sheet) before this ever reaches `RawAutocomplete`'s
+  /// `optionsViewBuilder`, so a caller passing this can't accidentally
+  /// change mobile's interaction pattern. Defaults to `null` — every
+  /// existing caller is unaffected.
+  final Widget? optionsHeader;
+
   const SakalAutocomplete({
     super.key,
     this.initialValue,
@@ -49,6 +58,7 @@ class SakalAutocomplete<T extends Object> extends StatefulWidget {
     this.optionsMinWidth = 280,
     this.optionBuilder,
     this.onChanged,
+    this.optionsHeader,
   });
 
   @override
@@ -213,26 +223,34 @@ class _SakalAutocompleteState<T extends Object> extends State<SakalAutocomplete<
             borderRadius: BorderRadius.circular(4),
             child: ConstrainedBox(
               constraints: BoxConstraints(maxHeight: widget.optionsMaxHeight, minWidth: widget.optionsMinWidth),
-              child: ValueListenableBuilder<int>(
-                valueListenable: _highlighted,
-                builder: (context, highlightedIndex, _) => ListView.builder(
-                  padding: EdgeInsets.zero,
-                  shrinkWrap: true,
-                  itemCount: optionsList.length,
-                  itemBuilder: (context, idx) {
-                    final option = optionsList[idx];
-                    final isHighlighted = idx == highlightedIndex;
-                    return InkWell(
-                      onTap: () => onSelected(option),
-                      child: Container(
-                        color: isHighlighted ? AppColors.primary.withValues(alpha: 0.08) : null,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        child: widget.optionBuilder?.call(context, option, isHighlighted) ??
-                            Text(widget.displayStringForOption(option), style: const TextStyle(fontSize: 13)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (widget.optionsHeader != null) widget.optionsHeader!,
+                  Flexible(
+                    child: ValueListenableBuilder<int>(
+                      valueListenable: _highlighted,
+                      builder: (context, highlightedIndex, _) => ListView.builder(
+                        padding: EdgeInsets.zero,
+                        shrinkWrap: true,
+                        itemCount: optionsList.length,
+                        itemBuilder: (context, idx) {
+                          final option = optionsList[idx];
+                          final isHighlighted = idx == highlightedIndex;
+                          return InkWell(
+                            onTap: () => onSelected(option),
+                            child: Container(
+                              color: isHighlighted ? AppColors.primary.withValues(alpha: 0.08) : null,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              child: widget.optionBuilder?.call(context, option, isHighlighted) ??
+                                  Text(widget.displayStringForOption(option), style: const TextStyle(fontSize: 13)),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

@@ -156,7 +156,16 @@ final accountsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async 
     return local.getAccounts(clientId: session.clientId, companyId: session.companyId);
   }
 
-  final res = await DioClient.instance.get('/rim_accounts', queryParameters: {
+  // Queries v_rim_accounts_with_parent (migration 134), not rim_accounts
+  // directly — parent_name is resolved server-side via a plain SQL join,
+  // not a PostgREST embed. Both embed-hint forms for the self-referencing
+  // rim_accounts!parent_id relationship failed live (found 2026-08-16):
+  // the column-name hint resolved to the reverse (children) relationship;
+  // the FK-constraint-name hint (independently verified correct via
+  // pg_constraint) was rejected outright by PostgREST even after a schema
+  // cache reload. A view sidesteps embedding resolution entirely — by the
+  // time PostgREST sees it, parent_name is just a regular scalar column.
+  final res = await DioClient.instance.get('/v_rim_accounts_with_parent', queryParameters: {
     'client_id':  'eq.${session.clientId}',
     'company_id': 'eq.${session.companyId}',
     'is_deleted': 'eq.false',
@@ -164,9 +173,7 @@ final accountsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async 
     'or':         '(posting_allowed.eq.true,'
                   'account_nature.eq.Customer,'
                   'account_nature.eq.Supplier)',
-    // No embedded self-join for parent_id — see the comment on the
-    // separate parent-name lookup below for why.
-    'select':     'id,account_code,account_name,account_nature,posting_allowed,parent_id,'
+    'select':     'id,account_code,account_name,account_nature,posting_allowed,parent_name,'
                   'rim_currencies!account_currency_id(currency_id)',
     'order':      'account_code.asc',
     'limit':      '500',
@@ -179,43 +186,14 @@ final accountsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async 
   // source, so every current and future consumer of this shared provider
   // gets a guaranteed Map-or-null — never has to defensively re-check this
   // itself, and never crashes on an unguarded `as Map<String, dynamic>?`.
+  // Also wraps the view's flat `parent_name` into the same
+  // `account['parent']['account_name']` shape every consumer already reads
+  // (FinanceAccountPicker, Opening Balance, etc.) — zero consumer changes.
   for (final a in accounts) {
     final currRel = a['rim_currencies'];
     if (currRel is List) a['rim_currencies'] = currRel.isNotEmpty ? currRel.first as Map<String, dynamic>? : null;
-  }
-
-  // Parent group name resolved via a SEPARATE flat query + client-side
-  // join, not a PostgREST embed — deliberately, after repeated live
-  // failures (found 2026-08-16): a `parent:rim_accounts!parent_id(...)`
-  // embed resolved to the REVERSE relationship (children, not parent) for
-  // this self-join; the fix (disambiguating via the FK CONSTRAINT name,
-  // `rim_accounts_parent_id_fkey` — independently verified correct against
-  // the live schema via `pg_constraint`) then failed outright with "no
-  // matches were found" even after a `NOTIFY pgrst, 'reload schema';`.
-  // Self-referencing embeds are evidently not reliable against this
-  // project's live PostgREST regardless of hint form — a flat lookup has
-  // no embedding ambiguity to trip over at all. Every consumer still reads
-  // `account['parent']['account_name']` exactly as before (FinanceAccountPicker,
-  // Opening Balance, etc.) — only how it gets populated changed.
-  final parentIds = accounts.map((a) => a['parent_id'] as String?).whereType<String>().toSet();
-  if (parentIds.isNotEmpty) {
-    final parentRes = await DioClient.instance.get('/rim_accounts', queryParameters: {
-      'client_id':  'eq.${session.clientId}',
-      'company_id': 'eq.${session.companyId}',
-      'id':         'in.(${parentIds.join(',')})',
-      'select':     'id,account_name',
-    });
-    final parentNames = <String, String>{
-      for (final p in List<Map<String, dynamic>>.from(parentRes.data as List))
-        p['id'] as String: p['account_name'] as String,
-    };
-    for (final a in accounts) {
-      final pid = a['parent_id'] as String?;
-      if (pid != null) {
-        final name = parentNames[pid];
-        if (name != null) a['parent'] = {'account_name': name};
-      }
-    }
+    final parentName = a['parent_name'] as String?;
+    if (parentName != null) a['parent'] = {'account_name': parentName};
   }
 
   if (!kIsWeb) {

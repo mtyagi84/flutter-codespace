@@ -81,17 +81,19 @@ Future<int> _syncProductsAndPricing(AppDatabase db, UserSession session) async {
 }
 
 Future<int> _syncCustomersSuppliers(AppDatabase db, UserSession session) async {
-  final res = await _dio.get('/rim_accounts', queryParameters: {
+  // Queries v_rim_accounts_with_parent (migration 134) — see
+  // master_cache_providers.dart's accountsProvider for why (self-
+  // referencing embeds proved unreliable against this project's live
+  // PostgREST regardless of hint form; a view with a plain SQL join
+  // sidesteps the problem entirely).
+  final res = await _dio.get('/v_rim_accounts_with_parent', queryParameters: {
     'client_id': 'eq.${session.clientId}',
     'company_id': 'eq.${session.companyId}',
     'is_deleted': 'eq.false',
     'is_active': 'eq.true',
     'or': '(posting_allowed.eq.true,account_nature.eq.Customer,account_nature.eq.Supplier)',
-    // No embedded self-join for parent_id — see master_cache_providers.dart's
-    // accountsProvider for why (self-referencing embeds proved unreliable
-    // against this project's live PostgREST regardless of hint form).
     'select': 'id,account_code,account_name,account_nature,posting_allowed,credit_limit,credit_days,'
-        'is_credit_blocked,phone,email,address_line1,address_line2,parent_id,'
+        'is_credit_blocked,phone,email,address_line1,address_line2,parent_name,'
         'rim_currencies!account_currency_id(currency_id)',
     'order': 'account_code.asc',
     'limit': '2000',
@@ -100,26 +102,8 @@ Future<int> _syncCustomersSuppliers(AppDatabase db, UserSession session) async {
   for (final a in accounts) {
     final currRel = a['rim_currencies'];
     if (currRel is List) a['rim_currencies'] = currRel.isNotEmpty ? currRel.first as Map<String, dynamic>? : null;
-  }
-  final parentIds = accounts.map((a) => a['parent_id'] as String?).whereType<String>().toSet();
-  if (parentIds.isNotEmpty) {
-    final parentRes = await _dio.get('/rim_accounts', queryParameters: {
-      'client_id': 'eq.${session.clientId}',
-      'company_id': 'eq.${session.companyId}',
-      'id': 'in.(${parentIds.join(',')})',
-      'select': 'id,account_name',
-    });
-    final parentNames = <String, String>{
-      for (final p in List<Map<String, dynamic>>.from(parentRes.data as List))
-        p['id'] as String: p['account_name'] as String,
-    };
-    for (final a in accounts) {
-      final pid = a['parent_id'] as String?;
-      if (pid != null) {
-        final name = parentNames[pid];
-        if (name != null) a['parent'] = {'account_name': name};
-      }
-    }
+    final parentName = a['parent_name'] as String?;
+    if (parentName != null) a['parent'] = {'account_name': parentName};
   }
   await AccountsLocalDs(db).upsertAccounts(accounts, clientId: session.clientId, companyId: session.companyId);
   return accounts.length;

@@ -59,13 +59,40 @@ class FinanceAccountPicker extends StatelessWidget {
   Iterable<Map<String, dynamic>> _search(TextEditingValue textEditingValue) =>
       accounts.where((a) => matchesSearch(a, textEditingValue.text)).take(50);
 
+  // Header labels and every optionRow share this exact column shape
+  // (110px code / flex 2 name / flex 1 parent) so the header and rows stay
+  // pixel-aligned — same convention as SakalTableHeaderBar + line-item rows
+  // elsewhere in this app.
+  static const double _codeColumnWidth = 110;
+
+  static Widget _headerRow() {
+    const style = TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 0.4);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: const Row(children: [
+        SizedBox(width: _codeColumnWidth, child: Text('ACCOUNT CODE', style: style)),
+        Expanded(flex: 2, child: Text('ACCOUNT NAME', style: style)),
+        Expanded(flex: 1, child: Text('GROUP NAME', style: style)),
+      ]),
+    );
+  }
+
   static Widget optionRow(Map<String, dynamic> account, {bool highlighted = false}) {
     final code = account['account_code'] as String? ?? '';
     final name = account['account_name'] as String? ?? '';
     final parent = _parentName(account);
     return Container(
-      color: highlighted ? AppColors.primary.withValues(alpha: 0.08) : null,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: highlighted ? AppColors.primary.withValues(alpha: 0.08) : null,
+        // Subtle row divider (no vertical column lines) — a deliberate,
+        // user-confirmed choice over a literal full spreadsheet grid.
+        border: const Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
+      ),
       child: Row(children: [
         // Widened from a fixed 70px — this schema's hierarchical account
         // codes routinely run to 10-13+ digits (e.g. "1120001001001"),
@@ -73,7 +100,7 @@ class FinanceAccountPicker extends StatelessWidget {
         // near-unreadable widths (found live 2026-08-15, Account Ledger's
         // own account filter). 110px + the wider optionsMinWidth below
         // give every column real room regardless of code length.
-        SizedBox(width: 110, child: Text(code, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
+        SizedBox(width: _codeColumnWidth, child: Text(code, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
         Expanded(flex: 2, child: Text(name, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis)),
         Expanded(flex: 1, child: Text(parent, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary), overflow: TextOverflow.ellipsis)),
       ]),
@@ -92,6 +119,9 @@ class FinanceAccountPicker extends StatelessWidget {
       onSelected: onSelected,
       optionsMinWidth: 460, // widened alongside optionRow's own code column — see its comment
       optionBuilder: (context, option, isHighlighted) => optionRow(option, highlighted: isHighlighted),
+      // Desktop-only — see SakalAutocomplete.optionsHeader's own doc
+      // comment for why this can never leak onto mobile's bottom sheet.
+      optionsHeader: _headerRow(),
     );
   }
 }
