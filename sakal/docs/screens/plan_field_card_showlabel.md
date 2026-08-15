@@ -1,6 +1,6 @@
 # Remove redundant per-cell labels in line-item table rows
 
-Status: Implemented 2026-08-16 (Journal Voucher desktop only, pilot).
+Status: Implemented 2026-08-16 — piloted on Journal Voucher, then rolled out to all 18 other applicable screens same day after user confirmed the pilot looked right.
 
 ## Context
 
@@ -20,9 +20,19 @@ Every desktop line-items table in the app (Journal Voucher's Account Lines, and 
 - `lib/core/widgets/sakal_field_card.dart` — new `showLabel` param (generic, reusable capability).
 - `lib/features/finance/presentation/screens/journal_voucher_entry_screen.dart` — `_buildLineCard`'s line-item fields opt in via `showLabel: isMobile`.
 
-## Follow-up (explicitly deferred, not part of this change)
+## Full rollout (same day, after pilot confirmed good)
 
-The identical redundancy exists on the other 20 screens using `SakalTableHeaderBar` + `SakalFieldCard` line-item rows (Sales Invoice, Purchase Order, GRN, Stock Transfer, etc.). Roll out `showLabel: isMobile` to each opportunistically once JV's own result is confirmed good — same incremental-rollout shape as `SakalAutocomplete`/`SakalAdaptiveList` before it.
+User confirmed the JV pilot looked right and asked to roll out to all screens. Dispatched 4 parallel agents (each given the JV diff as the canonical reference pattern, told explicitly to touch only per-line-item `SakalFieldCard`/`.readOnly` calls, never header-section fields, totals, or separate batch/serial sub-row methods) covering the remaining 18 applicable screens:
+
+- **Master/Inventory**: Opening Balance, Opening Stock, Stock Adjustment, Stock Receipt, Stock Transfer, Stock Transfer Request, Stock Count, Material Issue, Material Requisition
+- **Sales**: Sales Quotation, Sales Invoice, Sales Order (both its `_buildDirectLineRow` and `_buildQuotationLineRow`), Sales Delivery, Sales Return, Price Master
+- **Purchase**: Purchase Order, Purchase Return, GRN
+
+**Excluded, confirmed not applicable**: Purchase Invoice (no line-items grid at all — consolidates whole GRNs, no per-line editing UI) and Stock Count Review (its variance table uses plain `Text` cells directly, never `SakalFieldCard`, so there was no redundant label to remove).
+
+One real wrinkle handled correctly by the agents: a few screens (Sales Order's Stock/Cost fields, Price Master's Cost Price) had a `const SakalFieldCard(...)` literal for a loading-spinner branch — `showLabel: isMobile` isn't a compile-time constant, so those needed converting to non-`const` (keeping `const` on the inner spinner `SizedBox`, which doesn't depend on `isMobile`). Opening Balance's shared `_amountField(...)` helper (used 3× for Base/Local/Party Amount) needed a new `bool isMobile` parameter threaded through rather than 3 separate inline edits.
+
+All 18 files verified via the brace/paren balance-check script and a `git diff --stat` review before committing — nothing outside the intended per-line-item cells was touched in any file.
 
 ## Verification
 
