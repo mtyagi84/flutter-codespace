@@ -458,7 +458,14 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
       for (final l in _lines) {
         deferRowDisposal(l);
       }
+      // A leftover search filter from before the upload can make a freshly
+      // replaced worksheet look empty ("No lines match this search" reads
+      // the same as "nothing loaded" to a user who isn't looking closely)
+      // — clear it so the newly uploaded rows are always immediately
+      // visible, not hidden behind a stale query (found live 2026-08-16).
+      _searchCtrl.clear();
       setState(() {
+        _searchQuery = '';
         _lines
           ..clear()
           ..addAll(parsedRows);
