@@ -2163,11 +2163,12 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
 
     final productField = rowLocked
-        ? SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? '—' : row.productDisplay)
+        ? SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? '—' : row.productDisplay, showLabel: isMobile)
         : SakalFieldCard(
             label: 'Product',
             required: true,
             editable: true,
+            showLabel: isMobile,
             child: SakalAutocomplete<Map<String, dynamic>>(
               initialValue: TextEditingValue(text: row.productDisplay),
               focusNode: row.productFocusNode,
@@ -2185,21 +2186,22 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     final barcodeField = SakalFieldCard(
       label: 'Scan',
       editable: true,
+      showLabel: isMobile,
       child: TextFormField(controller: row.barcodeCtrl, decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle,
           onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v)),
     );
     final qtyPackField = SakalFieldCard(
-      label: showLooseQty ? 'Qty Pack' : 'Quantity', required: true, editable: !rowLocked,
+      label: showLooseQty ? 'Qty Pack' : 'Quantity', required: true, editable: !rowLocked, showLabel: isMobile,
       child: TextFormField(controller: row.qtyPackCtrl, enabled: !rowLocked, keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle, onChanged: (_) => _onLineQtyChanged(row)),
     );
     final qtyLooseField = SakalFieldCard(
-      label: 'Qty Loose', editable: !rowLocked,
+      label: 'Qty Loose', editable: !rowLocked, showLabel: isMobile,
       child: TextFormField(controller: row.qtyLooseCtrl, enabled: !rowLocked, keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle, onChanged: (_) => _onLineQtyChanged(row)),
     );
     final rateField = SakalFieldCard(
-      label: 'Rate', editable: rateEditable,
+      label: 'Rate', editable: rateEditable, showLabel: isMobile,
       child: SakalFormattedNumberField(
         controller: row.rateCtrl, enabled: rateEditable,
         decimalPlaces: _rateDecimalPlaces, numberFormatStyle: numberFormat,
@@ -2208,7 +2210,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
       ),
     );
     final discField = SakalFieldCard(
-      label: 'Disc %', editable: !rowLocked,
+      label: 'Disc %', editable: !rowLocked, showLabel: isMobile,
       child: TextFormField(controller: row.discountPctCtrl, enabled: !rowLocked, keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle,
           onChanged: (v) => _onDiscountChanged(row, v),
@@ -2217,8 +2219,8 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
           // Flutter's standard button-focus semantics, no extra wiring needed.
           onFieldSubmitted: (_) => row.addButtonFocusNode.requestFocus()),
     );
-    final taxField = SakalFieldCard.readOnly(label: 'Tax', value: row.taxGroupName ?? '—');
-    final amountField = SakalFieldCard.readOnly(label: 'Amount', value: AppNumberFormat.amount(row.finalAmount, numberFormat), numeric: true);
+    final taxField = SakalFieldCard.readOnly(label: 'Tax', value: row.taxGroupName ?? '—', showLabel: isMobile);
+    final amountField = SakalFieldCard.readOnly(label: 'Amount', value: AppNumberFormat.amount(row.finalAmount, numberFormat), numeric: true, showLabel: isMobile);
 
     final showActions = !locked && !_isAgainstSource;
     final overrideVisible = !locked && !_isAgainstSource && !row.priceResolved && _canOverridePrice;
@@ -2230,7 +2232,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     // block, respectively).
     final overrideReasonField = overrideReasonVisible
         ? SakalFieldCard(
-            label: 'Override Reason', required: true, editable: true,
+            label: 'Override Reason', required: true, editable: true, showLabel: isMobile,
             child: TextFormField(controller: row.overrideReasonCtrl, decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle),
           )
         : const SizedBox.shrink();

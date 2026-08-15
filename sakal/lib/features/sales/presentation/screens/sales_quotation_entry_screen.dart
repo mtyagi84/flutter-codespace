@@ -1283,7 +1283,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
               final row = entry.value;
 
               final productField = SakalFieldCard(
-                label: 'Product', required: true, editable: !locked,
+                label: 'Product', required: true, editable: !locked, showLabel: isMobile,
                 child: SakalAutocomplete<Map<String, dynamic>>(
                   key: ValueKey('${row.hashCode}-${row.productDisplay}'),
                   initialValue: TextEditingValue(text: row.productDisplay),
@@ -1303,16 +1303,16 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
                 ),
               );
               final barcodeField = SakalFieldCard(
-                label: 'Barcode', editable: !locked,
+                label: 'Barcode', editable: !locked, showLabel: isMobile,
                 child: TextFormField(
                   controller: row.barcodeCtrl, enabled: !locked,
                   decoration: bare, style: style,
                   onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
                 ),
               );
-              final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
+              final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—', showLabel: isMobile);
               final qtyPackField = SakalFieldCard(
-                label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked,
+                label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked, showLabel: isMobile,
                 child: TextFormField(
                   controller: row.qtyPackCtrl, enabled: !locked,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1321,7 +1321,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
                 ),
               );
               final qtyLooseField = SakalFieldCard(
-                label: 'Qty Loose', editable: !locked,
+                label: 'Qty Loose', editable: !locked, showLabel: isMobile,
                 child: TextFormField(
                   controller: row.qtyLooseCtrl, enabled: !locked,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1330,7 +1330,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
                 ),
               );
               final rateField = SakalFieldCard(
-                label: 'Rate', editable: !locked,
+                label: 'Rate', editable: !locked, showLabel: isMobile,
                 child: TextFormField(
                   controller: row.rateCtrl, enabled: !locked,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1339,7 +1339,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
                 ),
               );
               final discField = SakalFieldCard(
-                label: 'Disc %', editable: !locked,
+                label: 'Disc %', editable: !locked, showLabel: isMobile,
                 child: TextFormField(
                   controller: row.discountPctCtrl, enabled: !locked,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1348,7 +1348,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
                 ),
               );
               final taxGroupField = SakalFieldCard(
-                label: 'Tax Group', editable: !locked,
+                label: 'Tax Group', editable: !locked, showLabel: isMobile,
                 child: DropdownButtonFormField<String>(
                   decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
                   initialValue: row.taxGroupId,
@@ -1357,8 +1357,8 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
                   onChanged: locked ? null : (v) => setState(() => row.taxGroupId = v),
                 ),
               );
-              final amountField = SakalFieldCard.readOnly(label: 'Amount', value: row.finalAmount.toStringAsFixed(2), numeric: true);
-              final landedField = SakalFieldCard.readOnly(label: 'Landed', value: row.landedAmount.toStringAsFixed(2), numeric: true);
+              final amountField = SakalFieldCard.readOnly(label: 'Amount', value: row.finalAmount.toStringAsFixed(2), numeric: true, showLabel: isMobile);
+              final landedField = SakalFieldCard.readOnly(label: 'Landed', value: row.landedAmount.toStringAsFixed(2), numeric: true, showLabel: isMobile);
 
               if (isMobile) {
                 // 2-column grid instead of a loose Wrap — predictable
@@ -1380,7 +1380,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
                   amountField,
                   landedField,
                   if (row.convertedQty > 0)
-                    SakalFieldCard.readOnly(label: 'Converted', value: row.convertedQty.toStringAsFixed(2), numeric: true),
+                    SakalFieldCard.readOnly(label: 'Converted', value: row.convertedQty.toStringAsFixed(2), numeric: true, showLabel: isMobile),
                 ];
                 final pairedRows = <Widget>[];
                 for (var i = 0; i < secondaryFields.length; i += 2) {
@@ -1431,7 +1431,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
                     const SizedBox(width: 8),
                     SizedBox(width: 110, height: 56,
                         child: row.convertedQty > 0
-                            ? SakalFieldCard.readOnly(label: 'Converted', value: row.convertedQty.toStringAsFixed(2), numeric: true)
+                            ? SakalFieldCard.readOnly(label: 'Converted', value: row.convertedQty.toStringAsFixed(2), numeric: true, showLabel: isMobile)
                             : const SizedBox.shrink()),
                   ],
                   SizedBox(

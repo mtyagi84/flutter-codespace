@@ -1708,15 +1708,17 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
 
     final barcodeField = SakalFieldCard(
       label: 'Scan/Enter Barcode', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.barcodeCtrl, enabled: !locked, decoration: bare, style: style,
         onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
       ),
     );
     final productField = row.isFromPo
-        ? SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay)
+        ? SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay, showLabel: isMobile)
         : SakalFieldCard(
             label: 'Product', required: true, editable: !locked,
+            showLabel: isMobile,
             child: _searchField<Map<String, dynamic>>(
               options: _products,
               initialText: row.productDisplay,
@@ -1730,6 +1732,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
           );
     final uomField = SakalFieldCard(
       label: 'UOM', editable: !(rowLocked || row.isFromPo || row.convFactorLocked),
+      showLabel: isMobile,
       child: row.uomLoading
           ? const Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))
           : DropdownButtonFormField<String>(
@@ -1754,9 +1757,11 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
       label: 'Conv. Factor',
       value: row.convFactorCtrl.text,
       numeric: true,
+      showLabel: isMobile,
     );
     final qtyPackField = SakalFieldCard(
       label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyPackCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1766,6 +1771,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     );
     final qtyLooseField = SakalFieldCard(
       label: 'Qty Loose', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyLooseCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1777,6 +1783,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     final breached    = variancePct != null;
     final rateField = SakalFieldCard(
       label: 'Rate', editable: !locked && !row.isFromPo,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.rateCtrl, enabled: !locked && !row.isFromPo,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1795,6 +1802,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     );
     final discField = SakalFieldCard(
       label: 'Discount %', editable: !locked && !row.isFromPo,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.discountPctCtrl, enabled: !locked && !row.isFromPo,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1804,6 +1812,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     );
     final taxGroupField = SakalFieldCard(
       label: 'Tax Group', editable: !locked && !row.isFromPo,
+      showLabel: isMobile,
       child: DropdownButtonFormField<String?>(
         decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
         initialValue: row.taxGroupId,
@@ -1817,6 +1826,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     );
     final departmentField = SakalFieldCard(
       label: 'Department', editable: !locked,
+      showLabel: isMobile,
       child: DropdownButtonFormField<String?>(
         decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
         initialValue: row.departmentId,
@@ -1830,6 +1840,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
     );
     final consumptionAreaField = SakalFieldCard(
       label: 'Consumption Area', editable: !locked,
+      showLabel: isMobile,
       child: DropdownButtonFormField<String?>(
         decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
         initialValue: row.consumptionAreaId,

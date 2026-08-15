@@ -1020,6 +1020,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
 
               final productField = SakalFieldCard(
                 label: 'Product', required: true, editable: !locked,
+                showLabel: isMobile,
                 child: SakalAutocomplete<Map<String, dynamic>>(
                   key: ValueKey('${row.hashCode}-${row.productDisplay}'),
                   initialValue: TextEditingValue(text: row.productDisplay),
@@ -1040,6 +1041,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
               );
               final uomField = SakalFieldCard(
                 label: 'UOM', required: true, editable: !locked && row.productId != null,
+                showLabel: isMobile,
                 child: row.uomLoading
                     ? const Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))
                     : DropdownButtonFormField<String>(
@@ -1056,10 +1058,11 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
                       ),
               );
               final costPriceField = row.costLoading
-                  ? const SakalFieldCard(label: 'Cost Price', child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)))
-                  : SakalFieldCard.readOnly(label: 'Cost Price', value: row.costPrice.toStringAsFixed(2), numeric: true);
+                  ? SakalFieldCard(label: 'Cost Price', showLabel: isMobile, child: const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)))
+                  : SakalFieldCard.readOnly(label: 'Cost Price', value: row.costPrice.toStringAsFixed(2), numeric: true, showLabel: isMobile);
               final marginField = SakalFieldCard(
                 label: 'Margin %', editable: !locked && row.costPrice > 0,
+                showLabel: isMobile,
                 child: TextFormField(
                   controller: row.marginPercentCtrl, enabled: !locked && row.costPrice > 0,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
@@ -1069,6 +1072,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
               );
               final sellingPriceField = SakalFieldCard(
                 label: 'Selling Price', required: true, editable: !locked,
+                showLabel: isMobile,
                 child: TextFormField(
                   controller: row.sellingPriceCtrl, enabled: !locked,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1078,6 +1082,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
               );
               final belowCostReasonField = SakalFieldCard(
                 label: 'Below-Cost Reason', required: true, editable: !locked,
+                showLabel: isMobile,
                 child: DropdownButtonFormField<String>(
                   decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
                   initialValue: row.belowCostReasonId,

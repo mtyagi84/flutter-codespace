@@ -1077,6 +1077,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
     final productField = _mode == 'DIRECT'
         ? SakalFieldCard(
             label: 'Product', required: true, editable: !locked,
+            showLabel: isMobile,
             child: SakalAutocomplete<Map<String, dynamic>>(
               key: ValueKey('${row.hashCode}-${row.productDisplay}'),
               initialValue: TextEditingValue(text: row.productDisplay),
@@ -1092,21 +1093,24 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
               style: style,
             ),
           )
-        : SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? '—' : row.productDisplay);
+        : SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? '—' : row.productDisplay, showLabel: isMobile);
     final remainingField = SakalFieldCard.readOnly(
       label: 'Remaining',
       value: '${row.requestRemainingQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}',
+      showLabel: isMobile,
     );
     final barcodeField = SakalFieldCard(
       label: 'Scan/Enter Barcode', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.barcodeCtrl, enabled: !locked, decoration: bare, style: style,
         onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
       ),
     );
-    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
+    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—', showLabel: isMobile);
     final qtyPackField = SakalFieldCard(
       label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyPackCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1116,6 +1120,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
     );
     final qtyLooseField = SakalFieldCard(
       label: 'Qty Loose', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyLooseCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1125,6 +1130,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
     );
     final salesPriceField = SakalFieldCard(
       label: 'Sales Price', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.salesPriceCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1134,11 +1140,12 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
     );
     final remarksField = SakalFieldCard(
       label: 'Remarks', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(controller: row.remarksCtrl, enabled: !locked, decoration: bare, style: style),
     );
 
-    final costField   = SakalFieldCard.readOnly(label: 'Cost', value: AppNumberFormat.amount(row.costPriceHint.toDouble(), numberFormat), numeric: true);
-    final chargeField = SakalFieldCard.readOnly(label: '+ Charges', value: AppNumberFormat.amount(row.chargeAmount, numberFormat), numeric: true);
+    final costField   = SakalFieldCard.readOnly(label: 'Cost', value: AppNumberFormat.amount(row.costPriceHint.toDouble(), numberFormat), numeric: true, showLabel: isMobile);
+    final chargeField = SakalFieldCard.readOnly(label: '+ Charges', value: AppNumberFormat.amount(row.chargeAmount, numberFormat), numeric: true, showLabel: isMobile);
     final batchSerialBody = (row.isBatchTracked || row.isSerialTracked) ? _buildBatchSerialEditor(row, locked) : null;
 
     if (isMobile) {

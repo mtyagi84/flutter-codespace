@@ -844,7 +844,7 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
     final productField = SakalFieldCard(
-      label: 'Product', required: true, editable: !locked,
+      label: 'Product', required: true, editable: !locked, showLabel: isMobile,
       child: SakalAutocomplete<Map<String, dynamic>>(
         key: ValueKey('${row.hashCode}-${row.productDisplay}'),
         initialValue: TextEditingValue(text: row.productDisplay),
@@ -861,11 +861,11 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
       ),
     );
     final batchNoField = SakalFieldCard(
-      label: 'Batch No', editable: !locked,
+      label: 'Batch No', editable: !locked, showLabel: isMobile,
       child: TextFormField(controller: row.batchNoCtrl, enabled: !locked, decoration: bare, style: style),
     );
     final expiryField = SakalFieldCard(
-      label: 'Expiry Date', editable: !locked,
+      label: 'Expiry Date', editable: !locked, showLabel: isMobile,
       child: InkWell(
         onTap: locked ? null : () => _pickDate(row.expiryDate, (d) => setState(() => row.expiryDate = d)),
         child: Row(children: [
@@ -875,7 +875,7 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
       ),
     );
     final mfgField = SakalFieldCard(
-      label: 'Manufacturing Date', editable: !locked,
+      label: 'Manufacturing Date', editable: !locked, showLabel: isMobile,
       child: InkWell(
         onTap: locked ? null : () => _pickDate(row.manufacturingDate, (d) => setState(() => row.manufacturingDate = d)),
         child: Row(children: [
@@ -885,12 +885,12 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
       ),
     );
     final serialNoField = SakalFieldCard(
-      label: 'Serial No', editable: !locked,
+      label: 'Serial No', editable: !locked, showLabel: isMobile,
       child: TextFormField(controller: row.serialNoCtrl, enabled: !locked, decoration: bare, style: style),
     );
-    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
+    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—', showLabel: isMobile);
     final qtyPackField = SakalFieldCard(
-      label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked, numeric: true,
+      label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked, numeric: true, showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyPackCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -900,7 +900,7 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
       ),
     );
     final qtyLooseField = SakalFieldCard(
-      label: 'Qty Loose', editable: !locked, numeric: true,
+      label: 'Qty Loose', editable: !locked, numeric: true, showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyLooseCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -910,7 +910,7 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
       ),
     );
     final unitCostField = SakalFieldCard(
-      label: 'Unit Cost', required: true, editable: !locked, numeric: true,
+      label: 'Unit Cost', required: true, editable: !locked, numeric: true, showLabel: isMobile,
       child: TextFormField(
         controller: row.unitCostCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -920,7 +920,7 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
       ),
     );
     final remarksField = SakalFieldCard(
-      label: 'Remarks', editable: !locked,
+      label: 'Remarks', editable: !locked, showLabel: isMobile,
       child: TextFormField(controller: row.remarksCtrl, enabled: !locked, decoration: bare, style: style),
     );
 

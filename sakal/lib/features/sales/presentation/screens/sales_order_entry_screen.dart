@@ -1577,6 +1577,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
 
     final productField = SakalFieldCard(
       label: 'Product', required: true, editable: !locked,
+      showLabel: isMobile,
       child: SakalAutocomplete<Map<String, dynamic>>(
         key: ValueKey('${row.hashCode}-${row.productDisplay}'),
         initialValue: TextEditingValue(text: row.productDisplay),
@@ -1597,15 +1598,17 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     );
     final barcodeField = SakalFieldCard(
       label: 'Barcode', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.barcodeCtrl, enabled: !locked,
         decoration: bare, style: style,
         onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
       ),
     );
-    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
+    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—', showLabel: isMobile);
     final qtyPackField = SakalFieldCard(
       label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyPackCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1615,6 +1618,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     );
     final qtyLooseField = SakalFieldCard(
       label: 'Qty Loose', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyLooseCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1624,6 +1628,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     );
     final rateField = SakalFieldCard(
       label: 'Rate', editable: rateEditable,
+      showLabel: isMobile,
       child: row.priceLoading
           ? const Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))
           : TextFormField(
@@ -1639,6 +1644,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     );
     final discField = SakalFieldCard(
       label: 'Disc %', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.discountPctCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1648,6 +1654,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     );
     final taxGroupField = SakalFieldCard(
       label: 'Tax Group', editable: !locked,
+      showLabel: isMobile,
       child: DropdownButtonFormField<String>(
         decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
         initialValue: row.taxGroupId,
@@ -1656,14 +1663,14 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
         onChanged: locked ? null : (v) => setState(() => row.taxGroupId = v),
       ),
     );
-    final amountField = SakalFieldCard.readOnly(label: 'Amount', value: row.finalAmount.toStringAsFixed(2), numeric: true);
-    final landedField = SakalFieldCard.readOnly(label: 'Landed', value: row.landedAmount.toStringAsFixed(2), numeric: true);
+    final amountField = SakalFieldCard.readOnly(label: 'Amount', value: row.finalAmount.toStringAsFixed(2), numeric: true, showLabel: isMobile);
+    final landedField = SakalFieldCard.readOnly(label: 'Landed', value: row.landedAmount.toStringAsFixed(2), numeric: true, showLabel: isMobile);
     final stockField = row.costLoading
-        ? const SakalFieldCard(label: 'Stock', child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)))
-        : SakalFieldCard.readOnly(label: 'Stock', value: row.availableStock.toStringAsFixed(2), numeric: true);
+        ? SakalFieldCard(label: 'Stock', showLabel: isMobile, child: const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)))
+        : SakalFieldCard.readOnly(label: 'Stock', value: row.availableStock.toStringAsFixed(2), numeric: true, showLabel: isMobile);
     final costField = row.costLoading
-        ? const SakalFieldCard(label: 'Cost', child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)))
-        : SakalFieldCard.readOnly(label: 'Cost', value: row.costPrice.toStringAsFixed(2), numeric: true);
+        ? SakalFieldCard(label: 'Cost', showLabel: isMobile, child: const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)))
+        : SakalFieldCard.readOnly(label: 'Cost', value: row.costPrice.toStringAsFixed(2), numeric: true, showLabel: isMobile);
 
     // A real scrollable column now (alongside Product/Qty/Rate/...), not a
     // second row below the main line — it's a plain text value, so there
@@ -1673,6 +1680,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
     final overrideReasonField = overrideReasonVisible
         ? SakalFieldCard(
             label: 'Override Reason', required: true, editable: !locked,
+            showLabel: isMobile,
             child: TextFormField(controller: row.overrideReasonCtrl, enabled: !locked, decoration: bare, style: style),
           )
         : const SizedBox.shrink();
@@ -1778,6 +1786,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
   Widget _buildQuotationLineRow(_OrderLineRow row, int idx, bool locked, bool isMobile, bool showDiscFrozen) {
     final qtyToConvertField = SakalFieldCard(
       label: 'Qty to Convert', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyPackCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1785,17 +1794,17 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
         onChanged: (_) => setState(() {}),
       ),
     );
-    final ofField = SakalFieldCard.readOnly(label: 'of', value: row.sourceRemainingQty.toStringAsFixed(2), numeric: true);
-    final rateFrozenField = SakalFieldCard.readOnly(label: 'Rate (frozen)', value: row.rate.toStringAsFixed(2), numeric: true);
+    final ofField = SakalFieldCard.readOnly(label: 'of', value: row.sourceRemainingQty.toStringAsFixed(2), numeric: true, showLabel: isMobile);
+    final rateFrozenField = SakalFieldCard.readOnly(label: 'Rate (frozen)', value: row.rate.toStringAsFixed(2), numeric: true, showLabel: isMobile);
     final discFrozenField = row.discountPct > 0
-        ? SakalFieldCard.readOnly(label: 'Disc % (frozen)', value: row.discountPct.toStringAsFixed(2), numeric: true)
+        ? SakalFieldCard.readOnly(label: 'Disc % (frozen)', value: row.discountPct.toStringAsFixed(2), numeric: true, showLabel: isMobile)
         : const SizedBox.shrink();
-    final amountField = SakalFieldCard.readOnly(label: 'Amount', value: row.finalAmount.toStringAsFixed(2), numeric: true);
-    final landedField = SakalFieldCard.readOnly(label: 'Landed', value: row.landedAmount.toStringAsFixed(2), numeric: true);
+    final amountField = SakalFieldCard.readOnly(label: 'Amount', value: row.finalAmount.toStringAsFixed(2), numeric: true, showLabel: isMobile);
+    final landedField = SakalFieldCard.readOnly(label: 'Landed', value: row.landedAmount.toStringAsFixed(2), numeric: true, showLabel: isMobile);
 
     if (isMobile) {
       final secondaryFields = <Widget>[
-        SizedBox(height: 56, child: SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—')),
+        SizedBox(height: 56, child: SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—', showLabel: isMobile)),
         qtyToConvertField,
         SizedBox(height: 56, child: ofField),
         SizedBox(height: 56, child: rateFrozenField),
@@ -1815,7 +1824,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
         title: '${idx + 1}. ${row.productDisplay.isEmpty ? 'New Line' : row.productDisplay}',
         fields: const [],
         body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay),
+          SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay, showLabel: isMobile),
           const SizedBox(height: 8),
           ...pairedRows,
         ]),
@@ -1826,9 +1835,9 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
       padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        SizedBox(width: 220, height: 56, child: SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay)),
+        SizedBox(width: 220, height: 56, child: SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay, showLabel: isMobile)),
         const SizedBox(width: 8),
-        SizedBox(width: 70, height: 56, child: SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—')),
+        SizedBox(width: 70, height: 56, child: SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—', showLabel: isMobile)),
         const SizedBox(width: 8),
         SizedBox(width: 110, child: qtyToConvertField),
         const SizedBox(width: 8),

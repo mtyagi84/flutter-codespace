@@ -839,12 +839,13 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
     final isCompact = ref.watch(isCompactDensityProvider);
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
-    final productField = SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? '—' : row.productDisplay);
+    final productField = SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? '—' : row.productDisplay, showLabel: isMobile);
     final dispatchedField = SakalFieldCard.readOnly(
-        label: 'Dispatched', value: '${row.dispatchedQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}');
-    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
+        label: 'Dispatched', value: '${row.dispatchedQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}', showLabel: isMobile);
+    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—', showLabel: isMobile);
     final qtyPackField = SakalFieldCard(
       label: showLooseQty ? 'Received Qty Pack' : 'Received Qty', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyPackCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -854,6 +855,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
     );
     final qtyLooseField = SakalFieldCard(
       label: 'Received Qty Loose', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyLooseCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),

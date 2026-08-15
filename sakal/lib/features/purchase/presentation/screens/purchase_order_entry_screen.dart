@@ -1408,6 +1408,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
 
     final barcodeField = SakalFieldCard(
       label: 'Scan/Enter Barcode', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.barcodeCtrl, enabled: !locked, decoration: bare, style: style,
         onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
@@ -1415,6 +1416,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     );
     final productField = SakalFieldCard(
       label: 'Product', required: true, editable: !locked,
+      showLabel: isMobile,
       child: _searchField<Map<String, dynamic>>(
         options: _products,
         initialText: row.productDisplay,
@@ -1428,6 +1430,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     );
     final uomField = SakalFieldCard(
       label: 'UOM', editable: !locked && !row.convFactorLocked,
+      showLabel: isMobile,
       child: row.uomLoading
           ? const Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))
           : DropdownButtonFormField<String>(
@@ -1451,9 +1454,11 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
       label: 'Conv. Factor',
       value: row.convFactorCtrl.text,
       numeric: true,
+      showLabel: isMobile,
     );
     final qtyPackField = SakalFieldCard(
       label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyPackCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1463,6 +1468,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     );
     final qtyLooseField = SakalFieldCard(
       label: 'Qty Loose', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyLooseCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1472,6 +1478,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     );
     final rateField = SakalFieldCard(
       label: 'Rate', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.rateCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1481,6 +1488,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     );
     final discField = SakalFieldCard(
       label: 'Discount %', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.discountPctCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1490,6 +1498,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     );
     final taxGroupField = SakalFieldCard(
       label: 'Tax Group', editable: !locked,
+      showLabel: isMobile,
       child: DropdownButtonFormField<String?>(
         decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
         initialValue: row.taxGroupId,
@@ -1503,6 +1512,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     );
     final departmentField = SakalFieldCard(
       label: 'Department', editable: !locked,
+      showLabel: isMobile,
       child: DropdownButtonFormField<String?>(
         decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
         initialValue: row.departmentId,
@@ -1516,6 +1526,7 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
     );
     final consumptionAreaField = SakalFieldCard(
       label: 'Consumption Area', editable: !locked,
+      showLabel: isMobile,
       child: DropdownButtonFormField<String?>(
         decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
         initialValue: row.consumptionAreaId,
@@ -1527,8 +1538,8 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
         onChanged: locked ? null : (v) => setState(() => row.consumptionAreaId = v),
       ),
     );
-    final finalAmountField = SakalFieldCard.readOnly(label: 'Final', value: AppNumberFormat.amount(row.finalAmount, numberFormat), numeric: true);
-    final landedField = SakalFieldCard.readOnly(label: 'Landed', value: AppNumberFormat.amount(row.landedAmount, numberFormat), numeric: true);
+    final finalAmountField = SakalFieldCard.readOnly(label: 'Final', value: AppNumberFormat.amount(row.finalAmount, numberFormat), numeric: true, showLabel: isMobile);
+    final landedField = SakalFieldCard.readOnly(label: 'Landed', value: AppNumberFormat.amount(row.landedAmount, numberFormat), numeric: true, showLabel: isMobile);
 
     final descBody = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       InkWell(

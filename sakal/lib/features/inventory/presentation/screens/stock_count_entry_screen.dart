@@ -844,9 +844,10 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final isTracked = row.isBatchTracked || row.isSerialTracked;
 
-    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
+    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—', showLabel: isMobile);
     final qtyPackField = SakalFieldCard(
       label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked, numeric: true,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyPackCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -857,6 +858,7 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
     );
     final qtyLooseField = SakalFieldCard(
       label: 'Qty Loose', editable: !locked, numeric: true,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyLooseCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),

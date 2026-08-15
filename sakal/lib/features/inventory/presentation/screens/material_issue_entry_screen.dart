@@ -750,18 +750,21 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
     const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
-    final productField = SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? '—' : row.productDisplay);
+    final productField = SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? '—' : row.productDisplay, showLabel: isMobile);
     final sourceField = SakalFieldCard.readOnly(
       label: 'Source Requisition',
       value: 'Req ${row.sourceRequisitionNo} · Remaining ${row.requisitionRemainingQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}',
+      showLabel: isMobile,
     );
     final deptAreaField = SakalFieldCard.readOnly(
       label: 'Department / Area',
       value: '${row.departmentLabel ?? '—'} / ${row.consumptionAreaLabel ?? '—'}',
+      showLabel: isMobile,
     );
-    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
+    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—', showLabel: isMobile);
     final qtyPackField = SakalFieldCard(
       label: showLooseQty ? 'Issue Qty Pack' : 'Issue Qty', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyPackCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -771,6 +774,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
     );
     final qtyLooseField = SakalFieldCard(
       label: 'Issue Qty Loose', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyLooseCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),

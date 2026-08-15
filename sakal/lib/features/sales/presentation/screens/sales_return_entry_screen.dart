@@ -1144,16 +1144,17 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
 
-    final productField = SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? '—' : row.productDisplay);
+    final productField = SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? '—' : row.productDisplay, showLabel: isMobile);
     final invoicedField = SakalFieldCard.readOnly(
-        label: 'Invoiced', value: '${row.invoicedQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}');
+        label: 'Invoiced', value: '${row.invoicedQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}', showLabel: isMobile);
     final alreadyReturnedField = row.alreadyReturned > 0
-        ? SakalFieldCard.readOnly(label: 'Already Returned', value: row.alreadyReturned.toStringAsFixed(2), numeric: true)
+        ? SakalFieldCard.readOnly(label: 'Already Returned', value: row.alreadyReturned.toStringAsFixed(2), numeric: true, showLabel: isMobile)
         : const SizedBox.shrink();
-    final remainingField = SakalFieldCard.readOnly(label: 'Remaining', value: row.remainingReturnable.toStringAsFixed(2), numeric: true);
-    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
+    final remainingField = SakalFieldCard.readOnly(label: 'Remaining', value: row.remainingReturnable.toStringAsFixed(2), numeric: true, showLabel: isMobile);
+    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—', showLabel: isMobile);
     final qtyPackField = SakalFieldCard(
       label: showLooseQty ? 'Return Qty Pack' : 'Return Qty', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyPackCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1163,6 +1164,7 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
     );
     final qtyLooseField = SakalFieldCard(
       label: 'Return Qty Loose', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyLooseCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1170,9 +1172,9 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
         onChanged: (_) => setState(_recomputeChargesAndRefund),
       ),
     );
-    final rateField = SakalFieldCard.readOnly(label: 'Rate', value: AppNumberFormat.amount(row.rate, numberFormat), numeric: true);
+    final rateField = SakalFieldCard.readOnly(label: 'Rate', value: AppNumberFormat.amount(row.rate, numberFormat), numeric: true, showLabel: isMobile);
     final amountField = SakalFieldCard.readOnly(
-      label: 'Amount', value: AppNumberFormat.amount(row.finalAmount, numberFormat), numeric: true);
+      label: 'Amount', value: AppNumberFormat.amount(row.finalAmount, numberFormat), numeric: true, showLabel: isMobile);
     final batchSerialBody = row.isBatchTracked || row.isSerialTracked
         ? _buildBatchSerialEditor(row, locked, isMobile)
         : const SizedBox.shrink();

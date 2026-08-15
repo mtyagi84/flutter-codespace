@@ -1279,10 +1279,11 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
     final style = SakalFieldCard.valueTextStyle(isCompact);
     final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
 
-    final productField = SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? 'Line' : row.productDisplay);
-    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
+    final productField = SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? 'Line' : row.productDisplay, showLabel: isMobile);
+    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—', showLabel: isMobile);
     final qtyPackField = SakalFieldCard(
       label: showLooseQty ? 'Return Qty Pack' : 'Return Qty', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyPackCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1292,6 +1293,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
     );
     final qtyLooseField = SakalFieldCard(
       label: 'Return Qty Loose', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyLooseCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1299,9 +1301,9 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
         onChanged: (_) => _recomputeTotals(),
       ),
     );
-    final rateField = SakalFieldCard.readOnly(label: 'Rate', value: AppNumberFormat.amount(row.rate, numberFormat), numeric: true);
+    final rateField = SakalFieldCard.readOnly(label: 'Rate', value: AppNumberFormat.amount(row.rate, numberFormat), numeric: true, showLabel: isMobile);
     final amountField = SakalFieldCard.readOnly(
-      label: 'Amount', value: AppNumberFormat.amount(row.grossAmount + row.suggestedTaxAmount, numberFormat), numeric: true);
+      label: 'Amount', value: AppNumberFormat.amount(row.grossAmount + row.suggestedTaxAmount, numberFormat), numeric: true, showLabel: isMobile);
 
     final taxInfoText = Text(
       row.suggestedTaxAmount > 0

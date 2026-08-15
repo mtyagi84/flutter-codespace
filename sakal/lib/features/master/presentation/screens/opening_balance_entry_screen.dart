@@ -807,9 +807,9 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
     // reference. Column stays in the layout either way (alignment), the
     // input itself is disabled when it doesn't apply.
     final showBill = row.accountNature == 'Customer' || row.accountNature == 'Supplier';
-    final groupField = SakalFieldCard.readOnly(label: 'Group', value: row.groupName.isEmpty ? '—' : row.groupName);
+    final groupField = SakalFieldCard.readOnly(label: 'Group', value: row.groupName.isEmpty ? '—' : row.groupName, showLabel: isMobile);
     final accountField = SakalFieldCard(
-      label: 'Account', required: true, editable: _editable,
+      label: 'Account', required: true, editable: _editable, showLabel: isMobile,
       child: FinanceAccountPicker(
         accounts: _postableAccounts,
         initialValue: row.accountDisplay.isEmpty ? null : row.accountDisplay,
@@ -820,7 +820,7 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
       ),
     );
     final typeField = SakalFieldCard(
-      label: 'Type', editable: _editable,
+      label: 'Type', editable: _editable, showLabel: isMobile,
       child: DropdownButtonFormField<String>(
         initialValue: row.obType,
         isExpanded: true, isDense: true, itemHeight: null,
@@ -829,19 +829,19 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
         onChanged: _editable ? (v) => setState(() => row.obType = v ?? 'Dr') : null,
       ),
     );
-    final baseField = _amountField('Base Amount', row.baseAmountCtrl, bare, _editable);
-    final localField = _amountField('Local Amount', row.localAmountCtrl, bare, _editable);
-    final partyField = _amountField('Party Amount', row.partyAmountCtrl, bare, _editable);
+    final baseField = _amountField('Base Amount', row.baseAmountCtrl, bare, _editable, isMobile);
+    final localField = _amountField('Local Amount', row.localAmountCtrl, bare, _editable, isMobile);
+    final partyField = _amountField('Party Amount', row.partyAmountCtrl, bare, _editable, isMobile);
     final currencyField = SakalFieldCard(
-      label: 'Party Ccy', required: true, editable: _editable,
+      label: 'Party Ccy', required: true, editable: _editable, showLabel: isMobile,
       child: TextFormField(controller: row.partyCurrencyCtrl, enabled: _editable, decoration: bare, style: style),
     );
     final billNoField = SakalFieldCard(
-      label: 'Bill No', editable: _editable && showBill,
+      label: 'Bill No', editable: _editable && showBill, showLabel: isMobile,
       child: TextFormField(controller: row.invBillNoCtrl, enabled: _editable && showBill, decoration: bare, style: style),
     );
     final billDateField = SakalFieldCard(
-      label: 'Bill Date', editable: _editable && showBill,
+      label: 'Bill Date', editable: _editable && showBill, showLabel: isMobile,
       child: InkWell(
         onTap: (_editable && showBill)
             ? () async {
@@ -908,8 +908,8 @@ class _OpeningBalanceEntryScreenState extends ConsumerState<OpeningBalanceEntryS
     );
   }
 
-  Widget _amountField(String label, TextEditingController ctrl, InputDecoration bare, bool editable) => SakalFieldCard(
-        label: label, editable: editable, numeric: true,
+  Widget _amountField(String label, TextEditingController ctrl, InputDecoration bare, bool editable, bool isMobile) => SakalFieldCard(
+        label: label, editable: editable, numeric: true, showLabel: isMobile,
         child: TextFormField(
           controller: ctrl,
           enabled: editable,

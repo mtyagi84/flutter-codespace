@@ -656,6 +656,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
 
     final barcodeField = SakalFieldCard(
       label: 'Scan/Enter Barcode', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.barcodeCtrl, enabled: !locked, decoration: bare, style: style,
         onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
@@ -663,6 +664,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
     );
     final productField = SakalFieldCard(
       label: 'Product', editable: !locked,
+      showLabel: isMobile,
       child: SakalAutocomplete<Map<String, dynamic>>(
         key: ValueKey('${row.hashCode}-${row.productDisplay}'),
         initialValue: TextEditingValue(text: row.productDisplay),
@@ -678,9 +680,10 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
         style: style,
       ),
     );
-    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
+    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—', showLabel: isMobile);
     final qtyPackField = SakalFieldCard(
       label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyPackCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -690,6 +693,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
     );
     final qtyLooseField = SakalFieldCard(
       label: 'Qty Loose', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyLooseCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -699,6 +703,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
     );
     final departmentField = SakalFieldCard(
       label: 'Department', editable: !locked,
+      showLabel: isMobile,
       child: DropdownButtonFormField<String>(
         decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
         initialValue: row.departmentId,
@@ -712,6 +717,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
     );
     final consumptionAreaField = SakalFieldCard(
       label: 'Consumption Area', editable: !locked,
+      showLabel: isMobile,
       child: DropdownButtonFormField<String>(
         decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
         initialValue: row.consumptionAreaId,
@@ -722,6 +728,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
     );
     final remarksField = SakalFieldCard(
       label: 'Remarks', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.remarksCtrl, enabled: !locked,
         decoration: bare, style: style,

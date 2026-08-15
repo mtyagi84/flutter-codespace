@@ -1182,13 +1182,14 @@ class _SalesDeliveryEntryScreenState extends ConsumerState<SalesDeliveryEntryScr
     const bare  = SakalFieldCard.bareDecoration;
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
-    final productField = SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? '—' : row.productDisplay);
+    final productField = SakalFieldCard.readOnly(label: 'Product', value: row.productDisplay.isEmpty ? '—' : row.productDisplay, showLabel: isMobile);
     final pendingField = SakalFieldCard.readOnly(
-        label: 'Pending', value: '${row.pendingQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}');
-    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
-    final barcodeField = SakalFieldCard.readOnly(label: 'Barcode', value: (row.barcode?.isNotEmpty ?? false) ? row.barcode! : '—');
+        label: 'Pending', value: '${row.pendingQty.toStringAsFixed(2)}${row.uomLabel != null ? ' ${row.uomLabel}' : ''}', showLabel: isMobile);
+    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—', showLabel: isMobile);
+    final barcodeField = SakalFieldCard.readOnly(label: 'Barcode', value: (row.barcode?.isNotEmpty ?? false) ? row.barcode! : '—', showLabel: isMobile);
     final qtyPackField = SakalFieldCard(
       label: showLooseQty ? 'Delivery Qty Pack' : 'Delivery Qty', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyPackCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1198,6 +1199,7 @@ class _SalesDeliveryEntryScreenState extends ConsumerState<SalesDeliveryEntryScr
     );
     final qtyLooseField = SakalFieldCard(
       label: 'Delivery Qty Loose', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyLooseCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),

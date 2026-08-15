@@ -606,6 +606,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
 
     final barcodeField = SakalFieldCard(
       label: 'Scan/Enter Barcode', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.barcodeCtrl, enabled: !locked, decoration: bare, style: style,
         onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
@@ -613,6 +614,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
     );
     final productField = SakalFieldCard(
       label: 'Product', required: true, editable: !locked,
+      showLabel: isMobile,
       child: SakalAutocomplete<Map<String, dynamic>>(
         key: ValueKey('${row.hashCode}-${row.productDisplay}'),
         initialValue: TextEditingValue(text: row.productDisplay),
@@ -628,9 +630,10 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
         style: style,
       ),
     );
-    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
+    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—', showLabel: isMobile);
     final qtyPackField = SakalFieldCard(
       label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyPackCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -640,6 +643,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
     );
     final qtyLooseField = SakalFieldCard(
       label: 'Qty Loose', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyLooseCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -649,6 +653,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
     );
     final remarksField = SakalFieldCard(
       label: 'Remarks', editable: !locked,
+      showLabel: isMobile,
       child: TextFormField(controller: row.remarksCtrl, enabled: !locked, decoration: bare, style: style),
     );
 
@@ -671,7 +676,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
     // Desktop — a continuous row under _buildLinesHeader's dark bar, same
     // left-to-right column order/widths as that header (see the "Line-items
     // grid" mandatory pattern in CLAUDE.md).
-    final transferredField = SakalFieldCard.readOnly(label: 'Transferred', value: row.transferredQty.toStringAsFixed(2));
+    final transferredField = SakalFieldCard.readOnly(label: 'Transferred', value: row.transferredQty.toStringAsFixed(2), showLabel: isMobile);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),

@@ -891,7 +891,7 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
     final style = SakalFieldCard.valueTextStyle(isCompact);
 
     final productField = SakalFieldCard(
-      label: 'Product', required: true, editable: !locked,
+      label: 'Product', required: true, editable: !locked, showLabel: isMobile,
       child: SakalAutocomplete<Map<String, dynamic>>(
         key: ValueKey('${row.hashCode}-${row.productDisplay}'),
         initialValue: TextEditingValue(text: row.productDisplay),
@@ -908,14 +908,14 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
       ),
     );
     final barcodeField = SakalFieldCard(
-      label: 'Scan/Enter Barcode', editable: !locked,
+      label: 'Scan/Enter Barcode', editable: !locked, showLabel: isMobile,
       child: TextFormField(
         controller: row.barcodeCtrl, enabled: !locked, decoration: bare, style: style,
         onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
       ),
     );
     final directionField = SakalFieldCard(
-      label: 'Direction', editable: !locked,
+      label: 'Direction', editable: !locked, showLabel: isMobile,
       child: DropdownButtonFormField<String>(
         decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
         initialValue: row.adjustFlag,
@@ -929,9 +929,9 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
         },
       ),
     );
-    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—');
+    final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—', showLabel: isMobile);
     final qtyPackField = SakalFieldCard(
-      label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked,
+      label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked, showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyPackCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -940,7 +940,7 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
       ),
     );
     final qtyLooseField = SakalFieldCard(
-      label: 'Qty Loose', editable: !locked,
+      label: 'Qty Loose', editable: !locked, showLabel: isMobile,
       child: TextFormField(
         controller: row.qtyLooseCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -949,7 +949,7 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
       ),
     );
     final reasonOverrideField = SakalFieldCard(
-      label: 'Reason (override)', editable: !locked,
+      label: 'Reason (override)', editable: !locked, showLabel: isMobile,
       child: DropdownButtonFormField<String>(
         decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
         initialValue: row.reasonId,
@@ -959,7 +959,7 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
       ),
     );
     final remarksField = SakalFieldCard(
-      label: 'Remarks', editable: !locked,
+      label: 'Remarks', editable: !locked, showLabel: isMobile,
       child: TextFormField(controller: row.remarksCtrl, enabled: !locked, decoration: bare, style: style),
     );
 
