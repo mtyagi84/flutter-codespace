@@ -142,8 +142,26 @@ class PdfCanvasRenderer {
           // image element in this codebase is the logo (bind
           // 'company.logo'), so no per-element opt-out is needed.
           final company = document['company'] as Map<String, dynamic>? ?? const {};
-          final widthIn  = (company['logo_width_inch']  as num?)?.toDouble() ?? 1.0;
-          final heightIn = (company['logo_height_inch'] as num?)?.toDouble() ?? 1.0;
+          var widthIn  = (company['logo_width_inch']  as num?)?.toDouble() ?? 1.0;
+          var heightIn = (company['logo_height_inch'] as num?)?.toDouble() ?? 1.0;
+          // Cap the LETTERHEAD's own displayed logo size. A transactional
+          // document's letterhead sits the logo beside 2-3 short lines of
+          // company name/address/city text — rendering the company's full
+          // configured print size (defaults 1x1in) there forces that
+          // shared row far taller than the text next to it, wasting
+          // vertical space either above or below the text depending on
+          // which layout is tried (real bug reported live 2026-08-19,
+          // twice, from both directions — logo-beside-text left a gap
+          // below the short text, logo-on-its-own-row left a gap beside
+          // it at the top). Scaling proportionally down to a compact
+          // icon-sized box keeps the logo legible while letting the text
+          // beside it — not the logo — dictate the row height.
+          const maxLetterheadLogoIn = 0.5;
+          if (widthIn > maxLetterheadLogoIn || heightIn > maxLetterheadLogoIn) {
+            final scale = maxLetterheadLogoIn / (widthIn > heightIn ? widthIn : heightIn);
+            widthIn *= scale;
+            heightIn *= scale;
+          }
           return pw.SizedBox(
             width: widthIn * 25.4 * PdfPageFormat.mm,
             height: heightIn * 25.4 * PdfPageFormat.mm,
