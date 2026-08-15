@@ -1041,6 +1041,7 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
       label: 'Account',
       required: true,
       editable: !_locked,
+      showLabel: isMobile,
       child: FinanceAccountPicker(
         accounts: _pickableAccounts,
         initialValue: row.accountDisplay.isEmpty ? null : row.accountDisplay,
@@ -1050,12 +1051,13 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
         onSelected: (a) => _onAccountSelected(row, a),
       ),
     );
-    final parentGroupField = SakalFieldCard.readOnly(label: 'Parent Group', value: row.parentName.isEmpty ? '—' : row.parentName);
-    final currencyField = SakalFieldCard.readOnly(label: 'Currency', value: row.accountCurrency.isEmpty ? '—' : row.accountCurrency);
+    final parentGroupField = SakalFieldCard.readOnly(label: 'Parent Group', value: row.parentName.isEmpty ? '—' : row.parentName, showLabel: isMobile);
+    final currencyField = SakalFieldCard.readOnly(label: 'Currency', value: row.accountCurrency.isEmpty ? '—' : row.accountCurrency, showLabel: isMobile);
     final amountField = SakalFieldCard(
       label: 'Amount',
       editable: !_locked,
       numeric: true,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.amountCtrl,
         focusNode: row.amountFocusNode,
@@ -1070,6 +1072,7 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
     final drCrField = SakalFieldCard(
       label: 'Dr / Cr',
       editable: !_locked,
+      showLabel: isMobile,
       child: DropdownButtonFormField<String>(
         initialValue: row.natureDrCr,
         isExpanded: true,
@@ -1081,12 +1084,13 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
         onChanged: _locked ? null : (v) => setState(() => row.natureDrCr = v ?? 'DR'),
       ),
     );
-    final baseAmountField = SakalFieldCard.readOnly(label: 'Base Amount', value: AppNumberFormat.amount(row.amount * _baseRate, 'INTERNATIONAL'), numeric: true);
-    final localAmountField = SakalFieldCard.readOnly(label: 'Local Amount', value: AppNumberFormat.amount(row.amount * _localRate, 'INTERNATIONAL'), numeric: true);
-    final partyAmountField = SakalFieldCard.readOnly(label: 'Party Amount', value: AppNumberFormat.amount(row.amount * _partyRateFor(row), 'INTERNATIONAL'), numeric: true);
+    final baseAmountField = SakalFieldCard.readOnly(label: 'Base Amount', value: AppNumberFormat.amount(row.amount * _baseRate, 'INTERNATIONAL'), numeric: true, showLabel: isMobile);
+    final localAmountField = SakalFieldCard.readOnly(label: 'Local Amount', value: AppNumberFormat.amount(row.amount * _localRate, 'INTERNATIONAL'), numeric: true, showLabel: isMobile);
+    final partyAmountField = SakalFieldCard.readOnly(label: 'Party Amount', value: AppNumberFormat.amount(row.amount * _partyRateFor(row), 'INTERNATIONAL'), numeric: true, showLabel: isMobile);
     final remarksField = SakalFieldCard(
       label: 'Remarks',
       editable: !_locked,
+      showLabel: isMobile,
       child: TextFormField(
         controller: row.remarksCtrl,
         enabled: !_locked,

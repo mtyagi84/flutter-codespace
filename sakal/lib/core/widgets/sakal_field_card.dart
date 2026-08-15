@@ -47,6 +47,18 @@ class SakalFieldCard extends ConsumerStatefulWidget {
   final double? height;
   final bool numeric;
 
+  /// Hides the label row entirely (and shrinks the card's default height
+  /// to match, rather than leaving the label's space as dead whitespace)
+  /// — for a cell inside a line-item table row where a `SakalTableHeaderBar`
+  /// column header directly above it already names the field, making the
+  /// per-cell label pure redundancy. Defaults `true` (label shown) so
+  /// every existing call site — standalone header-section fields, and any
+  /// line-item cell that hasn't opted out yet — is unaffected. [required]'s
+  /// asterisk is part of the label text, so it's not shown either when
+  /// this is `false`; Save-time validation still enforces required-ness
+  /// regardless.
+  final bool showLabel;
+
   const SakalFieldCard({
     super.key,
     required this.label,
@@ -55,6 +67,7 @@ class SakalFieldCard extends ConsumerStatefulWidget {
     this.editable = false,
     this.height,
     this.numeric = false,
+    this.showLabel = true,
   }) : value = null;
 
   /// Convenience constructor for a plain read-only text value — Location,
@@ -74,6 +87,7 @@ class SakalFieldCard extends ConsumerStatefulWidget {
     this.required = false,
     this.height,
     this.numeric = false,
+    this.showLabel = true,
   })  : editable = false,
         child = null;
 
@@ -142,7 +156,11 @@ class _SakalFieldCardState extends ConsumerState<SakalFieldCard> {
   Widget build(BuildContext context) {
     final isCompact = ref.watch(isCompactDensityProvider);
     final preset = ThemePresetConfig.all[ref.watch(themePresetProvider)]!;
-    final resolvedHeight = widget.height ?? DensityMetrics.of(isCompact).rowHeight;
+    // No-label cells don't need the full label+gap+value stack height —
+    // using the same rowHeight here would just leave the freed-up label
+    // space as dead whitespace instead of actually shrinking the row.
+    final defaultHeight = widget.showLabel ? DensityMetrics.of(isCompact).rowHeight : (isCompact ? 32.0 : 40.0);
+    final resolvedHeight = widget.height ?? defaultHeight;
     final isFocused = widget.editable && _focusWithinNode.hasFocus;
     final labelFontSize = isCompact ? 8.5 : 10.0;
     final gap = isCompact ? 1.0 : 2.0;
@@ -186,19 +204,21 @@ class _SakalFieldCardState extends ConsumerState<SakalFieldCard> {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: widget.numeric ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            RichText(
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: widget.numeric ? TextAlign.right : TextAlign.left,
-              text: TextSpan(
-                text: widget.label.toUpperCase(),
-                style: TextStyle(fontSize: labelFontSize, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: AppColors.textSecondary),
-                children: widget.required
-                    ? const [TextSpan(text: ' *', style: TextStyle(color: AppColors.negative, fontWeight: FontWeight.w700))]
-                    : null,
+            if (widget.showLabel) ...[
+              RichText(
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: widget.numeric ? TextAlign.right : TextAlign.left,
+                text: TextSpan(
+                  text: widget.label.toUpperCase(),
+                  style: TextStyle(fontSize: labelFontSize, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: AppColors.textSecondary),
+                  children: widget.required
+                      ? const [TextSpan(text: ' *', style: TextStyle(color: AppColors.negative, fontWeight: FontWeight.w700))]
+                      : null,
+                ),
               ),
-            ),
-            SizedBox(height: gap),
+              SizedBox(height: gap),
+            ],
             Expanded(child: Align(alignment: widget.numeric ? Alignment.centerRight : Alignment.centerLeft, child: content)),
           ],
         ),
