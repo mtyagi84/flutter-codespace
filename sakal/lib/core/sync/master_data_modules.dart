@@ -87,9 +87,13 @@ Future<int> _syncCustomersSuppliers(AppDatabase db, UserSession session) async {
     'is_deleted': 'eq.false',
     'is_active': 'eq.true',
     'or': '(posting_allowed.eq.true,account_nature.eq.Customer,account_nature.eq.Supplier)',
+    // See master_cache_providers.dart's accountsProvider for why this uses
+    // the FK constraint name (rim_accounts_parent_id_fkey), not the column
+    // name — !parent_id resolved to the reverse (children) relationship
+    // for this self-referencing embed.
     'select': 'id,account_code,account_name,account_nature,posting_allowed,credit_limit,credit_days,'
         'is_credit_blocked,phone,email,address_line1,address_line2,'
-        'parent:rim_accounts!parent_id(account_name),'
+        'parent:rim_accounts!rim_accounts_parent_id_fkey(account_name),'
         'rim_currencies!account_currency_id(currency_id)',
     'order': 'account_code.asc',
     'limit': '2000',

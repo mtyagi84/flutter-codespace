@@ -164,8 +164,20 @@ final accountsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async 
     'or':         '(posting_allowed.eq.true,'
                   'account_nature.eq.Customer,'
                   'account_nature.eq.Supplier)',
+    // Self-referencing embed disambiguated by FK CONSTRAINT NAME
+    // (rim_accounts_parent_id_fkey, Postgres's default auto-generated name
+    // for the unnamed `parent_id UUID REFERENCES rim_accounts(id)` — see
+    // migration 013), not the column name. `!parent_id` looked correct per
+    // PostgREST's general M2O docs but resolved to the REVERSE relationship
+    // for a self-join in practice (found live 2026-08-16: every LEAF
+    // account, i.e. every account actually pickable in any picker, has no
+    // children, so `!parent_id` returned an empty children-list -> silently
+    // normalized to null "parent" -> Group Name always blank, even though
+    // Chart of Accounts genuinely had a parent group configured). The FK
+    // constraint name is PostgREST's unambiguous way to pin the direction
+    // for exactly this self-referencing case.
     'select':     'id,account_code,account_name,account_nature,posting_allowed,'
-                  'parent:rim_accounts!parent_id(account_name),'
+                  'parent:rim_accounts!rim_accounts_parent_id_fkey(account_name),'
                   'rim_currencies!account_currency_id(currency_id)',
     'order':      'account_code.asc',
     'limit':      '500',
