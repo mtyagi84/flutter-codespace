@@ -30,11 +30,26 @@ const salesQuotationDefaultTemplate = PrintTemplate(
             font: PrintFont(size: 9, colorHex: '#4A5568')),
       ],
     ),
-    PrintElement(id: 'div1', type: PrintElementType.line, x: 1, y: 4, w: 180),
+    // Title/Quotation No/Date as a right-aligned block beside the logo/
+    // company block (row 1) — same treatment as Journal Voucher, replacing
+    // the old big centered banner below the divider.
     PrintElement(
-      id: 'title', type: PrintElementType.text, text: 'SALES QUOTATION',
-      x: 1, y: 5, w: 180,
-      font: PrintFont(size: 18, bold: true, align: PrintAlign.center, colorHex: '#1B3A6B'),
+      id: 'title_block', type: PrintElementType.block,
+      x: 3, y: 1, w: 90, font: PrintFont(align: PrintAlign.right),
+      lines: [
+        PrintElement(id: 'title', type: PrintElementType.text, text: 'Sales Quotation',
+            font: PrintFont(size: 16, bold: true, align: PrintAlign.right, colorHex: '#1B3A6B')),
+        PrintElement(id: 'quotation_no', type: PrintElementType.field, bind: 'header.quotation_no', label: 'Quotation No: ',
+            font: PrintFont(size: 10, bold: true, align: PrintAlign.right)),
+        PrintElement(id: 'quotation_date', type: PrintElementType.field, bind: 'header.quotation_date', label: 'Date: ',
+            font: PrintFont(size: 10, align: PrintAlign.right)),
+      ],
+    ),
+    // Accent rule under the letterhead — thicker + navy, not the default
+    // thin grey divider, so the letterhead reads as a distinct block.
+    PrintElement(
+      id: 'div1', type: PrintElementType.line, x: 1, y: 4, w: 180,
+      h: 1.4, font: PrintFont(colorHex: '#1B3A6B'),
     ),
     // Was 'notEquals: APPROVED', which kept showing "DRAFT — NOT APPROVED"
     // for SENT/ACCEPTED/REJECTED/CONVERTED quotations too, not just actual
@@ -45,14 +60,6 @@ const salesQuotationDefaultTemplate = PrintTemplate(
       text: 'DRAFT — NOT APPROVED',
       x: 1, y: 6, w: 180,
       showWhen: PrintCondition(field: 'header.status', equals: 'DRAFT'),
-    ),
-    PrintElement(
-      id: 'quotation_no', type: PrintElementType.field, bind: 'header.quotation_no', label: 'Quotation No: ',
-      x: 1, y: 7, w: 90, font: PrintFont(size: 10, bold: true),
-    ),
-    PrintElement(
-      id: 'quotation_date', type: PrintElementType.field, bind: 'header.quotation_date', label: 'Date: ',
-      x: 2, y: 7, w: 85, font: PrintFont(size: 10),
     ),
     PrintElement(
       id: 'customer', type: PrintElementType.field, bind: 'header.customer_name', label: 'Customer: ',
@@ -102,6 +109,10 @@ const salesQuotationDefaultTemplate = PrintTemplate(
       id: 'remarks', type: PrintElementType.field, bind: 'header.remarks', label: 'Remarks: ',
       x: 1, y: 14, w: 180, font: PrintFont(size: 9),
     ),
+    // A rule directly above the totals block separates it from whatever's
+    // above (table/remarks) — otherwise "Gross Amount" reads as just one
+    // more (unbordered) table-less row with no visual anchor.
+    PrintElement(id: 'div_totals', type: PrintElementType.line, x: 1, y: 14.5, w: 180, h: 0.5),
     // Totals — right-aligned via a wide empty spacer + a narrower value field.
     PrintElement(id: 'totals_spacer_1', type: PrintElementType.text, text: '', x: 1, y: 15, w: 110),
     PrintElement(
@@ -129,7 +140,14 @@ const salesQuotationDefaultTemplate = PrintTemplate(
       x: 2, y: 19, w: 70, format: PrintDataFormat.currency,
       font: PrintFont(size: 13, bold: true, align: PrintAlign.right, colorHex: '#1B3A6B'),
     ),
-    PrintElement(id: 'div3', type: PrintElementType.line, x: 1, y: 20, w: 180),
+    PrintElement(
+      id: 'div3', type: PrintElementType.line, x: 1, y: 20, w: 180,
+      h: 1.4, font: PrintFont(colorHex: '#1B3A6B'),
+    ),
+    // Short "sign above the line" rules, one per signature column, sitting
+    // directly above the labels below.
+    PrintElement(id: 'sig_line_1', type: PrintElementType.line, x: 1, y: 20.6, w: 80, h: 0.5),
+    PrintElement(id: 'sig_line_2', type: PrintElementType.line, x: 2, y: 20.6, w: 80, h: 0.5),
     PrintElement(
       id: 'prepared_by', type: PrintElementType.field, bind: 'signatures.prepared_by', label: 'Prepared By: ',
       x: 1, y: 21, w: 80, font: PrintFont(size: 9, align: PrintAlign.center),

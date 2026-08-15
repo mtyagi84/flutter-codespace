@@ -28,25 +28,32 @@ const openingStockDefaultTemplate = PrintTemplate(
             font: PrintFont(size: 9, colorHex: '#4A5568')),
       ],
     ),
-    PrintElement(id: 'div1', type: PrintElementType.line, x: 1, y: 4, w: 180),
+    // Title/Opening No/Date as a right-aligned block beside the logo/company
+    // block (row 1) — same treatment as Journal Voucher, replacing the old
+    // big centered banner below the divider.
     PrintElement(
-      id: 'title', type: PrintElementType.text, text: 'OPENING STOCK',
-      x: 1, y: 5, w: 180,
-      font: PrintFont(size: 18, bold: true, align: PrintAlign.center, colorHex: '#1B3A6B'),
+      id: 'title_block', type: PrintElementType.block,
+      x: 3, y: 1, w: 90, font: PrintFont(align: PrintAlign.right),
+      lines: [
+        PrintElement(id: 'title', type: PrintElementType.text, text: 'Opening Stock',
+            font: PrintFont(size: 16, bold: true, align: PrintAlign.right, colorHex: '#1B3A6B')),
+        PrintElement(id: 'opening_no', type: PrintElementType.field, bind: 'header.opening_no', label: 'Opening No: ',
+            font: PrintFont(size: 10, bold: true, align: PrintAlign.right)),
+        PrintElement(id: 'opening_date', type: PrintElementType.field, bind: 'header.opening_date', label: 'Date: ',
+            font: PrintFont(size: 10, align: PrintAlign.right)),
+      ],
+    ),
+    // Accent rule under the letterhead — thicker + navy, not the default
+    // thin grey divider, so the letterhead reads as a distinct block.
+    PrintElement(
+      id: 'div1', type: PrintElementType.line, x: 1, y: 4, w: 180,
+      h: 1.4, font: PrintFont(colorHex: '#1B3A6B'),
     ),
     PrintElement(
       id: 'draft_watermark', type: PrintElementType.watermark,
       text: 'DRAFT — NOT APPROVED',
       x: 1, y: 6, w: 180,
       showWhen: PrintCondition(field: 'header.status', notEquals: 'APPROVED'),
-    ),
-    PrintElement(
-      id: 'opening_no', type: PrintElementType.field, bind: 'header.opening_no', label: 'Opening No: ',
-      x: 1, y: 7, w: 90, font: PrintFont(size: 10, bold: true),
-    ),
-    PrintElement(
-      id: 'opening_date', type: PrintElementType.field, bind: 'header.opening_date', label: 'Date: ',
-      x: 2, y: 7, w: 85, font: PrintFont(size: 10),
     ),
     PrintElement(
       id: 'location', type: PrintElementType.field, bind: 'header.location_name', label: 'Location: ',
@@ -69,7 +76,14 @@ const openingStockDefaultTemplate = PrintTemplate(
       id: 'remarks', type: PrintElementType.field, bind: 'header.remarks', label: 'Remarks: ',
       x: 1, y: 11, w: 180, font: PrintFont(size: 9),
     ),
-    PrintElement(id: 'div3', type: PrintElementType.line, x: 1, y: 12, w: 180),
+    PrintElement(
+      id: 'div3', type: PrintElementType.line, x: 1, y: 12, w: 180,
+      h: 1.4, font: PrintFont(colorHex: '#1B3A6B'),
+    ),
+    // Short "sign above the line" rules, one per signature column, sitting
+    // directly above the labels below.
+    PrintElement(id: 'sig_line_1', type: PrintElementType.line, x: 1, y: 12.6, w: 80, h: 0.5),
+    PrintElement(id: 'sig_line_2', type: PrintElementType.line, x: 2, y: 12.6, w: 80, h: 0.5),
     PrintElement(
       id: 'prepared_by', type: PrintElementType.field, bind: 'signatures.prepared_by', label: 'Prepared By: ',
       x: 1, y: 13, w: 80, font: PrintFont(size: 9, align: PrintAlign.center),

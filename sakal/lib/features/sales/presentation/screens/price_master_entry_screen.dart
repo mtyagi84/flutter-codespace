@@ -694,7 +694,14 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
       final company  = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
       final template = await ref.read(printTemplateProvider('PRICE_MASTER').future);
       final document = _buildPrintDocument(company);
-      await PrintEngine.printDocument(template: template, document: document, filename: '$_entryNo.pdf');
+      final session = ref.read(sessionProvider);
+      await PrintEngine.printDocument(
+        template: template,
+        document: document,
+        filename: '$_entryNo.pdf',
+        printedByName: session?.fullName,
+        printedOn: DateTime.now(),
+      );
     } catch (e, st) {
       AppLogger.error('PriceMasterPrint', e, st);
       if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this batch'), color: AppColors.negative);

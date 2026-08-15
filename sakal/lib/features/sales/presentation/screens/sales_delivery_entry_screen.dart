@@ -802,7 +802,14 @@ class _SalesDeliveryEntryScreenState extends ConsumerState<SalesDeliveryEntryScr
       final company  = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
       final template = await ref.read(printTemplateProvider('SALES_DELIVERY').future);
       final document = _buildPrintDocument(company);
-      await PrintEngine.printDocument(template: template, document: document, filename: '$_deliveryNo.pdf');
+      final session = ref.read(sessionProvider);
+      await PrintEngine.printDocument(
+        template: template,
+        document: document,
+        filename: '$_deliveryNo.pdf',
+        printedByName: session?.fullName,
+        printedOn: DateTime.now(),
+      );
     } catch (e, st) {
       AppLogger.error('SalesDeliveryPrint', e, st);
       if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this delivery'), color: AppColors.negative);

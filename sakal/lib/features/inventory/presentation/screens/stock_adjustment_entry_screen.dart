@@ -669,7 +669,14 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
       final company  = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
       final template = await ref.read(printTemplateProvider('STOCK_ADJUSTMENT').future);
       final document = _buildPrintDocument(company);
-      await PrintEngine.printDocument(template: template, document: document, filename: '$_adjustmentNo.pdf');
+      final session = ref.read(sessionProvider);
+      await PrintEngine.printDocument(
+        template: template,
+        document: document,
+        filename: '$_adjustmentNo.pdf',
+        printedByName: session?.fullName,
+        printedOn: DateTime.now(),
+      );
     } catch (e, st) {
       AppLogger.error('StockAdjustmentPrint', e, st);
       if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this stock adjustment'), color: AppColors.negative);

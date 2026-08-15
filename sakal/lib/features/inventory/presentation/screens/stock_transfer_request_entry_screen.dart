@@ -372,7 +372,14 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
       final company  = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
       final template = await ref.read(printTemplateProvider('STOCK_TRANSFER_REQUEST').future);
       final document = _buildPrintDocument(company);
-      await PrintEngine.printDocument(template: template, document: document, filename: '$_requestNo.pdf');
+      final session = ref.read(sessionProvider);
+      await PrintEngine.printDocument(
+        template: template,
+        document: document,
+        filename: '$_requestNo.pdf',
+        printedByName: session?.fullName,
+        printedOn: DateTime.now(),
+      );
     } catch (e, st) {
       AppLogger.error('StockTransferRequestPrint', e, st);
       if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this stock transfer request'), color: AppColors.negative);

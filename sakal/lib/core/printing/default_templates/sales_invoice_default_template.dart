@@ -32,11 +32,26 @@ const salesInvoiceDefaultTemplate = PrintTemplate(
             font: PrintFont(size: 9, colorHex: '#4A5568')),
       ],
     ),
-    PrintElement(id: 'div1', type: PrintElementType.line, x: 1, y: 4, w: 180),
+    // Title/Invoice No/Date as a right-aligned block beside the logo/company
+    // block (row 1) — same treatment as Journal Voucher, replacing the old
+    // big centered banner below the divider.
     PrintElement(
-      id: 'title', type: PrintElementType.text, text: 'SALES INVOICE',
-      x: 1, y: 5, w: 180,
-      font: PrintFont(size: 18, bold: true, align: PrintAlign.center, colorHex: '#1B3A6B'),
+      id: 'title_block', type: PrintElementType.block,
+      x: 3, y: 1, w: 90, font: PrintFont(align: PrintAlign.right),
+      lines: [
+        PrintElement(id: 'title', type: PrintElementType.text, text: 'Sales Invoice',
+            font: PrintFont(size: 16, bold: true, align: PrintAlign.right, colorHex: '#1B3A6B')),
+        PrintElement(id: 'invoice_no', type: PrintElementType.field, bind: 'header.invoice_no', label: 'Invoice No: ',
+            font: PrintFont(size: 10, bold: true, align: PrintAlign.right)),
+        PrintElement(id: 'invoice_date', type: PrintElementType.field, bind: 'header.invoice_date', label: 'Date: ',
+            font: PrintFont(size: 10, align: PrintAlign.right)),
+      ],
+    ),
+    // Accent rule under the letterhead — thicker + navy, not the default
+    // thin grey divider, so the letterhead reads as a distinct block.
+    PrintElement(
+      id: 'div1', type: PrintElementType.line, x: 1, y: 4, w: 180,
+      h: 1.4, font: PrintFont(colorHex: '#1B3A6B'),
     ),
     PrintElement(
       id: 'provisional_watermark', type: PrintElementType.watermark,
@@ -49,14 +64,6 @@ const salesInvoiceDefaultTemplate = PrintTemplate(
       text: 'DRAFT — PENDING MANAGER REVIEW',
       x: 1, y: 6, w: 180,
       showWhen: PrintCondition(field: 'header.status', equals: 'DRAFT'),
-    ),
-    PrintElement(
-      id: 'invoice_no', type: PrintElementType.field, bind: 'header.invoice_no', label: 'Invoice No: ',
-      x: 1, y: 7, w: 90, font: PrintFont(size: 10, bold: true),
-    ),
-    PrintElement(
-      id: 'invoice_date', type: PrintElementType.field, bind: 'header.invoice_date', label: 'Date: ',
-      x: 2, y: 7, w: 85, font: PrintFont(size: 10),
     ),
     PrintElement(
       id: 'sale_type', type: PrintElementType.field, bind: 'header.sale_type', label: 'Sale Type: ',
@@ -98,6 +105,10 @@ const salesInvoiceDefaultTemplate = PrintTemplate(
       id: 'remarks', type: PrintElementType.field, bind: 'header.remarks', label: 'Remarks: ',
       x: 1, y: 13, w: 180, font: PrintFont(size: 9),
     ),
+    // A rule directly above the totals block separates it from whatever's
+    // above (table/remarks) — otherwise "Gross Amount" reads as just one
+    // more (unbordered) table-less row with no visual anchor.
+    PrintElement(id: 'div_totals', type: PrintElementType.line, x: 1, y: 13.5, w: 180, h: 0.5),
     // Totals — right-aligned via a wide empty spacer + a narrower value field.
     PrintElement(id: 'totals_spacer_1', type: PrintElementType.text, text: '', x: 1, y: 14, w: 110),
     PrintElement(
@@ -125,7 +136,10 @@ const salesInvoiceDefaultTemplate = PrintTemplate(
       x: 2, y: 18, w: 70, format: PrintDataFormat.currency,
       font: PrintFont(size: 13, bold: true, align: PrintAlign.right, colorHex: '#1B3A6B'),
     ),
-    PrintElement(id: 'div3', type: PrintElementType.line, x: 1, y: 19, w: 180),
+    PrintElement(
+      id: 'div3', type: PrintElementType.line, x: 1, y: 19, w: 180,
+      h: 1.4, font: PrintFont(colorHex: '#1B3A6B'),
+    ),
     PrintElement(
       id: 'thank_you', type: PrintElementType.text, text: 'Thank you for your business',
       x: 1, y: 20, w: 180, font: PrintFont(size: 9, align: PrintAlign.center),

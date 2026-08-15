@@ -29,25 +29,32 @@ const stockTransferDefaultTemplate = PrintTemplate(
             font: PrintFont(size: 9, colorHex: '#4A5568')),
       ],
     ),
-    PrintElement(id: 'div1', type: PrintElementType.line, x: 1, y: 4, w: 180),
+    // Title/Transfer No/Date as a right-aligned block beside the logo/company
+    // block (row 1) — same treatment as Journal Voucher, replacing the old
+    // big centered banner below the divider.
     PrintElement(
-      id: 'title', type: PrintElementType.text, text: 'STOCK TRANSFER',
-      x: 1, y: 5, w: 180,
-      font: PrintFont(size: 18, bold: true, align: PrintAlign.center, colorHex: '#1B3A6B'),
+      id: 'title_block', type: PrintElementType.block,
+      x: 3, y: 1, w: 90, font: PrintFont(align: PrintAlign.right),
+      lines: [
+        PrintElement(id: 'title', type: PrintElementType.text, text: 'Stock Transfer',
+            font: PrintFont(size: 16, bold: true, align: PrintAlign.right, colorHex: '#1B3A6B')),
+        PrintElement(id: 'transfer_no', type: PrintElementType.field, bind: 'header.transfer_no', label: 'Transfer No: ',
+            font: PrintFont(size: 10, bold: true, align: PrintAlign.right)),
+        PrintElement(id: 'transfer_date', type: PrintElementType.field, bind: 'header.transfer_date', label: 'Date: ',
+            font: PrintFont(size: 10, align: PrintAlign.right)),
+      ],
+    ),
+    // Accent rule under the letterhead — thicker + navy, not the default
+    // thin grey divider, so the letterhead reads as a distinct block.
+    PrintElement(
+      id: 'div1', type: PrintElementType.line, x: 1, y: 4, w: 180,
+      h: 1.4, font: PrintFont(colorHex: '#1B3A6B'),
     ),
     PrintElement(
       id: 'draft_watermark', type: PrintElementType.watermark,
       text: 'DRAFT — NOT APPROVED',
       x: 1, y: 6, w: 180,
       showWhen: PrintCondition(field: 'header.status', notEquals: 'APPROVED'),
-    ),
-    PrintElement(
-      id: 'transfer_no', type: PrintElementType.field, bind: 'header.transfer_no', label: 'Transfer No: ',
-      x: 1, y: 7, w: 90, font: PrintFont(size: 10, bold: true),
-    ),
-    PrintElement(
-      id: 'transfer_date', type: PrintElementType.field, bind: 'header.transfer_date', label: 'Date: ',
-      x: 2, y: 7, w: 85, font: PrintFont(size: 10),
     ),
     PrintElement(
       id: 'from_location', type: PrintElementType.field, bind: 'header.from_location_name', label: 'From: ',
@@ -84,13 +91,24 @@ const stockTransferDefaultTemplate = PrintTemplate(
       id: 'remarks', type: PrintElementType.field, bind: 'header.remarks', label: 'Remarks: ',
       x: 1, y: 13, w: 180, font: PrintFont(size: 9),
     ),
+    // A rule directly above the totals block separates it from whatever's
+    // above (table/remarks) — otherwise "Total Charges" reads as just one
+    // more (unbordered) table-less row with no visual anchor.
+    PrintElement(id: 'div_totals', type: PrintElementType.line, x: 1, y: 13.5, w: 180, h: 0.5),
     PrintElement(id: 'totals_spacer_1', type: PrintElementType.text, text: '', x: 1, y: 14, w: 110),
     PrintElement(
       id: 'charges_total', type: PrintElementType.field, bind: 'totals.charges_amount', label: 'Total Charges: ',
       x: 2, y: 14, w: 70, format: PrintDataFormat.currency,
       font: PrintFont(size: 13, bold: true, align: PrintAlign.right, colorHex: '#1B3A6B'),
     ),
-    PrintElement(id: 'div3', type: PrintElementType.line, x: 1, y: 15, w: 180),
+    PrintElement(
+      id: 'div3', type: PrintElementType.line, x: 1, y: 15, w: 180,
+      h: 1.4, font: PrintFont(colorHex: '#1B3A6B'),
+    ),
+    // Short "sign above the line" rules, one per signature column, sitting
+    // directly above the labels below.
+    PrintElement(id: 'sig_line_1', type: PrintElementType.line, x: 1, y: 15.6, w: 80, h: 0.5),
+    PrintElement(id: 'sig_line_2', type: PrintElementType.line, x: 2, y: 15.6, w: 80, h: 0.5),
     PrintElement(
       id: 'dispatched_by', type: PrintElementType.field, bind: 'signatures.prepared_by', label: 'Dispatched By: ',
       x: 1, y: 16, w: 80, font: PrintFont(size: 9, align: PrintAlign.center),

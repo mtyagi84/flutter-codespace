@@ -899,7 +899,14 @@ class _PurchaseOrderEntryScreenState extends ConsumerState<PurchaseOrderEntryScr
       final company  = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
       final template = await ref.read(printTemplateProvider('PURCHASE_ORDER').future);
       final document = _buildPrintDocument(company);
-      await PrintEngine.printDocument(template: template, document: document, filename: '$_orderNo.pdf');
+      final session = ref.read(sessionProvider);
+      await PrintEngine.printDocument(
+        template: template,
+        document: document,
+        filename: '$_orderNo.pdf',
+        printedByName: session?.fullName,
+        printedOn: DateTime.now(),
+      );
     } catch (e, st) {
       AppLogger.error('PoPrint', e, st);
       if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this document'), color: AppColors.negative);

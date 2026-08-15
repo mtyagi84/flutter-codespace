@@ -913,7 +913,14 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
       final company  = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
       final template = await ref.read(printTemplateProvider('SALES_QUOTATION').future);
       final document = _buildPrintDocument(company);
-      await PrintEngine.printDocument(template: template, document: document, filename: '$_quotationNo.pdf');
+      final session = ref.read(sessionProvider);
+      await PrintEngine.printDocument(
+        template: template,
+        document: document,
+        filename: '$_quotationNo.pdf',
+        printedByName: session?.fullName,
+        printedOn: DateTime.now(),
+      );
     } catch (e, st) {
       AppLogger.error('SalesQuotationPrint', e, st);
       if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this quotation'), color: AppColors.negative);

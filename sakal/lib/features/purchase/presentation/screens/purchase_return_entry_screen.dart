@@ -904,7 +904,14 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
       final company  = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
       final template = await ref.read(printTemplateProvider('PURCHASE_RETURN').future);
       final document = _buildPrintDocument(company);
-      await PrintEngine.printDocument(template: template, document: document, filename: '$_returnNo.pdf');
+      final session = ref.read(sessionProvider);
+      await PrintEngine.printDocument(
+        template: template,
+        document: document,
+        filename: '$_returnNo.pdf',
+        printedByName: session?.fullName,
+        printedOn: DateTime.now(),
+      );
     } catch (e, st) {
       AppLogger.error('PurchaseReturnPrint', e, st);
       if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this document'), color: AppColors.negative);

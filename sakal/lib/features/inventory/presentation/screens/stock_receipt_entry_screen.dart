@@ -594,7 +594,14 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
       final company  = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
       final template = await ref.read(printTemplateProvider('STOCK_RECEIPT').future);
       final document = _buildPrintDocument(company);
-      await PrintEngine.printDocument(template: template, document: document, filename: '$_receiptNo.pdf');
+      final session = ref.read(sessionProvider);
+      await PrintEngine.printDocument(
+        template: template,
+        document: document,
+        filename: '$_receiptNo.pdf',
+        printedByName: session?.fullName,
+        printedOn: DateTime.now(),
+      );
     } catch (e, st) {
       AppLogger.error('StockReceiptPrint', e, st);
       if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this stock receipt'), color: AppColors.negative);

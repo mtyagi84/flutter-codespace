@@ -411,7 +411,14 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
       final company  = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
       final template = await ref.read(printTemplateProvider('MATERIAL_REQUISITION').future);
       final document = _buildPrintDocument(company);
-      await PrintEngine.printDocument(template: template, document: document, filename: '$_requisitionNo.pdf');
+      final session = ref.read(sessionProvider);
+      await PrintEngine.printDocument(
+        template: template,
+        document: document,
+        filename: '$_requisitionNo.pdf',
+        printedByName: session?.fullName,
+        printedOn: DateTime.now(),
+      );
     } catch (e, st) {
       AppLogger.error('MaterialRequisitionPrint', e, st);
       if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this material requisition'), color: AppColors.negative);

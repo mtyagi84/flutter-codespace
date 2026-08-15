@@ -554,7 +554,14 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
       final company  = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
       final template = await ref.read(printTemplateProvider('STOCK_COUNT').future);
       final document = _buildPrintDocument(company);
-      await PrintEngine.printDocument(template: template, document: document, filename: '$_countNo.pdf');
+      final session = ref.read(sessionProvider);
+      await PrintEngine.printDocument(
+        template: template,
+        document: document,
+        filename: '$_countNo.pdf',
+        printedByName: session?.fullName,
+        printedOn: DateTime.now(),
+      );
     } catch (e, st) {
       AppLogger.error('StockCountPrint', e, st);
       if (mounted) _showSnack(ErrorPresenter.format(e, action: 'print this stock count'), color: AppColors.negative);
