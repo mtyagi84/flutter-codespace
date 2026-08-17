@@ -5,7 +5,6 @@ import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
 import 'package:sakal/core/widgets/sakal_autocomplete.dart';
-import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/inventory/domain/repositories/material_requisition_repository.dart';
 import 'package:sakal/features/inventory/presentation/providers/material_requisition_providers.dart';
 import 'package:sakal/features/inventory/presentation/screens/material_requisition_entry_screen.dart';
@@ -231,11 +230,6 @@ void main() {
   // options -> tap one) — this extends the pattern proven on Stock Transfer
   // Request's own pilot group to this screen's Product field.
   group('Product autocomplete interaction (real search + select)', () {
-    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
-          of: find.ancestor(of: _findFieldLabel(label), matching: find.byType(SakalFieldCard)).first,
-          matching: matcher(),
-        );
-
     void stubProductSearch() {
       when(() => mockRepo.getProductsForPicker(
             clientId: any(named: 'clientId'),
