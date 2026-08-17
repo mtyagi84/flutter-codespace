@@ -168,7 +168,7 @@ mixin ScreenHeaderMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> im
     // place.
     final controller = _headerController;
     final owner = this;
-    Future.delayed(screenHeaderClearDelay, () {
+    void doClear() {
       if (identical(_screenHeaderOwner, owner)) {
         AppLogger.info('ScreenHeader', 'CLEAR (dispose, still owner) by $runtimeType');
         _screenHeaderOwner = null;
@@ -176,7 +176,24 @@ mixin ScreenHeaderMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> im
       } else {
         AppLogger.info('ScreenHeader', 'dispose, NOT owner ($runtimeType) — leaving header as-is');
       }
-    });
+    }
+    // Duration.zero is a deliberate escape hatch, used only by
+    // test/flutter_test_config.dart: widget tests run inside flutter_test's
+    // FakeAsync zone, where virtual time only advances when a test
+    // explicitly pumps for a duration — ANY positive Future.delayed
+    // (even 1ms) still counts as a "pending timer" and fails the test
+    // unless that exact test's own final pump happens to advance past it.
+    // Shortening the duration alone (tried first) does not fix this — the
+    // only reliable fix is to never create a Timer at all in test mode.
+    // Calling doClear() synchronously here is safe specifically because
+    // the race this delay protects against (a real GoRouter page
+    // transition, spanning multiple frames) does not exist in an isolated
+    // widget test's teardown.
+    if (screenHeaderClearDelay == Duration.zero) {
+      doClear();
+    } else {
+      Future.delayed(screenHeaderClearDelay, doClear);
+    }
     super.dispose();
   }
 

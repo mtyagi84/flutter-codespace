@@ -19,12 +19,23 @@ import 'package:sakal/core/layout/screen_header.dart';
 /// the tell that it's a shared-infrastructure issue, not a one-off bug in
 /// any particular screen.
 ///
-/// Shortening the delay to near-zero here (rather than adding an explicit
-/// long pump to every affected test) means most tests' own EXISTING final
-/// pump (already non-zero in this codebase's convention — see the
-/// "Widget-test DioClient gotchas" pattern) flushes it for free, with zero
-/// per-test changes needed.
+/// First attempt: shortened the delay to 1ms here. That was insufficient —
+/// confirmed live via a failing test's own stack trace, which showed the
+/// scheduled Timer's duration WAS correctly 1ms, yet the test still failed
+/// with "Pending timers". Root cause: `flutter_test` runs each test inside
+/// `fake_async`'s `FakeAsync` zone, where virtual time only advances when
+/// the test explicitly pumps for a duration — a bare `tester.pump()` (zero
+/// duration) never advances the fake clock, so even a 1ms `Future.delayed`
+/// remains "pending" at teardown unless that exact test happens to pump
+/// past it. Shortening the duration doesn't change that; only avoiding the
+/// Timer entirely does.
+///
+/// `Duration.zero` is a deliberate signal `ScreenHeaderMixin.dispose()`
+/// checks for (see that method's own comment) to skip `Future.delayed`
+/// entirely in test mode and clear the header synchronously instead — no
+/// Timer is ever created, so there is nothing left pending at teardown,
+/// regardless of what any individual test's own pump calls do.
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
-  screenHeaderClearDelay = const Duration(milliseconds: 1);
+  screenHeaderClearDelay = Duration.zero;
   await testMain();
 }
