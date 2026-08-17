@@ -31,6 +31,12 @@ import 'report_repository.dart';
 /// real large export proves it's needed — not attempted here without a
 /// local Flutter toolchain to verify the isolate boundary against.
 class ReportPdfExport {
+  // Brand navy (AppColors.primary, #1B3A6B) — same accent color the
+  // transaction-document Print Engine uses for its own letterhead/table
+  // styling (pdf_canvas_renderer.dart), applied here so every PDF in the
+  // app (report or document) reads as one consistent design.
+  static final _navy = PdfColor.fromHex('#1B3A6B');
+
   static Future<void> export({
     required ReportDefinition definition,
     required List<ReportColumn> columns,
@@ -92,7 +98,10 @@ class ReportPdfExport {
               headers: visibleColumns.map((c) => c.label).toList(),
               data: dataRows,
               headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9, color: PdfColors.white),
-              headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
+              // Brand navy, matching the transaction-document Print Engine's
+              // own table header tint (pdf_canvas_renderer.dart) — was
+              // generic blueGrey800 before this polish pass.
+              headerDecoration: pw.BoxDecoration(color: _navy),
               cellStyle: const pw.TextStyle(fontSize: 8),
               // Proportional to each column's own on-screen default_width,
               // so the printed table's column ratios roughly match what the
@@ -146,11 +155,12 @@ class ReportPdfExport {
     // document Print Engine's canvas renderer reads — not a size local to
     // this report header.
     final detailsColumn = pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-      pw.Text('${company['company_name'] ?? ''}', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+      pw.Text('${company['company_name'] ?? ''}',
+          style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: _navy)),
       if ('${company['address'] ?? ''}'.isNotEmpty)
-        pw.Text('${company['address']}', style: const pw.TextStyle(fontSize: 8)),
+        pw.Text('${company['address']}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
       if ('${company['city_name'] ?? ''}'.isNotEmpty)
-        pw.Text('${company['city_name']}', style: const pw.TextStyle(fontSize: 8)),
+        pw.Text('${company['city_name']}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
     ]);
 
     pw.Widget leftBlock = detailsColumn;
@@ -169,7 +179,7 @@ class ReportPdfExport {
     }
 
     final rightBlock = pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-      pw.Text(reportName, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+      pw.Text(reportName, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: _navy)),
       // Filter/parameter line only on page 1 — saves space on longer
       // reports; the company block + report heading still repeat on
       // every page (a normal letterhead), just not the parameter list.
@@ -190,7 +200,10 @@ class ReportPdfExport {
         pw.Expanded(child: pw.Align(alignment: pw.Alignment.topRight, child: rightBlock)),
       ]),
       pw.SizedBox(height: 6),
-      pw.Divider(thickness: 1, color: PdfColors.grey400),
+      // Thicker navy accent rule, matching the transaction-document Print
+      // Engine's own letterhead divider (pdf_canvas_renderer.dart) — was a
+      // thin plain grey line before this polish pass.
+      pw.Divider(thickness: 1.4, color: _navy),
       pw.SizedBox(height: 6),
     ]);
   }
