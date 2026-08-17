@@ -416,11 +416,18 @@ void main() {
       const expectedOption = 'SI-001 — [CUS01] Customer One · Main Warehouse · Pending 10.00';
       expect(find.text(expectedOption), findsOneWidget);
 
-      // tester.tap(find.text(...)) taps the center of the raw option text,
-      // which can land outside its own hit area inside the overlay's
-      // InkWell (Flutter warns "would not hit test", and onSelected never
-      // fires) — target the InkWell itself instead.
-      await tester.tap(find.ancestor(of: find.text(expectedOption), matching: find.byType(InkWell)).first);
+      // tester.tap(find.text(...)) / tapping the InkWell ancestor both hit
+      // the same "would not hit test" warning — the overlay option sits
+      // under a still-settling opacity/ink transition even after
+      // pumpAndSettle(). ensureVisible + an explicit extra settle pump
+      // first, and warnIfMissed:false since the pointer event is still
+      // delivered at the computed offset regardless of the warning (same
+      // workaround already proven for a SegmentedButton tap in
+      // sales_invoice_entry_screen_test.dart's own AGAINST_QUOTATION test).
+      final invoiceOption = find.ancestor(of: find.text(expectedOption), matching: find.byType(InkWell)).first;
+      await tester.ensureVisible(invoiceOption);
+      await tester.pump();
+      await tester.tap(invoiceOption, warnIfMissed: false);
       // invoiceField carries key: ValueKey(_invoiceNo ?? '') — selecting
       // sets _invoiceNo, forcing a remount.
       await tester.pumpAndSettle();

@@ -287,7 +287,11 @@ void main() {
       // `_onProductSelected` will also set as the row's productDisplay.
       expect(find.text('[WID-A] Widget A'), findsOneWidget);
 
-      await tester.tap(find.text('[WID-A] Widget A'));
+      // tester.tap(find.text(...)) taps the center of the raw option text,
+      // which can land outside its own hit area inside the overlay's
+      // InkWell (Flutter warns "would not hit test", and onSelected never
+      // fires) — target the InkWell itself instead.
+      await tester.tap(find.ancestor(of: find.text('[WID-A] Widget A'), matching: find.byType(InkWell)).first);
       // The field's own `key: ValueKey('${row.hashCode}-${row.productDisplay}')`
       // forces a remount once productDisplay changes — pumpAndSettle lets
       // that remount (and the Unit field's own rebuild) finish.

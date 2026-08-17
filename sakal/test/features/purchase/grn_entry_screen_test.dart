@@ -480,37 +480,50 @@ void main() {
       await tester.tap(find.text('Add Item'));
       await tester.pumpAndSettle();
 
-      // Before any product is picked, the fresh line's own title falls back
-      // to 'New Line' (`'${idx+1}. ${row.productDisplay.isEmpty ? 'New Line' : row.productDisplay}'`).
-      expect(find.text('1. New Line'), findsOneWidget);
+      // The fresh line's own '${idx+1}. New Line' fallback title only
+      // renders on SakalLineItemCard, which is mobile-only (see CLAUDE.md's
+      // "Line-items grid" pattern) — nothing to check for at this test's
+      // default (non-mobile) viewport.
 
       // Can't use fieldInCard() here: the per-line "Product" SakalFieldCard
       // label is gated `showLabel: isMobile` and isn't built at all at this
-      // test's (non-mobile) viewport. The Supplier field also uses
-      // SakalAutocomplete<Map<String, dynamic>> (same generic instantiation),
-      // so scope to the line card specifically rather than find.byType alone.
-      final productField = find.descendant(
-        of: find.descendant(of: find.byType(SakalLineItemCard), matching: find.byType(SakalAutocomplete<Map<String, dynamic>>)),
-        matching: find.byType(TextFormField),
-      );
+      // test's (non-mobile) viewport. Desktop has no per-line
+      // SakalLineItemCard to scope into either — it's mobile-only, so at
+      // this viewport it's just a plain Container row with no
+      // distinguishing ancestor type. The Supplier field also uses
+      // SakalAutocomplete<Map<String, dynamic>> and is built earlier in
+      // the tree (header, above the Lines section) — .last reliably
+      // resolves to this freshly-added line's Product field.
+      final productField = find.descendant(of: find.byType(SakalAutocomplete<Map<String, dynamic>>), matching: find.byType(TextFormField)).last;
       await tester.enterText(productField, 'Widget');
       await tester.pumpAndSettle();
 
       expect(find.text('[WID-A] Widget A'), findsOneWidget);
 
-      await tester.tap(find.text('[WID-A] Widget A'));
+      // tester.tap(find.text(...)) taps the center of the raw option text,
+      // which can land outside its own hit area inside the overlay's
+      // InkWell (Flutter warns "would not hit test", and onSelected never
+      // fires) — target the InkWell itself instead.
+      await tester.tap(find.ancestor(of: find.text('[WID-A] Widget A'), matching: find.byType(InkWell)).first);
       await tester.pumpAndSettle();
 
-      // _onProductSelected sets row.productId/productDisplay (the
-      // SakalLineItemCard title is a plain Text, not FormField-family, so it
-      // updates on every rebuild with no remount needed) and
+      // _onProductSelected sets row.productId/productDisplay — the
+      // SakalLineItemCard title text ('1. [WID-A] Widget A') only renders
+      // on mobile though, so at this (desktop) viewport the field's own
+      // displayed value is the observable proof the selection landed.
+      expect(find.text('[WID-A] Widget A'), findsOneWidget);
       // row.rateCtrl.text from last_purchase_cost — the Rate field is
       // TextEditingController-bound (not `initialValue`-driven like a
-      // DropdownButtonFormField), so it also updates live with no key/remount
-      // gotcha. Both are directly observable without saving and inspecting
-      // a payload.
-      expect(find.text('1. [WID-A] Widget A'), findsOneWidget);
-      final rateField = fieldInCard('Rate', () => find.byType(TextFormField));
+      // DropdownButtonFormField), so it updates live with no key/remount
+      // gotcha. Can't use fieldInCard('Rate', ...) — its own per-line label
+      // is gated `showLabel: isMobile`. Scope by position within the
+      // line's own Row instead: barcode is off by default and UOM/Conv.
+      // Factor aren't TextFormFields (Dropdown / readOnly respectively),
+      // so the TextFormField order is Product, Qty Pack, Qty Loose, Rate
+      // (showLooseQty is true per testSession()'s own default).
+      final productAutocomplete = find.byType(SakalAutocomplete<Map<String, dynamic>>).last;
+      final lineRow = find.ancestor(of: productAutocomplete, matching: find.byType(Row)).first;
+      final rateField = find.descendant(of: lineRow, matching: find.byType(TextFormField)).at(3);
       expect(tester.widget<TextFormField>(rateField).controller!.text, '25.5');
     });
   });

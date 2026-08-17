@@ -205,7 +205,8 @@ void main() {
       // and isn't built at this viewport either — check the desktop table
       // header's own "Product" label instead (no " *" suffix there —
       // that's a SakalFieldCard-only decoration).
-      expect(find.text('Product'), findsOneWidget);
+      // SakalTableHeaderBar.label() uppercases its own text internally.
+      expect(find.text('PRODUCT'), findsOneWidget);
 
       // Charges: always present and always editable for a new DIRECT
       // invoice, regardless of whether any charge types are configured —
@@ -600,7 +601,8 @@ void main() {
       // `showLabel: isMobile` and isn't built at this viewport either —
       // check the desktop table header's own "Product" label instead (no
       // " *" suffix there — that's a SakalFieldCard-only decoration).
-      expect(find.text('Product'), findsOneWidget);
+      // SakalTableHeaderBar.label() uppercases its own text internally.
+      expect(find.text('PRODUCT'), findsOneWidget);
 
       // Can't use fieldInCard() here either, for the same reason — the
       // per-line Product field's own label isn't built at this viewport,
@@ -672,17 +674,6 @@ void main() {
         );
 
     testWidgets('picking a quotation from the dialog switches to CREDIT and consolidates its line, frozen and read-only', (tester) async {
-      // This test's later assertions use fieldInCard() to scope per-line
-      // Product/Quantity/Tax/Rate values (some, like '—', aren't unique
-      // plain text on screen) — those per-line SakalFieldCard labels are
-      // gated `showLabel: isMobile` and need a genuinely mobile viewport to
-      // be built at all. Safe here (unlike the DIRECT+CREDIT interaction
-      // test above) because no per-line autocomplete typing happens after
-      // the quotation loads — the line is frozen/read-only by that point.
-      tester.view.physicalSize = const Size(400, 1600);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
-
       when(() => mockRepo.getInvoiceableQuotations(
             clientId: any(named: 'clientId'),
             companyId: any(named: 'companyId'),
@@ -779,6 +770,20 @@ void main() {
       expect(find.text('SQ-001'), findsOneWidget);
       expect(find.text('[CUS01] Customer One'), findsOneWidget); // read-only Customer field
       expect(find.text('USD'), findsOneWidget); // read-only Currency field
+
+      // The assertions below use fieldInCard() to scope per-line
+      // Product/Quantity/Tax/Rate values (some, like '—', aren't unique
+      // plain text on screen) — those per-line SakalFieldCard labels are
+      // gated `showLabel: isMobile` and need a genuinely mobile viewport to
+      // be built at all. Switched here, AFTER the SegmentedButton/dialog
+      // interaction above (which is calibrated for the default ~800px test
+      // width — see that step's own comment), rather than at the top of
+      // the test: no per-line autocomplete typing happens after the
+      // quotation loads, so nothing above this point needs desktop width.
+      tester.view.physicalSize = const Size(400, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpAndSettle();
 
       // Line — re-derived server-side from the source quotation, copied
       // verbatim: product/qty land correctly, and Rate is genuinely

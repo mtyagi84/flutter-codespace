@@ -143,7 +143,8 @@ void main() {
       // — at this test's default (non-mobile) viewport, the per-line
       // SakalFieldCard label is never built at all, so check the desktop
       // table header's own "Account" label instead.
-      expect(find.text('Account'), findsOneWidget);
+      // SakalTableHeaderBar.label() uppercases its own text internally.
+      expect(find.text('ACCOUNT'), findsOneWidget);
       // 'Amount' (editable) + the three readonly 'Base Amount'/'Local
       // Amount'/'Party Amount' fields all contain the substring "AMOUNT".
       expect(_findFieldLabel('AMOUNT'), findsNWidgets(4));

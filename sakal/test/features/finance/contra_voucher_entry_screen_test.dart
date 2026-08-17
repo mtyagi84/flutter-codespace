@@ -144,10 +144,15 @@ void main() {
       // tester.tap(find.text('Save Draft')) taps the CENTER of the raw text
       // label, not the actual ElevatedButton it sits inside — in the AppBar
       // actions row that offset can land outside the button's real hit
-      // area (Flutter warns "would not hit test"), silently never firing
-      // onPressed. Target the ElevatedButton itself instead, which always
-      // hit-tests correctly against its own bounds.
-      await tester.tap(find.widgetWithText(ElevatedButton, 'Save Draft'));
+      // area. Targeting the ElevatedButton itself still hits the same
+      // "would not hit test" warning (a still-settling transition even
+      // after pumpAndSettle()) — ensureVisible + an explicit extra settle
+      // pump first, and warnIfMissed:false since the pointer event is
+      // still delivered at the computed offset regardless of the warning.
+      final saveButton = find.widgetWithText(ElevatedButton, 'Save Draft');
+      await tester.ensureVisible(saveButton);
+      await tester.pump();
+      await tester.tap(saveButton, warnIfMissed: false);
       await _pumpBriefly(tester);
 
       // _saveDraft() checks From/To accounts first, before amounts/gap.

@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
-import 'package:sakal/core/widgets/sakal_field_card.dart';
+import 'package:sakal/core/widgets/sakal_autocomplete.dart';
 import 'package:sakal/features/inventory/domain/repositories/opening_stock_repository.dart';
 import 'package:sakal/features/inventory/presentation/providers/opening_stock_providers.dart';
 import 'package:sakal/features/inventory/presentation/screens/opening_stock_entry_screen.dart';
@@ -224,11 +224,6 @@ void main() {
   // untracked (tracking_type: NONE) product so no batch/serial/expiry entry
   // is ever triggered — that's a separate, out-of-scope work stream.
   group('Product autocomplete interaction (real search + select)', () {
-    Finder fieldInCard(String label, Finder Function() matcher) => find.descendant(
-          of: find.ancestor(of: _findFieldLabel(label), matching: find.byType(SakalFieldCard)).first,
-          matching: matcher(),
-        );
-
     void stubProductSearch() {
       when(() => mockRepo.getProductsForPicker(
             clientId: any(named: 'clientId'),
@@ -278,7 +273,11 @@ void main() {
       // row.isBatchTracked is true), so this is unambiguous as-is.
       expect(find.text('—'), findsOneWidget);
 
-      final productField = fieldInCard('Product', () => find.byType(TextFormField));
+      // Can't use fieldInCard() here: the per-line "Product" label is
+      // gated `showLabel: isMobile` and isn't built at this (non-mobile)
+      // viewport. Product is the only SakalAutocomplete on a
+      // freshly-added blank line.
+      final productField = find.descendant(of: find.byType(SakalAutocomplete<Map<String, dynamic>>), matching: find.byType(TextFormField));
       await tester.enterText(productField, 'Widget');
       // Lets the async optionsBuilder -> getProductsForPicker(search:
       // 'Widget') resolve and RawAutocomplete's OverlayEntry render the
@@ -291,7 +290,11 @@ void main() {
       // `_onProductSelected` will also set as the row's productDisplay.
       expect(find.text('[WID-A] Widget A'), findsOneWidget);
 
-      await tester.tap(find.text('[WID-A] Widget A'));
+      // tester.tap(find.text(...)) taps the center of the raw option text,
+      // which can land outside its own hit area inside the overlay's
+      // InkWell (Flutter warns "would not hit test", and onSelected never
+      // fires) — target the InkWell itself instead.
+      await tester.tap(find.ancestor(of: find.text('[WID-A] Widget A'), matching: find.byType(InkWell)).first);
       // The field's own `key: ValueKey('${row.hashCode}-${row.productDisplay}')`
       // forces a remount once productDisplay changes — pumpAndSettle lets
       // that remount (and the Unit field's own rebuild) finish.
@@ -333,23 +336,38 @@ void main() {
       await tester.tap(find.text('Add Line'));
       await tester.pumpAndSettle();
 
-      final productField = fieldInCard('Product', () => find.byType(TextFormField));
+      // Can't use fieldInCard() here or below — per-line labels are gated
+      // `showLabel: isMobile` and aren't built at this (non-mobile)
+      // viewport. Product is the only SakalAutocomplete on a
+      // freshly-added blank line; the line's own Row (its immediate
+      // ancestor) then scopes the remaining fields by position — barcode
+      // isn't part of this screen's line row at all, so the TextFormField
+      // order within it is Product, Qty Pack, Qty Loose, Unit Cost,
+      // Remarks (showLooseQty is true per testSession()'s own default).
+      final productField = find.descendant(of: find.byType(SakalAutocomplete<Map<String, dynamic>>), matching: find.byType(TextFormField));
       await tester.enterText(productField, 'Widget');
       await tester.pumpAndSettle();
-      await tester.tap(find.text('[WID-A] Widget A'));
+      // tester.tap(find.text(...)) taps the center of the raw option text,
+      // which can land outside its own hit area inside the overlay's
+      // InkWell (Flutter warns "would not hit test", and onSelected never
+      // fires) — target the InkWell itself instead.
+      await tester.tap(find.ancestor(of: find.text('[WID-A] Widget A'), matching: find.byType(InkWell)).first);
       await tester.pumpAndSettle();
+
+      final lineRow = find.ancestor(of: find.byType(SakalAutocomplete<Map<String, dynamic>>), matching: find.byType(Row)).first;
+      final lineTextFields = find.descendant(of: lineRow, matching: find.byType(TextFormField));
 
       // testSession()'s UserSession defaults qtyEntryMode to
       // 'PACK_AND_LOOSE' (not 'PACK_ONLY'), so showLooseQty is true and the
       // field's label is 'Qty Pack', never the bare 'Quantity' fallback.
-      final qtyField = fieldInCard('Qty Pack', () => find.byType(TextFormField));
+      final qtyField = lineTextFields.at(1);
       await tester.enterText(qtyField, '5');
       await tester.pump();
 
       // Unlike every other module in this rollout, Opening Stock requires a
       // user-entered unit cost per line (it's the one document establishing
       // cost for the first time) — _saveDraft blocks with no cost typed.
-      final unitCostField = fieldInCard('Unit Cost', () => find.byType(TextFormField));
+      final unitCostField = lineTextFields.at(3);
       await tester.enterText(unitCostField, '25.5');
       await tester.pump();
 
