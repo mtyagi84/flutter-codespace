@@ -1,6 +1,20 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../utils/app_logger.dart';
+
+/// Delay before [ScreenHeaderMixin.dispose] clears an unclaimed header —
+/// see that method's own comment for why 400ms was chosen in production
+/// (giving a newly-navigated-to screen time to claim ownership first).
+/// Widget tests override this to a near-zero value via
+/// `test/flutter_test_config.dart` — a real, pending `Future.delayed`
+/// left outstanding when a test ends fails that test ("pending timer"),
+/// and 604 widget tests across every screen using this mixin all
+/// disposing one at test teardown made this a real, live regression
+/// (247/604 failing) the day this was introduced, not a hypothetical one.
+/// Production code must never set this itself.
+@visibleForTesting
+Duration screenHeaderClearDelay = const Duration(milliseconds: 400);
 
 /// Data a screen supplies to the shared TopBar instead of building its own
 /// separate title block as body content — see the "Screen header" mandatory
@@ -155,7 +169,7 @@ mixin ScreenHeaderMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> im
     // place.
     final controller = _headerController;
     final owner = this;
-    Future.delayed(const Duration(milliseconds: 400), () {
+    Future.delayed(screenHeaderClearDelay, () {
       if (identical(_screenHeaderOwner, owner)) {
         AppLogger.info('ScreenHeader', 'CLEAR (dispose, still owner) by $runtimeType');
         _screenHeaderOwner = null;
