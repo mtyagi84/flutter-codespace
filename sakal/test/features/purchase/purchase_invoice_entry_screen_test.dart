@@ -61,6 +61,14 @@ void main() {
 
   setUp(() {
     mockRepo = MockPurchaseInvoiceRepository();
+    // _init() also calls getUsers() unconditionally to resolve signature
+    // names — an unstubbed Mock call throws, silently caught by _init()'s
+    // own try/catch, which broke every resume-flow assertion depending on
+    // post-load state (e.g. the header title).
+    when(() => mockRepo.getUsers(
+          clientId: any(named: 'clientId'),
+          companyId: any(named: 'companyId'),
+        )).thenAnswer((_) async => []);
     // Every test reaches _init(), which always calls
     // getSuppliersWithPendingGrns() first regardless of new-vs-edit mode.
     when(() => mockRepo.getSuppliersWithPendingGrns(
@@ -340,7 +348,11 @@ void main() {
 
       expect(find.text('[SUP-001] Test Supplier'), findsOneWidget);
 
-      await tester.tap(find.text('[SUP-001] Test Supplier'));
+      // tester.tap(find.text(...)) taps the center of the raw option text,
+      // which can land outside its own hit area inside the overlay's
+      // InkWell (Flutter warns "would not hit test", and onSelected never
+      // fires) — target the InkWell itself instead.
+      await tester.tap(find.ancestor(of: find.text('[SUP-001] Test Supplier'), matching: find.byType(InkWell)).first);
       // supplierField carries `key: ValueKey(_supplierDisplay ?? '')` —
       // selecting changes _supplierDisplay, forcing a remount.
       await tester.pumpAndSettle();

@@ -406,7 +406,11 @@ void main() {
 
       expect(find.text('[CUS01] Customer One'), findsOneWidget);
 
-      await tester.tap(find.text('[CUS01] Customer One'));
+      // tester.tap(find.text(...)) taps the center of the raw option text,
+      // which can land outside its own hit area inside the overlay's
+      // InkWell (Flutter warns "would not hit test", and onSelected never
+      // fires) — target the InkWell itself instead.
+      await tester.tap(find.ancestor(of: find.text('[CUS01] Customer One'), matching: find.byType(InkWell)).first);
       // _onCustomerSelected -> _loadPendingBillsAndRestore() -> a further
       // async ds.getPendingBills() call plus two getExchangeRate lookups
       // (EUR->USD/EUR->FC, already stubbed by stubBaseline()) —

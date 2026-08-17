@@ -443,7 +443,11 @@ void main() {
       const expectedOption = 'SI-001 — [CUS01] Customer One';
       expect(find.text(expectedOption), findsOneWidget);
 
-      await tester.tap(find.text(expectedOption));
+      // tester.tap(find.text(...)) taps the center of the raw option text,
+      // which can land outside its own hit area inside the overlay's
+      // InkWell (Flutter warns "would not hit test", and onSelected never
+      // fires) — target the InkWell itself instead.
+      await tester.tap(find.ancestor(of: find.text(expectedOption), matching: find.byType(InkWell)).first);
       // invoiceField carries key: ValueKey(_invoiceNo ?? '') — selecting
       // sets _invoiceNo, forcing a remount.
       await tester.pumpAndSettle();

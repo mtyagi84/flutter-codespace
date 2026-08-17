@@ -43,6 +43,14 @@ void main() {
 
   setUp(() {
     mockRepo = MockMaterialIssueRepository();
+    // _init() calls getUsersForAutocomplete() unconditionally to resolve
+    // signature names — an unstubbed Mock call throws, silently caught by
+    // _init()'s own try/catch, which broke every resume-flow assertion
+    // depending on post-load state (e.g. the header title).
+    when(() => mockRepo.getUsersForAutocomplete(
+          clientId: any(named: 'clientId'),
+          companyId: any(named: 'companyId'),
+        )).thenAnswer((_) async => []);
   });
 
   List<Override> overrides() => [

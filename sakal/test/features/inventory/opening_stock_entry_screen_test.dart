@@ -51,6 +51,17 @@ void main() {
           {'id': 'loc-001', 'location_name': 'Main Warehouse'},
           {'id': 'loc-002', 'location_name': 'Branch Store'},
         ]);
+    // _init() calls getUsers() unconditionally (before checking
+    // widget.editOpeningNo) to resolve created_by/approved_by signature
+    // names — an unstubbed Mock call throws MissingStubError, which was
+    // silently caught by _init()'s own try/catch, leaving _openingNo null
+    // forever. Invisible on the "New (blank)" tests (null is the correct
+    // value there too) but broke every "resume flow" assertion that the
+    // header title actually update.
+    when(() => mockRepo.getUsers(
+          clientId: any(named: 'clientId'),
+          companyId: any(named: 'companyId'),
+        )).thenAnswer((_) async => []);
   });
 
   List<Override> overrides() => [

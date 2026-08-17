@@ -199,7 +199,16 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _init();
-      _fromAccountFocusNode.requestFocus();
+      // Only auto-focus on a brand-new voucher — firing unconditionally
+      // also grabbed focus while resuming an existing DRAFT, and since the
+      // field's own key changes (key: ValueKey(accountDisplay)) once
+      // _init() loads a non-empty From account, the newly-mounted,
+      // now-focused FinanceAccountPicker opened its own options overlay
+      // self-matching that same account — a real, user-visible "why did
+      // the account picker just pop open on load" bug, caught by the
+      // resume-flow test finding the account's display text rendered
+      // twice (its own field value + the spurious overlay option).
+      if (widget.editTransNo == null) _fromAccountFocusNode.requestFocus();
     });
   }
 

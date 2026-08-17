@@ -141,7 +141,13 @@ void main() {
       await pumpApp(tester, const ContraVoucherEntryScreen(), overrides: overrides(), session: testSession());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Save Draft'));
+      // tester.tap(find.text('Save Draft')) taps the CENTER of the raw text
+      // label, not the actual ElevatedButton it sits inside — in the AppBar
+      // actions row that offset can land outside the button's real hit
+      // area (Flutter warns "would not hit test"), silently never firing
+      // onPressed. Target the ElevatedButton itself instead, which always
+      // hit-tests correctly against its own bounds.
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Save Draft'));
       await _pumpBriefly(tester);
 
       // _saveDraft() checks From/To accounts first, before amounts/gap.
@@ -289,7 +295,9 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.enterText(find.text('Original remarks'), 'Updated remarks');
-      await tester.tap(find.text('Save Draft'));
+      // See the "blocks save" test above for why this targets the
+      // ElevatedButton itself rather than its text label.
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Save Draft'));
       await _pumpBriefly(tester);
 
       final captured = verify(() => mockRepo.save(

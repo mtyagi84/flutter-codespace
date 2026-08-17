@@ -77,6 +77,12 @@ void main() {
           fromDate: any(named: 'fromDate'),
           toDate: any(named: 'toDate'),
           voucherTypeCode: any(named: 'voucherTypeCode'),
+          // The screen always passes voucherTypeCodes (its own CRV/BRV/CPV/
+          // BPV set) whenever no specific type filter is picked — omitting
+          // this matcher meant every stub silently failed to intercept the
+          // real call, falling through to Mock's own null return and a
+          // runtime type error.
+          voucherTypeCodes: any(named: 'voucherTypeCodes'),
           isPosted: any(named: 'isPosted'),
           search: any(named: 'search'),
           limit: any(named: 'limit'),
@@ -97,6 +103,12 @@ void main() {
           fromDate: any(named: 'fromDate'),
           toDate: any(named: 'toDate'),
           voucherTypeCode: any(named: 'voucherTypeCode'),
+          // The screen always passes voucherTypeCodes (its own CRV/BRV/CPV/
+          // BPV set) whenever no specific type filter is picked — omitting
+          // this matcher meant every stub silently failed to intercept the
+          // real call, falling through to Mock's own null return and a
+          // runtime type error.
+          voucherTypeCodes: any(named: 'voucherTypeCodes'),
           isPosted: any(named: 'isPosted'),
           search: any(named: 'search'),
           limit: any(named: 'limit'),
@@ -145,6 +157,12 @@ void main() {
           fromDate: any(named: 'fromDate'),
           toDate: any(named: 'toDate'),
           voucherTypeCode: any(named: 'voucherTypeCode'),
+          // The screen always passes voucherTypeCodes (its own CRV/BRV/CPV/
+          // BPV set) whenever no specific type filter is picked — omitting
+          // this matcher meant every stub silently failed to intercept the
+          // real call, falling through to Mock's own null return and a
+          // runtime type error.
+          voucherTypeCodes: any(named: 'voucherTypeCodes'),
           isPosted: any(named: 'isPosted'),
           search: any(named: 'search'),
           limit: any(named: 'limit'),
@@ -165,6 +183,12 @@ void main() {
           fromDate: any(named: 'fromDate'),
           toDate: any(named: 'toDate'),
           voucherTypeCode: any(named: 'voucherTypeCode'),
+          // The screen always passes voucherTypeCodes (its own CRV/BRV/CPV/
+          // BPV set) whenever no specific type filter is picked — omitting
+          // this matcher meant every stub silently failed to intercept the
+          // real call, falling through to Mock's own null return and a
+          // runtime type error.
+          voucherTypeCodes: any(named: 'voucherTypeCodes'),
           isPosted: any(named: 'isPosted'),
           search: any(named: 'search'),
           limit: any(named: 'limit'),

@@ -69,6 +69,14 @@ void main() {
 
   setUp(() {
     mockRepo = MockPriceMasterRepository();
+    // _init() calls getUsers() unconditionally to resolve signature names —
+    // an unstubbed Mock call throws, silently caught by _init()'s own
+    // try/catch, which broke every resume-flow assertion depending on
+    // post-load state (e.g. the header title).
+    when(() => mockRepo.getUsers(
+          clientId: any(named: 'clientId'),
+          companyId: any(named: 'companyId'),
+        )).thenAnswer((_) async => []);
   });
 
   // Unlike every other Sales entry screen tested so far, this one is a

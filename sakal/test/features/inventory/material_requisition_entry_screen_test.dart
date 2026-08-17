@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_autocomplete.dart';
 import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/inventory/domain/repositories/material_requisition_repository.dart';
 import 'package:sakal/features/inventory/presentation/providers/material_requisition_providers.dart';
@@ -21,6 +22,7 @@ Future<void> _pumpBriefly(WidgetTester tester, {int times = 5}) async {
     await tester.pump(const Duration(milliseconds: 50));
   }
 }
+
 
 Finder _findFieldLabel(String label) => find.byWidgetPredicate(
       (w) => w is RichText && w.maxLines == 1 && w.text.toPlainText().toUpperCase().contains(label.toUpperCase()),
@@ -263,10 +265,22 @@ void main() {
       await tester.pumpAndSettle();
 
       // Before any product is picked, the Unit field reads its own
-      // documented placeholder for "nothing selected yet".
-      expect(fieldInCard('Unit', () => find.text('—')), findsOneWidget);
+      // documented placeholder for "nothing selected yet". Can't use
+      // fieldInCard() here (or below, for Product): per-line field labels
+      // are gated `showLabel: isMobile`, so at this test's default
+      // (non-mobile) viewport the label RichText isn't built at all —
+      // there's no in-card label to anchor an ancestor lookup on. A forced
+      // mobile viewport isn't the fix either: SakalAutocomplete forks its
+      // WHOLE rendering path on isMobile (inline overlay vs. a
+      // showModalBottomSheet with its own separate search field, ignoring
+      // the outer field entirely — see journal_voucher_entry_screen_test.dart's
+      // "Mobile picker" group), which would break this test's own
+      // inline-overlay-based interaction below. '—' is unique on a fresh
+      // blank line (only the Unit field ever shows it).
+      expect(find.text('—'), findsOneWidget);
 
-      final productField = fieldInCard('Product', () => find.byType(TextFormField));
+      // Product is the only SakalAutocomplete on a freshly-added blank line.
+      final productField = find.descendant(of: find.byType(SakalAutocomplete<Map<String, dynamic>>), matching: find.byType(TextFormField));
       await tester.enterText(productField, 'Widget');
       // Lets the async optionsBuilder -> getProductsForPicker(search:
       // 'Widget') resolve and RawAutocomplete's OverlayEntry render the
@@ -289,7 +303,7 @@ void main() {
       // — the Unit field (a plain readOnly SakalFieldCard bound to
       // row.uomLabel) is the simplest observable proof the selection
       // actually landed, without needing to save and inspect a payload.
-      expect(fieldInCard('Unit', () => find.text('Piece')), findsOneWidget);
+      expect(find.text('Piece'), findsOneWidget);
       expect(find.text('[WID-A] Widget A'), findsOneWidget); // now the field's own displayed value, not an overlay option
     });
 

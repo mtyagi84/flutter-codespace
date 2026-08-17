@@ -7,6 +7,7 @@ import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
 import 'package:sakal/core/utils/app_number_format.dart';
+import 'package:sakal/core/widgets/sakal_autocomplete.dart';
 import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/sales/domain/repositories/sales_invoice_repository.dart';
 import 'package:sakal/features/sales/presentation/providers/sales_invoice_providers.dart';
@@ -199,7 +200,12 @@ void main() {
       // (Responsive.isMobile, <600px) — the default ~800px test viewport
       // hits the desktop row layout instead, which has no title text at
       // all, so assert on the always-present Product field label instead.
-      expect(_findFieldLabel('PRODUCT *'), findsOneWidget);
+      // The per-line SakalFieldCard's own "Product" label is ALSO gated
+      // `showLabel: isMobile` (redundant with the desktop table header)
+      // and isn't built at this viewport either — check the desktop table
+      // header's own "Product" label instead (no " *" suffix there —
+      // that's a SakalFieldCard-only decoration).
+      expect(find.text('Product'), findsOneWidget);
 
       // Charges: always present and always editable for a new DIRECT
       // invoice, regardless of whether any charge types are configured —
@@ -575,18 +581,38 @@ void main() {
       final customerField = fieldInCard('Customer', () => find.byType(TextFormField));
       await tester.enterText(customerField, 'Acme');
       await tester.pumpAndSettle();
-      await tester.tap(find.text('[CUS-002] Acme Corp'));
+      // tester.tap(find.text(...)) taps the center of the raw option text,
+      // which can land outside its own hit area inside the overlay's
+      // InkWell — same class of unreliable-tap issue already documented
+      // and worked around below for the Product field (Enter-to-select).
+      // A freshly-populated options list always pre-highlights index 0,
+      // and with only one matching customer in this fixture, Enter selects
+      // it directly, sidestepping the overlay hit-test entirely.
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pumpAndSettle();
 
       // Before any product is picked, the auto-seeded blank line's own
       // title falls back to 'New Line' (`row.productDisplay.isEmpty ?
       // 'New Line' : row.productDisplay`) — but only on the mobile branch
       // (Responsive.isMobile, <600px); the default ~800px test viewport
-      // hits the desktop row layout, which has no title text at all, so
-      // assert on the always-present Product field instead.
-      expect(_findFieldLabel('PRODUCT *'), findsOneWidget);
+      // hits the desktop row layout, which has no title text at all. The
+      // per-line SakalFieldCard's own "Product" label is ALSO gated
+      // `showLabel: isMobile` and isn't built at this viewport either —
+      // check the desktop table header's own "Product" label instead (no
+      // " *" suffix there — that's a SakalFieldCard-only decoration).
+      expect(find.text('Product'), findsOneWidget);
 
-      final productField = fieldInCard('Product', () => find.byType(TextFormField));
+      // Can't use fieldInCard() here either, for the same reason — the
+      // per-line Product field's own label isn't built at this viewport,
+      // so there's no in-card label to anchor an ancestor lookup on.
+      // Desktop has no per-line SakalLineItemCard to scope into either (see
+      // CLAUDE.md's "Line-items grid" pattern — that's mobile-only here,
+      // desktop is a plain Container row with no distinguishing ancestor
+      // type). Customer's own picker also uses
+      // SakalAutocomplete<Map<String, dynamic>> and is built earlier in the
+      // tree (header, above the Lines section) — .last reliably resolves
+      // to the one auto-seeded line's Product field.
+      final productField = find.descendant(of: find.byType(SakalAutocomplete<Map<String, dynamic>>), matching: find.byType(TextFormField)).last;
       await tester.enterText(productField, 'Widget');
       await tester.pumpAndSettle();
 
@@ -615,8 +641,10 @@ void main() {
       // actually rendered shows the grouped/rounded "42.50", not the raw
       // "42.5" the repository returned.
       expect(find.text('[WID-A] Widget A'), findsOneWidget);
-      final rateField = fieldInCard('Rate', () => find.byType(TextFormField));
-      expect(tester.widget<TextFormField>(rateField).controller!.text, '42.50');
+      // Can't use fieldInCard('Rate', ...) here — the per-line Rate field's
+      // own label isn't built at this (non-mobile) viewport either. The
+      // formatted value is itself the observable proof the price resolved.
+      expect(find.text('42.50'), findsOneWidget);
     });
   });
 
@@ -644,6 +672,17 @@ void main() {
         );
 
     testWidgets('picking a quotation from the dialog switches to CREDIT and consolidates its line, frozen and read-only', (tester) async {
+      // This test's later assertions use fieldInCard() to scope per-line
+      // Product/Quantity/Tax/Rate values (some, like '—', aren't unique
+      // plain text on screen) — those per-line SakalFieldCard labels are
+      // gated `showLabel: isMobile` and need a genuinely mobile viewport to
+      // be built at all. Safe here (unlike the DIRECT+CREDIT interaction
+      // test above) because no per-line autocomplete typing happens after
+      // the quotation loads — the line is frozen/read-only by that point.
+      tester.view.physicalSize = const Size(400, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
       when(() => mockRepo.getInvoiceableQuotations(
             clientId: any(named: 'clientId'),
             companyId: any(named: 'companyId'),

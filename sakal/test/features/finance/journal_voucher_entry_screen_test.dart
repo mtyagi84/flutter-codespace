@@ -10,6 +10,7 @@ import 'package:sakal/features/finance/data/models/finance_voucher_model.dart';
 import 'package:sakal/features/finance/domain/repositories/finance_voucher_repository.dart';
 import 'package:sakal/features/finance/presentation/providers/finance_voucher_providers.dart';
 import 'package:sakal/features/finance/presentation/screens/journal_voucher_entry_screen.dart';
+import 'package:sakal/features/finance/presentation/widgets/finance_account_picker.dart';
 
 import '../../test_helpers/pump_app.dart';
 
@@ -137,7 +138,12 @@ void main() {
       // always starts with exactly one blank account line, there's no
       // reachable "no lines" empty state on this screen.
       expect(find.text('Account Lines'), findsOneWidget);
-      expect(_findFieldLabel('ACCOUNT *'), findsOneWidget);
+      // Per-line field labels are gated `showLabel: isMobile` (redundant
+      // with the desktop table header, per the "Line-items grid" pattern)
+      // — at this test's default (non-mobile) viewport, the per-line
+      // SakalFieldCard label is never built at all, so check the desktop
+      // table header's own "Account" label instead.
+      expect(find.text('Account'), findsOneWidget);
       // 'Amount' (editable) + the three readonly 'Base Amount'/'Local
       // Amount'/'Party Amount' fields all contain the substring "AMOUNT".
       expect(_findFieldLabel('AMOUNT'), findsNWidgets(4));
@@ -373,8 +379,14 @@ void main() {
       await tester.pumpAndSettle();
 
       // _addLine() runs synchronously in initState() — there's always
-      // exactly one blank line to search within on a brand-new JV.
-      final accountField = fieldInCard('Account', () => find.byType(TextFormField));
+      // exactly one blank line to search within on a brand-new JV. Can't
+      // use fieldInCard() here: the per-line SakalFieldCard's own "Account"
+      // label is gated `showLabel: isMobile` (redundant with the desktop
+      // table header) and isn't built at all at this test's default
+      // (non-mobile) viewport, so there's no in-card label to anchor an
+      // ancestor lookup on. FinanceAccountPicker is unique on a
+      // brand-new (one-line) JV, so find its TextFormField directly.
+      final accountField = find.descendant(of: find.byType(FinanceAccountPicker), matching: find.byType(TextFormField));
       await tester.enterText(accountField, 'Office');
       // FinanceAccountPicker's own _search() filters the already-loaded
       // accountsProvider list synchronously — pumpAndSettle just lets
@@ -429,15 +441,26 @@ void main() {
     }
 
     testWidgets(
-        'the seed line\'s Account field auto-opens the bottom sheet via focus-chaining on load; '
-        'closing it and tapping the field manually reopens it; searching filters, and selecting closes '
-        'the sheet with the result showing in the field',
+        'tapping the seed line\'s Account field opens the bottom sheet; closing it and tapping the '
+        'field again reopens it; searching filters, and selecting closes the sheet with the result '
+        'showing in the field',
         (tester) async {
       await pumpMobile(tester);
 
-      // Focus-chaining fix: _addLine()'s own row.accountFocusNode.requestFocus()
-      // (unchanged, pre-existing code) now opens the picker sheet on mobile
-      // instead of silently doing nothing.
+      // The seed line added in initState() deliberately focuses the header
+      // Currency field first (_addLine(focusAccount: false)), so no sheet
+      // is open yet on load — only a manual tap opens it.
+      expect(find.byType(BottomSheet), findsNothing);
+
+      // Manually tapping the field (an InkWell wrapping an IgnorePointer'd
+      // TextFormField on mobile — warnIfMissed:false since the tap
+      // legitimately lands on the ancestor InkWell, not the TextFormField
+      // itself, which IgnorePointer deliberately excludes from hit-testing)
+      // opens the sheet via the same focus-chaining fix that also drives
+      // _addLine()'s own auto-open (see the "Add line" test below).
+      final accountField = fieldInCard('Account', () => find.byType(TextFormField));
+      await tester.tap(accountField, warnIfMissed: false);
+      await tester.pumpAndSettle();
       expect(find.byType(BottomSheet), findsOneWidget);
 
       // Only one line exists yet, so the "Remove line" button (which also
@@ -447,12 +470,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(BottomSheet), findsNothing);
 
-      // Manually tapping the field (an InkWell wrapping an IgnorePointer'd
-      // TextFormField on mobile — warnIfMissed:false since the tap
-      // legitimately lands on the ancestor InkWell, not the TextFormField
-      // itself, which IgnorePointer deliberately excludes from hit-testing)
-      // reopens the same sheet.
-      final accountField = fieldInCard('Account', () => find.byType(TextFormField));
+      // Tapping the field again reopens the same sheet.
       await tester.tap(accountField, warnIfMissed: false);
       await tester.pumpAndSettle();
       expect(find.byType(BottomSheet), findsOneWidget);
@@ -479,12 +497,17 @@ void main() {
         (tester) async {
       await pumpMobile(tester);
 
-      // Seed line's sheet is already open (focus-chaining) — optionBuilder
-      // (FinanceAccountPicker's 3-column optionRow: fixed-width code +
-      // Expanded name + Expanded parent) renders identically on mobile,
-      // just wrapped in the sheet's own Padding instead of the desktop
-      // overlay's Container. At 375px width this is the narrowest this
-      // layout has ever actually been exercised.
+      // The seed line's own sheet doesn't auto-open (see the tap-to-open
+      // test above) — open it manually via the same field tap.
+      final accountField = fieldInCard('Account', () => find.byType(TextFormField));
+      await tester.tap(accountField, warnIfMissed: false);
+      await tester.pumpAndSettle();
+
+      // optionBuilder (FinanceAccountPicker's 3-column optionRow:
+      // fixed-width code + Expanded name + Expanded parent) renders
+      // identically on mobile, just wrapped in the sheet's own Padding
+      // instead of the desktop overlay's Container. At 375px width this is
+      // the narrowest this layout has ever actually been exercised.
       expect(find.byType(BottomSheet), findsOneWidget);
       expect(tester.takeException(), isNull);
 
@@ -500,10 +523,8 @@ void main() {
         (tester) async {
       await pumpMobile(tester);
 
-      // Dismiss the seed line's own auto-opened sheet first — at this
-      // point there's still only one line, so Icons.close is unambiguous.
-      await tester.tap(find.byIcon(Icons.close));
-      await tester.pumpAndSettle();
+      // The seed line focuses the header Currency field on load
+      // (_addLine(focusAccount: false)), so no sheet is open yet here.
       expect(find.byType(BottomSheet), findsNothing);
 
       // The real "Add line" button _addLine() uses in production — not a

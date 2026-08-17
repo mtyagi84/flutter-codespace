@@ -6,7 +6,9 @@ import 'package:sakal/core/config/master_type_keys.dart';
 import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/providers/master_cache_providers.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_autocomplete.dart';
 import 'package:sakal/core/widgets/sakal_field_card.dart';
+import 'package:sakal/core/widgets/sakal_line_item_card.dart';
 import 'package:sakal/features/purchase/data/models/grn_charge_line_model.dart';
 import 'package:sakal/features/purchase/data/models/grn_line_model.dart';
 import 'package:sakal/features/purchase/data/models/grn_model.dart';
@@ -64,6 +66,14 @@ void main() {
 
   setUp(() {
     mockRepo = MockGrnRepository();
+    // _init() also calls getUsers() unconditionally to resolve signature
+    // names — an unstubbed Mock call throws, silently caught by _init()'s
+    // own try/catch, which broke every resume-flow assertion depending on
+    // post-load state (e.g. the header title).
+    when(() => mockRepo.getUsers(
+          clientId: any(named: 'clientId'),
+          companyId: any(named: 'companyId'),
+        )).thenAnswer((_) async => []);
     // Every test reaches _init(), which always fetches this fixed set of
     // reference data regardless of new-vs-edit mode.
     when(() => mockRepo.getProductsForPicker(
@@ -458,7 +468,12 @@ void main() {
             locationId: any(named: 'locationId'),
           )).thenAnswer((_) async => null);
 
-      _useMobileViewport(tester);
+      // Deliberately NOT _useMobileViewport(tester) here: SakalAutocomplete
+      // forks its whole rendering path on isMobile (inline overlay vs. a
+      // showModalBottomSheet with its own separate search field, ignoring
+      // the outer field entirely — see journal_voucher_entry_screen_test.dart's
+      // "Mobile picker" group), which would break this test's own
+      // inline-overlay-based interaction below.
       await pumpApp(tester, const GrnEntryScreen(), overrides: overrides(), session: testSession());
       await tester.pumpAndSettle();
 
@@ -469,7 +484,15 @@ void main() {
       // to 'New Line' (`'${idx+1}. ${row.productDisplay.isEmpty ? 'New Line' : row.productDisplay}'`).
       expect(find.text('1. New Line'), findsOneWidget);
 
-      final productField = fieldInCard('Product', () => find.byType(TextFormField));
+      // Can't use fieldInCard() here: the per-line "Product" SakalFieldCard
+      // label is gated `showLabel: isMobile` and isn't built at all at this
+      // test's (non-mobile) viewport. The Supplier field also uses
+      // SakalAutocomplete<Map<String, dynamic>> (same generic instantiation),
+      // so scope to the line card specifically rather than find.byType alone.
+      final productField = find.descendant(
+        of: find.descendant(of: find.byType(SakalLineItemCard), matching: find.byType(SakalAutocomplete<Map<String, dynamic>>)),
+        matching: find.byType(TextFormField),
+      );
       await tester.enterText(productField, 'Widget');
       await tester.pumpAndSettle();
 

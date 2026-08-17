@@ -88,6 +88,13 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
+      // A brand-new voucher auto-focuses the Supplier field on load, and
+      // FinanceAccountPicker's own desktopDialogMode auto-opens a picker
+      // dialog on focus (desktop too, not just mobile) — dismiss it first
+      // so the rest of this test verifies the settled blank-form state.
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+
       final header = _readHeader(tester, find.byType(ExpenseVoucherEntryScreen));
       expect(header?.title, 'New Expense Voucher');
       expect(header?.badgeText, 'Draft');
@@ -127,7 +134,17 @@ void main() {
       await pumpApp(tester, const ExpenseVoucherEntryScreen(), overrides: overrides(), session: testSession());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Save Draft'));
+      // Dismiss the auto-opened Supplier picker dialog first (see the
+      // "renders the blank form" test above) — while open it sits as a
+      // modal above the rest of the form, including Save Draft.
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+
+      // tester.tap(find.text('Save Draft')) taps the center of the raw
+      // text label, which can land outside the AppBar action button's real
+      // hit area — target the ElevatedButton itself instead (same fix as
+      // contra_voucher_entry_screen_test.dart).
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Save Draft'));
       await _pumpBriefly(tester);
 
       // _saveDraft() checks the supplier first, before currency/bill/lines.
@@ -245,7 +262,11 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.enterText(find.text('Original remarks'), 'Updated remarks');
-      await tester.tap(find.text('Save Draft'));
+      // tester.tap(find.text('Save Draft')) taps the center of the raw
+      // text label, which can land outside the AppBar action button's real
+      // hit area — target the ElevatedButton itself instead (same fix as
+      // contra_voucher_entry_screen_test.dart).
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Save Draft'));
       await _pumpBriefly(tester);
 
       final captured = verify(() => mockRepo.save(

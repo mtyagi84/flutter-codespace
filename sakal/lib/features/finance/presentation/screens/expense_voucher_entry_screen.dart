@@ -190,7 +190,14 @@ class _ExpenseVoucherEntryScreenState extends ConsumerState<ExpenseVoucherEntryS
     _addLine();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _init();
-      _supplierFocusNode.requestFocus();
+      // Only auto-focus on a brand-new voucher — firing unconditionally
+      // also grabbed focus while resuming an existing DRAFT. The Supplier
+      // field's own FinanceAccountPicker uses desktopDialogMode (auto-opens
+      // a picker dialog on focus, on desktop too, not just mobile), so an
+      // unconditional requestFocus() here spuriously popped that dialog
+      // open on load even when reviewing/editing an already-saved voucher
+      // — see the identical bug (and fix) on contra_voucher_entry_screen.
+      if (widget.editTransNo == null) _supplierFocusNode.requestFocus();
     });
   }
 
