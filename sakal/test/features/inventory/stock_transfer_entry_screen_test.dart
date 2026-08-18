@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sakal/core/layout/screen_header.dart';
 import 'package:sakal/core/sync/sync_engine.dart';
+import 'package:sakal/core/widgets/sakal_autocomplete.dart';
 import 'package:sakal/core/widgets/sakal_field_card.dart';
 import 'package:sakal/features/inventory/domain/repositories/stock_transfer_repository.dart';
 import 'package:sakal/features/inventory/presentation/providers/stock_transfer_providers.dart';
@@ -334,19 +335,15 @@ void main() {
       // `_onProductSelected` will also set as the row's productDisplay.
       expect(find.text('[WID-A] Widget A'), findsOneWidget);
 
-      // Select via Enter, never a tap on the option itself.
-      // SakalAutocomplete's options overlay uses OverflowBox(maxWidth: 900)
-      // to break out of RawAutocomplete's own narrower ambient constraint,
-      // so an option's painted box can sit partly outside the region that
-      // actually hit-tests — tester.tap() then computes a center that lands
-      // on whatever is underneath and onSelected never fires (and
-      // warnIfMissed:false only silences the warning, it does NOT make the
-      // tap land). The widget's own documented keyboard navigation is
-      // reliable instead: a freshly-populated options list always
-      // pre-highlights index 0 (see _highlighted in sakal_autocomplete.dart),
-      // and every fixture here returns exactly one match, so Enter selects
-      // it directly, sidestepping the overlay hit-test entirely.
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      // Tap the option directly — do NOT switch this to Enter-to-select.
+      // This test runs on a MOBILE viewport (see _useMobileViewport above),
+      // where SakalAutocomplete renders a showModalBottomSheet picker with
+      // its own search field and list rather than the inline overlay. The
+      // sheet's rows are ordinary, reliably-tappable list items, and its
+      // list is NOT driven by the inline overlay's _highlighted/_onKey
+      // pair — so Enter does nothing here, unlike on the desktop branch
+      // (proven live: converting this one to Enter broke a passing test).
+      await tester.tap(find.text('[WID-A] Widget A'));
       // The field's own `key: ValueKey('${row.hashCode}-${row.productDisplay}')`
       // forces a remount once productDisplay changes — pumpAndSettle lets
       // that remount (and the Unit field's own rebuild, plus the unawaited
@@ -396,7 +393,16 @@ void main() {
       await tester.tap(find.text('Add Line'));
       await tester.pumpAndSettle();
 
-      final productField = fieldInCard('Product', () => find.byType(TextFormField));
+      // Desktop viewport (no _useMobileViewport here — this test taps
+      // Save Draft, which only the desktop TopBar-actions path is proven
+      // against). Per-line SakalFieldCard labels are gated
+      // `showLabel: isMobile`, so fieldInCard() can't anchor on them —
+      // locate the line's fields by widget type/position instead.
+      // Product is the line's only SakalAutocomplete.
+      final productField = find.descendant(
+        of: find.byType(SakalAutocomplete<Map<String, dynamic>>),
+        matching: find.byType(TextFormField),
+      );
       await tester.enterText(productField, 'Widget');
       await tester.pumpAndSettle();
       // Select via Enter, never a tap on the option itself.
@@ -414,7 +420,15 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pumpAndSettle();
 
-      final qtyField = fieldInCard('Qty Pack', () => find.byType(TextFormField));
+      // Same label-gating limitation as Product above. Within the line's
+      // own Row the TextFormFields are, in order: Product, Qty Pack, Qty
+      // Loose, Remarks — Unit is a read-only SakalFieldCard (plain Text,
+      // not a field) and barcode is off by default, so Qty Pack is index 1.
+      final lineRow = find.ancestor(
+        of: find.byType(SakalAutocomplete<Map<String, dynamic>>),
+        matching: find.byType(Row),
+      ).first;
+      final qtyField = find.descendant(of: lineRow, matching: find.byType(TextFormField)).at(1);
       await tester.enterText(qtyField, '5');
       await tester.pump();
 
