@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -416,18 +417,20 @@ void main() {
       const expectedOption = 'SI-001 — [CUS01] Customer One · Main Warehouse · Pending 10.00';
       expect(find.text(expectedOption), findsOneWidget);
 
-      // tester.tap(find.text(...)) / tapping the InkWell ancestor both hit
-      // the same "would not hit test" warning — the overlay option sits
-      // under a still-settling opacity/ink transition even after
-      // pumpAndSettle(). ensureVisible + an explicit extra settle pump
-      // first, and warnIfMissed:false since the pointer event is still
-      // delivered at the computed offset regardless of the warning (same
-      // workaround already proven for a SegmentedButton tap in
-      // sales_invoice_entry_screen_test.dart's own AGAINST_QUOTATION test).
-      final invoiceOption = find.ancestor(of: find.text(expectedOption), matching: find.byType(InkWell)).first;
-      await tester.ensureVisible(invoiceOption);
-      await tester.pump();
-      await tester.tap(invoiceOption, warnIfMissed: false);
+      // Select via Enter, never a tap on the option itself.
+      // SakalAutocomplete's options overlay uses OverflowBox(maxWidth: 900)
+      // to break out of RawAutocomplete's own narrower ambient constraint,
+      // so an option's painted box can sit partly outside the region that
+      // actually hit-tests — tester.tap() then computes a center that lands
+      // on whatever is underneath and onSelected never fires (and
+      // warnIfMissed:false only silences the warning, it does NOT make the
+      // tap land; ensureVisible doesn't help either, the box is already
+      // on-screen). The widget's own documented keyboard navigation is
+      // reliable instead: a freshly-populated options list always
+      // pre-highlights index 0 (see _highlighted in sakal_autocomplete.dart),
+      // and this fixture returns exactly one match, so Enter selects it
+      // directly, sidestepping the overlay hit-test entirely.
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       // invoiceField carries key: ValueKey(_invoiceNo ?? '') — selecting
       // sets _invoiceNo, forcing a remount.
       await tester.pumpAndSettle();

@@ -646,7 +646,10 @@ void main() {
       // Can't use fieldInCard('Rate', ...) here — the per-line Rate field's
       // own label isn't built at this (non-mobile) viewport either. The
       // formatted value is itself the observable proof the price resolved.
-      expect(find.text('42.50'), findsOneWidget);
+      // It renders TWICE: once as the editable Rate field's own text, and
+      // once as the read-only line Amount (a fresh line's qty defaults to
+      // 1, so 1 × 42.50 formats to the same string).
+      expect(find.text('42.50'), findsNWidgets(2));
     });
   });
 

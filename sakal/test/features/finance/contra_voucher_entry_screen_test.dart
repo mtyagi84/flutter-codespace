@@ -141,18 +141,22 @@ void main() {
       await pumpApp(tester, const ContraVoucherEntryScreen(), overrides: overrides(), session: testSession());
       await tester.pumpAndSettle();
 
-      // tester.tap(find.text('Save Draft')) taps the CENTER of the raw text
-      // label, not the actual ElevatedButton it sits inside — in the AppBar
-      // actions row that offset can land outside the button's real hit
-      // area. Targeting the ElevatedButton itself still hits the same
-      // "would not hit test" warning (a still-settling transition even
-      // after pumpAndSettle()) — ensureVisible + an explicit extra settle
-      // pump first, and warnIfMissed:false since the pointer event is
-      // still delivered at the computed offset regardless of the warning.
-      final saveButton = find.widgetWithText(ElevatedButton, 'Save Draft');
-      await tester.ensureVisible(saveButton);
-      await tester.pump();
-      await tester.tap(saveButton, warnIfMissed: false);
+      // A brand-new voucher auto-focuses the FROM Account field on load
+      // (initState -> _fromAccountFocusNode.requestFocus()), and
+      // FinanceAccountPicker runs in desktopDialogMode — it opens a picker
+      // DIALOG on focus, on desktop too, not just mobile. That dialog's
+      // ModalBarrier covers the whole screen, so every tap on Save Draft
+      // silently landed on the barrier instead of the button. This is why
+      // targeting the ElevatedButton (rather than its text label) didn't
+      // help, and why warnIfMissed:false made it worse — that flag only
+      // silences the "would not hit test" warning, it does NOT make the
+      // tap land. Dismiss the dialog first, then the button is reachable.
+      // Same fix as expense_voucher_entry_screen_test.dart's own blank-form
+      // tests, which hit the identical auto-open behaviour.
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Save Draft'));
       await _pumpBriefly(tester);
 
       // _saveDraft() checks From/To accounts first, before amounts/gap.

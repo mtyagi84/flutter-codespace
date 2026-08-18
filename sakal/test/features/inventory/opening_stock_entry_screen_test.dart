@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -290,11 +291,19 @@ void main() {
       // `_onProductSelected` will also set as the row's productDisplay.
       expect(find.text('[WID-A] Widget A'), findsOneWidget);
 
-      // tester.tap(find.text(...)) taps the center of the raw option text,
-      // which can land outside its own hit area inside the overlay's
-      // InkWell (Flutter warns "would not hit test", and onSelected never
-      // fires) — target the InkWell itself instead.
-      await tester.tap(find.ancestor(of: find.text('[WID-A] Widget A'), matching: find.byType(InkWell)).first);
+      // Select via Enter, never a tap on the option itself.
+      // SakalAutocomplete's options overlay uses OverflowBox(maxWidth: 900)
+      // to break out of RawAutocomplete's own narrower ambient constraint,
+      // so an option's painted box can sit partly outside the region that
+      // actually hit-tests — tester.tap() then computes a center that lands
+      // on whatever is underneath and onSelected never fires (and
+      // warnIfMissed:false only silences the warning, it does NOT make the
+      // tap land). The widget's own documented keyboard navigation is
+      // reliable instead: a freshly-populated options list always
+      // pre-highlights index 0 (see _highlighted in sakal_autocomplete.dart),
+      // and every fixture here returns exactly one match, so Enter selects
+      // it directly, sidestepping the overlay hit-test entirely.
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       // The field's own `key: ValueKey('${row.hashCode}-${row.productDisplay}')`
       // forces a remount once productDisplay changes — pumpAndSettle lets
       // that remount (and the Unit field's own rebuild) finish.
@@ -347,11 +356,19 @@ void main() {
       final productField = find.descendant(of: find.byType(SakalAutocomplete<Map<String, dynamic>>), matching: find.byType(TextFormField));
       await tester.enterText(productField, 'Widget');
       await tester.pumpAndSettle();
-      // tester.tap(find.text(...)) taps the center of the raw option text,
-      // which can land outside its own hit area inside the overlay's
-      // InkWell (Flutter warns "would not hit test", and onSelected never
-      // fires) — target the InkWell itself instead.
-      await tester.tap(find.ancestor(of: find.text('[WID-A] Widget A'), matching: find.byType(InkWell)).first);
+      // Select via Enter, never a tap on the option itself.
+      // SakalAutocomplete's options overlay uses OverflowBox(maxWidth: 900)
+      // to break out of RawAutocomplete's own narrower ambient constraint,
+      // so an option's painted box can sit partly outside the region that
+      // actually hit-tests — tester.tap() then computes a center that lands
+      // on whatever is underneath and onSelected never fires (and
+      // warnIfMissed:false only silences the warning, it does NOT make the
+      // tap land). The widget's own documented keyboard navigation is
+      // reliable instead: a freshly-populated options list always
+      // pre-highlights index 0 (see _highlighted in sakal_autocomplete.dart),
+      // and every fixture here returns exactly one match, so Enter selects
+      // it directly, sidestepping the overlay hit-test entirely.
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pumpAndSettle();
 
       final lineRow = find.ancestor(of: find.byType(SakalAutocomplete<Map<String, dynamic>>), matching: find.byType(Row)).first;
