@@ -94,19 +94,13 @@ class _SakalReportTableState extends State<SakalReportTable> {
   List<ReportColumn> get _visibleColumns =>
       widget.bundle.columns.where((c) => !_hiddenColumns.contains(c.columnKey)).toList();
 
+  // Nesting indent (Pending Bills by Customer's 2-level case) is scoped
+  // entirely inside the first visible column's own fixed-width cell (see
+  // _buildDataRow/_buildGroupHeaderRow) — it eats into that column's
+  // existing width rather than adding a new element ahead of the row, so
+  // _totalWidth never needs to account for it separately.
   double get _totalWidth =>
-      _visibleColumns.fold(0.0, (sum, c) => sum + (_widths[c.columnKey] ?? _defaultColumnWidth)) + _extraGroupPrefixWidth;
-
-  // Group-header and detail rows at nesting depth > 0 (Pending Bills by
-  // Customer's 2-level case) prepend an indent SizedBox that a top-level
-  // row never has — not part of _visibleColumns, so leaving it out
-  // understates how wide a group row can get, and the horizontal scroll
-  // region (sized to _totalWidth everywhere in this file) then overflows
-  // by exactly the missing amount. Using the deepest possible indent is a
-  // safe upper bound — the extra reads as blank trailing space on
-  // header/data/totals rows for a report with no nested groups.
-  double get _extraGroupPrefixWidth =>
-      widget.bundle.isGrouped ? widget.bundle.groupLevels.length * 20.0 : 0.0;
+      _visibleColumns.fold(0.0, (sum, c) => sum + (_widths[c.columnKey] ?? _defaultColumnWidth));
 
   @override
   Widget build(BuildContext context) {
@@ -363,7 +357,14 @@ class _SakalReportTableState extends State<SakalReportTable> {
     final labelColVisible = _visibleColumns.any((c) => c.columnKey == level.groupLabelColumn);
     var iconAndLabelPlaced = false;
 
+    // indent is scoped to this label cell only (leading space ahead of the
+    // icon), never prepended before the whole row — see _buildDataRow's own
+    // comment for why: shifting the entire row misaligns every OTHER
+    // column (the numeric buckets) against the header/rows at a different
+    // indent, not just the label column this indent is actually meant to
+    // visualize nesting for.
     Widget iconAndLabel() => Row(children: [
+          if (indent > 0) SizedBox(width: indent * 20.0),
           Icon(node.loading
                   ? Icons.hourglass_empty
                   : (node.expanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_right),
@@ -388,7 +389,6 @@ class _SakalReportTableState extends State<SakalReportTable> {
       child: Container(
         color: AppColors.surfaceVariant,
         child: Row(children: [
-          if (indent > 0) SizedBox(width: indent * 20.0),
           ..._visibleColumns.map((c) {
             final width = _widths[c.columnKey] ?? _defaultColumnWidth;
             final isLabelCol = labelColVisible
@@ -422,22 +422,34 @@ class _SakalReportTableState extends State<SakalReportTable> {
               ),
       );
 
+  // indent is scoped to the FIRST visible column's own cell (as extra
+  // leading space inside it), never prepended before the whole row — a
+  // prior version prepended it as its own element ahead of every column,
+  // which shifted the entire row including the numeric columns to the
+  // right by indent*20px relative to the header row and the group-total
+  // row above it (both indent 0). Caught live: a customer's own amount
+  // columns visibly didn't line up under the header/group-total numbers
+  // once its group was expanded ("customer amount move to right... while
+  // headings and currency wise total remain on same place").
   Widget _buildDataRow(ReportRow row, {required int indent}) => Container(
         decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5))),
         child: Row(children: [
-          if (indent > 0) SizedBox(width: indent * 20.0),
-          ..._visibleColumns.map((c) {
-            final width = _widths[c.columnKey] ?? _defaultColumnWidth;
-            return Container(width: width, decoration: _colDivider(onDark: false), child: _cellContent(c, row));
-          }),
+          for (final c in _visibleColumns)
+            Container(
+              width: _widths[c.columnKey] ?? _defaultColumnWidth,
+              decoration: _colDivider(onDark: false),
+              child: _cellContent(c, row, indent: c == _visibleColumns.first ? indent : 0),
+            ),
         ]),
       );
 
-  Widget _cellContent(ReportColumn col, ReportRow row, {bool bold = false}) {
+  Widget _cellContent(ReportColumn col, ReportRow row, {bool bold = false, int indent = 0}) {
     final value = row[col.columnKey];
     Widget content = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      child: _buildCellValue(col, row, value, bold: bold),
+      child: indent > 0
+          ? Row(children: [SizedBox(width: indent * 20.0), Expanded(child: _buildCellValue(col, row, value, bold: bold))])
+          : _buildCellValue(col, row, value, bold: bold),
     );
     if (col.hasDrilldown && value != null) {
       content = InkWell(
