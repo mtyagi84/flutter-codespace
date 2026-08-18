@@ -452,7 +452,7 @@ BEGIN
              serial_no, group_code, group_name, group_serial_no, approve_allowed, copy_allowed, excel_upload_allowed)
         VALUES
             (v_company.client_id, v_company.company_id, v_fn_module_id, 'FN-TRB', 'Trial Balance',
-             '/reports/TRIAL_BALANCE', 6, 'FN-RPT', 'Reports', 2, false, false, false)
+             '/reports/TRIAL_BALANCE', 6, 'FN-RPT', 'Reports', 1, false, false, false)
         ON CONFLICT (client_id, company_id, feature_code) DO UPDATE
             SET screen_name = excluded.screen_name, group_code = excluded.group_code,
                 group_name = excluded.group_name, group_serial_no = excluded.group_serial_no,

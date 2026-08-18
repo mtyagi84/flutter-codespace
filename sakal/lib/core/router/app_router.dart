@@ -554,7 +554,18 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.balanceSheet, builder: (c, s) => const _Placeholder('Balance Sheet')),
         GoRoute(
           path: RouteNames.report,
-          builder: (c, s) => ReportScreen(reportKey: s.pathParameters['reportKey']!),
+          // key: ValueKey(reportKey) — every report shares this ONE route
+          // (path param only differs), so without a key that changes with
+          // reportKey, GoRouter/Flutter reuses the same ReportScreen
+          // element across navigations between two reports instead of
+          // rebuilding it, and initState() (which is what triggers _load())
+          // never re-fires for the new reportKey. Caught live: clicking
+          // Trial Balance while Supplier Ageing was open left Supplier
+          // Ageing's content showing with no navigation appearing to happen.
+          builder: (c, s) => ReportScreen(
+            key: ValueKey(s.pathParameters['reportKey']),
+            reportKey: s.pathParameters['reportKey']!,
+          ),
         ),
       ],
     ),
