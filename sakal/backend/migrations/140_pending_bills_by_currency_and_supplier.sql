@@ -325,8 +325,8 @@ BEGIN
             (v_company.client_id, v_company.company_id, v_report_id, 'balance_amount', 'Balance (Original)', 'NUMBER', 'RIGHT', false, true, 160, 7, NULL, 'party_currency'),
             (v_company.client_id, v_company.company_id, v_report_id, 'bill_amount_base', 'Bill Amount (Base)', 'NUMBER', 'RIGHT', true, true, 150, 8, 'SUM', NULL),
             (v_company.client_id, v_company.company_id, v_report_id, 'bill_amount_local', 'Bill Amount (Local)', 'NUMBER', 'RIGHT', true, false, 150, 9, 'SUM', NULL),
-            (v_company.client_id, v_company.company_id, v_report_id, 'account_label', 'Supplier (Group)', 'TEXT', 'LEFT', false, false, 220, 10, NULL),
-            (v_company.client_id, v_company.company_id, v_report_id, 'party_currency', 'Currency', 'TEXT', 'LEFT', false, false, 80, 11, NULL);
+            (v_company.client_id, v_company.company_id, v_report_id, 'account_label', 'Supplier (Group)', 'TEXT', 'LEFT', false, false, 220, 10, NULL, NULL),
+            (v_company.client_id, v_company.company_id, v_report_id, 'party_currency', 'Currency', 'TEXT', 'LEFT', false, false, 80, 11, NULL, NULL);
 
         DELETE FROM ric_report_filters WHERE report_id = v_report_id;
         INSERT INTO ric_report_filters
