@@ -65,8 +65,6 @@ class _AppShellState extends ConsumerState<AppShell> {
     // the missing width.
     final bool effectiveCollapsed = Responsive.isTablet(context) ? true : collapsed;
     final double sidebarW = effectiveCollapsed ? 56.0 : 240.0;
-    final double contentW =
-        (MediaQuery.sizeOf(context).width - sidebarW - 1.0).clamp(0.0, double.infinity);
 
     return Scaffold(
       key: _scaffoldKey,
@@ -82,8 +80,17 @@ class _AppShellState extends ConsumerState<AppShell> {
           ),
           const VerticalDivider(
               width: 1, thickness: 1, color: AppColors.border),
-          SizedBox(
-            width: contentW,
+          // Expanded (not a hand-computed SizedBox width from
+          // MediaQuery.sizeOf) — the sidebar's actual on-screen width is
+          // mid-animation for 200ms on every collapse/expand and every
+          // resize across the tablet breakpoint, while a MediaQuery-based
+          // width assumes the sidebar is already at its final target width.
+          // The two disagreeing during that window is exactly what caused a
+          // real overflow (184px = 240 - 56, the full sidebar-width delta)
+          // caught live. Expanded lets RenderFlex size the content pane from
+          // the sidebar's REAL width for that frame, so it can never overflow
+          // regardless of animation state.
+          Expanded(
             child: Column(
               children: [
                 if (offline) const OfflineBanner(),
