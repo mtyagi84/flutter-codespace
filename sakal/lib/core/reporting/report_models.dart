@@ -28,6 +28,14 @@ class ReportDefinition {
   final String? sourceObjectLocal;
   final String? totalsSourceObjectLocal;
   final bool isActive;
+  // Nullable — when set, the filter bar's own date_range filter (if any)
+  // is checked against this cap in sakal_report_screen.dart's onApply,
+  // before the report ever fetches. Exists because a MATRIX report's
+  // column count is driven directly by the date range (e.g. one column
+  // per month) — an unbounded range would silently generate an
+  // unreasonable number of columns. NULL (every report before this one)
+  // means no limit.
+  final int? maxDateRangeMonths;
 
   const ReportDefinition({
     required this.id,
@@ -48,6 +56,7 @@ class ReportDefinition {
     this.sourceObjectLocal,
     this.totalsSourceObjectLocal,
     required this.isActive,
+    this.maxDateRangeMonths,
   });
 
   factory ReportDefinition.fromJson(Map<String, dynamic> j) => ReportDefinition(
@@ -69,6 +78,7 @@ class ReportDefinition {
         sourceObjectLocal: j['source_object_local'] as String?,
         totalsSourceObjectLocal: j['totals_source_object_local'] as String?,
         isActive: j['is_active'] as bool? ?? true,
+        maxDateRangeMonths: (j['max_date_range_months'] as num?)?.toInt(),
       );
 
   bool get isTabular => reportType == 'TABULAR';

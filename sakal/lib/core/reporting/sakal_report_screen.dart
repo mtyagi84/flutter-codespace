@@ -97,6 +97,40 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
   String _fmtFilterDate(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+  // Shows the company's real currency code (e.g. "USD"/"CDF") instead of
+  // the literal word "Base"/"Local" — the app already knows both
+  // (ric_companies.base_currency/local_currency via these existing
+  // providers), so showing the generic word was needless indirection.
+  // Falls back to the word only if the provider hasn't resolved yet (or a
+  // company has genuinely left the field blank) rather than showing "".
+  String _currencyLabel(String mode) {
+    final code = mode == 'BASE' ? ref.watch(baseCurrencyProvider).valueOrNull : ref.watch(localCurrencyProvider).valueOrNull;
+    if (code == null || code.isEmpty) return mode == 'BASE' ? 'Base' : 'Local';
+    return code;
+  }
+
+  // Enforces ReportDefinition.maxDateRangeMonths (e.g. 12 for the Expense
+  // Report — a MATRIX report's own column count is driven directly by the
+  // date range) BEFORE the report fetches, not as a server-side surprise.
+  // Registry-driven rather than checking widget.reportKey, so a future
+  // report opts in purely via its own migration.
+  String? _dateRangeCapError(ReportDefinition def, List<ReportFilter> filters, Map<String, dynamic> values) {
+    final maxMonths = def.maxDateRangeMonths;
+    if (maxMonths == null) return null;
+    final dateRangeFilter = filters.where((f) => f.isDateRange).firstOrNull;
+    if (dateRangeFilter == null) return null;
+    final value = values[dateRangeFilter.filterKey];
+    if (value is! Map) return null;
+    final from = value['from'] as DateTime?;
+    final to = value['to'] as DateTime?;
+    if (from == null || to == null) return null;
+    final spanMonths = (to.year - from.year) * 12 + (to.month - from.month) + 1;
+    if (spanMonths > maxMonths) {
+      return '${dateRangeFilter.label} range cannot exceed $maxMonths months — narrow the range and try again.';
+    }
+    return null;
+  }
+
   Map<String, String> _buildFilterSummary() {
     final bundle = _bundle!, controller = _controller!;
     final summary = <String, String>{};
@@ -246,9 +280,9 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
             children: [
               const Text('Currency: ', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
               SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'BASE', label: Text('Base')),
-                  ButtonSegment(value: 'LOCAL', label: Text('Local')),
+                segments: [
+                  ButtonSegment(value: 'BASE', label: Text(_currencyLabel('BASE'))),
+                  ButtonSegment(value: 'LOCAL', label: Text(_currencyLabel('LOCAL'))),
                 ],
                 selected: {controller.currencyMode},
                 onSelectionChanged: (s) async {
@@ -265,6 +299,12 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
           filters: bundle.filters,
           initialValues: controller.filterValues,
           onApply: (values) async {
+            final rangeError = _dateRangeCapError(bundle.definition, bundle.filters, values);
+            if (rangeError != null) {
+              setState(() => _actionError = rangeError);
+              return;
+            }
+            setState(() => _actionError = null);
             await controller.applyFilters(values);
             if (mounted) setState(() {});
           },
