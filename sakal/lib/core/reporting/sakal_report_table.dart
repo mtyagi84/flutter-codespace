@@ -97,33 +97,16 @@ class _SakalReportTableState extends State<SakalReportTable> {
   double get _totalWidth =>
       _visibleColumns.fold(0.0, (sum, c) => sum + (_widths[c.columnKey] ?? _defaultColumnWidth)) + _extraGroupPrefixWidth;
 
-  // Group-header rows (_buildGroupHeaderRow) prepend content that a plain
-  // header/data row never has: an indent SizedBox per nesting depth, and —
-  // whenever a level's own group_label_column isn't one of the visible
-  // columns (e.g. this report hides party_currency at the detail-row level
-  // because it's already shown via the group header) — a fallback
-  // icon+label cell sized from that column's own configured width. Neither
-  // is part of _visibleColumns, so leaving it out of _totalWidth understates
-  // how wide a group row can actually get, and the horizontal scroll region
-  // (sized to _totalWidth everywhere else in this file) then overflows by
-  // exactly the missing amount — caught live (a real, not hypothetical,
-  // overflow) once the group-header row itself was fixed to have a bounded
-  // width instead of crashing outright. Using the deepest indent and the
-  // widest applicable fallback label across all levels is a safe, if
-  // slightly generous, upper bound — the extra reads as blank trailing
-  // space on header/data/totals rows, never a wrongly-narrow column.
-  double get _extraGroupPrefixWidth {
-    if (!widget.bundle.isGrouped) return 0.0;
-    final maxIndent = widget.bundle.groupLevels.length * 20.0;
-    var maxFallbackLabel = 0.0;
-    for (final level in widget.bundle.groupLevels) {
-      final labelColVisible = _visibleColumns.any((c) => c.columnKey == level.groupLabelColumn);
-      if (labelColVisible) continue;
-      final w = _widths[level.groupLabelColumn] ?? _defaultColumnWidth;
-      if (w > maxFallbackLabel) maxFallbackLabel = w;
-    }
-    return maxIndent + maxFallbackLabel;
-  }
+  // Group-header and detail rows at nesting depth > 0 (Pending Bills by
+  // Customer's 2-level case) prepend an indent SizedBox that a top-level
+  // row never has — not part of _visibleColumns, so leaving it out
+  // understates how wide a group row can get, and the horizontal scroll
+  // region (sized to _totalWidth everywhere in this file) then overflows
+  // by exactly the missing amount. Using the deepest possible indent is a
+  // safe upper bound — the extra reads as blank trailing space on
+  // header/data/totals rows for a report with no nested groups.
+  double get _extraGroupPrefixWidth =>
+      widget.bundle.isGrouped ? widget.bundle.groupLevels.length * 20.0 : 0.0;
 
   @override
   Widget build(BuildContext context) {
@@ -170,24 +153,44 @@ class _SakalReportTableState extends State<SakalReportTable> {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         child: Align(
           alignment: Alignment.centerRight,
-          child: PopupMenuButton<String>(
-            icon: const Icon(Icons.view_column_outlined, size: 20, color: AppColors.primary),
-            tooltip: 'Columns',
-            itemBuilder: (context) => widget.bundle.columns
-                .map((c) => CheckedPopupMenuItem<String>(
-                      value: c.columnKey,
-                      checked: !_hiddenColumns.contains(c.columnKey),
-                      child: Text(c.label),
-                    ))
-                .toList(),
-            onSelected: (key) => setState(() {
-              if (_hiddenColumns.contains(key)) {
-                _hiddenColumns.remove(key);
-              } else {
-                _hiddenColumns.add(key);
-              }
-            }),
-          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            if (widget.bundle.isGrouped) ...[
+              IconButton(
+                icon: const Icon(Icons.unfold_more, size: 20, color: AppColors.primary),
+                tooltip: 'Expand all',
+                onPressed: () async {
+                  await widget.controller.expandAll();
+                  widget.onChanged();
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.unfold_less, size: 20, color: AppColors.primary),
+                tooltip: 'Collapse all',
+                onPressed: () {
+                  widget.controller.collapseAll();
+                  widget.onChanged();
+                },
+              ),
+            ],
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.view_column_outlined, size: 20, color: AppColors.primary),
+              tooltip: 'Columns',
+              itemBuilder: (context) => widget.bundle.columns
+                  .map((c) => CheckedPopupMenuItem<String>(
+                        value: c.columnKey,
+                        checked: !_hiddenColumns.contains(c.columnKey),
+                        child: Text(c.label),
+                      ))
+                  .toList(),
+              onSelected: (key) => setState(() {
+                if (_hiddenColumns.contains(key)) {
+                  _hiddenColumns.remove(key);
+                } else {
+                  _hiddenColumns.add(key);
+                }
+              }),
+            ),
+          ]),
         ),
       );
 
@@ -339,16 +342,26 @@ class _SakalReportTableState extends State<SakalReportTable> {
     );
   }
 
-  // Renders in the SAME column order/widths as _buildDataRow (just
-  // special-casing the group-label column's own cell to show the expand
-  // icon + label instead of a plain value) so group-header rows line up
-  // pixel-for-pixel with both the header row and the detail rows beneath
-  // them — an earlier draft built this as "icon+label, THEN every other
-  // column", which only lines up when the label column happens to be
-  // first in _visibleColumns; caught on review before this ever ran.
+  // Renders in the SAME column order/widths as _buildDataRow — every cell
+  // is one of _visibleColumns, none prepended — so a group-header row
+  // lines up pixel-for-pixel with both the header row and the detail rows
+  // beneath it. The icon + expand affordance + label goes in whichever
+  // cell actually corresponds to the level's own group_label_column, e.g.
+  // an "Account Name" grouping puts it in the Account Name cell. When that
+  // column isn't itself visible (both Ageing reports and Pending Bills by
+  // Customer group by party_currency, which is intentionally hidden at the
+  // detail-row level — the group header IS how currency is shown), it goes
+  // in the FIRST visible column instead — matching that column's own real
+  // width, not a separately-sized prepended cell. An earlier version
+  // prepended a whole extra cell sized from the (invisible) label column's
+  // own configured width, which almost never matched any real column's
+  // width and made every group-header row look visibly misaligned against
+  // the rows below it — caught live, reported as "columns are not
+  // aligned, it is looking odd."
   Widget _buildGroupHeaderRow(ReportGroupNode node, int indent) {
     final level = widget.bundle.groupLevels[node.levelNo - 1];
     final labelColVisible = _visibleColumns.any((c) => c.columnKey == level.groupLabelColumn);
+    var iconAndLabelPlaced = false;
 
     Widget iconAndLabel() => Row(children: [
           Icon(node.loading
@@ -376,19 +389,12 @@ class _SakalReportTableState extends State<SakalReportTable> {
         color: AppColors.surfaceVariant,
         child: Row(children: [
           if (indent > 0) SizedBox(width: indent * 20.0),
-          // Fallback for a level whose group_label_column was never also
-          // declared as a ric_report_columns row — degrades gracefully
-          // (icon+label prepended, not aligned to any column) rather than
-          // silently never rendering.
-          if (!labelColVisible)
-            Container(
-              width: _widths[level.groupLabelColumn] ?? _defaultColumnWidth,
-              decoration: _colDivider(onDark: false),
-              child: Padding(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), child: iconAndLabel()),
-            ),
           ..._visibleColumns.map((c) {
             final width = _widths[c.columnKey] ?? _defaultColumnWidth;
-            final isLabelCol = c.columnKey == level.groupLabelColumn;
+            final isLabelCol = labelColVisible
+                ? c.columnKey == level.groupLabelColumn
+                : !iconAndLabelPlaced;
+            if (isLabelCol) iconAndLabelPlaced = true;
             return Container(
               width: width,
               decoration: _colDivider(onDark: false),
@@ -515,6 +521,31 @@ class _SakalReportTableState extends State<SakalReportTable> {
                 .map((c) => Text('${c.label}: ${AppNumberFormat.amount((totalsRow[c.columnKey] as num? ?? 0), widget.numberFormat)}',
                     style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)))
                 .toList(),
+          ),
+        ),
+      if (widget.bundle.isGrouped)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                icon: const Icon(Icons.unfold_more, size: 20, color: AppColors.primary),
+                tooltip: 'Expand all',
+                onPressed: () async {
+                  await widget.controller.expandAll();
+                  widget.onChanged();
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.unfold_less, size: 20, color: AppColors.primary),
+                tooltip: 'Collapse all',
+                onPressed: () {
+                  widget.controller.collapseAll();
+                  widget.onChanged();
+                },
+              ),
+            ]),
           ),
         ),
       Expanded(

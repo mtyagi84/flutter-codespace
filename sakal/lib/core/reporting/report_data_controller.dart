@@ -259,6 +259,34 @@ class ReportDataController {
     }
   }
 
+  // Expand every currently-collapsed node, recursing into nested levels as
+  // each parent's children arrive — sequential, not Future.wait, so a
+  // report with many groups doesn't fire them all as simultaneous RPC
+  // calls. Only opens each node to its already-lazy first page of
+  // detail rows (same as tapping it once), never bulk-loads every page —
+  // "expand" and "load everything" are deliberately different operations.
+  Future<void> expandAll() async {
+    Future<void> walk(List<ReportGroupNode> nodes) async {
+      for (final node in nodes) {
+        if (!node.expanded) await expandNode(node);
+        if (node.childGroups != null) await walk(node.childGroups!);
+      }
+    }
+
+    await walk(rootGroups);
+  }
+
+  void collapseAll() {
+    void walk(List<ReportGroupNode> nodes) {
+      for (final node in nodes) {
+        node.expanded = false;
+        if (node.childGroups != null) walk(node.childGroups!);
+      }
+    }
+
+    walk(rootGroups);
+  }
+
   Future<void> loadMoreDetailForNode(ReportGroupNode node) async {
     if (!node.childDetailHasMore || node.childDetailLoadingMore) return;
     node.childDetailLoadingMore = true;
