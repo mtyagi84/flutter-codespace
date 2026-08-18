@@ -60,6 +60,13 @@ class _SakalReportTableState extends State<SakalReportTable> {
   static const double _minColumnWidth = 70;
   static const double _defaultColumnWidth = 140;
 
+  // Vertical gridline between columns — one shared decoration so header
+  // (dark background, needs a light line) and body/group/totals rows
+  // (light background, needs AppColors.border) both go through one place.
+  static BoxDecoration _colDivider({required bool onDark}) => BoxDecoration(
+        border: Border(right: BorderSide(color: onDark ? Colors.white24 : AppColors.border, width: 1)),
+      );
+
   @override
   void initState() {
     super.initState();
@@ -194,8 +201,9 @@ class _SakalReportTableState extends State<SakalReportTable> {
   Widget _buildHeaderCell(ReportColumn col) {
     final width = _widths[col.columnKey] ?? _defaultColumnWidth;
     final isSorted = widget.controller.sortColumn == col.columnKey;
-    return SizedBox(
+    return Container(
       width: width,
+      decoration: _colDivider(onDark: true),
       child: Stack(children: [
         InkWell(
           onTap: col.sortable
@@ -206,23 +214,35 @@ class _SakalReportTableState extends State<SakalReportTable> {
               : null,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            child: Row(
-              mainAxisAlignment: col.isNumeric ? MainAxisAlignment.end : MainAxisAlignment.start,
-              children: [
-                Flexible(
-                  child: Text(
-                    col.label.toUpperCase(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 10.5, letterSpacing: 0.4),
+            // SizedBox(width: double.infinity) forces this Row to the cell's
+            // FULL width regardless of the enclosing Stack's own StackFit
+            // (default StackFit.loose loosens the incoming width constraint
+            // for non-positioned children) — without it, mainAxisAlignment
+            // has no guaranteed extra space to push the label into, so a
+            // numeric header's label can end up sitting left-of-center
+            // instead of flush with the right-aligned values beneath it.
+            // Caught live: user reported header labels not lining up with
+            // the numeric columns' own right-aligned values.
+            child: SizedBox(
+              width: double.infinity,
+              child: Row(
+                mainAxisAlignment: col.isNumeric ? MainAxisAlignment.end : MainAxisAlignment.start,
+                children: [
+                  Flexible(
+                    child: Text(
+                      col.label.toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 10.5, letterSpacing: 0.4),
+                    ),
                   ),
-                ),
-                if (isSorted) ...[
-                  const SizedBox(width: 2),
-                  Icon(widget.controller.sortDir == 'DESC' ? Icons.arrow_downward : Icons.arrow_upward,
-                      size: 12, color: Colors.white),
+                  if (isSorted) ...[
+                    const SizedBox(width: 2),
+                    Icon(widget.controller.sortDir == 'DESC' ? Icons.arrow_downward : Icons.arrow_upward,
+                        size: 12, color: Colors.white),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -274,7 +294,12 @@ class _SakalReportTableState extends State<SakalReportTable> {
     );
   }
 
-  Widget _buildGroupedBody() {
+  // Shared by the desktop table body and the mobile card list — flattens
+  // the (recursive, lazily-expanded) group tree into one render-order list.
+  // A collapsed node just doesn't recurse into its children; expanding it
+  // (controller.expandNode) triggers the same lazy per-group fetch on
+  // mobile as it already does on desktop, not a bulk "load everything" pass.
+  List<_RenderItem> _flattenGroups() {
     final items = <_RenderItem>[];
     void walk(List<ReportGroupNode> nodes, int indent) {
       for (final node in nodes) {
@@ -292,6 +317,11 @@ class _SakalReportTableState extends State<SakalReportTable> {
     }
 
     walk(widget.controller.rootGroups, 0);
+    return items;
+  }
+
+  Widget _buildGroupedBody() {
+    final items = _flattenGroups();
 
     return Scrollbar(
       controller: _vBodyController,
@@ -351,15 +381,17 @@ class _SakalReportTableState extends State<SakalReportTable> {
           // (icon+label prepended, not aligned to any column) rather than
           // silently never rendering.
           if (!labelColVisible)
-            SizedBox(
+            Container(
               width: _widths[level.groupLabelColumn] ?? _defaultColumnWidth,
+              decoration: _colDivider(onDark: false),
               child: Padding(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), child: iconAndLabel()),
             ),
           ..._visibleColumns.map((c) {
             final width = _widths[c.columnKey] ?? _defaultColumnWidth;
             final isLabelCol = c.columnKey == level.groupLabelColumn;
-            return SizedBox(
+            return Container(
               width: width,
+              decoration: _colDivider(onDark: false),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 child: isLabelCol ? iconAndLabel() : _buildCellValue(c, node.summaryRow, node.summaryRow[c.columnKey], bold: true),
@@ -390,7 +422,7 @@ class _SakalReportTableState extends State<SakalReportTable> {
           if (indent > 0) SizedBox(width: indent * 20.0),
           ..._visibleColumns.map((c) {
             final width = _widths[c.columnKey] ?? _defaultColumnWidth;
-            return SizedBox(width: width, child: _cellContent(c, row));
+            return Container(width: width, decoration: _colDivider(onDark: false), child: _cellContent(c, row));
           }),
         ]),
       );
@@ -453,8 +485,9 @@ class _SakalReportTableState extends State<SakalReportTable> {
         child: Row(children: _visibleColumns.map((c) {
           final width = _widths[c.columnKey] ?? _defaultColumnWidth;
           final isFirst = c == _visibleColumns.first;
-          return SizedBox(
+          return Container(
             width: width,
+            decoration: _colDivider(onDark: false),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
               child: isFirst
@@ -485,40 +518,112 @@ class _SakalReportTableState extends State<SakalReportTable> {
           ),
         ),
       Expanded(
-        child: widget.bundle.isGrouped
-            ? const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Text('Grouped reports are best viewed on a wider screen.', textAlign: TextAlign.center),
-                ),
-              )
-            : ListView.builder(
-                padding: const EdgeInsets.all(12),
-                itemCount: rows.length + (widget.controller.isLoadingMore ? 1 : 0),
-                itemBuilder: (context, i) {
-                  if (i >= rows.length) return _loadingRow();
-                  final row = rows[i];
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: widget.bundle.visibleColumns
-                            .map((c) => Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 2),
-                                  child: Row(children: [
-                                    SizedBox(width: 110, child: Text(c.label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
-                                    Expanded(child: _buildCellValue(c, row, row[c.columnKey])),
-                                  ]),
-                                ))
-                            .toList(),
-                      ),
-                    ),
-                  );
-                },
-              ),
+        child: widget.bundle.isGrouped ? _buildMobileGroupedList() : _buildMobileDetailList(rows),
       ),
     ]);
   }
+
+  // Same flattened group tree the desktop table renders as table rows
+  // (_flattenGroups) — rendered here as a tappable group-summary card
+  // (expand/collapse drives the same lazy controller.expandNode() fetch as
+  // desktop) followed by an account card per detail row, indented to show
+  // nesting. Replaces an earlier placeholder ("best viewed on a wider
+  // screen") that left grouped reports — both new Ageing reports and the
+  // existing Pending Bills by Customer — entirely unusable on mobile: no
+  // account, no amount, nothing but the grand-total bar above.
+  Widget _buildMobileGroupedList() {
+    final items = _flattenGroups();
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: items.length,
+      itemBuilder: (context, i) {
+        final item = items[i];
+        final indent = item.indent * 12.0;
+
+        if (item.loadMoreNode != null) {
+          return Padding(
+            padding: EdgeInsets.only(left: indent, bottom: 8),
+            child: _buildLoadMoreDetailRow(item.loadMoreNode!, 0),
+          );
+        }
+
+        if (item.groupNode != null) {
+          final node = item.groupNode!;
+          final level = widget.bundle.groupLevels[node.levelNo - 1];
+          return Padding(
+            padding: EdgeInsets.only(left: indent, bottom: 8),
+            child: Card(
+              color: AppColors.surfaceVariant,
+              child: InkWell(
+                onTap: () async {
+                  if (!node.expanded) {
+                    await widget.controller.expandNode(node);
+                  } else {
+                    node.expanded = false;
+                  }
+                  widget.onChanged();
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(children: [
+                    Icon(node.loading
+                            ? Icons.hourglass_empty
+                            : (node.expanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_right),
+                        size: 18, color: AppColors.primary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text('${node.summaryRow[level.groupLabelColumn] ?? '—'}',
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                    ),
+                    Wrap(
+                      spacing: 12,
+                      alignment: WrapAlignment.end,
+                      children: widget.bundle.aggregateColumns
+                          .map((c) => Text(
+                              AppNumberFormat.amount((node.summaryRow[c.columnKey] as num? ?? 0), widget.numberFormat),
+                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)))
+                          .toList(),
+                    ),
+                  ]),
+                ),
+              ),
+            ),
+          );
+        }
+
+        return Padding(
+          padding: EdgeInsets.only(left: indent, bottom: 8),
+          child: _mobileDetailCard(item.detailRow!),
+        );
+      },
+    );
+  }
+
+  Widget _buildMobileDetailList(List<ReportRow> rows) => ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: rows.length + (widget.controller.isLoadingMore ? 1 : 0),
+        itemBuilder: (context, i) {
+          if (i >= rows.length) return _loadingRow();
+          return Padding(padding: const EdgeInsets.only(bottom: 8), child: _mobileDetailCard(rows[i]));
+        },
+      );
+
+  Widget _mobileDetailCard(ReportRow row) => Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: widget.bundle.visibleColumns
+                .map((c) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(children: [
+                        SizedBox(width: 110, child: Text(c.label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
+                        Expanded(child: _buildCellValue(c, row, row[c.columnKey])),
+                      ]),
+                    ))
+                .toList(),
+          ),
+        ),
+      );
 }
