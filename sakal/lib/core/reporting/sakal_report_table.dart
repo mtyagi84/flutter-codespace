@@ -322,7 +322,10 @@ class _SakalReportTableState extends State<SakalReportTable> {
           // (icon+label prepended, not aligned to any column) rather than
           // silently never rendering.
           if (!labelColVisible)
-            Padding(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), child: iconAndLabel()),
+            SizedBox(
+              width: _widths[level.groupLabelColumn] ?? _defaultColumnWidth,
+              child: Padding(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), child: iconAndLabel()),
+            ),
           ..._visibleColumns.map((c) {
             final width = _widths[c.columnKey] ?? _defaultColumnWidth;
             final isLabelCol = c.columnKey == level.groupLabelColumn;

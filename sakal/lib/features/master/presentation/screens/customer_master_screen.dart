@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/config/master_type_keys.dart';
 import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -202,7 +203,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
   // pattern as SalesOrderRemoteDs.getIncoterms() (086).
   Future<List<Map<String, dynamic>>> _fetchCategories(UserSession session) async {
     final typeRes = await DioClient.instance.get('/rim_common_master_types', queryParameters: {
-      'type_key': 'eq.CUSTOMER_CATEGORY',
+      'type_key': 'eq.${MasterTypeKey.customerCategory}',
       'select':   'id',
       'limit':    '1',
     });
@@ -355,7 +356,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
       _addr1Ctrl.text   = row['address_line1']  as String? ?? '';
       _addr2Ctrl.text   = row['address_line2']  as String? ?? '';
       _taxIdCtrl.text   = row['tax_id']         as String? ?? '';
-      _category         = row['party_category'] as String?;
+      _category         = row['party_category_id'] as String?;
       _limitCtrl.text   = row['credit_limit'] != null
           ? row['credit_limit'].toString() : '';
       _daysCtrl.text    = (row['credit_days'] ?? 30).toString();
@@ -644,7 +645,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
     'country_id':      _countryId,
     'city_id':         _cityId,
     'tax_id':          _taxIdCtrl.text.trim().nullIfEmpty,
-    'party_category':  _category,
+    'party_category_id':  _category,
     'credit_limit':    _limitCtrl.text.trim().isEmpty
         ? null : double.tryParse(_limitCtrl.text.trim()),
     'credit_days':     int.tryParse(_daysCtrl.text.trim()) ?? 30,
@@ -1148,7 +1149,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
             style: fieldStyle,
             decoration: bare(hint: 'Select…'),
             items: _categories.map((c) => DropdownMenuItem(
-                value: c['description'] as String,
+                value: c['id'] as String,
                 child: Text(c['description'] as String,
                     overflow: TextOverflow.ellipsis))).toList(),
             onChanged: (v) => setState(() => _category = v),

@@ -87,7 +87,16 @@ class ReportDataController {
     sortDir = bundle.definition.defaultSortDir;
     for (final f in bundle.filters) {
       if (f.defaultValue == null) continue;
-      filterValues[f.filterKey] = f.isDateRange ? _parseDefaultDateRange(f.defaultValue!) : f.defaultValue;
+      if (f.isDateRange) {
+        filterValues[f.filterKey] = _parseDefaultDateRange(f.defaultValue!);
+      } else if (f.filterType == 'BOOLEAN') {
+        // default_value is always TEXT in ric_report_filters (e.g. 'false') —
+        // the BOOLEAN filter widget casts this as `bool?`, so it must be
+        // parsed here, not passed through as a raw String.
+        filterValues[f.filterKey] = f.defaultValue!.toLowerCase() == 'true';
+      } else {
+        filterValues[f.filterKey] = f.defaultValue;
+      }
     }
     await refresh();
   }

@@ -6,4 +6,6 @@ class MasterTypeKey {
   static const department      = 'DEPARTMENT';
   static const consumptionArea = 'CONSUMPTION_AREA';
   static const paymentTerms    = 'PAYMENT_TERMS';
+  static const customerCategory = 'CUSTOMER_CATEGORY';
+  static const supplierCategory = 'SUPPLIER_CATEGORY';
 }

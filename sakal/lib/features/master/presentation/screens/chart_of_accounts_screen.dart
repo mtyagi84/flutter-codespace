@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/config/master_type_keys.dart';
 import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/master_cache_providers.dart';
@@ -79,7 +80,6 @@ class _ChartOfAccountsScreenState
   final _addr1Ctrl   = TextEditingController();
   final _addr2Ctrl   = TextEditingController();
   final _taxIdCtrl   = TextEditingController();
-  final _catCtrl     = TextEditingController();
   final _limitCtrl   = TextEditingController();
   final _daysCtrl    = TextEditingController();
 
@@ -94,6 +94,8 @@ class _ChartOfAccountsScreenState
   String? _countryCode;   // ISO code for querying cities/divisions
   String? _divisionId;
   String? _cityId;
+  String? _categoryId;
+  List<Map<String, dynamic>> _categories = [];
   bool    _creditBlocked  = false;
   bool    _isActive       = true;
   bool    _partyExpanded  = false;
@@ -116,7 +118,7 @@ class _ChartOfAccountsScreenState
   @override
   void dispose() {
     for (final c in [_nameCtrl, _codeCtrl, _contactCtrl, _phoneCtrl,
-        _emailCtrl, _addr1Ctrl, _addr2Ctrl, _taxIdCtrl, _catCtrl,
+        _emailCtrl, _addr1Ctrl, _addr2Ctrl, _taxIdCtrl,
         _limitCtrl, _daysCtrl]) {
       c.dispose();
     }
@@ -192,6 +194,41 @@ class _ChartOfAccountsScreenState
     try {
       final res = await DioClient.instance.get('/rim_cities', queryParameters: params);
       if (mounted) setState(() => _cities = List<Map<String, dynamic>>.from(res.data as List));
+    } on DioException { /* silent */ }
+  }
+
+  // Two-step common-masters lookup (type_key -> type_id -> masters), same
+  // pattern as customer_master_screen.dart/supplier_master_screen.dart's
+  // own _fetchCategories() — type_key switches with _nature since this
+  // screen (unlike those two) is account_nature-generic.
+  Future<void> _loadCategories() async {
+    if (_nature != 'Customer' && _nature != 'Supplier') return;
+    final session = ref.read(sessionProvider)!;
+    final typeKey = _nature == 'Customer'
+        ? MasterTypeKey.customerCategory
+        : MasterTypeKey.supplierCategory;
+    try {
+      final typeRes = await DioClient.instance.get('/rim_common_master_types', queryParameters: {
+        'type_key': 'eq.$typeKey',
+        'select':   'id',
+        'limit':    '1',
+      });
+      final typeList = typeRes.data as List;
+      if (typeList.isEmpty) {
+        if (mounted) setState(() => _categories = []);
+        return;
+      }
+      final typeId = (typeList.first as Map<String, dynamic>)['id'] as String;
+      final res = await DioClient.instance.get('/rim_common_masters', queryParameters: {
+        'type_id':    'eq.$typeId',
+        'client_id':  'eq.${session.clientId}',
+        'company_id': 'eq.${session.companyId}',
+        'is_deleted': 'eq.false',
+        'is_active':  'eq.true',
+        'select':     'id,description',
+        'order':      'sort_order.asc,description.asc',
+      });
+      if (mounted) setState(() => _categories = List<Map<String, dynamic>>.from(res.data as List));
     } on DioException { /* silent */ }
   }
 
@@ -273,6 +310,7 @@ class _ChartOfAccountsScreenState
       }
     } catch (_) { /* leave unset — user can pick manually */ }
     if (needsAuto) _loadAutoCode(parent['id'] as String);
+    if (autoNature == 'Customer' || autoNature == 'Supplier') _loadCategories();
   }
 
   void _openEdit(Map<String, dynamic> node) {
@@ -283,6 +321,7 @@ class _ChartOfAccountsScreenState
         : <String, dynamic>{};
     final targetDivId  = node['division_id'] as String?;
     final targetCityId = node['city_id'] as String?;
+    final targetCategoryId = node['party_category_id'] as String?;
 
     setState(() {
       _panelMode      = 'edit';
@@ -299,6 +338,8 @@ class _ChartOfAccountsScreenState
       _countryCode    = country['country_code'] as String?;
       _divisionId     = null;   // set after divisions load
       _cityId         = null;   // set after cities load
+      _categoryId     = null;   // set after categories load
+      _categories     = [];
       _creditBlocked  = node['is_credit_blocked'] as bool? ?? false;
       _isActive       = node['is_active'] as bool? ?? true;
       _partyExpanded  = false;
@@ -313,7 +354,6 @@ class _ChartOfAccountsScreenState
       _addr1Ctrl.text   = node['address_line1']  as String? ?? '';
       _addr2Ctrl.text   = node['address_line2']  as String? ?? '';
       _taxIdCtrl.text   = node['tax_id']         as String? ?? '';
-      _catCtrl.text     = node['party_category'] as String? ?? '';
       _limitCtrl.text   = node['credit_limit'] != null
           ? node['credit_limit'].toString() : '';
       _daysCtrl.text    = (node['credit_days'] ?? 30).toString();
@@ -325,6 +365,11 @@ class _ChartOfAccountsScreenState
       });
       _loadCities().then((_) {
         if (mounted) setState(() => _cityId = targetCityId);
+      });
+    }
+    if (nat == 'Customer' || nat == 'Supplier') {
+      _loadCategories().then((_) {
+        if (mounted) setState(() => _categoryId = targetCategoryId);
       });
     }
 
@@ -348,12 +393,13 @@ class _ChartOfAccountsScreenState
   void _clearForm() {
     _nameCtrl.clear(); _codeCtrl.clear(); _contactCtrl.clear();
     _phoneCtrl.clear(); _emailCtrl.clear(); _addr1Ctrl.clear();
-    _addr2Ctrl.clear(); _taxIdCtrl.clear(); _catCtrl.clear();
+    _addr2Ctrl.clear(); _taxIdCtrl.clear();
     _limitCtrl.clear();
     _currencyId = null; _currencyLocked = false; _defaultTaxGroupId = null; _partyType = null;
     _countryId  = null; _countryCode = null;
     _divisionId = null; _cityId      = null;
     _divisions  = [];   _cities      = [];
+    _categoryId = null; _categories  = [];
     _creditBlocked = false; _isActive = true;
   }
 
@@ -403,7 +449,7 @@ class _ChartOfAccountsScreenState
         'division_id':       _divisionId,
         'city_id':           _cityId,
         'tax_id':            _taxIdCtrl.text.trim().nullIfEmpty,
-        'party_category':    _catCtrl.text.trim().nullIfEmpty,
+        'party_category_id': _categoryId,
         'credit_limit':      _limitCtrl.text.trim().isEmpty
             ? null : double.tryParse(_limitCtrl.text.trim()),
         'credit_days':       int.tryParse(_daysCtrl.text.trim()) ?? 30,
@@ -844,7 +890,21 @@ class _ChartOfAccountsScreenState
                               value: n, child: Text(n))).toList(),
                           onChanged: isFixed
                               ? null
-                              : (v) => setState(() => _nature = v!),
+                              : (v) {
+                                  // Category is sourced from a nature-specific
+                                  // LOV (CUSTOMER_CATEGORY vs SUPPLIER_CATEGORY)
+                                  // — a selection made under the old nature has
+                                  // no meaning under the new one, so it's
+                                  // cleared here rather than left stale.
+                                  setState(() {
+                                    _nature      = v!;
+                                    _categoryId  = null;
+                                    _categories  = [];
+                                  });
+                                  if (_nature == 'Customer' || _nature == 'Supplier') {
+                                    _loadCategories();
+                                  }
+                                },
                         ),
                       ),
                 _currencyLocked
@@ -1091,10 +1151,21 @@ class _ChartOfAccountsScreenState
         SakalFieldCard(
           label: 'Category',
           editable: true,
-          child: TextField(
-              controller: _catCtrl,
-              style: fieldStyle,
-              decoration: bare(hint: 'e.g. Wholesale')),
+          child: DropdownButtonFormField<String>(
+            // Externally-driven value (Nature switch clears it, async
+            // load restores it after an edit) — a fresh key forces a
+            // clean remount instead of a stale FormField-family display.
+            key: ValueKey('$_nature-$_categoryId'),
+            initialValue: _categoryId,
+            isExpanded: true, isDense: true, itemHeight: null,
+            style: fieldStyle,
+            decoration: bare(hint: 'Select…'),
+            items: _categories.map((c) => DropdownMenuItem(
+                value: c['id'] as String,
+                child: Text(c['description'] as String,
+                    overflow: TextOverflow.ellipsis))).toList(),
+            onChanged: (v) => setState(() => _categoryId = v),
+          ),
         ),
         SakalFieldCard(
           label: 'Credit Days',

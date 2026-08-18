@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/config/master_type_keys.dart';
+import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -75,7 +77,6 @@ class _ProspectConversionDialogState extends ConsumerState<_ProspectConversionDi
   late final TextEditingController _emailCtrl;
   late final TextEditingController _addressCtrl;
   final _taxIdCtrl = TextEditingController();
-  final _categoryCtrl = TextEditingController();
   final _creditLimitCtrl = TextEditingController();
   final _creditDaysCtrl = TextEditingController(text: '30');
   final _notesCtrl = TextEditingController();
@@ -83,6 +84,8 @@ class _ProspectConversionDialogState extends ConsumerState<_ProspectConversionDi
   String? _partyType;
   String? _currencyId;
   List<Map<String, dynamic>> _currencies = [];
+  String? _categoryId;
+  List<Map<String, dynamic>> _categories = [];
   bool _loading = true;
   bool _saving = false;
   String? _error;
@@ -105,7 +108,6 @@ class _ProspectConversionDialogState extends ConsumerState<_ProspectConversionDi
     _emailCtrl.dispose();
     _addressCtrl.dispose();
     _taxIdCtrl.dispose();
-    _categoryCtrl.dispose();
     _creditLimitCtrl.dispose();
     _creditDaysCtrl.dispose();
     _notesCtrl.dispose();
@@ -116,17 +118,45 @@ class _ProspectConversionDialogState extends ConsumerState<_ProspectConversionDi
     try {
       final currencies = await ref.read(currenciesProvider.future);
       final baseCode = await ref.read(baseCurrencyProvider.future);
+      final categories = await _fetchCategories();
       if (mounted) {
         setState(() {
           _currencies = currencies;
           final base = currencies.where((c) => c['currency_id'] == baseCode).toList();
           _currencyId = base.isNotEmpty ? base.first['id'] as String? : (currencies.isNotEmpty ? currencies.first['id'] as String? : null);
+          _categories = categories;
           _loading = false;
         });
       }
     } catch (e) {
       if (mounted) setState(() { _loading = false; _error = 'Could not load currencies: $e'; });
     }
+  }
+
+  // Two-step common-masters lookup (type_key -> type_id -> masters), same
+  // pattern as customer_master_screen.dart's own _fetchCategories() —
+  // always CUSTOMER_CATEGORY here since a prospect only ever converts to
+  // a Customer, never a Supplier.
+  Future<List<Map<String, dynamic>>> _fetchCategories() async {
+    final session = ref.read(sessionProvider)!;
+    final typeRes = await DioClient.instance.get('/rim_common_master_types', queryParameters: {
+      'type_key': 'eq.${MasterTypeKey.customerCategory}',
+      'select':   'id',
+      'limit':    '1',
+    });
+    final typeList = typeRes.data as List;
+    if (typeList.isEmpty) return [];
+    final typeId = (typeList.first as Map<String, dynamic>)['id'] as String;
+    final res = await DioClient.instance.get('/rim_common_masters', queryParameters: {
+      'type_id':    'eq.$typeId',
+      'client_id':  'eq.${session.clientId}',
+      'company_id': 'eq.${session.companyId}',
+      'is_deleted': 'eq.false',
+      'is_active':  'eq.true',
+      'select':     'id,description',
+      'order':      'sort_order.asc,description.asc',
+    });
+    return List<Map<String, dynamic>>.from(res.data as List);
   }
 
   Future<void> _confirm() async {
@@ -157,7 +187,7 @@ class _ProspectConversionDialogState extends ConsumerState<_ProspectConversionDi
           'email':               _emailCtrl.text.trim(),
           'address_line1':       _addressCtrl.text.trim(),
           'tax_id':              _taxIdCtrl.text.trim(),
-          'party_category':      _categoryCtrl.text.trim(),
+          'party_category_id':   _categoryId,
           'credit_limit':        double.tryParse(_creditLimitCtrl.text.trim()),
           'credit_days':         int.tryParse(_creditDaysCtrl.text.trim()) ?? 30,
         },
@@ -260,7 +290,15 @@ class _ProspectConversionDialogState extends ConsumerState<_ProspectConversionDi
                     Row(children: [
                       Expanded(child: TextFormField(controller: _taxIdCtrl, decoration: dec.copyWith(labelText: 'Tax ID'))),
                       const SizedBox(width: 10),
-                      Expanded(child: TextFormField(controller: _categoryCtrl, decoration: dec.copyWith(labelText: 'Category'))),
+                      Expanded(child: DropdownButtonFormField<String>(
+                        decoration: dec.copyWith(labelText: 'Category'),
+                        isExpanded: true, isDense: true, itemHeight: null,
+                        initialValue: _categoryId,
+                        items: _categories.map((c) => DropdownMenuItem(value: c['id'] as String,
+                            child: Text(c['description'] as String, style: const TextStyle(fontSize: 13),
+                                overflow: TextOverflow.ellipsis))).toList(),
+                        onChanged: (v) => setState(() => _categoryId = v),
+                      )),
                     ]),
                     const SizedBox(height: 10),
                     Row(children: [

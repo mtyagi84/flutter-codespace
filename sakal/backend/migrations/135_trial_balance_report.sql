@@ -89,7 +89,7 @@ CREATE OR REPLACE FUNCTION fn_trial_balance_lines_base(
 ) LANGUAGE sql STABLE AS $$
     WITH fy AS (
         SELECT id, fy_start_date
-        FROM rim_financial_years
+        FROM   rim_financial_years
         WHERE client_id = p_client_id AND company_id = p_company_id
           AND fy_start_date <= p_date_from AND fy_end_date >= p_date_from
         LIMIT 1

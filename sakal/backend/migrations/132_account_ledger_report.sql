@@ -118,9 +118,11 @@ CREATE OR REPLACE FUNCTION fn_account_ledger_lines(
                           WHERE ula.user_id = (current_setting('request.jwt.claims', true)::json->>'user_id')::uuid
                             AND ula.client_id = h.client_id AND ula.company_id = h.company_id
                             AND ula.is_active = true AND ula.is_deleted = false)
-              OR h.location_id IN (SELECT ula.location_id FROM ric_user_location_access ula
+              OR h.location_id IN (SELECT ula.location_id 
+                                   FROM ric_user_location_access ula
                                     WHERE ula.user_id = (current_setting('request.jwt.claims', true)::json->>'user_id')::uuid
-                                      AND ula.client_id = h.client_id AND ula.company_id = h.company_id
+                                      AND ula.client_id = h.client_id
+                                      AND ula.company_id = h.company_id
                                       AND ula.is_active = true AND ula.is_deleted = false)
           )
     ),
