@@ -87,7 +87,36 @@ class _SakalReportTableState extends State<SakalReportTable> {
   List<ReportColumn> get _visibleColumns =>
       widget.bundle.columns.where((c) => !_hiddenColumns.contains(c.columnKey)).toList();
 
-  double get _totalWidth => _visibleColumns.fold(0.0, (sum, c) => sum + (_widths[c.columnKey] ?? _defaultColumnWidth));
+  double get _totalWidth =>
+      _visibleColumns.fold(0.0, (sum, c) => sum + (_widths[c.columnKey] ?? _defaultColumnWidth)) + _extraGroupPrefixWidth;
+
+  // Group-header rows (_buildGroupHeaderRow) prepend content that a plain
+  // header/data row never has: an indent SizedBox per nesting depth, and —
+  // whenever a level's own group_label_column isn't one of the visible
+  // columns (e.g. this report hides party_currency at the detail-row level
+  // because it's already shown via the group header) — a fallback
+  // icon+label cell sized from that column's own configured width. Neither
+  // is part of _visibleColumns, so leaving it out of _totalWidth understates
+  // how wide a group row can actually get, and the horizontal scroll region
+  // (sized to _totalWidth everywhere else in this file) then overflows by
+  // exactly the missing amount — caught live (a real, not hypothetical,
+  // overflow) once the group-header row itself was fixed to have a bounded
+  // width instead of crashing outright. Using the deepest indent and the
+  // widest applicable fallback label across all levels is a safe, if
+  // slightly generous, upper bound — the extra reads as blank trailing
+  // space on header/data/totals rows, never a wrongly-narrow column.
+  double get _extraGroupPrefixWidth {
+    if (!widget.bundle.isGrouped) return 0.0;
+    final maxIndent = widget.bundle.groupLevels.length * 20.0;
+    var maxFallbackLabel = 0.0;
+    for (final level in widget.bundle.groupLevels) {
+      final labelColVisible = _visibleColumns.any((c) => c.columnKey == level.groupLabelColumn);
+      if (labelColVisible) continue;
+      final w = _widths[level.groupLabelColumn] ?? _defaultColumnWidth;
+      if (w > maxFallbackLabel) maxFallbackLabel = w;
+    }
+    return maxIndent + maxFallbackLabel;
+  }
 
   @override
   Widget build(BuildContext context) {
