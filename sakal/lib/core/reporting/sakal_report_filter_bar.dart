@@ -201,10 +201,21 @@ class _SakalReportFilterBarState extends ConsumerState<SakalReportFilterBar> {
         // from the plain-dropdown ACCOUNT_PICKER above, which stays as-is
         // for reports (e.g. Sales Register's Customer filter) that don't
         // need Finance's Code/Name/Parent-Group disambiguation.
+        //
+        // lookup_source is unused by DROPDOWN_LOOKUP's own meaning for this
+        // filter type (that's a table/view name) — repurposed here to hold
+        // an optional account_nature restriction ('Customer'/'Supplier'),
+        // so a report like Customer Ageing can scope its own Account filter
+        // to just Customer accounts instead of every postable account in
+        // the chart. Left NULL (as Account Ledger's own filter is) shows
+        // every postable account, unrestricted, same as before.
+        final natureFiltered = f.lookupSource != null
+            ? postableAccounts.where((a) => a['account_nature'] == f.lookupSource).toList()
+            : postableAccounts;
         final selectedId = _values[f.filterKey] as String?;
         Map<String, dynamic>? selected;
         if (selectedId != null) {
-          for (final a in postableAccounts) {
+          for (final a in natureFiltered) {
             if (a['id'] == selectedId) {
               selected = a;
               break;
@@ -213,7 +224,7 @@ class _SakalReportFilterBarState extends ConsumerState<SakalReportFilterBar> {
         }
         return FinanceAccountPicker(
           key: ValueKey(selectedId),
-          accounts: postableAccounts,
+          accounts: natureFiltered,
           initialValue: selected != null ? FinanceAccountPicker.displayString(selected) : null,
           onSelected: (a) => _set(f.filterKey, a['id'] as String),
           decoration: InputDecoration(labelText: f.label, isDense: true, border: const OutlineInputBorder()),

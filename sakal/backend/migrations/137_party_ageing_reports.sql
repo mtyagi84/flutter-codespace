@@ -550,8 +550,12 @@ BEGIN
                 'v_party_account_groups_lookup', 'group_name', 'group_id', false, 1),
             (v_company.client_id, v_company.company_id, v_report_id, 'category_id', 'Category', 'DROPDOWN_LOOKUP',
                 'v_customer_categories_lookup', 'category_name', 'category_id', false, 2),
+            -- lookup_source repurposed here to hold an account_nature
+            -- restriction (see sakal_report_filter_bar.dart's
+            -- FINANCE_ACCOUNT_PICKER case) — scopes this picker to
+            -- Customer accounts only, not every postable account.
             (v_company.client_id, v_company.company_id, v_report_id, 'account_id', 'Customer Name', 'FINANCE_ACCOUNT_PICKER',
-                NULL, NULL, 'account_id', false, 3),
+                'Customer', NULL, 'account_id', false, 3),
             (v_company.client_id, v_company.company_id, v_report_id, 'currency', 'Currency', 'DROPDOWN_LOOKUP',
                 'v_party_currencies_lookup', 'currency_code', 'currency', false, 4);
 
@@ -617,7 +621,7 @@ BEGIN
             (v_company.client_id, v_company.company_id, v_report_id, 'category_id', 'Category', 'DROPDOWN_LOOKUP',
                 'v_supplier_categories_lookup', 'category_name', 'category_id', false, 2),
             (v_company.client_id, v_company.company_id, v_report_id, 'account_id', 'Supplier Name', 'FINANCE_ACCOUNT_PICKER',
-                NULL, NULL, 'account_id', false, 3),
+                'Supplier', NULL, 'account_id', false, 3),
             (v_company.client_id, v_company.company_id, v_report_id, 'currency', 'Currency', 'DROPDOWN_LOOKUP',
                 'v_party_currencies_lookup', 'currency_code', 'currency', false, 4);
 
