@@ -84,8 +84,8 @@ GRANT SELECT ON v_expense_account_groups_lookup TO authenticated;
 CREATE OR REPLACE FUNCTION fn_expense_report_matrix_base(
     p_client_id  UUID,
     p_company_id UUID,
-    p_date_from  DATE,
-    p_date_to    DATE,
+    p_trans_date_from  DATE,
+    p_trans_date_to    DATE,
     p_posted_only BOOLEAN DEFAULT true,
     p_group_id    UUID DEFAULT NULL
 ) RETURNS TABLE (
@@ -108,7 +108,7 @@ CREATE OR REPLACE FUNCTION fn_expense_report_matrix_base(
     JOIN rim_accounts a ON a.id = l.account_id
     LEFT JOIN rim_accounts p ON p.id = a.parent_id AND p.client_id = a.client_id AND p.company_id = a.company_id
     WHERE l.client_id = p_client_id AND l.company_id = p_company_id
-      AND h.trans_date BETWEEN p_date_from AND p_date_to
+      AND h.trans_date BETWEEN p_trans_date_from AND p_trans_date_to
       AND (NOT p_posted_only OR h.is_posted = true)
       AND h.is_deleted = false AND l.is_deleted = false
       AND (p_group_id IS NULL OR a.parent_id = p_group_id)
@@ -131,8 +131,8 @@ GRANT EXECUTE ON FUNCTION fn_expense_report_matrix_base(UUID, UUID, DATE, DATE, 
 CREATE OR REPLACE FUNCTION fn_expense_report_matrix_local(
     p_client_id  UUID,
     p_company_id UUID,
-    p_date_from  DATE,
-    p_date_to    DATE,
+    p_trans_date_from  DATE,
+    p_trans_date_to    DATE,
     p_posted_only BOOLEAN DEFAULT true,
     p_group_id    UUID DEFAULT NULL
 ) RETURNS TABLE (
@@ -155,7 +155,7 @@ CREATE OR REPLACE FUNCTION fn_expense_report_matrix_local(
     JOIN rim_accounts a ON a.id = l.account_id
     LEFT JOIN rim_accounts p ON p.id = a.parent_id AND p.client_id = a.client_id AND p.company_id = a.company_id
     WHERE l.client_id = p_client_id AND l.company_id = p_company_id
-      AND h.trans_date BETWEEN p_date_from AND p_date_to
+      AND h.trans_date BETWEEN p_trans_date_from AND p_trans_date_to
       AND (NOT p_posted_only OR h.is_posted = true)
       AND h.is_deleted = false AND l.is_deleted = false
       AND (p_group_id IS NULL OR a.parent_id = p_group_id)
