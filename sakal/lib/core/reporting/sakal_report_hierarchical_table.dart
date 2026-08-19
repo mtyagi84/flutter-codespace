@@ -62,7 +62,9 @@ class _SakalReportHierarchicalTableState extends State<SakalReportHierarchicalTa
   @override
   void didUpdateWidget(covariant SakalReportHierarchicalTable oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.rows, widget.rows)) _buildTrees();
+    if (!identical(oldWidget.rows, widget.rows)) {
+      _buildTrees();
+    }
   }
 
   // rows arrive flat, each carrying its own parent_id — link them into a
@@ -106,7 +108,9 @@ class _SakalReportHierarchicalTableState extends State<SakalReportHierarchicalTa
     int cmp(_PlNode a, _PlNode b) => a.name.compareTo(b.name);
     void sortRec(List<_PlNode> list) {
       list.sort(cmp);
-      for (final n in list) sortRec(n.children);
+      for (final n in list) {
+        sortRec(n.children);
+      }
     }
 
     sortRec(roots);
@@ -117,11 +121,15 @@ class _SakalReportHierarchicalTableState extends State<SakalReportHierarchicalTa
     final items = <_PlRenderItem>[
       _PlRenderItem(_PlNode(id: '__section__', name: sectionLabel, levelDepth: 0, isLeaf: false, amount: sectionTotal), 0),
     ];
-    if (!sectionExpanded) return items;
+    if (!sectionExpanded) {
+      return items;
+    }
     void walk(List<_PlNode> nodes, int depth) {
       for (final n in nodes) {
         items.add(_PlRenderItem(n, depth));
-        if (n.expanded) walk(n.children, depth + 1);
+        if (n.expanded) {
+          walk(n.children, depth + 1);
+        }
       }
     }
 
