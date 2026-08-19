@@ -153,6 +153,17 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
     setState(() { _exportingPdf = true; _actionError = null; });
     try {
       final bundle = _bundle!, controller = _controller!;
+      if (bundle.isHierarchical) {
+        // Hierarchical data (P&L) is already fully loaded, like MATRIX —
+        // no extra fetch needed, just flatten + write the indented tree.
+        final session = ref.read(sessionProvider);
+        final company = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
+        await ReportPdfExport.exportHierarchical(
+          definition: bundle.definition, rows: controller.items, totals: controller.totals,
+          filterSummary: _buildFilterSummary(),
+          company: company, printedByName: session?.fullName ?? '—', printedOn: DateTime.now());
+        return;
+      }
       final rows = await _repository.fetchAllForExport(
         bundle: bundle, clientId: controller.clientId, companyId: controller.companyId,
         filterValues: controller.filterValues,
@@ -190,6 +201,12 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
         await ReportExcelExport.exportMatrix(
           definition: bundle.definition, columns: bundle.columns, rows: controller.items,
           numberFormat: session?.numberFormat ?? 'INTERNATIONAL');
+        return;
+      }
+      if (bundle.isHierarchical) {
+        // Same "already fully loaded" reasoning as MATRIX above.
+        await ReportExcelExport.exportHierarchical(
+          definition: bundle.definition, rows: controller.items, totals: controller.totals);
         return;
       }
       final rows = await _repository.fetchAllForExport(

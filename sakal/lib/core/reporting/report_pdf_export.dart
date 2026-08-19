@@ -4,6 +4,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'report_export_helpers.dart';
+import 'report_hierarchy_export.dart';
 import 'report_models.dart';
 import 'report_repository.dart';
 
@@ -122,10 +123,92 @@ class ReportPdfExport {
 
     final bytes = await doc.save();
     final filename = '${definition.reportKey.toLowerCase()}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+    await _saveAndOpenPdf(bytes, filename);
+  }
 
-    // Same platform dispatch as PrintEngine.printDocument — see that
-    // file's own comment for why Web must go through sharePdf() too, not
-    // just native Android/iOS.
+  /// HIERARCHICAL-report export (P&L) — writes the real indented tree
+  /// (Income section fully expanded, then Expense, then Total Income /
+  /// Total Expense / Net Profit), not the flat row-per-record shape
+  /// `export()` above uses. Built via a plain pw.Table rather than
+  /// TableHelper.fromTextArray so every row's bold/indent is under direct
+  /// control, no reliance on that helper's own per-row styling API. Reuses
+  /// flattenPlForExport (report_hierarchy_export.dart) — the exact same
+  /// derivation the on-screen widget's tree is built from, so the PDF can
+  /// never disagree with what's on screen.
+  static Future<void> exportHierarchical({
+    required ReportDefinition definition,
+    required List<ReportRow> rows,
+    required ReportRow? totals,
+    required Map<String, String> filterSummary,
+    required Map<String, dynamic> company,
+    required String printedByName,
+    required DateTime printedOn,
+  }) async {
+    final exportRows = flattenPlForExport(rows: rows, totals: totals);
+    final doc = pw.Document();
+
+    pw.TableRow headerRow() => pw.TableRow(
+          decoration: pw.BoxDecoration(color: _navy),
+          children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+              child: pw.Text('Account / Group Name', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9, color: PdfColors.white)),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+              child: pw.Text('Amount', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9, color: PdfColors.white)),
+            ),
+          ],
+        );
+
+    pw.TableRow dataRow(PlExportRow r) => pw.TableRow(
+          decoration: r.isTotalRow ? pw.BoxDecoration(color: PdfColor.fromHex('#E8ECF3')) : null,
+          children: [
+            pw.Padding(
+              padding: pw.EdgeInsets.only(left: 6.0 + r.depth * 12, right: 6, top: 4, bottom: 4),
+              child: pw.Text(r.label,
+                  style: pw.TextStyle(fontSize: 8.5, fontWeight: (r.isGroup || r.isTotalRow) ? pw.FontWeight.bold : pw.FontWeight.normal)),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: pw.Text(r.amount.toStringAsFixed(2),
+                  textAlign: pw.TextAlign.right,
+                  style: pw.TextStyle(fontSize: 8.5, fontWeight: (r.isGroup || r.isTotalRow) ? pw.FontWeight.bold : pw.FontWeight.normal)),
+            ),
+          ],
+        );
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        header: (context) => _buildHeader(company, definition.reportName, filterSummary, context.pageNumber),
+        footer: (context) => _buildFooter(context, printedByName, printedOn),
+        build: (context) => [
+          if (exportRows.isEmpty)
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(vertical: 24),
+              child: pw.Text('No records found for the selected filters.',
+                  style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+            )
+          else
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.4),
+              columnWidths: const {0: pw.FlexColumnWidth(4), 1: pw.FlexColumnWidth(1.2)},
+              children: [headerRow(), ...exportRows.map(dataRow)],
+            ),
+        ],
+      ),
+    );
+
+    final bytes = await doc.save();
+    final filename = '${definition.reportKey.toLowerCase()}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+    await _saveAndOpenPdf(bytes, filename);
+  }
+
+  // Same platform dispatch as PrintEngine.printDocument — see that
+  // file's own comment for why Web must go through sharePdf() too, not
+  // just native Android/iOS. Shared by export() and exportHierarchical().
+  static Future<void> _saveAndOpenPdf(Uint8List bytes, String filename) async {
     final isNativeDesktop = !kIsWeb &&
         defaultTargetPlatform != TargetPlatform.android && defaultTargetPlatform != TargetPlatform.iOS;
     if (isNativeDesktop) {

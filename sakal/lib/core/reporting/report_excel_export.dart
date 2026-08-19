@@ -3,6 +3,7 @@ import 'package:excel/excel.dart' as xls;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'report_export_helpers.dart';
+import 'report_hierarchy_export.dart';
 import 'report_matrix_pivot.dart';
 import 'report_models.dart';
 import 'report_repository.dart';
@@ -141,6 +142,54 @@ class ReportExcelExport {
       ...pivot.dimensionValues.map((d) => xls.DoubleCellValue((pivot.columnTotals[d] ?? 0).toDouble())),
       xls.DoubleCellValue(pivot.grandTotal.toDouble()),
     ]);
+
+    final bytes = workbook.encode();
+    if (bytes == null) return;
+    final filename = '${definition.reportKey.toLowerCase()}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+    await _saveWorkbookBytes(bytes, filename, 'Save ${definition.reportName}');
+  }
+
+  /// HIERARCHICAL-report export (P&L) — one indented "Account / Group
+  /// Name" text column + one numeric "Amount" column, Income section
+  /// fully expanded then Expense then Total Income/Total Expense/Net
+  /// Profit — same shape as ReportPdfExport.exportHierarchical, built
+  /// from the same flattenPlForExport derivation (report_hierarchy_
+  /// export.dart) so neither export can disagree with the other or with
+  /// what's on screen. Indentation is a leading-space text prefix, not a
+  /// cell-indent style property — the `excel` package (^4.0.6, checked
+  /// against pubspec) has no reliably cross-version cell-indent API,
+  /// while leading spaces work in every version and every spreadsheet app.
+  static Future<void> exportHierarchical({
+    required ReportDefinition definition,
+    required List<ReportRow> rows,
+    required ReportRow? totals,
+  }) async {
+    final exportRows = flattenPlForExport(rows: rows, totals: totals);
+    final workbook = xls.Excel.createExcel();
+    final sheetName = workbook.getDefaultSheet()!;
+    final sheet = workbook[sheetName];
+
+    final boldStyle = xls.CellStyle(bold: true);
+
+    void setBold(int rowIndex) {
+      for (var col = 0; col < 2; col++) {
+        sheet.cell(xls.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: rowIndex)).cellStyle = boldStyle;
+      }
+    }
+
+    sheet.appendRow([xls.TextCellValue('Account / Group Name'), xls.TextCellValue('Amount')]);
+    setBold(0);
+
+    for (var i = 0; i < exportRows.length; i++) {
+      final r = exportRows[i];
+      sheet.appendRow([
+        xls.TextCellValue(('  ' * r.depth) + r.label),
+        xls.DoubleCellValue(r.amount.toDouble()),
+      ]);
+      if (r.isGroup || r.isTotalRow) {
+        setBold(i + 1); // +1: row 0 is the header
+      }
+    }
 
     final bytes = workbook.encode();
     if (bytes == null) return;

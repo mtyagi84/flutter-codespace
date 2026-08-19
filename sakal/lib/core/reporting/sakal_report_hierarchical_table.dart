@@ -2,31 +2,17 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../utils/app_number_format.dart';
 import '../utils/responsive.dart';
+import 'report_hierarchy_export.dart';
 import 'report_repository.dart';
 
-/// One node in a P&L's real arbitrary-depth account tree — built once,
-/// client-side, from the single flat fetch fn_pl_tree_*_base/_local
-/// returns (node_id, parent_id, section, node_name, level_depth,
-/// is_leaf, amount, sort_key). Unlike the grouped-TABULAR mechanism's
-/// ReportGroupNode, nothing here is lazy — the whole tree is already in
-/// memory, so expand/collapse is pure local UI state, no controller
-/// round-trip. See sakal_report_table.dart's own _flattenGroups for the
-/// precedent this mirrors (flatten a tree into one ListView.builder-
-/// friendly list, indent by depth).
-class _PlNode {
-  _PlNode({required this.id, required this.name, required this.levelDepth, required this.isLeaf, required this.amount});
-  final String id;
-  final String name;
-  final int levelDepth;
-  final bool isLeaf;
-  final num amount;
-  final List<_PlNode> children = [];
-  bool expanded = true; // P&L trees are small — default open, unlike Ageing/Pending Bills' default-collapsed currency groups
-}
-
+/// Tree-building (PlNode, buildPlSections) now lives in
+/// report_hierarchy_export.dart, shared with both PDF/Excel export paths
+/// so the on-screen tree and the exported one can never disagree — this
+/// file keeps only the widget-specific state-aware flatten (respects
+/// live expand/collapse, which a static export has no concept of).
 class _PlRenderItem {
   const _PlRenderItem(this.node, this.depth);
-  final _PlNode node;
+  final PlNode node;
   final int depth; // 0 = section header itself
 }
 
@@ -50,8 +36,8 @@ class SakalReportHierarchicalTable extends StatefulWidget {
 }
 
 class _SakalReportHierarchicalTableState extends State<SakalReportHierarchicalTable> {
-  late List<_PlNode> _incomeRoots;
-  late List<_PlNode> _expenseRoots;
+  late List<PlNode> _incomeRoots;
+  late List<PlNode> _expenseRoots;
 
   @override
   void initState() {
@@ -67,64 +53,20 @@ class _SakalReportHierarchicalTableState extends State<SakalReportHierarchicalTa
     }
   }
 
-  // rows arrive flat, each carrying its own parent_id — link them into a
-  // real tree per section. A row whose parent_id doesn't appear anywhere
-  // in this section's own node map is a level_depth==1 root (its true
-  // parent is the section's own synthetic root, which is never itself a
-  // row — see migration 143's fn_pl_tree_base).
   void _buildTrees() {
-    final bySection = <String, List<ReportRow>>{};
-    for (final r in widget.rows) {
-      bySection.putIfAbsent('${r['section']}', () => []).add(r);
-    }
-    _incomeRoots = _buildSectionTree(bySection['INCOME'] ?? const []);
-    _expenseRoots = _buildSectionTree(bySection['EXPENSE'] ?? const []);
+    final sections = buildPlSections(widget.rows);
+    _incomeRoots = sections.incomeRoots;
+    _expenseRoots = sections.expenseRoots;
   }
 
-  List<_PlNode> _buildSectionTree(List<ReportRow> rows) {
-    final nodes = <String, _PlNode>{};
-    for (final r in rows) {
-      final id = '${r['node_id']}';
-      nodes[id] = _PlNode(
-        id: id,
-        name: '${r['node_name']}',
-        levelDepth: (r['level_depth'] as num).toInt(),
-        isLeaf: r['is_leaf'] == true,
-        amount: (r['amount'] as num?) ?? 0,
-      );
-    }
-    final roots = <_PlNode>[];
-    for (final r in rows) {
-      final id = '${r['node_id']}';
-      final parentId = r['parent_id']?.toString();
-      final node = nodes[id]!;
-      final parent = parentId != null ? nodes[parentId] : null;
-      if (parent != null) {
-        parent.children.add(node);
-      } else {
-        roots.add(node);
-      }
-    }
-    int cmp(_PlNode a, _PlNode b) => a.name.compareTo(b.name);
-    void sortRec(List<_PlNode> list) {
-      list.sort(cmp);
-      for (final n in list) {
-        sortRec(n.children);
-      }
-    }
-
-    sortRec(roots);
-    return roots;
-  }
-
-  List<_PlRenderItem> _flatten(String sectionLabel, num sectionTotal, List<_PlNode> roots, bool sectionExpanded) {
+  List<_PlRenderItem> _flatten(String sectionLabel, num sectionTotal, List<PlNode> roots, bool sectionExpanded) {
     final items = <_PlRenderItem>[
-      _PlRenderItem(_PlNode(id: '__section__', name: sectionLabel, levelDepth: 0, isLeaf: false, amount: sectionTotal), 0),
+      _PlRenderItem(PlNode(id: '__section__', name: sectionLabel, levelDepth: 0, isLeaf: false, amount: sectionTotal), 0),
     ];
     if (!sectionExpanded) {
       return items;
     }
-    void walk(List<_PlNode> nodes, int depth) {
+    void walk(List<PlNode> nodes, int depth) {
       for (final n in nodes) {
         items.add(_PlRenderItem(n, depth));
         if (n.expanded) {
@@ -200,7 +142,7 @@ class _SakalReportHierarchicalTableState extends State<SakalReportHierarchicalTa
   // by doing that; here the amount is a separate fixed-position trailing
   // widget unaffected by however much indent the name side carries,
   // avoiding that class of bug by construction.
-  Widget _nodeRow(_PlNode node, int depth) => InkWell(
+  Widget _nodeRow(PlNode node, int depth) => InkWell(
         onTap: node.isLeaf ? null : () => setState(() => node.expanded = !node.expanded),
         child: Container(
           decoration: BoxDecoration(
