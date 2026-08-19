@@ -91,12 +91,28 @@ Income/Expense/Net Profit footer can never disagree with the tree's own numbers.
 - `sakal_report_screen.dart` gained a third `report_type` branch (Matrix → Hierarchical → plain
   Tabular).
 
-### Scope decision: Excel/PDF export not tree-aware yet
-Falls back to the existing flat `fetchAllForExport` + `ReportExcelExport.export` path — functional
-(rows in correct `sort_key` order: section → depth → account code) but not indented into a visual tree
-in the exported file. Flagged as a known limitation, not built now, to avoid over-scoping an already
-large first-of-its-kind feature; a `report_hierarchy_pivot.dart` sibling to `report_matrix_pivot.dart`
-would be the natural follow-up if tree-shaped export is needed later.
+### Update 2026-08-19 (same day): real hierarchical PDF/Excel export built
+The deferred export gap above was hit live the same day the screen was tested — wrong row order, no
+Income/Expense/Net Profit totals, and (in Excel specifically) an unindented single column that read as
+confusing. Rather than the flat 3-column shape the user first sketched as an example (`Type | Group
+Name | Account Name | Balance`), the actual fix keeps **real arbitrary-depth hierarchy** in both
+exports too — a fixed `Group Name` column can only ever represent one level, which would silently lose
+a 3rd/4th-level subgroup some company's COA might have (confirmed with the user, who agreed once this
+tradeoff was explained).
+
+Built `report_hierarchy_export.dart` — `PlNode`/`buildPlSections` (the tree-building logic, extracted
+out of `SakalReportHierarchicalTable` so the widget and both exporters share one derivation, same
+"can never disagree" precedent `report_matrix_pivot.dart` already established for MATRIX) plus
+`flattenPlForExport()` (always walks the full tree — a static document has no "collapsed" state, unlike
+the widget's own live expand/collapse). `ReportPdfExport.exportHierarchical()` (built via a plain
+`pw.Table`/`pw.TableRow`, not `TableHelper.fromTextArray`, for guaranteed per-row bold/indent without
+depending on that helper's unverifiable-without-a-toolchain row-styling API) and
+`ReportExcelExport.exportHierarchical()` (indentation via a leading-space text prefix, not a
+package-specific cell-indent style — `excel: ^4.0.6` has no reliable cross-version indent API) both
+render: Income section (fully expanded) → Expense section (fully expanded) → Total Income / Total
+Expense / Net Profit, one indented "Account / Group Name" column + Amount. `sakal_report_screen.dart`'s
+`_exportPdf`/`_exportExcel` gained a `bundle.isHierarchical` branch each, parallel to the existing
+`isMatrix` one, using already-loaded `controller.items`/`controller.totals` — no extra fetch.
 
 ## Files touched
 
@@ -105,8 +121,11 @@ would be the natural follow-up if tree-shaped export is needed later.
 | `backend/migrations/143_profit_loss_hierarchical.sql` | **New** — the whole backend |
 | `backend/functions/fn_seed_client_modules.sql` | `FN-PNL` repointed, new `FN-RPT-PNL` added |
 | `lib/core/reporting/report_data_controller.dart` | `_loadAllForHierarchical()` |
-| `lib/core/reporting/sakal_report_screen.dart` | Third report_type branch |
-| `lib/core/reporting/sakal_report_hierarchical_table.dart` | **New** — the tree widget |
+| `lib/core/reporting/sakal_report_screen.dart` | Third report_type branch; `isHierarchical` export branch in both `_exportPdf`/`_exportExcel` |
+| `lib/core/reporting/sakal_report_hierarchical_table.dart` | **New** — the tree widget; later refactored to use the shared `PlNode`/`buildPlSections` |
+| `lib/core/reporting/report_hierarchy_export.dart` | **New** (2026-08-19 follow-up) — shared tree-build + export flatten |
+| `lib/core/reporting/report_pdf_export.dart` | **New** `exportHierarchical()` (2026-08-19 follow-up) |
+| `lib/core/reporting/report_excel_export.dart` | **New** `exportHierarchical()` (2026-08-19 follow-up) |
 
 ## Verification
 
