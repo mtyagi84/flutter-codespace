@@ -13,18 +13,22 @@
 -- match any parameter on the function). Caught live by the user running
 -- the report.
 --
--- CREATE OR REPLACE FUNCTION with the SAME type signature (UUID, UUID,
--- DATE, DATE, BOOLEAN, UUID) but different parameter NAMES is safe here
--- — parameter names aren't part of Postgres's overload-resolution
--- signature (only types are), so this is a plain rename, not the
--- RETURNS-TABLE-shape or new-parameter overload gotcha documented
--- elsewhere in this project's own conventions.
+-- CREATE OR REPLACE FUNCTION does NOT allow renaming an input parameter
+-- even when the type signature is unchanged — Postgres rejects it
+-- outright (42P13: "cannot change name of input parameter", with its own
+-- DROP FUNCTION hint), a real gotcha this migration's first draft got
+-- wrong (assumed only RETURNS-TABLE-shape changes or new-parameter
+-- overloads needed a DROP first — a parameter RENAME needs one too).
+-- Caught live running this exact migration in Supabase.
 --
 -- Fixed at the source in 141_expense_report_matrix.sql's own file too
 -- (won't re-apply itself, per this project's "editing a run migration
 -- does nothing" rule) — this migration is what actually fixes the live
 -- database.
 -- ============================================================
+
+DROP FUNCTION IF EXISTS fn_expense_report_matrix_base(UUID, UUID, DATE, DATE, BOOLEAN, UUID);
+DROP FUNCTION IF EXISTS fn_expense_report_matrix_local(UUID, UUID, DATE, DATE, BOOLEAN, UUID);
 
 CREATE OR REPLACE FUNCTION fn_expense_report_matrix_base(
     p_client_id  UUID,
