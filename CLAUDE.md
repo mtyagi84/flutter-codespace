@@ -166,7 +166,7 @@ Every transaction stores exchange rate → all 3 currencies derived automaticall
 | Sales (quotations, orders, invoices, receipts, returns) | Sales Quotation (with Prospect support), Sales Order (Direct + Against-Quotation, price/discount governance, Payment Terms master), and Sales Invoice / Quick Invoice (Direct + Against-Quotation/Order, first screen with real GL/stock impact, offline + Manager Review) done. Dedicated Receipts/Returns screens still pending |
 | Purchase (PO, GRN, invoices, payments) | Pending |
 | Inventory (stock, transfers, adjustments) | Material Requisition/Issue, Stock Transfer (Request/Transfer/Receipt), and Stock Adjustment all done. Barcode traceability + company-config field gating (Pack/Loose Qty, Barcode) audited complete app-wide |
-| Finance (double-entry, trial balance, P&L, balance sheet) | Payment/Receipt Voucher, Journal Voucher, Contra Voucher, and Expense Voucher (manual transaction entry, full double-entry) done. Trial Balance, Customer Ageing, Supplier Ageing, Pending Bills by Customer/Supplier, month-wise Expense Report, and Profit & Loss (Summary + Account Detail, first HIERARCHICAL report) done. Balance Sheet still pending |
+| Finance (double-entry, trial balance, P&L, balance sheet) | Payment/Receipt Voucher, Journal Voucher, Contra Voucher, and Expense Voucher (manual transaction entry, full double-entry) done. Trial Balance, Customer Ageing, Supplier Ageing, Pending Bills by Customer/Supplier, month-wise Expense Report, Profit & Loss (Summary + Account Detail), and Balance Sheet (Summary + Account Detail) all done — all three core financial statements complete |
 | Dashboard | Placeholder only |
 | Reports | Pending |
 

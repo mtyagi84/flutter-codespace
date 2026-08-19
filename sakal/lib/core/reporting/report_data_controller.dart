@@ -89,6 +89,13 @@ class ReportDataController {
       if (f.defaultValue == null) continue;
       if (f.isDateRange) {
         filterValues[f.filterKey] = _parseDefaultDateRange(f.defaultValue!);
+      } else if (f.filterType == 'DATE') {
+        // Same reasoning as DATE_RANGE just above — the DATE filter widget
+        // and _buildFilterParams both expect a real DateTime, not the raw
+        // TEXT default_value stores (e.g. 'TODAY' for Balance Sheet's own
+        // As Of Date filter, the first single-DATE filter with a default in
+        // this engine).
+        filterValues[f.filterKey] = _parseDefaultDate(f.defaultValue!);
       } else if (f.filterType == 'BOOLEAN') {
         // default_value is always TEXT in ric_report_filters (e.g. 'false') —
         // the BOOLEAN filter widget casts this as `bool?`, so it must be
@@ -355,6 +362,16 @@ class ReportDataController {
       result[col.columnKey] = sum;
     }
     return result;
+  }
+
+  DateTime _parseDefaultDate(String token) {
+    final now = DateTime.now();
+    switch (token) {
+      case 'TODAY':
+        return DateTime(now.year, now.month, now.day);
+      default:
+        return now;
+    }
   }
 
   Map<String, DateTime> _parseDefaultDateRange(String token) {
