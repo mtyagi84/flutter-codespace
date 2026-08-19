@@ -255,7 +255,7 @@ CREATE OR REPLACE FUNCTION fn_balance_sheet_tree_base(
     SELECT
         '00000000-0000-0000-0000-000000000001'::uuid, NULL::uuid, 'EQUITY', 'Current Year Earnings',
         1, true, pl.net_profit, 'EQUITY~001~ZZZZ'
-    FROM fy, LATERAL fn_pl_totals_base(p_client_id, p_company_id, fy.fy_start_date, p_as_of_date, p_posted_only, p_location_group_id) pl
+    FROM fy, LATERAL fn_pl_totals_base(p_client_id, p_company_id, fy.fy_start_date, p_as_of_date, p_location_group_id, p_posted_only) pl
     WHERE pl.net_profit <> 0;
 $$;
 
@@ -411,7 +411,7 @@ CREATE OR REPLACE FUNCTION fn_balance_sheet_tree_local(
     SELECT
         '00000000-0000-0000-0000-000000000001'::uuid, NULL::uuid, 'EQUITY', 'Current Year Earnings',
         1, true, pl.net_profit, 'EQUITY~001~ZZZZ'
-    FROM fy, LATERAL fn_pl_totals_local(p_client_id, p_company_id, fy.fy_start_date, p_as_of_date, p_posted_only, p_location_group_id) pl
+    FROM fy, LATERAL fn_pl_totals_local(p_client_id, p_company_id, fy.fy_start_date, p_as_of_date, p_location_group_id, p_posted_only) pl
     WHERE pl.net_profit <> 0;
 $$;
 
