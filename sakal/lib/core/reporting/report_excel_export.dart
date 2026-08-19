@@ -164,7 +164,7 @@ class ReportExcelExport {
     required List<ReportRow> rows,
     required ReportRow? totals,
   }) async {
-    final exportRows = flattenPlForExport(rows: rows, totals: totals);
+    final exportRows = flattenPlForExport(rows: rows, totals: totals, spec: hierarchySpecFor(definition.reportKey));
     final workbook = xls.Excel.createExcel();
     final sheetName = workbook.getDefaultSheet()!;
     final sheet = workbook[sheetName];

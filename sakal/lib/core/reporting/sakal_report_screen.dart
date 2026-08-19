@@ -338,7 +338,8 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
           child: bundle.isMatrix
               ? SakalReportMatrixTable(bundle: bundle, rows: controller.items, numberFormat: numberFormat)
               : bundle.isHierarchical
-                  ? SakalReportHierarchicalTable(rows: controller.items, totals: controller.totals, numberFormat: numberFormat)
+                  ? SakalReportHierarchicalTable(
+                      reportKey: widget.reportKey, rows: controller.items, totals: controller.totals, numberFormat: numberFormat)
                   : SakalReportTable(
                       bundle: bundle,
                       controller: controller,

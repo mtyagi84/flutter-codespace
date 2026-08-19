@@ -144,7 +144,7 @@ class ReportPdfExport {
     required String printedByName,
     required DateTime printedOn,
   }) async {
-    final exportRows = flattenPlForExport(rows: rows, totals: totals);
+    final exportRows = flattenPlForExport(rows: rows, totals: totals, spec: hierarchySpecFor(definition.reportKey));
     final doc = pw.Document();
 
     pw.TableRow headerRow() => pw.TableRow(

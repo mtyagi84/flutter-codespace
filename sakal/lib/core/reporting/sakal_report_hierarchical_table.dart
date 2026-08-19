@@ -5,7 +5,8 @@ import '../utils/responsive.dart';
 import 'report_hierarchy_export.dart';
 import 'report_repository.dart';
 
-/// Tree-building (PlNode, buildPlSections) now lives in
+/// Tree-building (PlNode, buildHierarchyTrees) and the section/totals
+/// shape (HierarchyReportSpec, hierarchySpecFor) live in
 /// report_hierarchy_export.dart, shared with both PDF/Excel export paths
 /// so the on-screen tree and the exported one can never disagree — this
 /// file keeps only the widget-specific state-aware flatten (respects
@@ -18,30 +19,44 @@ class _PlRenderItem {
 
 /// Renders a HIERARCHICAL report — first real build of this report_type
 /// (see report_models.dart's ReportDefinition.isHierarchical, previously
-/// checked nowhere in the app). Two top-level sections (Income, Expense),
-/// each a genuine arbitrary-depth tree built from rows already fully
-/// loaded by ReportDataController._loadAllForHierarchical — no
-/// pagination, no per-node fetch, matching how small a P&L's own account
-/// tree realistically is (never the huge row counts a detail feed like
+/// checked nowhere in the app). Generic over any number of top-level
+/// sections (Profit & Loss's Income/Expense; Balance Sheet's
+/// Asset/Liability/Equity) via [reportKey] → hierarchySpecFor() — each a
+/// genuine arbitrary-depth tree built from rows already fully loaded by
+/// ReportDataController._loadAllForHierarchical, no pagination, no
+/// per-node fetch, matching how small this kind of account tree
+/// realistically is (never the huge row counts a detail feed like
 /// Ageing/Pending Bills can hit).
 class SakalReportHierarchicalTable extends StatefulWidget {
+  final String reportKey;
   final List<ReportRow> rows;
-  final ReportRow? totals; // {income_total, expense_total, net_profit}
+  final ReportRow? totals;
   final String numberFormat;
 
-  const SakalReportHierarchicalTable({super.key, required this.rows, required this.totals, required this.numberFormat});
+  const SakalReportHierarchicalTable({
+    super.key,
+    required this.reportKey,
+    required this.rows,
+    required this.totals,
+    required this.numberFormat,
+  });
 
   @override
   State<SakalReportHierarchicalTable> createState() => _SakalReportHierarchicalTableState();
 }
 
 class _SakalReportHierarchicalTableState extends State<SakalReportHierarchicalTable> {
-  late List<PlNode> _incomeRoots;
-  late List<PlNode> _expenseRoots;
+  late HierarchyReportSpec _spec;
+  late Map<String, List<PlNode>> _treesBySection;
+  final Map<String, bool> _sectionExpanded = {};
 
   @override
   void initState() {
     super.initState();
+    _spec = hierarchySpecFor(widget.reportKey);
+    for (final s in _spec.sections) {
+      _sectionExpanded[s.key] = true;
+    }
     _buildTrees();
   }
 
@@ -54,16 +69,14 @@ class _SakalReportHierarchicalTableState extends State<SakalReportHierarchicalTa
   }
 
   void _buildTrees() {
-    final sections = buildPlSections(widget.rows);
-    _incomeRoots = sections.incomeRoots;
-    _expenseRoots = sections.expenseRoots;
+    _treesBySection = buildHierarchyTrees(widget.rows, _spec.sections);
   }
 
-  List<_PlRenderItem> _flatten(String sectionLabel, num sectionTotal, List<PlNode> roots, bool sectionExpanded) {
+  List<_PlRenderItem> _flatten(HierarchySectionSpec section, num sectionTotal) {
     final items = <_PlRenderItem>[
-      _PlRenderItem(PlNode(id: '__section__', name: sectionLabel, levelDepth: 0, isLeaf: false, amount: sectionTotal), 0),
+      _PlRenderItem(PlNode(id: '__section__', name: section.label, levelDepth: 0, isLeaf: false, amount: sectionTotal), 0),
     ];
-    if (!sectionExpanded) {
+    if (_sectionExpanded[section.key] != true) {
       return items;
     }
     void walk(List<PlNode> nodes, int depth) {
@@ -75,24 +88,19 @@ class _SakalReportHierarchicalTableState extends State<SakalReportHierarchicalTa
       }
     }
 
-    walk(roots, 1);
+    walk(_treesBySection[section.key] ?? const [], 1);
     return items;
   }
-
-  bool _incomeSectionExpanded = true;
-  bool _expenseSectionExpanded = true;
 
   @override
   Widget build(BuildContext context) {
     final t = widget.totals;
-    final incomeTotal = (t?['income_total'] as num?) ?? 0;
-    final expenseTotal = (t?['expense_total'] as num?) ?? 0;
-    final netProfit = (t?['net_profit'] as num?) ?? (incomeTotal - expenseTotal);
 
-    final items = [
-      ..._flatten('Income', incomeTotal, _incomeRoots, _incomeSectionExpanded),
-      ..._flatten('Expense', expenseTotal, _expenseRoots, _expenseSectionExpanded),
-    ];
+    final items = <_PlRenderItem>[];
+    for (final section in _spec.sections) {
+      final sectionTotal = (t?[section.totalsKey] as num?) ?? 0;
+      items.addAll(_flatten(section, sectionTotal));
+    }
 
     return Column(children: [
       Expanded(
@@ -101,12 +109,12 @@ class _SakalReportHierarchicalTableState extends State<SakalReportHierarchicalTa
           itemBuilder: (context, i) {
             final item = items[i];
             if (item.node.id == '__section__') {
-              final isIncome = item.node.name == 'Income';
+              final section = _spec.sections.firstWhere((s) => s.label == item.node.name);
               return _sectionHeaderRow(
-                item.node.name,
+                section.label,
                 item.node.amount,
-                isIncome ? _incomeSectionExpanded : _expenseSectionExpanded,
-                isIncome ? () => setState(() => _incomeSectionExpanded = !_incomeSectionExpanded) : () => setState(() => _expenseSectionExpanded = !_expenseSectionExpanded),
+                _sectionExpanded[section.key] == true,
+                () => setState(() => _sectionExpanded[section.key] = !(_sectionExpanded[section.key] ?? true)),
               );
             }
             return _nodeRow(item.node, item.depth);
@@ -114,7 +122,7 @@ class _SakalReportHierarchicalTableState extends State<SakalReportHierarchicalTa
         ),
       ),
       const Divider(height: 1, color: AppColors.border),
-      _totalsRow('Net Profit', netProfit),
+      for (final row in _spec.totalRows) _totalsRow(row.label, (t?[row.totalsKey] as num?) ?? 0),
     ]);
   }
 
@@ -175,7 +183,7 @@ class _SakalReportHierarchicalTableState extends State<SakalReportHierarchicalTa
 
   Widget _totalsRow(String label, num amount) => Container(
         color: AppColors.primaryLight.withValues(alpha: 0.12),
-        padding: EdgeInsets.symmetric(horizontal: 12, vertical: Responsive.isMobile(context) ? 10 : 12),
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: Responsive.isMobile(context) ? 8 : 10),
         child: Row(children: [
           Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14))),
           Text(AppNumberFormat.amount(amount, widget.numberFormat),
