@@ -1,6 +1,9 @@
 # Balance Sheet reports — Finance (third HIERARCHICAL report, last core financial statement)
 
-Status: Implemented 2026-08-19 (migration `144_balance_sheet_hierarchical.sql`), not yet run in Supabase.
+Status: Implemented 2026-08-19 (migration `144_balance_sheet_hierarchical.sql`). First run attempt hit
+a live Postgres 42883 error (`fn_pl_totals_base`/`_local` called with `posted_only`/`location_group_id`
+swapped vs their real 143 signature) — fixed same day, commit `25b7d8d`. Not yet confirmed run
+successfully in Supabase.
 
 ## Context
 
