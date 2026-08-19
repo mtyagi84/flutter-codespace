@@ -73,6 +73,20 @@ const _balanceSheetSpec = HierarchyReportSpec(
   ],
 );
 
+const _cashFlowSpec = HierarchyReportSpec(
+  sections: [
+    HierarchySectionSpec(key: 'OPERATING', label: 'Operating Activities', totalsKey: 'operating_total'),
+    HierarchySectionSpec(key: 'INVESTING', label: 'Investing Activities', totalsKey: 'investing_total'),
+    HierarchySectionSpec(key: 'FINANCING', label: 'Financing Activities', totalsKey: 'financing_total'),
+  ],
+  totalRows: [
+    HierarchyTotalRowSpec(label: 'Net Change in Cash', totalsKey: 'net_cash_flow'),
+    HierarchyTotalRowSpec(label: 'Opening Cash', totalsKey: 'opening_cash'),
+    HierarchyTotalRowSpec(label: 'Closing Cash', totalsKey: 'closing_cash'),
+    HierarchyTotalRowSpec(label: 'Reconciliation Diff', totalsKey: 'reconciliation_diff'),
+  ],
+);
+
 /// The one place that knows which section/totals shape a given
 /// HIERARCHICAL report family uses — everything else in this file, the
 /// on-screen widget, and both exporters are fully generic over
@@ -84,6 +98,7 @@ const _balanceSheetSpec = HierarchyReportSpec(
 /// safe, non-crashing default beats an unhandled-case error.
 HierarchyReportSpec hierarchySpecFor(String reportKey) {
   if (reportKey.startsWith('BALANCE_SHEET')) return _balanceSheetSpec;
+  if (reportKey.startsWith('CASH_FLOW')) return _cashFlowSpec;
   return _plSpec;
 }
 

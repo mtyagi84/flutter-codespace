@@ -307,7 +307,9 @@ begin
         (p_client_id, p_company_id, v_fn, 'FN-RPT-PBS', 'Pending Bills by Supplier',   '/reports/PENDING_BILLS_BY_SUPPLIER',   9, 'FN-RPT', 'Reports', 1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-RPT-EXR', 'Expense Report',              '/reports/EXPENSE_REPORT_MATRIX',       10, 'FN-RPT', 'Reports', 1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-RPT-PNL', 'Profit & Loss Account Detail', '/reports/PROFIT_LOSS_DETAIL',          11, 'FN-RPT', 'Reports', 1, false, false, false),
-        (p_client_id, p_company_id, v_fn, 'FN-RPT-BSD', 'Balance Sheet Account Detail', '/reports/BALANCE_SHEET_DETAIL',        12, 'FN-RPT', 'Reports', 1, false, false, false)
+        (p_client_id, p_company_id, v_fn, 'FN-RPT-BSD', 'Balance Sheet Account Detail', '/reports/BALANCE_SHEET_DETAIL',        12, 'FN-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-RPT-CFS', 'Cash Flow Summary',            '/reports/CASH_FLOW_SUMMARY',           13, 'FN-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-RPT-CFD', 'Cash Flow Account Detail',      '/reports/CASH_FLOW_DETAIL',            14, 'FN-RPT', 'Reports', 1, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set module_id       = excluded.module_id,
             feature_name    = excluded.feature_name,
