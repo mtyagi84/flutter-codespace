@@ -297,7 +297,7 @@ begin
         (p_client_id, p_company_id, v_fn, 'FN-CBK', 'Cash Book',                '/finance/cashbook',           3, 'FN-TXN', 'Transactions', 0, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-PRV', 'Payment/Receipt Voucher',  '/finance/voucher-list',       4, 'FN-TXN', 'Transactions', 0, true,  false, false),
         (p_client_id, p_company_id, v_fn, 'FN-TRB', 'Trial Balance',            '/finance/trial-balance',      0, 'FN-RPT', 'Reports',      1, false, false, false),
-        (p_client_id, p_company_id, v_fn, 'FN-PNL', 'Profit & Loss',            '/finance/profit-loss',        1, 'FN-RPT', 'Reports',      1, false, false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-PNL', 'Profit & Loss',            '/reports/PROFIT_LOSS_SUMMARY', 1, 'FN-RPT', 'Reports',     1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-BSH', 'Balance Sheet',            '/finance/balance-sheet',      2, 'FN-RPT', 'Reports',      1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-RPT-PBR', 'Pending Bills Register',      '/reports/PENDING_BILLS_REGISTER',      3, 'FN-RPT', 'Reports', 1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-RPT-PBG', 'Pending Bills by Customer',   '/reports/PENDING_BILLS_BY_CUSTOMER',   4, 'FN-RPT', 'Reports', 1, false, false, false),
@@ -305,7 +305,8 @@ begin
         (p_client_id, p_company_id, v_fn, 'FN-RPT-CAG', 'Customer Ageing',             '/reports/CUSTOMER_AGEING',             7, 'FN-RPT', 'Reports', 1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-RPT-SAG', 'Supplier Ageing',             '/reports/SUPPLIER_AGEING',             8, 'FN-RPT', 'Reports', 1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-RPT-PBS', 'Pending Bills by Supplier',   '/reports/PENDING_BILLS_BY_SUPPLIER',   9, 'FN-RPT', 'Reports', 1, false, false, false),
-        (p_client_id, p_company_id, v_fn, 'FN-RPT-EXR', 'Expense Report',              '/reports/EXPENSE_REPORT_MATRIX',       10, 'FN-RPT', 'Reports', 1, false, false, false)
+        (p_client_id, p_company_id, v_fn, 'FN-RPT-EXR', 'Expense Report',              '/reports/EXPENSE_REPORT_MATRIX',       10, 'FN-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-RPT-PNL', 'Profit & Loss Account Detail', '/reports/PROFIT_LOSS_DETAIL',          11, 'FN-RPT', 'Reports', 1, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set module_id       = excluded.module_id,
             feature_name    = excluded.feature_name,

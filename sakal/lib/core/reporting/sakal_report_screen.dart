@@ -14,6 +14,7 @@ import 'report_pdf_export.dart';
 import 'report_excel_export.dart';
 import 'report_repository.dart';
 import 'sakal_report_filter_bar.dart';
+import 'sakal_report_hierarchical_table.dart';
 import 'sakal_report_matrix_table.dart';
 import 'sakal_report_table.dart';
 
@@ -319,12 +320,14 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
           hasScrollBody: true,
           child: bundle.isMatrix
               ? SakalReportMatrixTable(bundle: bundle, rows: controller.items, numberFormat: numberFormat)
-              : SakalReportTable(
-                  bundle: bundle,
-                  controller: controller,
-                  numberFormat: numberFormat,
-                  onChanged: () => setState(() {}),
-                ),
+              : bundle.isHierarchical
+                  ? SakalReportHierarchicalTable(rows: controller.items, totals: controller.totals, numberFormat: numberFormat)
+                  : SakalReportTable(
+                      bundle: bundle,
+                      controller: controller,
+                      numberFormat: numberFormat,
+                      onChanged: () => setState(() {}),
+                    ),
         ),
     ]);
   }

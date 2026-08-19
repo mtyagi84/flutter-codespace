@@ -108,6 +108,8 @@ class ReportDataController {
         await _loadRootGroups();
       } else if (bundle.definition.isMatrix) {
         await _loadAllForMatrix();
+      } else if (bundle.definition.isHierarchical) {
+        await _loadAllForHierarchical();
       } else {
         await _loadFirstPage();
         totals = await repository.fetchTotals(
@@ -117,6 +119,34 @@ class ReportDataController {
     } finally {
       isLoading = false;
     }
+  }
+
+  // HIERARCHICAL reports (P&L) are, like MATRIX, a small pre-computed
+  // result set — fetched once in full, no pagination. Unlike MATRIX
+  // (whose Total row/column is cheap client-side arithmetic over the
+  // pivoted cells), the Income/Expense/Net Profit footer here comes from
+  // a real totals_source_object call, same as a plain TABULAR report —
+  // fn_pl_totals_base/_local reuses fn_pl_tree_base/_local's own numbers
+  // rather than re-deriving the rollup a third time, so the footer can
+  // never disagree with the tree.
+  Future<void> _loadAllForHierarchical() async {
+    final page = await repository.fetchPage(
+      bundle: bundle,
+      clientId: clientId,
+      companyId: companyId,
+      filterValues: filterValues,
+      sortColumn: sortColumn,
+      sortDir: sortDir,
+      limit: _matrixSafetyCap,
+      offset: 0,
+      sourceObjectOverride: _sourceOverride,
+    );
+    items = page.rows;
+    hasMore = false;
+    totalCount = page.rows.length;
+    totals = await repository.fetchTotals(
+        bundle: bundle, clientId: clientId, companyId: companyId, filterValues: filterValues,
+        totalsSourceObjectOverride: _totalsOverride);
   }
 
   // MATRIX reports are always a small, pre-aggregated result set (see
