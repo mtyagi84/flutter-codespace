@@ -245,6 +245,7 @@ abstract class SalesInvoiceRepository {
     required List<Map<String, dynamic>> batches,
     required List<Map<String, dynamic>> serials,
     required String userId,
+    bool creditInvoiceScreen = false,
   });
 
   /// Caches an invoice locally for offline read-back/print. Called after

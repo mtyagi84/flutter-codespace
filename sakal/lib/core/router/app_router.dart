@@ -67,6 +67,8 @@ import '../../features/sales/presentation/screens/sales_order_list_screen.dart';
 import '../../features/sales/presentation/screens/sales_order_entry_screen.dart';
 import '../../features/sales/presentation/screens/sales_invoice_list_screen.dart';
 import '../../features/sales/presentation/screens/sales_invoice_entry_screen.dart';
+import '../../features/sales/presentation/screens/credit_sales_invoice_list_screen.dart';
+import '../../features/sales/presentation/screens/credit_sales_invoice_entry_screen.dart';
 import '../../features/sales/presentation/screens/sales_pending_approvals_screen.dart';
 import '../../features/sales/presentation/screens/sales_return_list_screen.dart';
 import '../../features/sales/presentation/screens/sales_return_entry_screen.dart';
@@ -310,6 +312,22 @@ final appRouter = GoRouter(
           builder: (c, s) {
             final extra = s.extra as Map<String, dynamic>?;
             return SalesInvoiceEntryScreen(
+              editInvoiceNo:       extra?['invoiceNo'] as String?,
+              editInvoiceDate:     extra?['invoiceDate'] as String?,
+              newInvoiceMode:      extra?['newInvoiceMode'] as String?,
+              sourceQuotationNo:   extra?['sourceQuotationNo'] as String?,
+              sourceQuotationDate: extra?['sourceQuotationDate'] as String?,
+              sourceOrderNo:       extra?['sourceOrderNo'] as String?,
+              sourceOrderDate:     extra?['sourceOrderDate'] as String?,
+            );
+          },
+        ),
+        GoRoute(path: RouteNames.creditSalesInvoices, builder: (c, s) => const CreditSalesInvoiceListScreen()),
+        GoRoute(
+          path: RouteNames.creditSalesInvoiceEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return CreditSalesInvoiceEntryScreen(
               editInvoiceNo:       extra?['invoiceNo'] as String?,
               editInvoiceDate:     extra?['invoiceDate'] as String?,
               newInvoiceMode:      extra?['newInvoiceMode'] as String?,

@@ -41,6 +41,8 @@ class RouteNames {
   static const String salesOrderEntry = '/sales/order-entry';
   static const String salesInvoices = '/sales/invoices';
   static const String salesInvoiceEntry = '/sales/invoice-entry';
+  static const String creditSalesInvoices = '/sales/credit-invoices';
+  static const String creditSalesInvoiceEntry = '/sales/credit-invoice-entry';
   // Repurposed from the old Sales-Invoice-only Manager Review screen —
   // now a unified screen showing DRAFT Invoices/Returns/Deliveries
   // together. Route/screen_name kept as '/sales/pending-approvals'

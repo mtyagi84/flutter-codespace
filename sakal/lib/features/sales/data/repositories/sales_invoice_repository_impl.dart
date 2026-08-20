@@ -422,7 +422,11 @@ class SalesInvoiceRepositoryImpl implements SalesInvoiceRepository {
     required List<Map<String, dynamic>> batches,
     required List<Map<String, dynamic>> serials,
     required String userId,
-  }) => _remote.save(header: header, lines: lines, charges: charges, batches: batches, serials: serials, userId: userId);
+    bool creditInvoiceScreen = false,
+  }) => _remote.save(
+        header: header, lines: lines, charges: charges, batches: batches, serials: serials, userId: userId,
+        creditInvoiceScreen: creditInvoiceScreen,
+      );
 
   @override
   Future<void> cacheInvoiceLocally({

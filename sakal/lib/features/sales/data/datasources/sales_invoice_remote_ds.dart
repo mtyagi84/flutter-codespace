@@ -816,6 +816,7 @@ class SalesInvoiceRemoteDs {
     required List<Map<String, dynamic>> batches,
     required List<Map<String, dynamic>> serials,
     required String userId,
+    bool creditInvoiceScreen = false,
   }) async {
     final res = await _dio.post('/rpc/fn_save_sales_invoice', data: {
       'p_header':  header,
@@ -833,6 +834,11 @@ class SalesInvoiceRemoteDs {
       // safety net (migration 122) that catches it for real once an
       // offline-originated DRAFT is reviewed online.
       'p_enforce_cost_check': true,
+      // Credit Sales Invoice screen only (migration 146) — forces
+      // DEFERRED stock dispatch + the hard future-date/date-locked-after-
+      // first-save rules. Quick Invoice never passes this (defaults
+      // false), so its own behavior is unaffected.
+      'p_credit_invoice_screen': creditInvoiceScreen,
     });
     return res.data as String;
   }

@@ -59,6 +59,30 @@ final locationsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async
   );
 });
 
+// Same shape as locationsProvider, but scoped by ric_user_location_access
+// (v_user_accessible_locations, migration 127 — zero active access rows
+// for this user = unrestricted, any rows = limited to that set). Used by
+// any entry screen whose own Location picker should respect per-user
+// location access rather than showing every company location
+// unconditionally (first consumer: Credit Sales Invoice, migration 146).
+final accessibleLocationsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final session = ref.watch(sessionProvider);
+  if (session == null) return [];
+  return _cachedFetch(
+    ref: ref, cacheKey: 'ACCESSIBLE_LOCATIONS', offlineMode: session.offlineMode,
+    clientId: session.clientId, companyId: session.companyId,
+    fetchRemote: () async {
+      final res = await DioClient.instance.get('/v_user_accessible_locations', queryParameters: {
+        'client_id':  'eq.${session.clientId}',
+        'company_id': 'eq.${session.companyId}',
+        'select':     'id,location_name,location_short',
+        'order':      'location_name.asc',
+      });
+      return List<Map<String, dynamic>>.from(res.data as List);
+    },
+  );
+});
+
 final baseCurrencyProvider = FutureProvider<String>((ref) async {
   final session = ref.watch(sessionProvider);
   if (session == null) return '';
