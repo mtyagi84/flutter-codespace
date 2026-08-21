@@ -36,6 +36,15 @@ class ReportDefinition {
   // unreasonable number of columns. NULL (every report before this one)
   // means no limit.
   final int? maxDateRangeMonths;
+  // NEW: gates whether ReportDataController.init() fires a query
+  // automatically on screen open, or waits for an explicit "Run Report"
+  // action (sakal_report_screen.dart). Defaults true — every report
+  // before this one keeps auto-loading exactly as before; set false only
+  // on reports whose row count scales with something unbounded (e.g. the
+  // full product catalog) and where every filter is optional, so the
+  // worst case ("no filters, click the menu") is the default case, not
+  // an edge case.
+  final bool autoLoad;
 
   const ReportDefinition({
     required this.id,
@@ -57,6 +66,7 @@ class ReportDefinition {
     this.totalsSourceObjectLocal,
     required this.isActive,
     this.maxDateRangeMonths,
+    this.autoLoad = true,
   });
 
   factory ReportDefinition.fromJson(Map<String, dynamic> j) => ReportDefinition(
@@ -79,6 +89,7 @@ class ReportDefinition {
         totalsSourceObjectLocal: j['totals_source_object_local'] as String?,
         isActive: j['is_active'] as bool? ?? true,
         maxDateRangeMonths: (j['max_date_range_months'] as num?)?.toInt(),
+        autoLoad: j['auto_load'] as bool? ?? true,
       );
 
   bool get isTabular => reportType == 'TABULAR';

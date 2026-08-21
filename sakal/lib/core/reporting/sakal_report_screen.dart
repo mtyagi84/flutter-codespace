@@ -332,6 +332,8 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
       ),
       if (controller.isLoading)
         const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
+      else if (!bundle.definition.autoLoad && !controller.hasRunOnce)
+        SliverFillRemaining(child: _buildRunReportPrompt(controller))
       else
         SliverFillRemaining(
           hasScrollBody: true,
@@ -349,4 +351,32 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
         ),
     ]);
   }
+
+  // Shown once, before the first fetch, on any report with
+  // ReportDefinition.autoLoad == false — this report's row count scales
+  // with something unbounded (e.g. the whole product catalog) and every
+  // one of its filters is optional, so the worst case ("no filters,
+  // click the menu") would otherwise be the DEFAULT case, not an edge
+  // case. Set the filters above (or leave them blank on purpose) then
+  // press Run — same underlying refresh() the filter bar's own Apply
+  // button already uses, so behavior converges after the first run.
+  Widget _buildRunReportPrompt(ReportDataController controller) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.filter_alt_outlined, size: 48, color: AppColors.textDisabled),
+            const SizedBox(height: 16),
+            const Text('Set your filters, then run the report', style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              icon: const Icon(Icons.play_arrow_outlined, size: 18),
+              label: const Text('Run Report'),
+              onPressed: () async {
+                await controller.refresh();
+                if (mounted) setState(() {});
+              },
+            ),
+          ]),
+        ),
+      );
 }

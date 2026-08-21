@@ -58,6 +58,14 @@ class ReportDataController {
   bool isLoading = false;
   ReportRow? totals;
 
+  // NEW: when bundle.definition.autoLoad is false, init() resolves default
+  // filter values but does NOT fire the first fetch — the screen shows a
+  // "Run Report" prompt instead, and this flips true once the user (or
+  // the filter bar's own Apply) actually triggers refresh() for the first
+  // time. Always true for every existing auto-loading report, so their
+  // behavior is unaffected.
+  bool hasRunOnce = false;
+
   // Ungrouped-report state
   List<ReportRow> items = [];
   bool isLoadingMore = false;
@@ -105,11 +113,13 @@ class ReportDataController {
         filterValues[f.filterKey] = f.defaultValue;
       }
     }
+    if (!bundle.definition.autoLoad) return;
     await refresh();
   }
 
   Future<void> refresh() async {
     isLoading = true;
+    hasRunOnce = true;
     try {
       if (bundle.isGrouped) {
         await _loadRootGroups();
