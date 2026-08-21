@@ -332,6 +332,11 @@ class _CreditSalesInvoiceEntryScreenState extends ConsumerState<CreditSalesInvoi
   // _init() — the formatted Rate field needs this per the invoice's own
   // currency (a USD unit price may need 4-5dp, CDF only 2).
   Map<String, int> _currencyDecimalPlaces = {};
+  // Populated once in _init() (same currenciesProvider fetch that already
+  // builds _currencyDecimalPlaces) — feeds the DIRECT-mode Currency
+  // dropdown; AGAINST_QUOTATION/AGAINST_ORDER never show it (currency is
+  // inherited from the source document and locked).
+  List<Map<String, dynamic>> _currencies = [];
   int get _rateDecimalPlaces => _currencyDecimalPlaces[_invoiceCurrencyCode] ?? 2;
 
   // Snapshotted once at load time — never re-read mid-edit, matching the
@@ -440,8 +445,9 @@ class _CreditSalesInvoiceEntryScreenState extends ConsumerState<CreditSalesInvoi
       _additionalCharges = results[3] as List<Map<String, dynamic>>;
       _salesExecutives = results[5] as List<Map<String, dynamic>>;
       _accessibleLocations = results[6] as List<Map<String, dynamic>>;
+      _currencies = results[4] as List<Map<String, dynamic>>;
       _currencyDecimalPlaces = {
-        for (final c in results[4] as List<Map<String, dynamic>>)
+        for (final c in _currencies)
           c['currency_id'] as String: (c['rate_decimal_places'] as num?)?.toInt() ?? 2,
       };
       _canOverridePrice  = controls?['can_override_price'] as bool? ?? false;
@@ -460,7 +466,7 @@ class _CreditSalesInvoiceEntryScreenState extends ConsumerState<CreditSalesInvoi
         _locationName = _accessibleLocations.firstWhere(
           (l) => l['id'] == _locationId, orElse: () => const {},
         )['location_name'] as String? ?? '';
-        _addLine();
+        _addLine(autoFocus: false);
         if (mounted) setState(() => _loading = false);
       }
     } catch (e, st) {
@@ -534,6 +540,44 @@ class _CreditSalesInvoiceEntryScreenState extends ConsumerState<CreditSalesInvoi
       );
       _rateToLocalCtrl.text = (r ?? 1).toString();
     }
+  }
+
+  // Currency is freely user-chosen on this screen in DIRECT mode (unlike
+  // Quick Invoice, which always forces local currency for its Cash sales)
+  // — AGAINST_QUOTATION/AGAINST_ORDER never reach this, currency there is
+  // inherited from the source document and locked (see the Currency field
+  // itself in _buildHeaderCard).
+  Future<void> _onCurrencySelected(Map<String, dynamic> currency) async {
+    final session = ref.read(sessionProvider)!;
+    final ds = ref.read(salesInvoiceRepositoryProvider);
+    setState(() {
+      _invoiceCurrencyId = currency['id'] as String;
+      _invoiceCurrencyCode = currency['currency_id'] as String;
+      _rateToBaseCtrl.text = '1';
+      _rateToLocalCtrl.text = '1';
+    });
+    final ccyCode = _invoiceCurrencyCode!;
+    if (ccyCode != _baseCurrency) {
+      final r = await ds.getExchangeRate(
+        companyId: session.companyId, locationId: _locationId ?? '', fromCurrency: ccyCode,
+        toCurrency: _baseCurrency, rateDate: _fmtDate(_invoiceDate),
+      );
+      if (mounted) setState(() => _rateToBaseCtrl.text = (r ?? 1).toString());
+    }
+    if (ccyCode != _localCurrency) {
+      final r = await ds.getExchangeRate(
+        companyId: session.companyId, locationId: _locationId ?? '', fromCurrency: ccyCode,
+        toCurrency: _localCurrency, rateDate: _fmtDate(_invoiceDate),
+      );
+      if (mounted) setState(() => _rateToLocalCtrl.text = (r ?? 1).toString());
+    }
+    // Re-resolve price for every line already added, same as picking a
+    // new Customer already does — a price fetched under the old currency
+    // is meaningless once the invoice's own currency has changed.
+    for (final l in _lines.where((l) => l.productId != null)) {
+      await _resolvePrice(l, ds, session);
+    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadExisting(String invoiceNo, String? invoiceDate) async {
@@ -894,7 +938,7 @@ class _CreditSalesInvoiceEntryScreenState extends ConsumerState<CreditSalesInvoi
     _locationName = _accessibleLocations.firstWhere(
       (l) => l['id'] == _locationId, orElse: () => const {},
     )['location_name'] as String? ?? _locationName;
-    _addLine();
+    _addLine(autoFocus: false);
     if (mounted) setState(() => _loading = false);
   }
 
@@ -985,11 +1029,18 @@ class _CreditSalesInvoiceEntryScreenState extends ConsumerState<CreditSalesInvoi
   // (see _buildLineTile), so pressing Enter after typing a discount and
   // then Enter/Space again on the now-focused (+) button adds the next
   // line with zero mouse use.
-  void _addLine() {
+  // autoFocus: false for the very first line seeded on initial load / a
+  // mode reset — the user wants focus to stay on the header's Direct/
+  // Against Quotation/Against Order selector when the screen first opens,
+  // not jump straight into Product. Defaults true so the (+) button /
+  // keyboard-chained Enter (this method's usual callers) keep working
+  // exactly as before.
+  void _addLine({bool autoFocus = true}) {
     final row = _InvoiceLineRow();
     final headerDiscount = double.tryParse(_headerDiscountPctCtrl.text) ?? 0;
     if (headerDiscount > 0) row.discountPctCtrl.text = '$headerDiscount';
     setState(() => _lines.add(row));
+    if (!autoFocus) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) row.productFocusNode.requestFocus();
     });
@@ -2110,7 +2161,29 @@ class _CreditSalesInvoiceEntryScreenState extends ConsumerState<CreditSalesInvoi
                 ),
               ),
             ),
-            SakalFieldCard.readOnly(label: 'Currency', value: _invoiceCurrencyCode ?? '—'),
+            // Freely editable in DIRECT mode — locked when the currency is
+            // inherited from a source Quotation/Order (_isAgainstSource).
+            _isAgainstSource
+                ? SakalFieldCard.readOnly(label: 'Currency', value: _invoiceCurrencyCode ?? '—')
+                : SakalFieldCard(
+                    label: 'Currency',
+                    required: true,
+                    editable: !locked,
+                    child: DropdownButtonFormField<String>(
+                      key: ValueKey(_invoiceCurrencyId),
+                      decoration: SakalFieldCard.bareDecoration,
+                      isExpanded: true, isDense: true, itemHeight: null,
+                      style: fieldTextStyle,
+                      initialValue: _invoiceCurrencyId,
+                      items: _currencies.map((c) => DropdownMenuItem(
+                          value: c['id'] as String, child: Text(c['currency_id'] as String))).toList(),
+                      onChanged: locked ? null : (v) {
+                        if (v == null) return;
+                        final c = _currencies.firstWhere((e) => e['id'] == v);
+                        unawaited(_onCurrencySelected(c));
+                      },
+                    ),
+                  ),
             if (_invoiceCurrencyCode != null && _invoiceCurrencyCode != _baseCurrency)
               SakalFieldCard(
                 label: 'Rate to Base ($_baseCurrency)',
@@ -2278,24 +2351,43 @@ class _CreditSalesInvoiceEntryScreenState extends ConsumerState<CreditSalesInvoi
         : null;
 
     if (isMobile) {
+      // 2-column grid instead of a loose fixed-width list — predictable
+      // pairing (qty+rate, disc+tax, ...) that stretches to fill the
+      // available row width, reusing SakalFieldRow (same pattern as
+      // sales_quotation_entry_screen.dart's own mobile line card).
+      // Chunked rather than hand-paired so it stays correct regardless
+      // of which optional fields (barcode/qty loose) are present.
+      final secondaryFields = <Widget>[
+        if (showBarcode && !rowLocked) barcodeField,
+        qtyPackField,
+        if (showLooseQty) qtyLooseField,
+        rateField,
+        discField,
+        taxField,
+        amountField,
+        if (overrideReasonVisible) overrideReasonField,
+      ];
+      final pairedRows = <Widget>[];
+      for (var i = 0; i < secondaryFields.length; i += 2) {
+        pairedRows.add(SakalFieldRow(
+          isMobile: true,
+          children: secondaryFields.sublist(i, (i + 2).clamp(0, secondaryFields.length)),
+        ));
+        if (i + 2 < secondaryFields.length) pairedRows.add(const SizedBox(height: 8));
+      }
       return SakalLineItemCard(
         title: row.productDisplay.isEmpty ? 'New Line' : row.productDisplay,
         trailingHeaderAction: showActions
             ? IconButton(focusNode: row.addButtonFocusNode, icon: const Icon(Icons.add_circle_outline, size: 20, color: Colors.white), onPressed: _addLine, tooltip: 'Add line')
             : null,
         onDelete: showActions ? () => _removeLine(row) : null,
-        fields: [
-          SizedBox(width: double.infinity, child: productField),
-          if (showBarcode && !rowLocked) SizedBox(width: double.infinity, child: barcodeField),
-          SizedBox(width: 100, child: qtyPackField),
-          if (showLooseQty) SizedBox(width: 100, child: qtyLooseField),
-          SizedBox(width: 110, child: rateField),
-          SizedBox(width: 100, child: discField),
-          SizedBox(width: 150, child: taxField),
-          SizedBox(width: 120, child: amountField),
-          if (overrideReasonVisible) SizedBox(width: double.infinity, child: overrideReasonField),
-        ],
-        body: extraBody,
+        fields: const [],
+        body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          productField,
+          const SizedBox(height: 8),
+          ...pairedRows,
+          if (extraBody != null) ...[const SizedBox(height: 8), extraBody],
+        ]),
       );
     }
 
