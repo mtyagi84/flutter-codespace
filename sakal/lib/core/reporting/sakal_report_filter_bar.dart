@@ -45,7 +45,12 @@ class _SakalReportFilterBarState extends ConsumerState<SakalReportFilterBar> {
     _values = Map<String, dynamic>.from(widget.initialValues);
     for (final f in widget.filters) {
       if (f.filterType == 'DROPDOWN_LOOKUP' || f.filterType == 'ACCOUNT_PICKER' || f.filterType == 'PRODUCT_PICKER') {
-        _loadLookupOptions(f);
+        // A cascading filter's initial options must reflect whatever its
+        // parent filter is ALREADY set to (e.g. reopening a report with a
+        // Category pre-selected) — not "All", which is what a plain
+        // parentValue-less load would show.
+        final parentValue = f.dependsOnFilterKey != null ? _values[f.dependsOnFilterKey] : null;
+        _loadLookupOptions(f, parentValue: parentValue);
       }
     }
   }
@@ -56,13 +61,35 @@ class _SakalReportFilterBarState extends ConsumerState<SakalReportFilterBar> {
     super.dispose();
   }
 
-  Future<void> _loadLookupOptions(ReportFilter f) async {
+  // [parentValue] is only meaningful when f.dependsOnFilterKey is set — the
+  // parent filter's current value, used to scope this filter's own option
+  // list. Capped at 500 rows either way (scoped or not) so a cascading
+  // filter never becomes an unbounded dropdown fetch on a large catalog.
+  Future<void> _loadLookupOptions(ReportFilter f, {dynamic parentValue}) async {
     if (f.lookupSource == null) return;
     try {
-      final res = await DioClient.instance.get('/${f.lookupSource}', queryParameters: {
+      final params = <String, dynamic>{
         'select': 'id,${f.lookupLabelColumn ?? 'name'}',
         'order': '${f.lookupLabelColumn ?? 'name'}.asc',
-      });
+        'limit': '500',
+      };
+      if (f.dependsOnFilterKey != null && parentValue != null && f.dependsOnColumn != null) {
+        if (f.dependsOnExpandFn != null) {
+          final expandRes = await DioClient.instance.get('/rpc/${f.dependsOnExpandFn}', queryParameters: {
+            'p_category_id': parentValue,
+          });
+          final ids = List<Map<String, dynamic>>.from(expandRes.data as List).map((r) => r['id']).toList();
+          if (ids.isEmpty) {
+            if (!mounted) return;
+            setState(() => _lookupOptionsCache[f.filterKey] = const []);
+            return;
+          }
+          params[f.dependsOnColumn!] = 'in.(${ids.join(',')})';
+        } else {
+          params[f.dependsOnColumn!] = 'eq.$parentValue';
+        }
+      }
+      final res = await DioClient.instance.get('/${f.lookupSource}', queryParameters: params);
       if (!mounted) return;
       setState(() => _lookupOptionsCache[f.filterKey] = List<Map<String, dynamic>>.from(res.data as List));
     } catch (_) {
@@ -77,11 +104,25 @@ class _SakalReportFilterBarState extends ConsumerState<SakalReportFilterBar> {
       _debounce = Timer(const Duration(milliseconds: 350), () {
         setState(() => _values[key] = value);
         widget.onApply(_values);
+        _reloadDependents(key, value);
       });
       return;
     }
     setState(() => _values[key] = value);
     widget.onApply(_values);
+    _reloadDependents(key, value);
+  }
+
+  // Any filter whose dependsOnFilterKey names the just-changed filter must
+  // have its own current selection cleared (it may no longer be valid
+  // under the new parent scope) and its option list re-fetched.
+  void _reloadDependents(String changedKey, dynamic newParentValue) {
+    for (final f in widget.filters) {
+      if (f.dependsOnFilterKey != changedKey) continue;
+      setState(() => _values[f.filterKey] = null);
+      widget.onApply(_values);
+      _loadLookupOptions(f, parentValue: newParentValue);
+    }
   }
 
   Future<void> _pickDate(String key, {required bool isFrom}) async {
@@ -183,8 +224,16 @@ class _SakalReportFilterBarState extends ConsumerState<SakalReportFilterBar> {
       case 'PRODUCT_PICKER':
         final options = _lookupOptionsCache[f.filterKey] ?? const [];
         final labelCol = f.lookupLabelColumn ?? 'name';
+        final selectedValue = _values[f.filterKey] as String?;
         return DropdownButtonFormField<String?>(
-          initialValue: _values[f.filterKey] as String?,
+          // A cascading filter's value can be cleared programmatically
+          // (_reloadDependents, when its parent changes) — initialValue is
+          // only ever read once by a FormField, so without this key the
+          // dropdown's displayed selection would silently keep showing the
+          // stale option after being cleared (see CLAUDE.md's FormField
+          // externally-driven-value-change rule).
+          key: ValueKey(selectedValue),
+          initialValue: selectedValue,
           isExpanded: true, isDense: true, itemHeight: null,
           decoration: InputDecoration(labelText: f.label, border: const OutlineInputBorder()),
           items: [

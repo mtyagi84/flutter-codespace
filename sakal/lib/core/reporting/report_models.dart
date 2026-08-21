@@ -177,6 +177,17 @@ class ReportFilter {
   final bool required;
   final String? defaultValue;
   final int sortOrder;
+  // Cascading-lookup trio (nullable — only set on a filter whose own
+  // option list depends on another filter's current value, e.g. Stock
+  // Details' Product filter scoped to whatever Category is selected).
+  // dependsOnFilterKey names the parent filter; dependsOnColumn is the
+  // column on THIS filter's own lookup_source to scope by; dependsOnExpandFn
+  // is an optional RPC (RETURNS TABLE(id uuid)) that expands the parent's
+  // raw value into a set of ids first (e.g. fn_category_subtree) — when
+  // null, the parent's value is used as a plain equality filter instead.
+  final String? dependsOnFilterKey;
+  final String? dependsOnColumn;
+  final String? dependsOnExpandFn;
 
   const ReportFilter({
     required this.id,
@@ -191,6 +202,9 @@ class ReportFilter {
     required this.required,
     this.defaultValue,
     required this.sortOrder,
+    this.dependsOnFilterKey,
+    this.dependsOnColumn,
+    this.dependsOnExpandFn,
   });
 
   factory ReportFilter.fromJson(Map<String, dynamic> j) => ReportFilter(
@@ -208,6 +222,9 @@ class ReportFilter {
         required: j['required'] as bool? ?? false,
         defaultValue: j['default_value'] as String?,
         sortOrder: (j['sort_order'] as num?)?.toInt() ?? 0,
+        dependsOnFilterKey: j['depends_on_filter_key'] as String?,
+        dependsOnColumn: j['depends_on_column'] as String?,
+        dependsOnExpandFn: j['depends_on_expand_fn'] as String?,
       );
 
   bool get isDateRange => filterType == 'DATE_RANGE';
