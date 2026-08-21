@@ -107,6 +107,26 @@ final localCurrencyProvider = FutureProvider<String>((ref) async {
   return list.isNotEmpty ? (list.first['local_currency'] as String? ?? '') : '';
 });
 
+// Company-level "is Serial tracking used at all" signal — a cheap existence
+// check, not a per-report row scan. Used by the Reporting Engine
+// (sakal_report_screen.dart) to hide a report's own Serial No column when
+// the company has no serial-tracked products configured at all, same
+// convention as enable_barcode already gates the Barcode column, but
+// tracking_type is a per-product attribute (see CLAUDE.md's own note) with
+// no company-level toggle of its own — this is that missing "does the
+// company use this at all" signal, derived rather than stored.
+final hasSerialTrackedProductsProvider = FutureProvider<bool>((ref) async {
+  final session = ref.watch(sessionProvider);
+  if (session == null) return false;
+  final res = await DioClient.instance.get('/rim_products', queryParameters: {
+    'tracking_type': 'eq.SERIAL',
+    'is_deleted':    'eq.false',
+    'select':        'id',
+    'limit':         '1',
+  });
+  return List<Map<String, dynamic>>.from(res.data as List).isNotEmpty;
+});
+
 // The company's real chosen accounting standard (rim_accounting_setup,
 // set once via the Accounting Setup screen) — 'INDIAN' or 'OHADA'. Every
 // place that inserts a new rim_accounts row must read this instead of

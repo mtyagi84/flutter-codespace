@@ -177,8 +177,12 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
       final totalsRow = bundle.isGrouped ? controller.groupedGrandTotal : controller.totals;
       final session = ref.read(sessionProvider);
       final company = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
+      final hasSerialTracking = ref.read(hasSerialTrackedProductsProvider).valueOrNull ?? false;
       await ReportPdfExport.export(
-        definition: bundle.definition, columns: bundle.columns, rows: exportRows,
+        definition: bundle.definition,
+        columns: filterDynamicColumns(bundle.columns,
+            enableBarcode: session?.enableBarcode ?? false, hasSerialTracking: hasSerialTracking),
+        rows: exportRows,
         filterSummary: _buildFilterSummary(), totalsRow: totalsRow,
         company: company, printedByName: session?.fullName ?? '—', printedOn: DateTime.now());
     } catch (e, st) {
@@ -198,8 +202,12 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
         // pagination for MATRIX reports, see ReportDataController) — no
         // extra fetch needed, just pivot + write the wide shape.
         final session = ref.read(sessionProvider);
+        final hasSerialTracking = ref.read(hasSerialTrackedProductsProvider).valueOrNull ?? false;
         await ReportExcelExport.exportMatrix(
-          definition: bundle.definition, columns: bundle.columns, rows: controller.items,
+          definition: bundle.definition,
+          columns: filterDynamicColumns(bundle.columns,
+              enableBarcode: session?.enableBarcode ?? false, hasSerialTracking: hasSerialTracking),
+          rows: controller.items,
           numberFormat: session?.numberFormat ?? 'INTERNATIONAL');
         return;
       }
@@ -220,8 +228,13 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
       }
       final exportRows = prepareGroupedExportRows(bundle, rows);
       final totalsRow = bundle.isGrouped ? controller.groupedGrandTotal : controller.totals;
+      final session = ref.read(sessionProvider);
+      final hasSerialTracking = ref.read(hasSerialTrackedProductsProvider).valueOrNull ?? false;
       await ReportExcelExport.export(
-        definition: bundle.definition, columns: bundle.columns, rows: exportRows, totalsRow: totalsRow);
+        definition: bundle.definition,
+        columns: filterDynamicColumns(bundle.columns,
+            enableBarcode: session?.enableBarcode ?? false, hasSerialTracking: hasSerialTracking),
+        rows: exportRows, totalsRow: totalsRow);
     } catch (e, st) {
       AppLogger.error('ReportScreenExportExcel', e, st);
       if (mounted) setState(() => _actionError = ErrorPresenter.format(e, action: 'export this report to Excel'));
@@ -240,6 +253,16 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
     final bundle = _bundle!, controller = _controller!;
     final session = ref.watch(sessionProvider);
     final numberFormat = session?.numberFormat ?? 'INTERNATIONAL';
+
+    // Barcode/Serial No are only meaningful when the company actually uses
+    // them — neither is a static per-report registry flag, both are
+    // resolved here and applied once so screen/PDF/Excel stay consistent.
+    // See filterDynamicColumns' own doc comment (report_models.dart).
+    final enableBarcode = session?.enableBarcode ?? false;
+    final hasSerialTracking = ref.watch(hasSerialTrackedProductsProvider).valueOrNull ?? false;
+    final effectiveBundle = bundle.copyWith(
+      columns: filterDynamicColumns(bundle.columns, enableBarcode: enableBarcode, hasSerialTracking: hasSerialTracking),
+    );
 
     // CustomScrollView, not a plain Column+Expanded — the header block
     // below (title, currency toggle, filter bar) has no fixed height (the
@@ -338,12 +361,12 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
         SliverFillRemaining(
           hasScrollBody: true,
           child: bundle.isMatrix
-              ? SakalReportMatrixTable(bundle: bundle, rows: controller.items, numberFormat: numberFormat)
+              ? SakalReportMatrixTable(bundle: effectiveBundle, rows: controller.items, numberFormat: numberFormat)
               : bundle.isHierarchical
                   ? SakalReportHierarchicalTable(
                       reportKey: widget.reportKey, rows: controller.items, totals: controller.totals, numberFormat: numberFormat)
                   : SakalReportTable(
-                      bundle: bundle,
+                      bundle: effectiveBundle,
                       controller: controller,
                       numberFormat: numberFormat,
                       onChanged: () => setState(() {}),

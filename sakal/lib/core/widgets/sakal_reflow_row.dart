@@ -45,20 +45,51 @@ class SakalReflowRow extends StatelessWidget {
     if (children.isEmpty) return const SizedBox.shrink();
     return LayoutBuilder(builder: (context, constraints) {
       final totalWidth = constraints.maxWidth.isFinite ? constraints.maxWidth : 1000.0;
-      final totalUnits = List.generate(children.length, _weightFor).fold<double>(0, (s, w) => s + w);
-      final unitsPerRow = (totalWidth / minChildWidth).clamp(1.0, totalUnits == 0 ? 1.0 : totalUnits);
-      final unitWidth = (totalWidth - (unitsPerRow.floor() - 1).clamp(0, 999) * spacing) / unitsPerRow;
+      final unitsPerRow = (totalWidth / minChildWidth).floor().clamp(1, 999);
 
-      return Wrap(
-        spacing: spacing,
-        runSpacing: runSpacing,
-        crossAxisAlignment: WrapCrossAlignment.center,
+      // Group children into real rows first (matching how many whole
+      // minChildWidth-sized units actually fit), THEN size each row's own
+      // children as a share of that row's real width via Expanded/flex —
+      // never a single global width estimate applied uniformly to every
+      // child regardless of how many end up sharing its actual row. That
+      // old two-pass approach (estimate width, then hand off to Wrap's own
+      // independent line-breaking) could disagree with Wrap's real greedy
+      // break, leaving dead trailing space on a row Wrap only fit one
+      // field into — the exact bug reported on narrow/mobile screens.
+      final rows = <List<int>>[];
+      var current = <int>[];
+      var currentWeight = 0.0;
+      for (var i = 0; i < children.length; i++) {
+        final w = _weightFor(i);
+        if (current.isNotEmpty && currentWeight + w > unitsPerRow) {
+          rows.add(current);
+          current = [];
+          currentWeight = 0;
+        }
+        current.add(i);
+        currentWeight += w;
+      }
+      if (current.isNotEmpty) rows.add(current);
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          for (var i = 0; i < children.length; i++)
-            SizedBox(
-              width: unitWidth * _weightFor(i) + (spacing * (_weightFor(i) - 1)),
-              child: children[i],
+          for (var r = 0; r < rows.length; r++) ...[
+            if (r > 0) SizedBox(height: runSpacing),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                for (var j = 0; j < rows[r].length; j++) ...[
+                  if (j > 0) SizedBox(width: spacing),
+                  Expanded(
+                    flex: (_weightFor(rows[r][j]) * 100).round(),
+                    child: children[rows[r][j]],
+                  ),
+                ],
+              ],
             ),
+          ],
         ],
       );
     });

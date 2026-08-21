@@ -272,10 +272,37 @@ class ReportBundle {
     required this.groupLevels,
   });
 
+  ReportBundle copyWith({List<ReportColumn>? columns}) => ReportBundle(
+        definition: definition,
+        columns: columns ?? this.columns,
+        filters: filters,
+        groupLevels: groupLevels,
+      );
+
   bool get isGrouped => groupLevels.isNotEmpty;
   bool get isTabular => definition.isTabular;
   bool get isMatrix => definition.isMatrix;
   bool get isHierarchical => definition.isHierarchical;
   List<ReportColumn> get visibleColumns => columns.where((c) => c.defaultVisible).toList();
   List<ReportColumn> get aggregateColumns => columns.where((c) => c.aggregateFn != null).toList();
+}
+
+/// Drops columns whose relevance depends on something the static per-company
+/// `ric_report_columns.default_visible` flag can't express — a company
+/// setting (Barcode) or whether the feature is even in use at all (Serial
+/// tracking). Applied once, centrally, in sakal_report_screen.dart before
+/// handing a bundle's columns to the table/PDF/Excel render paths, so all
+/// three stay consistent. Deliberately a small explicit rule keyed by these
+/// two well-known column keys, not a pluggable registry — a future third
+/// dynamically-gated column just adds one more check here.
+List<ReportColumn> filterDynamicColumns(
+  List<ReportColumn> columns, {
+  required bool enableBarcode,
+  required bool hasSerialTracking,
+}) {
+  return columns.where((c) {
+    if (c.columnKey == 'barcode' && !enableBarcode) return false;
+    if (c.columnKey == 'serial_no' && !hasSerialTracking) return false;
+    return true;
+  }).toList();
 }
