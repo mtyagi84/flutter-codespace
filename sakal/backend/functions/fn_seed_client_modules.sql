@@ -277,7 +277,9 @@ begin
         (p_client_id, p_company_id, v_in, 'IN-RPT-SBM', 'Stock Balance by Location', '/reports/STOCK_BALANCE_MATRIX', 0, 'IN-RPT', 'Reports',     1, false, false, false),
         (p_client_id, p_company_id, v_in, 'IN-RPT-SVL', 'Stock Value by Location',   '/reports/STOCK_VALUE_BY_LOCATION', 1, 'IN-RPT', 'Reports',  1, false, false, false),
         (p_client_id, p_company_id, v_in, 'IN-RPT-SDT', 'Stock Details',             '/reports/STOCK_DETAILS',           2, 'IN-RPT', 'Reports',  1, false, false, false),
-        (p_client_id, p_company_id, v_in, 'IN-RPT-SDL', 'Stock Ledger',              '/reports/STOCK_LEDGER',             3, 'IN-RPT', 'Reports',  1, false, false, false)
+        (p_client_id, p_company_id, v_in, 'IN-RPT-SDL', 'Stock Ledger',              '/reports/STOCK_LEDGER',             3, 'IN-RPT', 'Reports',  1, false, false, false),
+        (p_client_id, p_company_id, v_in, 'IN-RPT-STR', 'Stock Transfer Register',   '/reports/STOCK_TRANSFER_REGISTER',  4, 'IN-RPT', 'Reports',  1, false, false, false),
+        (p_client_id, p_company_id, v_in, 'IN-RPT-STP', 'Pending Transfer to Receive','/reports/STOCK_TRANSFER_PENDING_RECEIPT', 5, 'IN-RPT', 'Reports', 1, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set module_id       = excluded.module_id,
             feature_name    = excluded.feature_name,
