@@ -282,7 +282,9 @@ begin
         (p_client_id, p_company_id, v_in, 'IN-RPT-STP', 'Pending Transfer to Receive','/reports/STOCK_TRANSFER_PENDING_RECEIPT', 5, 'IN-RPT', 'Reports', 1, false, false, false),
         (p_client_id, p_company_id, v_in, 'IN-RPT-SRR', 'Stock Receipt Register',    '/reports/STOCK_RECEIPT_REGISTER',   6, 'IN-RPT', 'Reports',  1, false, false, false),
         (p_client_id, p_company_id, v_in, 'IN-RPT-SAD', 'Stock Adjustment Register', '/reports/STOCK_ADJUSTMENT_REGISTER', 7, 'IN-RPT', 'Reports', 1, false, false, false),
-        (p_client_id, p_company_id, v_in, 'IN-RPT-SAV', 'Stock Adjustment Register (with Value)', '/reports/STOCK_ADJUSTMENT_REGISTER_VALUE', 8, 'IN-RPT', 'Reports', 1, false, false, false)
+        (p_client_id, p_company_id, v_in, 'IN-RPT-SAV', 'Stock Adjustment Register (with Value)', '/reports/STOCK_ADJUSTMENT_REGISTER_VALUE', 8, 'IN-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_in, 'IN-RPT-MRQ', 'Material Requisition Register', '/reports/MATERIAL_REQUISITION_REGISTER', 9, 'IN-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_in, 'IN-RPT-MIS', 'Material Issue Register',       '/reports/MATERIAL_ISSUE_REGISTER',       10, 'IN-RPT', 'Reports', 1, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set module_id       = excluded.module_id,
             feature_name    = excluded.feature_name,
