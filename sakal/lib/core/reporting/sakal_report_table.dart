@@ -133,8 +133,8 @@ class _SakalReportTableState extends State<SakalReportTable> {
             radius: const Radius.circular(6),
             trackVisibility: const WidgetStatePropertyAll(true),
             thumbVisibility: const WidgetStatePropertyAll(true),
-            trackColor: WidgetStatePropertyAll(AppColors.border),
-            trackBorderColor: WidgetStatePropertyAll(AppColors.border),
+            trackColor: const WidgetStatePropertyAll(AppColors.border),
+            trackBorderColor: const WidgetStatePropertyAll(AppColors.border),
             thumbColor: WidgetStatePropertyAll(AppColors.textSecondary.withValues(alpha: 0.6)),
           ),
           child: Scrollbar(
