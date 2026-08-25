@@ -479,10 +479,21 @@ class _SakalReportTableState extends State<SakalReportTable> {
         return Icon(value == true ? Icons.check_circle : Icons.cancel,
             size: 16, color: value == true ? AppColors.positive : AppColors.textDisabled);
       case 'BADGE':
+        // Increase/Decrease (Stock Adjustment's own Adjustment Type column)
+        // reuse the app's existing profit/loss color convention — an exact-
+        // match check, so every other BADGE column (e.g. Sales Register's
+        // own Status) keeps today's neutral styling unchanged.
+        final badgeColor = value == 'Increase'
+            ? AppColors.positive
+            : value == 'Decrease'
+                ? AppColors.negative
+                : AppColors.surfaceVariant;
+        final badgeTextColor = (value == 'Increase' || value == 'Decrease') ? Colors.white : null;
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(4)),
-          child: Text('$value', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+          decoration: BoxDecoration(color: badgeColor, borderRadius: BorderRadius.circular(4)),
+          child: Text('$value',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: badgeTextColor)),
         );
       case 'DATE':
       case 'TEXT':
