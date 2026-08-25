@@ -284,7 +284,10 @@ begin
         (p_client_id, p_company_id, v_in, 'IN-RPT-SAD', 'Stock Adjustment Register', '/reports/STOCK_ADJUSTMENT_REGISTER', 7, 'IN-RPT', 'Reports', 1, false, false, false),
         (p_client_id, p_company_id, v_in, 'IN-RPT-SAV', 'Stock Adjustment Register (with Value)', '/reports/STOCK_ADJUSTMENT_REGISTER_VALUE', 8, 'IN-RPT', 'Reports', 1, false, false, false),
         (p_client_id, p_company_id, v_in, 'IN-RPT-MRQ', 'Material Requisition Register', '/reports/MATERIAL_REQUISITION_REGISTER', 9, 'IN-RPT', 'Reports', 1, false, false, false),
-        (p_client_id, p_company_id, v_in, 'IN-RPT-MIS', 'Material Issue Register',       '/reports/MATERIAL_ISSUE_REGISTER',       10, 'IN-RPT', 'Reports', 1, false, false, false)
+        (p_client_id, p_company_id, v_in, 'IN-RPT-MIS', 'Material Issue Register',       '/reports/MATERIAL_ISSUE_REGISTER',       10, 'IN-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_in, 'IN-RPT-SCW', 'Stock Count Worksheet Register', '/reports/STOCK_COUNT_WORKSHEET_REGISTER', 11, 'IN-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_in, 'IN-RPT-SCV', 'Stock Count Variance Report',    '/reports/STOCK_COUNT_VARIANCE_REPORT',    12, 'IN-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_in, 'IN-RPT-SCV-V', 'Stock Count Variance Report (with Value)', '/reports/STOCK_COUNT_VARIANCE_REPORT_VALUE', 13, 'IN-RPT', 'Reports', 1, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set module_id       = excluded.module_id,
             feature_name    = excluded.feature_name,

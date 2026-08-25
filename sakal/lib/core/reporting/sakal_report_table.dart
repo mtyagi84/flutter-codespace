@@ -119,14 +119,32 @@ class _SakalReportTableState extends State<SakalReportTable> {
       ),
       const Divider(height: 1, color: AppColors.border),
       Expanded(
-        child: Scrollbar(
-          controller: _hBodyController,
-          thumbVisibility: true,
-          notificationPredicate: (n) => n.depth == 0,
-          child: SingleChildScrollView(
+        child: ScrollbarTheme(
+          // A persistent, unmissable horizontal scrollbar — the default
+          // Scrollbar(thumbVisibility: true) still renders a hairline
+          // track/thumb that reads as invisible on a normal landscape
+          // monitor and (on some renderers) only paints on hover/drag.
+          // Every report renders through this one widget, so this single
+          // theme override fixes discoverability app-wide. Caught live:
+          // user reported wide reports (Stock Adjustment, Stock Transfer,
+          // Stock Receipt) had "no scrollbar to scroll".
+          data: ScrollbarThemeData(
+            thickness: const WidgetStatePropertyAll(11),
+            radius: const Radius.circular(6),
+            trackVisibility: const WidgetStatePropertyAll(true),
+            thumbVisibility: const WidgetStatePropertyAll(true),
+            trackColor: WidgetStatePropertyAll(AppColors.border),
+            trackBorderColor: WidgetStatePropertyAll(AppColors.border),
+            thumbColor: WidgetStatePropertyAll(AppColors.textSecondary.withValues(alpha: 0.6)),
+          ),
+          child: Scrollbar(
             controller: _hBodyController,
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(width: _totalWidth, child: _buildBody()),
+            notificationPredicate: (n) => n.depth == 0,
+            child: SingleChildScrollView(
+              controller: _hBodyController,
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(width: _totalWidth, child: _buildBody()),
+            ),
           ),
         ),
       ),

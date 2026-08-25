@@ -1,5 +1,15 @@
 Status: Implemented 2026-08-22 (migration 153, not yet run by user).
 
+**Addendum 2026-08-25 (migration 155):** both report variants are now GROUPED — one collapsible row per
+document (Adjustment No/Date/Location/Reason, the HEADER's own reason only) expanding to line items.
+"Grouped" here is not a `report_type` value (that CHECK constraint only allows TABULAR/MATRIX/
+HIERARCHICAL) — it's plain TABULAR plus a `ric_report_group_levels` row, the same mechanism already
+proven by Pending Bills by Customer/Supplier (migration 140). New `fn_stock_adjustment_register_group_summary`
+resolves the group identity directly off `rih_stock_adjustment_headers` (not via `v_stock_adjustment_lines`)
+so Reason is unambiguously the header's own `reason_id` — a line-level override still shows correctly in
+its own detail row via the view's existing `COALESCE(line, header)` `reason_name` column, unchanged. No
+edits to 153's own view/function/columns — see `155_stock_adjustment_regroup_and_stock_count_reports.sql`.
+
 # Inventory — Stock Adjustment Register (two variants: with/without Value)
 
 ## Context
