@@ -94,8 +94,8 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
       actions: [
         const MasterDataSyncIndicator(),
         const SyncStatusIndicator(),
-        const NotificationBell(),
         ...?header?.actions,
+        const NotificationBell(),
         Padding(
           padding: const EdgeInsets.only(right: 8),
           child: PopupMenuButton<String>(
