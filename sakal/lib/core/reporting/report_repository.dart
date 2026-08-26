@@ -180,6 +180,12 @@ class ReportRepository {
     required String companyId,
     required Map<String, dynamic> filterValues,
     String? totalsSourceObjectOverride,
+    // Bare column-name → raw value, same shape as ReportDataController's
+    // own fixedParams — since this always targets a FUNCTION, each pair
+    // is p_-prefixed (no 'eq.' operator, a real RPC argument) before being
+    // handed to fetchPage, mirroring ancestorKeys' own FUNCTION-vs-VIEW
+    // formatting split above.
+    Map<String, String>? extraParams,
   }) async {
     final totalsObject = totalsSourceObjectOverride ?? bundle.definition.totalsSourceObject;
     if (totalsObject == null) return null;
@@ -193,6 +199,7 @@ class ReportRepository {
       sourceObjectOverride: totalsObject,
       sourceTypeOverride: 'FUNCTION',
       applyDefaultSort: false,
+      extraParams: extraParams?.map((k, v) => MapEntry('p_$k', v)),
     );
     return page.rows.isEmpty ? null : page.rows.first;
   }

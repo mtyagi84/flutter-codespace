@@ -37,12 +37,22 @@ class ReportDataController {
     required this.bundle,
     required this.clientId,
     required this.companyId,
+    this.fixedParams,
   });
 
   final ReportRepository repository;
   final ReportBundle bundle;
   final String clientId;
   final String companyId;
+
+  // A hidden, non-user-editable filter applied on EVERY fetch (detail page,
+  // load-more, and totals) alongside whatever's in filterValues — bare
+  // column-name → raw value. Introduced for Product Movement Analysis'
+  // own job_id scoping (a report screen reached via a notification's deep
+  // link, not through a normal declared ric_report_filters row — see
+  // ReportScreen's own job_id handling) but generic: any future report
+  // needing a fixed, invisible scope key can reuse this the same way.
+  final Map<String, String>? fixedParams;
 
   String? sortColumn;
   String? sortDir; // ASC | DESC
@@ -131,7 +141,7 @@ class ReportDataController {
         await _loadFirstPage();
         totals = await repository.fetchTotals(
             bundle: bundle, clientId: clientId, companyId: companyId, filterValues: filterValues,
-            totalsSourceObjectOverride: _totalsOverride);
+            totalsSourceObjectOverride: _totalsOverride, extraParams: fixedParams);
       }
     } finally {
       isLoading = false;
@@ -217,6 +227,7 @@ class ReportDataController {
       offset: 0,
       wantCount: true,
       sourceObjectOverride: _sourceOverride,
+      extraParams: fixedParams?.map((k, v) => MapEntry(k, 'eq.$v')),
     );
     items = page.rows;
     totalCount = page.totalCount;
@@ -238,6 +249,7 @@ class ReportDataController {
         limit: pageSize,
         offset: _offset,
         sourceObjectOverride: _sourceOverride,
+        extraParams: fixedParams?.map((k, v) => MapEntry(k, 'eq.$v')),
       );
       items = [...items, ...page.rows];
       _offset += page.rows.length;
@@ -391,6 +403,8 @@ class ReportDataController {
         return {'from': DateTime(now.year, now.month, 1), 'to': DateTime(now.year, now.month + 1, 0)};
       case 'LAST_30_DAYS':
         return {'from': now.subtract(const Duration(days: 30)), 'to': now};
+      case 'LAST_90_DAYS':
+        return {'from': now.subtract(const Duration(days: 90)), 'to': now};
       default:
         return {'from': now, 'to': now};
     }

@@ -581,8 +581,9 @@ final appRouter = GoRouter(
           // Trial Balance while Supplier Ageing was open left Supplier
           // Ageing's content showing with no navigation appearing to happen.
           builder: (c, s) => ReportScreen(
-            key: ValueKey(s.pathParameters['reportKey']),
+            key: ValueKey('${s.pathParameters['reportKey']}-${s.uri.queryParameters['job_id']}'),
             reportKey: s.pathParameters['reportKey']!,
+            jobId: s.uri.queryParameters['job_id'],
           ),
         ),
       ],

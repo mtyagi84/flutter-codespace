@@ -12,6 +12,7 @@ import '../theme/app_colors.dart';
 import '../theme/theme_presets.dart';
 import '../utils/responsive.dart';
 import '../widgets/master_data_sync_indicator.dart';
+import '../widgets/notification_bell.dart';
 import '../widgets/sync_status_indicator.dart';
 import 'screen_header.dart';
 
@@ -93,6 +94,7 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
       actions: [
         const MasterDataSyncIndicator(),
         const SyncStatusIndicator(),
+        const NotificationBell(),
         ...?header?.actions,
         Padding(
           padding: const EdgeInsets.only(right: 8),

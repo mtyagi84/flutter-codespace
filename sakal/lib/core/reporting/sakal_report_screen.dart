@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../errors/error_presenter.dart';
 import '../layout/screen_header.dart';
+import '../network/dio_client.dart';
 import '../providers/master_cache_providers.dart';
 import '../providers/session_provider.dart';
 import '../theme/app_colors.dart';
@@ -27,7 +28,13 @@ import 'sakal_report_table.dart';
 /// + registry rows) and a menu row are enough.
 class ReportScreen extends ConsumerStatefulWidget {
   final String reportKey;
-  const ReportScreen({super.key, required this.reportKey});
+  // Present only for a report reached via a notification's deep link
+  // (Product Movement Analysis today — see fn_process_pending_report_jobs'
+  // own link_route, migration 156) — scopes every fetch to one completed
+  // job's own results instead of the normal live-filtered flow. Absent for
+  // every other report, which behaves exactly as before.
+  final String? jobId;
+  const ReportScreen({super.key, required this.reportKey, this.jobId});
 
   @override
   ConsumerState<ReportScreen> createState() => _ReportScreenState();
@@ -66,6 +73,14 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
   bool _exportingExcel = false;
   String? _actionError;
 
+  // Product Movement Analysis' own Submit-a-job flow — see
+  // _buildSubmitJobPrompt below and migration 156's Report Job Queue.
+  DateTime _jobDateFrom = DateTime.now().subtract(const Duration(days: 90));
+  DateTime _jobDateTo = DateTime.now();
+  bool _submittingJob = false;
+  bool _jobSubmitted = false;
+  String? _jobSubmitError;
+
   @override
   void initState() {
     super.initState();
@@ -80,7 +95,8 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
       final bundle = await _repository.fetchBundle(
         reportKey: widget.reportKey, clientId: session.clientId, companyId: session.companyId);
       final controller = ReportDataController(
-          repository: _repository, bundle: bundle, clientId: session.clientId, companyId: session.companyId);
+          repository: _repository, bundle: bundle, clientId: session.clientId, companyId: session.companyId,
+          fixedParams: widget.jobId != null ? {'job_id': widget.jobId!} : null);
       await controller.init();
       if (!mounted) return;
       setState(() { _bundle = bundle; _controller = controller; _loading = false; });
@@ -356,7 +372,11 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
       if (controller.isLoading)
         const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
       else if (!bundle.definition.autoLoad && !controller.hasRunOnce)
-        SliverFillRemaining(child: _buildRunReportPrompt(controller))
+        SliverFillRemaining(
+          child: (bundle.definition.reportKey == 'PRODUCT_MOVEMENT_ANALYSIS' && widget.jobId == null)
+              ? _buildSubmitJobPrompt()
+              : _buildRunReportPrompt(controller),
+        )
       else
         SliverFillRemaining(
           hasScrollBody: true,
@@ -373,6 +393,111 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
                     ),
         ),
     ]);
+  }
+
+  // Product Movement Analysis doesn't "Run" live — it aggregates over the
+  // ENTIRE product catalog (one row per product, not bounded by
+  // transaction volume the way every other report is), which is genuinely
+  // heavy for a large catalog. Instead: pick a date range, Submit — this
+  // calls fn_submit_report_job (migration 156) and returns instantly; the
+  // actual computation happens asynchronously via a pg_cron worker, and
+  // the user is notified (NotificationBell, TopBar) once it's ready,
+  // landing back on this same route with ?job_id=... which then behaves
+  // like a normal completed report (see build()'s own jobId branch).
+  Future<void> _submitMovementAnalysisJob() async {
+    setState(() { _submittingJob = true; _jobSubmitError = null; });
+    try {
+      final session = ref.read(sessionProvider);
+      if (session == null) return;
+      await DioClient.instance.post('/rpc/fn_submit_report_job', data: {
+        'p_client_id': session.clientId,
+        'p_company_id': session.companyId,
+        'p_report_key': 'PRODUCT_MOVEMENT_ANALYSIS',
+        'p_params': {
+          'date_from': _fmtFilterDate(_jobDateFrom),
+          'date_to': _fmtFilterDate(_jobDateTo),
+        },
+        'p_submitted_by': session.userId,
+      });
+      if (mounted) setState(() { _jobSubmitted = true; });
+    } catch (e, st) {
+      AppLogger.error('SubmitMovementAnalysisJob', e, st);
+      if (mounted) setState(() => _jobSubmitError = ErrorPresenter.format(e, action: 'submit this report'));
+    } finally {
+      if (mounted) setState(() => _submittingJob = false);
+    }
+  }
+
+  Widget _buildSubmitJobPrompt() {
+    if (_jobSubmitted) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.check_circle_outline, size: 48, color: AppColors.positive),
+            const SizedBox(height: 16),
+            const Text('Submitted', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            const Text(
+              "We'll notify you (bell icon, top right) once it's ready — feel free to navigate away.",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+          ]),
+        ),
+      );
+    }
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.hourglass_top_outlined, size: 48, color: AppColors.textDisabled),
+          const SizedBox(height: 16),
+          const Text('Pick a date range, then submit', style: TextStyle(fontSize: 15, color: AppColors.textSecondary)),
+          const SizedBox(height: 8),
+          const Text(
+            'This report scans your whole product catalog, so it runs in the background — you\'ll be\nnotified when your results are ready.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: AppColors.textDisabled),
+          ),
+          const SizedBox(height: 20),
+          Wrap(alignment: WrapAlignment.center, spacing: 12, runSpacing: 8, children: [
+            OutlinedButton.icon(
+              icon: const Icon(Icons.calendar_today_outlined, size: 16),
+              label: Text('From: ${_fmtFilterDate(_jobDateFrom)}'),
+              onPressed: () async {
+                final picked = await showDatePicker(
+                    context: context, initialDate: _jobDateFrom,
+                    firstDate: DateTime(2020), lastDate: DateTime.now());
+                if (picked != null) setState(() => _jobDateFrom = picked);
+              },
+            ),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.calendar_today_outlined, size: 16),
+              label: Text('To: ${_fmtFilterDate(_jobDateTo)}'),
+              onPressed: () async {
+                final picked = await showDatePicker(
+                    context: context, initialDate: _jobDateTo,
+                    firstDate: DateTime(2020), lastDate: DateTime.now());
+                if (picked != null) setState(() => _jobDateTo = picked);
+              },
+            ),
+          ]),
+          if (_jobSubmitError != null) ...[
+            const SizedBox(height: 12),
+            Text(_jobSubmitError!, style: const TextStyle(color: AppColors.negative, fontSize: 12)),
+          ],
+          const SizedBox(height: 20),
+          FilledButton.icon(
+            icon: _submittingJob
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.send_outlined, size: 18),
+            label: const Text('Submit'),
+            onPressed: _submittingJob ? null : _submitMovementAnalysisJob,
+          ),
+        ]),
+      ),
+    );
   }
 
   // Shown once, before the first fetch, on any report with

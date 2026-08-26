@@ -498,15 +498,24 @@ class _SakalReportTableState extends State<SakalReportTable> {
             size: 16, color: value == true ? AppColors.positive : AppColors.textDisabled);
       case 'BADGE':
         // Increase/Decrease (Stock Adjustment's own Adjustment Type column)
-        // reuse the app's existing profit/loss color convention — an exact-
-        // match check, so every other BADGE column (e.g. Sales Register's
-        // own Status) keeps today's neutral styling unchanged.
-        final badgeColor = value == 'Increase'
+        // and Fast/Slow/Non-Moving (Product Movement Analysis) reuse the
+        // app's existing profit/loss color convention — an exact-match
+        // check, so every other BADGE column (e.g. Sales Register's own
+        // Status) keeps today's neutral styling unchanged.
+        const positiveBadges = {'Increase', 'Fast-Moving'};
+        const negativeBadges = {'Non-Moving'};
+        const warningBadges = {'Slow-Moving'};
+        final badgeColor = positiveBadges.contains(value)
             ? AppColors.positive
-            : value == 'Decrease'
+            : negativeBadges.contains(value)
                 ? AppColors.negative
-                : AppColors.surfaceVariant;
-        final badgeTextColor = (value == 'Increase' || value == 'Decrease') ? Colors.white : null;
+                : warningBadges.contains(value)
+                    ? AppColors.secondary
+                    : value == 'Decrease'
+                        ? AppColors.negative
+                        : AppColors.surfaceVariant;
+        final coloredBadges = {...positiveBadges, ...negativeBadges, ...warningBadges, 'Decrease'};
+        final badgeTextColor = coloredBadges.contains(value) ? Colors.white : null;
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(color: badgeColor, borderRadius: BorderRadius.circular(4)),
