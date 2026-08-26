@@ -430,15 +430,15 @@ class _ReportScreenState extends ConsumerState<ReportScreen>
 
   Widget _buildSubmitJobPrompt() {
     if (_jobSubmitted) {
-      return Center(
+      return const Center(
         child: Padding(
-          padding: const EdgeInsets.all(32),
+          padding: EdgeInsets.all(32),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.check_circle_outline, size: 48, color: AppColors.positive),
-            const SizedBox(height: 16),
-            const Text('Submitted', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            const Text(
+            Icon(Icons.check_circle_outline, size: 48, color: AppColors.positive),
+            SizedBox(height: 16),
+            Text('Submitted', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            SizedBox(height: 8),
+            Text(
               "We'll notify you (bell icon, top right) once it's ready — feel free to navigate away.",
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
