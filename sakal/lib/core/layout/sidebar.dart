@@ -16,8 +16,6 @@ class Sidebar extends ConsumerStatefulWidget {
 }
 
 class _SidebarState extends ConsumerState<Sidebar> {
-  final Set<String> _expandedModules = {};
-
   static const _moduleIcons = <String, IconData>{
     'AD': Icons.admin_panel_settings_outlined,
     'SL': Icons.point_of_sale_outlined,
@@ -26,14 +24,42 @@ class _SidebarState extends ConsumerState<Sidebar> {
     'FN': Icons.account_balance_outlined,
   };
 
+  bool _seededInitialExpansion = false;
+  // Shared between whichever of the two ListViews (collapsed rail vs
+  // expanded tree) is actually mounted at a time — never both at once, so
+  // one controller is enough.
+  final _scrollController = ScrollController();
+
   @override
-  void initState() {
-    super.initState();
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  // One-time seed, run after the first frame (menu + route are both
+  // available by then): every module starts collapsed EXCEPT the one
+  // containing whatever screen the user is currently on (e.g. a refresh
+  // mid-work inside Sales keeps Sales open) — landing on the Dashboard, with
+  // no module active, means every module starts closed. Guarded by
+  // _seededInitialExpansion (not "is the provider set still empty") so a
+  // user who deliberately collapses that one auto-opened module doesn't get
+  // it silently re-added on the next rebuild.
+  void _seedInitialExpansion(List<MenuModule> menu, String path) {
+    if (_seededInitialExpansion) return;
+    // menu loads asynchronously after login — don't consume the one-time
+    // seed on an empty tree, or the real menu arriving a frame later would
+    // never get its active module auto-opened.
+    if (menu.isEmpty) return;
+    _seededInitialExpansion = true;
+    final active = menu.where((m) => m.groups.any((g) =>
+        g.features.any((f) => path.startsWith(f.screenName)) ||
+        path == RouteNames.groupPath(g.groupCode)));
+    if (active.isEmpty) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final menu = ref.read(menuProvider);
-      setState(() {
-        for (final m in menu) { _expandedModules.add(m.moduleCode); }
-      });
+      ref.read(sidebarExpandedModulesProvider.notifier).state = {
+        ...ref.read(sidebarExpandedModulesProvider),
+        for (final m in active) m.moduleCode,
+      };
     });
   }
 
@@ -64,14 +90,38 @@ class _SidebarState extends ConsumerState<Sidebar> {
     final path      = GoRouterState.of(context).matchedLocation;
     final activePreset = _activePreset;
 
+    _seedInitialExpansion(menu, path);
+
     return Container(
       color: activePreset.primary,
       // No app-branding header block — the sidebar's module list starts
       // directly at the top (branding removed per explicit request; the
       // shared TopBar's own company name is the app's identity marker now).
-      child: collapsed
-          ? _buildCollapsedList(menu, path)
-          : _buildExpandedList(menu, path, mobile),
+      //
+      // A persistent, visible scrollbar — the default desktop/web scrollbar
+      // is thin enough to be easy to miss entirely once several modules are
+      // open and the tree overflows the viewport, same bug class already
+      // found and fixed on the Reporting Engine's own table this session
+      // (sakal_report_table.dart's ScrollbarTheme) — themed for THIS dark
+      // surface (light/semi-transparent white) rather than that fix's
+      // light-surface colors.
+      child: ScrollbarTheme(
+        data: ScrollbarThemeData(
+          thickness: const WidgetStatePropertyAll(8),
+          radius: const Radius.circular(4),
+          trackVisibility: const WidgetStatePropertyAll(true),
+          thumbVisibility: const WidgetStatePropertyAll(true),
+          trackColor: const WidgetStatePropertyAll(Colors.white12),
+          trackBorderColor: const WidgetStatePropertyAll(Colors.white12),
+          thumbColor: const WidgetStatePropertyAll(Colors.white38),
+        ),
+        child: Scrollbar(
+          controller: _scrollController,
+          child: collapsed
+              ? _buildCollapsedList(menu, path)
+              : _buildExpandedList(menu, path, mobile),
+        ),
+      ),
     );
   }
 
@@ -87,6 +137,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
   // navigation work without ever needing to expand.
   Widget _buildCollapsedList(List<MenuModule> menu, String path) {
     return ListView(
+      controller: _scrollController,
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: menu.map((m) {
         final icon = _moduleIcons[m.moduleCode] ?? Icons.apps_outlined;
@@ -150,14 +201,22 @@ class _SidebarState extends ConsumerState<Sidebar> {
   // sizing. A real complaint: the original 32-40px rows/12px text were
   // sized for the desktop case and never had a mobile-specific pass.
   Widget _buildExpandedList(List<MenuModule> menu, String path, bool mobile) {
+    final expandedModules = ref.watch(sidebarExpandedModulesProvider);
     return ListView(
+      controller: _scrollController,
       padding: const EdgeInsets.symmetric(vertical: 8),
-      children: menu.map((m) => _buildModule(m, path, mobile)).toList(),
+      children: menu.map((m) => _buildModule(m, path, mobile, expandedModules.contains(m.moduleCode))).toList(),
     );
   }
 
-  Widget _buildModule(MenuModule module, String path, bool mobile) {
-    final isExpanded = _expandedModules.contains(module.moduleCode);
+  void _toggleModule(String moduleCode, bool isExpanded) {
+    final current = ref.read(sidebarExpandedModulesProvider);
+    ref.read(sidebarExpandedModulesProvider.notifier).state = isExpanded
+        ? ({...current}..remove(moduleCode))
+        : ({...current}..add(moduleCode));
+  }
+
+  Widget _buildModule(MenuModule module, String path, bool mobile, bool isExpanded) {
     final icon = _moduleIcons[module.moduleCode] ?? Icons.apps_outlined;
     final hasActive = module.groups.any((g) =>
         g.features.any((f) => path.startsWith(f.screenName)) ||
@@ -168,9 +227,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
       children: [
         // Module header
         InkWell(
-          onTap: () => setState(() => isExpanded
-              ? _expandedModules.remove(module.moduleCode)
-              : _expandedModules.add(module.moduleCode)),
+          onTap: () => _toggleModule(module.moduleCode, isExpanded),
           child: Container(
             height: mobile ? 52 : 40,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -200,22 +257,39 @@ class _SidebarState extends ConsumerState<Sidebar> {
                     ),
                   ),
                 ),
-                Icon(
-                  isExpanded
-                      ? Icons.keyboard_arrow_up
-                      : Icons.keyboard_arrow_down,
-                  size: mobile ? 20 : 16,
-                  color: AppColors.sidebarText.withValues(alpha: 0.5),
+                AnimatedRotation(
+                  turns: isExpanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 150),
+                  curve: Curves.easeInOut,
+                  child: Icon(
+                    Icons.keyboard_arrow_down,
+                    size: mobile ? 20 : 16,
+                    color: AppColors.sidebarText.withValues(alpha: 0.5),
+                  ),
                 ),
               ],
             ),
           ),
         ),
 
-        // Groups
-        if (isExpanded)
-          ...module.groups.map((g) => _buildGroup(g, path, mobile)),
-        if (isExpanded) const SizedBox(height: 4),
+        // Groups — AnimatedSize (inside ClipRect, so mid-animation content
+        // can't spill outside the sidebar's own bounds) slides the group
+        // list open/closed instead of the previous instant show/hide.
+        ClipRect(
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            child: isExpanded
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ...module.groups.map((g) => _buildGroup(g, path, mobile)),
+                      const SizedBox(height: 4),
+                    ],
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+        ),
       ],
     );
   }

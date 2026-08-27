@@ -70,3 +70,14 @@ final sessionProvider = StateProvider<UserSession?>((ref) => null);
 final menuProvider = StateProvider<List<MenuModule>>((ref) => []);
 
 final sidebarCollapsedProvider = StateProvider<bool>((ref) => false);
+
+// Which modules are currently open in the sidebar's expanded (240px) tree
+// view — moved out of Sidebar's own local State so it survives widget
+// rebuilds within the session (previously reset to "all expanded" on
+// every Sidebar remount, not just app restart). Session-lifetime only,
+// same no-disk-persistence precedent as sidebarCollapsedProvider itself.
+// Starts empty; Sidebar seeds it once with just the current route's own
+// module on first build, not eagerly here, since that seeding needs the
+// active route/menu tree which aren't available at provider-construction
+// time.
+final sidebarExpandedModulesProvider = StateProvider<Set<String>>((ref) => {});
