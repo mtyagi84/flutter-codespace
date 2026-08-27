@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/notification_provider.dart';
 import '../theme/app_colors.dart';
+import '../utils/relative_time.dart';
 
 /// Generic notification bell — reusable beyond Product Movement Analysis'
 /// own "your report is ready" notifications; any future notification_type
@@ -10,14 +11,6 @@ import '../theme/app_colors.dart';
 /// zero changes here, since it only ever reads title/message/linkRoute.
 class NotificationBell extends ConsumerWidget {
   const NotificationBell({super.key});
-
-  String _relativeTime(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -64,7 +57,7 @@ class NotificationBell extends ConsumerWidget {
                         Text(n.message!,
                             maxLines: 2, overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                      Text(_relativeTime(n.createdAt),
+                      Text(relativeTime(n.createdAt),
                           style: const TextStyle(fontSize: 10, color: AppColors.textDisabled)),
                     ],
                   ),

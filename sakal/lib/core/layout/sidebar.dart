@@ -6,6 +6,7 @@ import '../providers/session_provider.dart';
 import '../router/route_names.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_presets.dart';
+import '../utils/module_icons.dart';
 import '../utils/responsive.dart';
 
 class Sidebar extends ConsumerStatefulWidget {
@@ -16,14 +17,6 @@ class Sidebar extends ConsumerStatefulWidget {
 }
 
 class _SidebarState extends ConsumerState<Sidebar> {
-  static const _moduleIcons = <String, IconData>{
-    'AD': Icons.admin_panel_settings_outlined,
-    'SL': Icons.point_of_sale_outlined,
-    'PR': Icons.shopping_cart_outlined,
-    'IN': Icons.inventory_2_outlined,
-    'FN': Icons.account_balance_outlined,
-  };
-
   bool _seededInitialExpansion = false;
   // Shared between whichever of the two ListViews (collapsed rail vs
   // expanded tree) is actually mounted at a time — never both at once, so
@@ -140,7 +133,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
       controller: _scrollController,
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: menu.map((m) {
-        final icon = _moduleIcons[m.moduleCode] ?? Icons.apps_outlined;
+        final icon = moduleIconFor(m.moduleCode);
         final hasActive = m.groups.any((g) =>
             g.features.any((f) => path.startsWith(f.screenName)));
         final isGroupActive = m.groups.any((g) =>
@@ -217,7 +210,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
   }
 
   Widget _buildModule(MenuModule module, String path, bool mobile, bool isExpanded) {
-    final icon = _moduleIcons[module.moduleCode] ?? Icons.apps_outlined;
+    final icon = moduleIconFor(module.moduleCode);
     final hasActive = module.groups.any((g) =>
         g.features.any((f) => path.startsWith(f.screenName)) ||
         path == RouteNames.groupPath(g.groupCode));
