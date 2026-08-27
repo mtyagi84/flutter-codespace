@@ -1,0 +1,526 @@
+<title>Sales Reports Blueprint</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+  :root {
+    --navy: #1b3a6b;
+    --navy-deep: #12294d;
+    --amber: #b4700a;
+    --amber-soft: #f2e2c8;
+    --positive: #1e6b3e;
+    --negative: #ad2c33;
+    --bg: #f4f6fa;
+    --surface: #ffffff;
+    --surface-sunk: #eef1f7;
+    --border: #dbe1ec;
+    --text: #17233d;
+    --text-secondary: #56637d;
+    --text-faint: #8792a8;
+    --mono-chip: #eef1f8;
+    --shadow: 0 1px 2px rgba(18, 41, 77, 0.05), 0 6px 20px rgba(18, 41, 77, 0.06);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --navy: #6f8fc9; --navy-deep: #a9c1e8; --amber: #e0a856; --amber-soft: #3a2f18;
+      --positive: #5fbf85; --negative: #e2777c; --bg: #0f1420; --surface: #161d2c;
+      --surface-sunk: #1d2536; --border: #2b3552; --text: #e8ecf6; --text-secondary: #9aa6c3;
+      --text-faint: #6b7594; --mono-chip: #1d2536;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --navy: #6f8fc9; --navy-deep: #a9c1e8; --amber: #e0a856; --amber-soft: #3a2f18;
+    --positive: #5fbf85; --negative: #e2777c; --bg: #0f1420; --surface: #161d2c;
+    --surface-sunk: #1d2536; --border: #2b3552; --text: #e8ecf6; --text-secondary: #9aa6c3;
+    --text-faint: #6b7594; --mono-chip: #1d2536;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: "Inter", -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--amber-soft); }
+  a { color: inherit; }
+
+  .shell { display: grid; grid-template-columns: 250px minmax(0, 1fr); max-width: 1360px; margin: 0 auto; }
+
+  .toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; padding: 28px 18px 40px 28px; border-right: 1px solid var(--border); }
+  .toc-brand { font-family: "Manrope", sans-serif; font-weight: 800; font-size: 15px; color: var(--navy); margin: 0 0 2px; }
+  .toc-sub { font-size: 11.5px; color: var(--text-faint); margin: 0 0 26px; }
+  .toc-stage { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); margin: 20px 0 8px; }
+  .toc-stage:first-of-type { margin-top: 0; }
+  .toc a.toc-link { display: block; font-size: 12.5px; text-decoration: none; color: var(--text-secondary); padding: 5px 8px; border-radius: 6px; margin-bottom: 1px; }
+  .toc a.toc-link:hover { background: var(--surface-sunk); color: var(--text); }
+  .toc a.toc-link b { color: var(--navy); font-variant-numeric: tabular-nums; margin-right: 6px; }
+
+  main { padding: 40px 44px 100px; min-width: 0; }
+  .page-head { margin-bottom: 30px; }
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber); margin: 0 0 10px; }
+  h1 { font-family: "Manrope", sans-serif; font-size: 30px; font-weight: 800; letter-spacing: -0.015em; margin: 0 0 10px; text-wrap: balance; color: var(--navy); }
+  .lede { font-size: 14.5px; color: var(--text-secondary); max-width: 68ch; line-height: 1.6; margin: 0; }
+
+  .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 26px 0 6px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); }
+  .stat .n { font-family: "Manrope", sans-serif; font-size: 24px; font-weight: 800; color: var(--navy); font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
+  .gap-note { display: flex; gap: 10px; align-items: flex-start; background: var(--amber-soft); border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent); border-radius: 12px; padding: 14px 16px; margin: 22px 0 40px; font-size: 13px; line-height: 1.55; color: var(--text); }
+  .gap-note .tag { flex: 0 0 auto; font-size: 10px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; background: var(--amber); color: var(--surface); padding: 3px 8px; border-radius: 5px; margin-top: 1px; }
+  .gap-note code { font-family: "IBM Plex Mono", monospace; font-size: 12px; background: var(--mono-chip); padding: 1px 5px; border-radius: 4px; }
+
+  .stage-title { display: flex; align-items: baseline; gap: 10px; margin: 56px 0 18px; padding-top: 6px; scroll-margin-top: 20px; }
+  .stage-title:first-of-type { margin-top: 8px; }
+  .stage-title h2 { font-family: "Manrope", sans-serif; font-size: 18px; font-weight: 800; margin: 0; color: var(--text); }
+  .stage-title .stage-desc { font-size: 12.5px; color: var(--text-faint); }
+  .stage-rule { flex: 1; height: 1px; background: var(--border); }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); margin-bottom: 18px; overflow: hidden; scroll-margin-top: 20px; }
+  .card-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, var(--surface), var(--surface-sunk) 220%); }
+  .card-num { font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: 12px; color: var(--navy); background: var(--mono-chip); border-radius: 6px; width: 26px; height: 26px; display: grid; place-items: center; flex: 0 0 auto; }
+  .card-head h3 { font-family: "Manrope", sans-serif; font-size: 15px; font-weight: 700; margin: 0; }
+  .shape { margin-left: auto; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+  .shape.grouped { background: color-mix(in srgb, var(--navy) 14%, transparent); color: var(--navy); }
+  .shape.tabular { background: color-mix(in srgb, var(--text-faint) 16%, transparent); color: var(--text-secondary); }
+  .reuse { font-size: 10px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; padding: 3px 9px; border-radius: 20px; background: color-mix(in srgb, var(--positive) 14%, transparent); color: var(--positive); white-space: nowrap; }
+
+  .card-body { padding: 16px 20px 20px; }
+  .card-desc { font-size: 12.5px; color: var(--text-secondary); line-height: 1.55; margin: 0 0 14px; max-width: 80ch; }
+  .card-desc b { color: var(--text); font-weight: 600; }
+
+  .cols2 { display: grid; grid-template-columns: 1fr 1.5fr; gap: 20px; align-items: start; }
+  @media (max-width: 880px) { .cols2 { grid-template-columns: 1fr; } }
+
+  .field-label { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-faint); margin: 0 0 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 11.5px; padding: 4px 10px; border-radius: 20px; background: var(--surface-sunk); border: 1px solid var(--border); color: var(--text-secondary); }
+  .chip.req { background: color-mix(in srgb, var(--navy) 10%, transparent); border-color: color-mix(in srgb, var(--navy) 30%, transparent); color: var(--navy); font-weight: 600; }
+
+  table.cols { width: 100%; border-collapse: collapse; }
+  table.cols th { text-align: left; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-faint); padding: 0 10px 6px 0; border-bottom: 1px solid var(--border); }
+  table.cols td { font-size: 12.5px; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.cols tr:last-child td { border-bottom: none; }
+  table.cols td.group-col { color: var(--navy); font-weight: 600; }
+  .row-tag { font-family: "IBM Plex Mono", monospace; font-size: 9.5px; font-weight: 600; padding: 1px 6px; border-radius: 4px; text-transform: uppercase; white-space: nowrap; }
+  .row-tag.g { background: color-mix(in srgb, var(--navy) 14%, transparent); color: var(--navy); }
+  .row-tag.d { background: var(--surface-sunk); color: var(--text-secondary); }
+
+  .note { margin-top: 14px; padding: 10px 13px; border-radius: 9px; font-size: 12px; line-height: 1.55; background: var(--surface-sunk); border-left: 3px solid var(--amber); color: var(--text-secondary); }
+  .note.reuse-note { border-left-color: var(--positive); }
+  .note b { color: var(--text); }
+  .note code { font-family: "IBM Plex Mono", monospace; font-size: 11px; background: var(--mono-chip); padding: 1px 5px; border-radius: 4px; }
+
+  .not-building { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; margin-top: 20px; box-shadow: var(--shadow); }
+  .not-building h3 { font-family: "Manrope", sans-serif; font-size: 14px; margin: 0 0 12px; }
+  .nb-item { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+  .nb-item:last-child { border-bottom: none; }
+  .nb-item .why { color: var(--text-secondary); }
+  .nb-item .what { flex: 0 0 240px; font-weight: 600; color: var(--text); }
+
+  footer.page-footer { margin-top: 50px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--text-faint); text-align: center; }
+
+  @media (max-width: 760px) {
+    .shell { grid-template-columns: 1fr; }
+    .toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 28px 20px 70px; }
+    .stat-row { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+
+<div class="shell">
+  <nav class="toc">
+    <p class="toc-brand">SAKAL · Sales Reports</p>
+    <p class="toc-sub">Blueprint for review — 12 reports</p>
+
+    <p class="toc-stage">Gross Profit family</p>
+    <a class="toc-link" href="#r1"><b>01</b>Item-wise Gross Profit</a>
+    <a class="toc-link" href="#r2"><b>02</b>Invoice-wise Gross Profit</a>
+    <a class="toc-link" href="#r3"><b>03</b>Customer-wise Gross Profit</a>
+    <a class="toc-link" href="#r4"><b>04</b>Salesperson-wise Performance</a>
+    <a class="toc-link" href="#r5"><b>05</b>Sales Return Register</a>
+
+    <p class="toc-stage">Pipeline</p>
+    <a class="toc-link" href="#r6"><b>06</b>Sales Quotation Register</a>
+    <a class="toc-link" href="#r7"><b>07</b>Sales Order Register</a>
+    <a class="toc-link" href="#r8"><b>08</b>Quotation Conversion Analysis</a>
+    <a class="toc-link" href="#r9"><b>09</b>Open Sales Orders</a>
+
+    <p class="toc-stage">Fulfillment &amp; collections</p>
+    <a class="toc-link" href="#r10"><b>10</b>Sales Delivery Register</a>
+    <a class="toc-link" href="#r11"><b>11</b>Pending Deliveries</a>
+    <a class="toc-link" href="#r12"><b>12</b>Cash Receipt Register</a>
+
+    <p class="toc-stage">Reference</p>
+    <a class="toc-link" href="#not-building">Deliberately not built</a>
+  </nav>
+
+  <main>
+    <div class="page-head">
+      <p class="eyebrow">Sales Module · Reporting Blueprint</p>
+      <h1>Twelve reports, the full customer journey</h1>
+      <p class="lede">
+        Sales already has a live Gross Profit engine (Sales Register, migration 127) — cost/revenue/margin
+        are already real, posted-consistent data, just never grouped by Item, Invoice, Customer, or
+        Salesperson. This maps those five reuses plus the seven genuine gaps — Quotation, Order,
+        Delivery, and Collections have zero reports today — cross-checked against Finance's own AR ageing
+        and Inventory's own movement analysis so nothing here duplicates them.
+      </p>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat"><div class="n">12</div><div class="l">Reports specified</div></div>
+      <div class="stat"><div class="n">5</div><div class="l">Reuse existing GP data</div></div>
+      <div class="stat"><div class="n">4</div><div class="l">New views needed</div></div>
+      <div class="stat"><div class="n">0</div><div class="l">Schema changes</div></div>
+    </div>
+
+    <div class="gap-note">
+      <span class="tag">Real finding</span>
+      <span>
+        Gross Profit isn't new plumbing to build — <code>rid_sales_invoice_lines.cost_price</code> is
+        already the SAME value the Cost-of-Sales voucher posts with, and <code>v_sales_details_base</code>
+        already computes <code>gross_profit</code>/<code>gross_profit_percent</code> per line. Reports
+        01-05 below are new ways to GROUP that existing, posting-consistent data — not a new cost engine.
+      </span>
+    </div>
+
+    <!-- ============ GROSS PROFIT FAMILY ============ -->
+    <div class="stage-title" id="stage-gp">
+      <h2>Gross Profit family</h2>
+      <span class="stage-desc">Same dataset, five ways to slice it — mirrors Odoo's own Sales Analysis pivot</span>
+      <div class="stage-rule"></div>
+    </div>
+
+    <section class="card" id="r1">
+      <div class="card-head">
+        <span class="card-num">01</span>
+        <h3>Item-wise Gross Profit</h3>
+        <span class="shape grouped">Grouped</span>
+        <span class="reuse">Reuses v_sales_details_base</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">Which products actually make money, not just sell — one row per product, expanding to every sale/return line behind it.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip req">Date range — required</span>
+              <span class="chip">Customer</span><span class="chip">Product</span><span class="chip">Category</span>
+              <span class="chip">Brand</span><span class="chip">Location</span><span class="chip">Sales Person</span>
+              <span class="chip">Record Type (Sale/Return/Both)</span><span class="chip">Status</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th></th><th>Column</th></tr>
+            <tr><td><span class="row-tag g">Group</span></td><td class="group-col">Item Code/Name · Qty · Avg Rate · Revenue · Cost Value · <b>Gross Profit</b> · <b>Gross Profit %</b></td></tr>
+            <tr><td><span class="row-tag d">Detail</span></td><td>Doc No · Doc Date · Customer · Qty · Rate · Final Amount · Cost Value · Gross Profit</td></tr>
+          </table>
+          <div class="note reuse-note"><b>Category/Brand</b> need a join to <code>rim_products</code> not present in the base view — added at this report's own function level, no change to the shared view.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="r2">
+      <div class="card-head">
+        <span class="card-num">02</span>
+        <h3>Invoice-wise Gross Profit</h3>
+        <span class="shape grouped">Grouped</span>
+        <span class="reuse">Reuses v_sales_details_base</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">One row per invoice, expanding to its own lines — was THIS sale actually profitable, and by how much.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip req">Date range — required</span>
+              <span class="chip">Customer</span><span class="chip">Sales Person</span><span class="chip">Location</span><span class="chip">Status</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th></th><th>Column</th></tr>
+            <tr><td><span class="row-tag g">Group</span></td><td class="group-col">Invoice No · Date · Customer · Sales Person · Revenue · Cost Value · <b>Gross Profit</b> · <b>Gross Profit %</b></td></tr>
+            <tr><td><span class="row-tag d">Detail</span></td><td>Item Code/Name · Qty · Rate · Final Amount · Cost Value · Gross Profit</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="r3">
+      <div class="card-head">
+        <span class="card-num">03</span>
+        <h3>Customer-wise Gross Profit</h3>
+        <span class="shape grouped">Grouped</span>
+        <span class="reuse">Reuses v_sales_details_base</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">Which customers are actually valuable, not just big — doubles as the general "Customer Sales Summary," since Revenue/Qty already sit alongside Gross Profit here.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip req">Date range — required</span>
+              <span class="chip">Customer</span><span class="chip">Sales Person</span><span class="chip">Location</span><span class="chip">Category</span><span class="chip">Status</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th></th><th>Column</th></tr>
+            <tr><td><span class="row-tag g">Group</span></td><td class="group-col">Customer · Invoice Count · Qty · Revenue · Cost Value · <b>Gross Profit</b> · <b>Gross Profit %</b> · Avg GP% / Invoice</td></tr>
+            <tr><td><span class="row-tag d">Detail</span></td><td>Item Code/Name · Qty · Revenue · Gross Profit</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="r4">
+      <div class="card-head">
+        <span class="card-num">04</span>
+        <h3>Salesperson-wise Performance</h3>
+        <span class="shape grouped">Grouped</span>
+        <span class="reuse">Reuses v_sales_details_base</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">Margins by salesperson, not just revenue by salesperson — directly matches Odoo's own standard "sales margins by salesperson" report.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip req">Date range — required</span>
+              <span class="chip">Sales Person</span><span class="chip">Customer</span><span class="chip">Location</span><span class="chip">Status</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th></th><th>Column</th></tr>
+            <tr><td><span class="row-tag g">Group</span></td><td class="group-col">Sales Person · Invoice Count · Customer Count · Qty · Revenue · Cost Value · <b>Gross Profit</b> · <b>Gross Profit %</b></td></tr>
+            <tr><td><span class="row-tag d">Detail</span></td><td>Invoice No · Date · Customer · Revenue · Gross Profit</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="r5">
+      <div class="card-head">
+        <span class="card-num">05</span>
+        <h3>Sales Return Register</h3>
+        <span class="shape grouped">Grouped</span>
+        <span class="reuse">Reuses v_sales_details_base</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">One row per return, expanding to its own lines — the same dataset as 01-04, just filtered to Record Type = Return by default and grouped by the return document instead.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip req">Date range — required</span>
+              <span class="chip">Customer</span><span class="chip">Reason</span><span class="chip">Sales Person</span><span class="chip">Location</span><span class="chip">Status</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th></th><th>Column</th></tr>
+            <tr><td><span class="row-tag g">Group</span></td><td class="group-col">Return No · Date · Customer · Original Invoice No/Date · Reason · Return Total · Reversed Gross Profit</td></tr>
+            <tr><td><span class="row-tag d">Detail</span></td><td>Item Code/Name · Qty Returned · Rate · Amount</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PIPELINE ============ -->
+    <div class="stage-title" id="stage-pipeline">
+      <h2>Pipeline</h2>
+      <span class="stage-desc">Quotation → Order — zero reports exist here today</span>
+      <div class="stage-rule"></div>
+    </div>
+
+    <section class="card" id="r6">
+      <div class="card-head">
+        <span class="card-num">06</span>
+        <h3>Sales Quotation Register</h3>
+        <span class="shape grouped">Grouped</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">One row per quotation, expanding to line items — including prospects, not just existing customers.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip req">Date range — required</span>
+              <span class="chip">Customer/Prospect</span><span class="chip">Sales Person</span><span class="chip">Location</span>
+              <span class="chip">Status</span><span class="chip">Product</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th></th><th>Column</th></tr>
+            <tr><td><span class="row-tag g">Group</span></td><td class="group-col">Quotation No · Date · Customer/Party Name · Sales Person · Status · Grand Total</td></tr>
+            <tr><td><span class="row-tag d">Detail</span></td><td>Item Code/Name · Qty · Qty Converted · Rate · Final Amount · Charge Amount · Landed Amount</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="r7">
+      <div class="card-head">
+        <span class="card-num">07</span>
+        <h3>Sales Order Register</h3>
+        <span class="shape grouped">Grouped</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">One row per order, expanding to line items — the commitment stage between Quotation and Invoice.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip req">Date range — required</span>
+              <span class="chip">Customer</span><span class="chip">Sales Person</span><span class="chip">Location</span>
+              <span class="chip">Order Mode (Direct/Against Quotation)</span><span class="chip">Status</span><span class="chip">Product</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th></th><th>Column</th></tr>
+            <tr><td><span class="row-tag g">Group</span></td><td class="group-col">Order No · Date · Customer · Sales Person · Order Mode · Source Quotation No · Status · Grand Total</td></tr>
+            <tr><td><span class="row-tag d">Detail</span></td><td>Item Code/Name · Qty · Rate · Price Source · Final Amount · Charge Amount · Landed Amount</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="r8">
+      <div class="card-head">
+        <span class="card-num">08</span>
+        <h3>Quotation Conversion Analysis</h3>
+        <span class="shape tabular">Tabular</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">The pipeline funnel report — how much of what we quoted actually became an order, using real tracked data, not an estimate.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip req">Date range — required</span>
+              <span class="chip">Customer</span><span class="chip">Sales Person</span><span class="chip">Status</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th>Column</th></tr>
+            <tr><td>Quotation No · Date · Customer · Item Code/Name · Qty Quoted · <b style="color:var(--navy)">Qty Converted</b> · <b style="color:var(--navy)">Qty Unconverted</b> · Conversion % · Status</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="r9">
+      <div class="card-head">
+        <span class="card-num">09</span>
+        <h3>Open Sales Orders</h3>
+        <span class="shape tabular">Tabular</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">Orders still in play — status-based, not a quantity-fulfillment gap. Deliberately NOT modeled like Purchase's own Pending PO report.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip">Customer</span><span class="chip">Sales Person</span><span class="chip">Location</span>
+              <span class="chip">Order Mode</span><span class="chip">Aging over N days</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th>Column</th></tr>
+            <tr><td>Order No · Date · Days Open · Customer · Sales Person · Status · Grand Total</td></tr>
+          </table>
+          <div class="note">
+            <b>Real schema finding:</b> Sales Delivery links to the ORIGINAL INVOICE, never to the Order
+            directly — <code>rid_sales_order_lines.delivered_qty</code> is never actually written by any
+            function in this build. A qty-gap report (like Purchase's Pending PO) would always show zero
+            progress, so this report is scoped to order STATUS instead — "not yet Delivered or Cancelled."
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ FULFILLMENT & COLLECTIONS ============ -->
+    <div class="stage-title" id="stage-fulfillment">
+      <h2>Fulfillment &amp; collections</h2>
+      <span class="stage-desc">What shipped, what's still owed to ship, what cash came in</span>
+      <div class="stage-rule"></div>
+    </div>
+
+    <section class="card" id="r10">
+      <div class="card-head">
+        <span class="card-num">10</span>
+        <h3>Sales Delivery Register</h3>
+        <span class="shape grouped">Grouped</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">One row per delivery, expanding to line items — a pure logistics document. No rate/tax/amount column exists anywhere on Delivery, confirmed by direct schema read, so none are shown here.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip req">Date range — required</span>
+              <span class="chip">Customer</span><span class="chip">Location</span><span class="chip">Status</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th></th><th>Column</th></tr>
+            <tr><td><span class="row-tag g">Group</span></td><td class="group-col">Delivery No · Date · Customer · Source Invoice No/Date · Ship-To Name · Received By · Status</td></tr>
+            <tr><td><span class="row-tag d">Detail</span></td><td>Item Code/Name · Qty</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="r11">
+      <div class="card-head">
+        <span class="card-num">11</span>
+        <h3>Pending Deliveries</h3>
+        <span class="shape tabular">Tabular</span>
+        <span class="reuse">Reuses v_sales_invoice_delivery_status</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">Invoices still waiting on a deferred dispatch — the rollup already exists (migration 102), this just exposes it as a report.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips"><span class="chip">Customer</span><span class="chip">Location</span><span class="chip">Aging over N days</span></div>
+          </div>
+          <table class="cols">
+            <tr><th>Column</th></tr>
+            <tr><td>Invoice No · Date · Days Since Invoice · Customer · Total Qty · Delivered Qty · <b style="color:var(--navy)">Pending Qty</b> · Delivery Status</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="r12">
+      <div class="card-head">
+        <span class="card-num">12</span>
+        <h3>Cash Receipt / Collections Register</h3>
+        <span class="shape tabular">Tabular</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">What cash actually came in against which bill — the collections side, mirroring Purchase's own payment visibility but for receivables.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip req">Date range — required</span>
+              <span class="chip">Customer</span><span class="chip">Status</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th>Column</th></tr>
+            <tr><td>Receipt No · Date · Customer · Bill No · Applied Amount · Local Amount · Base Amount · Status</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <div class="not-building" id="not-building">
+      <h3>Deliberately not built (cross-referenced, not forgotten)</h3>
+      <div class="nb-item"><div class="what">Customer Ageing / AR Outstanding</div><div class="why">Already fully covered by Finance's Customer Ageing / Pending Bills by Customer.</div></div>
+      <div class="nb-item"><div class="what">Item-wise Sales Summary (no GP)</div><div class="why">Folded into Report 01 — Item-wise Gross Profit already carries Qty/Revenue alongside GP; a summary-only variant would just be a narrower view of the same rows.</div></div>
+      <div class="nb-item"><div class="what">Customer-wise Sales Summary</div><div class="why">Folded into Report 03 for the identical reason.</div></div>
+      <div class="nb-item"><div class="what">Sales Order fulfillment-gap report</div><div class="why">Not buildable honestly — delivered_qty on Order is never written (Delivery links to Invoice, not Order). Report 09 substitutes a status-based view instead.</div></div>
+    </div>
+
+    <footer class="page-footer">Sales Reports Blueprint — reviewed before any migration or Flutter work begins.</footer>
+  </main>
+</div>

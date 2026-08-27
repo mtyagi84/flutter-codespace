@@ -219,7 +219,19 @@ begin
         (p_client_id, p_company_id, v_sl, 'SL-DEL', 'Sales Delivery',     '/sales/deliveries',        5, 'SL-TXN', 'Transactions', 0, true,  false, false),
         (p_client_id, p_company_id, v_sl, 'SL-RCP', 'Cash Receipt',       '/sales/receipts',          6, 'SL-TXN', 'Transactions', 0, false, false, false),
         (p_client_id, p_company_id, v_sl, 'SL-CINV', 'Credit Sales Invoice', '/sales/credit-invoices', 7, 'SL-TXN', 'Transactions', 0, true,  false, false),
-        (p_client_id, p_company_id, v_sl, 'SL-RPT-REG', 'Sales Register', '/reports/SALES_REGISTER',  0, 'SL-RPT', 'Reports',      1, false, false, false)
+        (p_client_id, p_company_id, v_sl, 'SL-RPT-REG', 'Sales Register', '/reports/SALES_REGISTER',  0, 'SL-RPT', 'Reports',      1, false, false, false),
+        (p_client_id, p_company_id, v_sl, 'SL-RPT-IGP', 'Item-wise Gross Profit', '/reports/ITEM_GROSS_PROFIT', 2, 'SL-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_sl, 'SL-RPT-VGP', 'Invoice-wise Gross Profit', '/reports/INVOICE_GROSS_PROFIT', 3, 'SL-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_sl, 'SL-RPT-CGP', 'Customer-wise Gross Profit', '/reports/CUSTOMER_GROSS_PROFIT', 4, 'SL-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_sl, 'SL-RPT-SPP', 'Salesperson-wise Performance', '/reports/SALESPERSON_PERFORMANCE', 5, 'SL-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_sl, 'SL-RPT-RET', 'Sales Return Register', '/reports/SALES_RETURN_REGISTER', 6, 'SL-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_sl, 'SL-RPT-SQR', 'Sales Quotation Register', '/reports/SALES_QUOTATION_REGISTER', 7, 'SL-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_sl, 'SL-RPT-SOR', 'Sales Order Register', '/reports/SALES_ORDER_REGISTER', 8, 'SL-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_sl, 'SL-RPT-QCA', 'Quotation Conversion Analysis', '/reports/QUOTATION_CONVERSION_ANALYSIS', 9, 'SL-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_sl, 'SL-RPT-OSO', 'Open Sales Orders', '/reports/OPEN_SALES_ORDERS', 10, 'SL-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_sl, 'SL-RPT-SDR', 'Sales Delivery Register', '/reports/SALES_DELIVERY_REGISTER', 11, 'SL-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_sl, 'SL-RPT-PDL', 'Pending Deliveries', '/reports/PENDING_DELIVERIES', 12, 'SL-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_sl, 'SL-RPT-CRR', 'Cash Receipt / Collections Register', '/reports/CASH_RECEIPT_REGISTER', 13, 'SL-RPT', 'Reports', 1, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set module_id       = excluded.module_id,
             feature_name    = excluded.feature_name,
