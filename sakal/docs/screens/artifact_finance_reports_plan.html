@@ -1,0 +1,426 @@
+<title>Finance Reports Blueprint</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+  :root {
+    --navy: #1b3a6b;
+    --navy-deep: #12294d;
+    --amber: #b4700a;
+    --amber-soft: #f2e2c8;
+    --positive: #1e6b3e;
+    --negative: #ad2c33;
+    --bg: #f4f6fa;
+    --surface: #ffffff;
+    --surface-sunk: #eef1f7;
+    --border: #dbe1ec;
+    --text: #17233d;
+    --text-secondary: #56637d;
+    --text-faint: #8792a8;
+    --mono-chip: #eef1f8;
+    --shadow: 0 1px 2px rgba(18, 41, 77, 0.05), 0 6px 20px rgba(18, 41, 77, 0.06);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --navy: #6f8fc9; --navy-deep: #a9c1e8; --amber: #e0a856; --amber-soft: #3a2f18;
+      --positive: #5fbf85; --negative: #e2777c; --bg: #0f1420; --surface: #161d2c;
+      --surface-sunk: #1d2536; --border: #2b3552; --text: #e8ecf6; --text-secondary: #9aa6c3;
+      --text-faint: #6b7594; --mono-chip: #1d2536;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --navy: #6f8fc9; --navy-deep: #a9c1e8; --amber: #e0a856; --amber-soft: #3a2f18;
+    --positive: #5fbf85; --negative: #e2777c; --bg: #0f1420; --surface: #161d2c;
+    --surface-sunk: #1d2536; --border: #2b3552; --text: #e8ecf6; --text-secondary: #9aa6c3;
+    --text-faint: #6b7594; --mono-chip: #1d2536;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: "Inter", -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--amber-soft); }
+  a { color: inherit; }
+
+  .shell { display: grid; grid-template-columns: 250px minmax(0, 1fr); max-width: 1360px; margin: 0 auto; }
+
+  .toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; padding: 28px 18px 40px 28px; border-right: 1px solid var(--border); }
+  .toc-brand { font-family: "Manrope", sans-serif; font-weight: 800; font-size: 15px; color: var(--navy); margin: 0 0 2px; }
+  .toc-sub { font-size: 11.5px; color: var(--text-faint); margin: 0 0 26px; }
+  .toc-stage { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); margin: 20px 0 8px; }
+  .toc-stage:first-of-type { margin-top: 0; }
+  .toc a.toc-link { display: block; font-size: 12.5px; text-decoration: none; color: var(--text-secondary); padding: 5px 8px; border-radius: 6px; margin-bottom: 1px; }
+  .toc a.toc-link:hover { background: var(--surface-sunk); color: var(--text); }
+  .toc a.toc-link b { color: var(--navy); font-variant-numeric: tabular-nums; margin-right: 6px; }
+
+  main { padding: 40px 44px 100px; min-width: 0; }
+  .page-head { margin-bottom: 30px; }
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber); margin: 0 0 10px; }
+  h1 { font-family: "Manrope", sans-serif; font-size: 30px; font-weight: 800; letter-spacing: -0.015em; margin: 0 0 10px; text-wrap: balance; color: var(--navy); }
+  .lede { font-size: 14.5px; color: var(--text-secondary); max-width: 68ch; line-height: 1.6; margin: 0; }
+
+  .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 26px 0 6px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); }
+  .stat .n { font-family: "Manrope", sans-serif; font-size: 24px; font-weight: 800; color: var(--navy); font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
+  .gap-note { display: flex; gap: 10px; align-items: flex-start; background: var(--amber-soft); border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent); border-radius: 12px; padding: 14px 16px; margin: 22px 0 40px; font-size: 13px; line-height: 1.55; color: var(--text); }
+  .gap-note .tag { flex: 0 0 auto; font-size: 10px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; background: var(--amber); color: var(--surface); padding: 3px 8px; border-radius: 5px; margin-top: 1px; }
+  .gap-note code { font-family: "IBM Plex Mono", monospace; font-size: 12px; background: var(--mono-chip); padding: 1px 5px; border-radius: 4px; }
+
+  .existing-note { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin: 0 0 40px; box-shadow: var(--shadow); }
+  .existing-note .field-label { margin-bottom: 10px; }
+  .existing-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .existing-chips .chip { font-size: 11px; padding: 3px 9px; background: var(--surface-sunk); border: 1px solid var(--border); border-radius: 20px; color: var(--text-secondary); font-family: "IBM Plex Mono", monospace; }
+
+  .stage-title { display: flex; align-items: baseline; gap: 10px; margin: 56px 0 18px; padding-top: 6px; scroll-margin-top: 20px; }
+  .stage-title:first-of-type { margin-top: 8px; }
+  .stage-title h2 { font-family: "Manrope", sans-serif; font-size: 18px; font-weight: 800; margin: 0; color: var(--text); }
+  .stage-title .stage-desc { font-size: 12.5px; color: var(--text-faint); }
+  .stage-rule { flex: 1; height: 1px; background: var(--border); }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); margin-bottom: 18px; overflow: hidden; scroll-margin-top: 20px; }
+  .card-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, var(--surface), var(--surface-sunk) 220%); }
+  .card-num { font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: 12px; color: var(--navy); background: var(--mono-chip); border-radius: 6px; width: 26px; height: 26px; display: grid; place-items: center; flex: 0 0 auto; }
+  .card-head h3 { font-family: "Manrope", sans-serif; font-size: 15px; font-weight: 700; margin: 0; }
+  .shape { margin-left: auto; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+  .shape.grouped { background: color-mix(in srgb, var(--navy) 14%, transparent); color: var(--navy); }
+  .shape.tabular { background: color-mix(in srgb, var(--text-faint) 16%, transparent); color: var(--text-secondary); }
+  .reuse { font-size: 10px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; padding: 3px 9px; border-radius: 20px; background: color-mix(in srgb, var(--positive) 14%, transparent); color: var(--positive); white-space: nowrap; }
+  .widen { font-size: 10px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; padding: 3px 9px; border-radius: 20px; background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); white-space: nowrap; }
+
+  .card-body { padding: 16px 20px 20px; }
+  .card-desc { font-size: 12.5px; color: var(--text-secondary); line-height: 1.55; margin: 0 0 14px; max-width: 80ch; }
+  .card-desc b { color: var(--text); font-weight: 600; }
+
+  .cols2 { display: grid; grid-template-columns: 1fr 1.5fr; gap: 20px; align-items: start; }
+  @media (max-width: 880px) { .cols2 { grid-template-columns: 1fr; } }
+
+  .field-label { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-faint); margin: 0 0 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 11.5px; padding: 4px 10px; border-radius: 20px; background: var(--surface-sunk); border: 1px solid var(--border); color: var(--text-secondary); }
+  .chip.req { background: color-mix(in srgb, var(--navy) 10%, transparent); border-color: color-mix(in srgb, var(--navy) 30%, transparent); color: var(--navy); font-weight: 600; }
+
+  table.cols { width: 100%; border-collapse: collapse; }
+  table.cols th { text-align: left; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-faint); padding: 0 10px 6px 0; border-bottom: 1px solid var(--border); }
+  table.cols td { font-size: 12.5px; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.cols tr:last-child td { border-bottom: none; }
+  table.cols td.group-col { color: var(--navy); font-weight: 600; }
+  .row-tag { font-family: "IBM Plex Mono", monospace; font-size: 9.5px; font-weight: 600; padding: 1px 6px; border-radius: 4px; text-transform: uppercase; white-space: nowrap; }
+  .row-tag.g { background: color-mix(in srgb, var(--navy) 14%, transparent); color: var(--navy); }
+  .row-tag.d { background: var(--surface-sunk); color: var(--text-secondary); }
+
+  .note { margin-top: 14px; padding: 10px 13px; border-radius: 9px; font-size: 12px; line-height: 1.55; background: var(--surface-sunk); border-left: 3px solid var(--amber); color: var(--text-secondary); }
+  .note.reuse-note { border-left-color: var(--positive); }
+  .note b { color: var(--text); }
+  .note code { font-family: "IBM Plex Mono", monospace; font-size: 11px; background: var(--mono-chip); padding: 1px 5px; border-radius: 4px; }
+
+  .not-building { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; margin-top: 20px; box-shadow: var(--shadow); }
+  .not-building h3 { font-family: "Manrope", sans-serif; font-size: 14px; margin: 0 0 12px; }
+  .nb-item { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+  .nb-item:last-child { border-bottom: none; }
+  .nb-item .why { color: var(--text-secondary); }
+  .nb-item .what { flex: 0 0 240px; font-weight: 600; color: var(--text); }
+
+  footer.page-footer { margin-top: 50px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--text-faint); text-align: center; }
+
+  @media (max-width: 760px) {
+    .shell { grid-template-columns: 1fr; }
+    .toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 28px 20px 70px; }
+    .stat-row { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+
+<div class="shell">
+  <nav class="toc">
+    <p class="toc-brand">SAKAL · Finance Reports</p>
+    <p class="toc-sub">Blueprint for review — 8 new reports</p>
+
+    <p class="toc-stage">Foundational &amp; compliance</p>
+    <a class="toc-link" href="#r1"><b>01</b>Day Book / Voucher Register</a>
+    <a class="toc-link" href="#r2"><b>02</b>VAT / Tax Return Summary</a>
+    <a class="toc-link" href="#r3"><b>03</b>Withholding Tax Summary</a>
+    <a class="toc-link" href="#r4"><b>04</b>Cheque Register</a>
+
+    <p class="toc-stage">Analysis &amp; snapshots</p>
+    <a class="toc-link" href="#r5"><b>05</b>Comparative Profit &amp; Loss</a>
+    <a class="toc-link" href="#r6"><b>06</b>Comparative Balance Sheet</a>
+    <a class="toc-link" href="#r7"><b>07</b>Financial Ratio Analysis</a>
+    <a class="toc-link" href="#r8"><b>08</b>Cash &amp; Bank Position Summary</a>
+
+    <p class="toc-stage">Reference</p>
+    <a class="toc-link" href="#existing">Already built (14 reports)</a>
+    <a class="toc-link" href="#not-building">Deliberately not built</a>
+  </nav>
+
+  <main>
+    <div class="page-head">
+      <p class="eyebrow">Finance Module · Reporting Blueprint</p>
+      <h1>Eight reports, closing the real gaps</h1>
+      <p class="lede">
+        Finance already covers all four core statements plus AR/AP — this isn't a from-zero build like
+        Purchase was. What's missing is a chronological "everything that happened" register, the two
+        tax-compliance reports a DRC/Zambia business actually needs to file, comparative period-over-period
+        analysis, and a couple of fast operational snapshots. Every report below is either cross-module GL
+        data no other report currently surfaces, or an additive widening of an existing function — nothing
+        here duplicates what's already built.
+      </p>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat"><div class="n">8</div><div class="l">Reports specified</div></div>
+      <div class="stat"><div class="n">2</div><div class="l">Widen existing functions</div></div>
+      <div class="stat"><div class="n">6</div><div class="l">New views/functions</div></div>
+      <div class="stat"><div class="n">0</div><div class="l">Schema changes</div></div>
+    </div>
+
+    <div class="gap-note">
+      <span class="tag">Real finding</span>
+      <span>
+        <code>rim_taxes.gl_output_account_id</code> / <code>gl_input_account_id</code> are already the
+        real GL accounts every module posts VAT through — Sales Invoice, GRN/Purchase Bill, and Expense
+        Voucher all converge on the same two accounts. A VAT Return Summary read straight off
+        <code>rid_finance_lines</code> is cross-module for free and can never drift from what actually
+        posted — the same principle every other Finance report already relies on.
+      </span>
+    </div>
+
+    <div class="existing-note" id="existing">
+      <p class="field-label">Already built — 14 reports, confirmed by reading the live registry, not assumed</p>
+      <div class="existing-chips">
+        <span class="chip">Trial Balance</span><span class="chip">P&amp;L Summary</span><span class="chip">P&amp;L Detail</span>
+        <span class="chip">Balance Sheet Summary</span><span class="chip">Balance Sheet Detail</span>
+        <span class="chip">Cash Flow Summary</span><span class="chip">Cash Flow Detail</span>
+        <span class="chip">Account Ledger</span><span class="chip">Customer Ageing</span><span class="chip">Supplier Ageing</span>
+        <span class="chip">Pending Bills Register</span><span class="chip">Pending Bills by Customer</span>
+        <span class="chip">Pending Bills by Supplier</span><span class="chip">Expense Report (Matrix)</span>
+      </div>
+    </div>
+
+    <!-- ============ FOUNDATIONAL & COMPLIANCE ============ -->
+    <div class="stage-title" id="stage-foundational">
+      <h2>Foundational &amp; compliance</h2>
+      <span class="stage-desc">The chronological record, and the two filings a VAT/WHT-registered business actually needs</span>
+      <div class="stage-rule"></div>
+    </div>
+
+    <section class="card" id="r1">
+      <div class="card-head">
+        <span class="card-num">01</span>
+        <h3>Day Book / Voucher Register</h3>
+        <span class="shape grouped">Grouped</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">Every voucher of every type, in date order — the single most-missing report in the whole module today. One row per voucher, expanding to its own Dr/Cr lines.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip req">Date range — required</span>
+              <span class="chip">Voucher Type (JV/CTR/CRV/BRV/CPV/BPV/EXP)</span>
+              <span class="chip">Location</span><span class="chip">Posted status</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th></th><th>Column</th></tr>
+            <tr><td><span class="row-tag g">Group</span></td><td class="group-col">Trans No · Date · Voucher Type · Reference No/Date · Total Amount · Posted By</td></tr>
+            <tr><td><span class="row-tag d">Detail</span></td><td>Account · Dr/Cr · Trans Amount · Base Amount · Narration</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="r2">
+      <div class="card-head">
+        <span class="card-num">02</span>
+        <h3>VAT / Tax Return Summary</h3>
+        <span class="shape grouped">Grouped</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">Output Tax vs Input Tax vs Net Payable/Refundable for a period — the standout compliance report for DRC/Zambia filing. Sourced straight off the GL, not any one module's own tax fields.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip req">Date range — required</span>
+              <span class="chip">Tax</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th></th><th>Column</th></tr>
+            <tr><td><span class="row-tag g">Group</span></td><td class="group-col">Tax Code/Name · Output Tax Amount · Input Tax Amount · <b>Net Payable</b></td></tr>
+            <tr><td><span class="row-tag d">Detail</span></td><td>Source Doc Type/No/Date · Account · Amount</td></tr>
+          </table>
+          <div class="note reuse-note"><b>Cross-module by construction:</b> reads <code>rid_finance_lines</code> filtered to accounts matching each tax's own <code>gl_output_account_id</code>/<code>gl_input_account_id</code> — Sales, Purchase, and Expense all converge here automatically, no per-module wiring.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="r3">
+      <div class="card-head">
+        <span class="card-num">03</span>
+        <h3>Withholding Tax Summary</h3>
+        <span class="shape grouped">Grouped</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">Which suppliers had WHT deducted, and how much — the basis for issuing a WHT certificate. One row per supplier, expanding to the bills it was deducted on.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip req">Date range — required</span>
+              <span class="chip">Supplier</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th></th><th>Column</th></tr>
+            <tr><td><span class="row-tag g">Group</span></td><td class="group-col">Supplier · Gross Amount · <b>WHT Amount</b> · WHT %</td></tr>
+            <tr><td><span class="row-tag d">Detail</span></td><td>Bill No · Bill Date · Tax Code · WHT Amount</td></tr>
+          </table>
+          <div class="note reuse-note">Filters <code>rid_finance_lines</code> on <code>source_line_type = 'WITHHOLDING'</code> — already tagged by Expense Voucher's own posting function (migration 107), no new tagging needed.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="r4">
+      <div class="card-head">
+        <span class="card-num">04</span>
+        <h3>Cheque Register</h3>
+        <span class="shape tabular">Tabular</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">Every cheque-mode voucher issued or received — reference/audit only. Deliberately NOT called "Outstanding Cheques," since no bank-clearance tracking exists yet to honestly support that claim.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip req">Date range — required</span>
+              <span class="chip">Voucher Type</span><span class="chip">Party</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th>Column</th></tr>
+            <tr><td>Cheque No · Cheque Date · Trans No · Trans Date · Voucher Type · Party · Amount</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ANALYSIS & SNAPSHOTS ============ -->
+    <div class="stage-title" id="stage-analysis">
+      <h2>Analysis &amp; snapshots</h2>
+      <span class="stage-desc">Period-over-period comparison, and two fast operational checks</span>
+      <div class="stage-rule"></div>
+    </div>
+
+    <section class="card" id="r5">
+      <div class="card-head">
+        <span class="card-num">05</span>
+        <h3>Comparative Profit &amp; Loss</h3>
+        <span class="shape grouped">Hierarchical</span>
+        <span class="widen">Widens FN-RPT-PNL</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">The same account tree as Profit &amp; Loss Account Detail, with the immediately-preceding period's figure and variance added alongside — not a new report shape, an additive widening of the existing function.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip req">Period — required</span>
+              <span class="chip">Location</span><span class="chip">Base/Local toggle</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th>Column</th></tr>
+            <tr><td>Account (tree) · Current Period Amount · Prior Period Amount · <b style="color:var(--navy)">Variance</b> · <b style="color:var(--navy)">Variance %</b></td></tr>
+          </table>
+          <div class="note"><b>No comparative capability exists today</b> (confirmed: no prior-period logic anywhere in 143-145). The Hierarchical engine already renders multiple numeric columns per tree row — Balance Sheet's own dual Base/Local columns prove it — so this is <code>CREATE OR REPLACE FUNCTION</code> appending columns, never a new report type.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="r6">
+      <div class="card-head">
+        <span class="card-num">06</span>
+        <h3>Comparative Balance Sheet</h3>
+        <span class="shape grouped">Hierarchical</span>
+        <span class="widen">Widens FN-RPT-BSD</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">Same idea as 05, for the Balance Sheet's own account tree — as-of Current Date vs as-of a prior comparison date.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip req">As-of date — required</span>
+              <span class="chip">Comparison date</span><span class="chip">Location</span><span class="chip">Base/Local toggle</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th>Column</th></tr>
+            <tr><td>Account (tree) · Current Balance · Prior Balance · <b style="color:var(--navy)">Variance</b> · <b style="color:var(--navy)">Variance %</b></td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="r7">
+      <div class="card-head">
+        <span class="card-num">07</span>
+        <h3>Financial Ratio Analysis</h3>
+        <span class="shape tabular">Tabular</span>
+        <span class="reuse">Zero new data</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">The standard management ratios, computed live from the same account-nature balances Trial Balance and the Balance Sheet already sum — pure derived report, no new base data anywhere.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip req">As-of date — required</span>
+              <span class="chip">Location</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th>Column</th></tr>
+            <tr><td>Ratio Name · Formula · Value · Category (Liquidity/Profitability/Leverage)</td></tr>
+          </table>
+          <div class="note">Current Ratio · Quick Ratio · Gross Profit % · Net Profit % · Debt-to-Equity · Return on Assets — each one line, computed server-side from live GL sums.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="r8">
+      <div class="card-head">
+        <span class="card-num">08</span>
+        <h3>Cash &amp; Bank Position Summary</h3>
+        <span class="shape tabular">Tabular</span>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">Every Cash/Bank-nature account's live balance as of a chosen date, one row per account — a fast "how much do we actually have" check, valuable given the app's own offline/unstable-connectivity design goal.</p>
+        <div class="cols2">
+          <div>
+            <p class="field-label">Filters</p>
+            <div class="chips">
+              <span class="chip req">As-of date — required</span>
+              <span class="chip">Location</span><span class="chip">Account Nature (Cash/Bank)</span>
+            </div>
+          </div>
+          <table class="cols">
+            <tr><th>Column</th></tr>
+            <tr><td>Account Code/Name · Nature (Cash/Bank) · Currency · Balance (Base) · Balance (Local)</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <div class="not-building" id="not-building">
+      <h3>Deliberately not built (cross-referenced, not forgotten)</h3>
+      <div class="nb-item"><div class="what">Bank Reconciliation Statement</div><div class="why">No clearance/reconciliation tracking exists anywhere in the schema — this needs a real feature (bank statement import, matching workflow, new columns), not a read-only report. Cheque Register (04) is the honest substitute for today; recommend a dedicated future initiative for true BRS.</div></div>
+      <div class="nb-item"><div class="what">Customer/Supplier Statement of Account</div><div class="why">Already served by the existing Account Ledger report — it's account-agnostic and already works for any Customer/Supplier account, print-ready.</div></div>
+      <div class="nb-item"><div class="what">Fixed Asset Register / Depreciation</div><div class="why">No Fixed Assets module exists in this schema at all — out of scope entirely, not a Finance report gap.</div></div>
+    </div>
+
+    <footer class="page-footer">Finance Reports Blueprint — reviewed before any migration or Flutter work begins.</footer>
+  </main>
+</div>

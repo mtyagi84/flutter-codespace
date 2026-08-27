@@ -349,7 +349,13 @@ begin
         (p_client_id, p_company_id, v_fn, 'FN-RPT-PNL', 'Profit & Loss Account Detail', '/reports/PROFIT_LOSS_DETAIL',          11, 'FN-RPT', 'Reports', 1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-RPT-BSD', 'Balance Sheet Account Detail', '/reports/BALANCE_SHEET_DETAIL',        12, 'FN-RPT', 'Reports', 1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-RPT-CFS', 'Cash Flow Summary',            '/reports/CASH_FLOW_SUMMARY',           13, 'FN-RPT', 'Reports', 1, false, false, false),
-        (p_client_id, p_company_id, v_fn, 'FN-RPT-CFD', 'Cash Flow Account Detail',      '/reports/CASH_FLOW_DETAIL',            14, 'FN-RPT', 'Reports', 1, false, false, false)
+        (p_client_id, p_company_id, v_fn, 'FN-RPT-CFD', 'Cash Flow Account Detail',      '/reports/CASH_FLOW_DETAIL',            14, 'FN-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-RPT-DBK', 'Day Book / Voucher Register',   '/reports/DAY_BOOK_REGISTER',            15, 'FN-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-RPT-CHQ', 'Cheque Register',               '/reports/CHEQUE_REGISTER',              16, 'FN-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-RPT-VAT', 'VAT / Tax Return Summary',      '/reports/VAT_TAX_RETURN_SUMMARY',       17, 'FN-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-RPT-WHT', 'Withholding Tax Summary',       '/reports/WITHHOLDING_TAX_SUMMARY',      18, 'FN-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-RPT-RAT', 'Financial Ratio Analysis',      '/reports/FINANCIAL_RATIO_ANALYSIS',     19, 'FN-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-RPT-CBP', 'Cash & Bank Position Summary',  '/reports/CASH_BANK_POSITION_SUMMARY',   20, 'FN-RPT', 'Reports', 1, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set module_id       = excluded.module_id,
             feature_name    = excluded.feature_name,
