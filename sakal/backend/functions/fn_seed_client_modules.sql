@@ -244,7 +244,20 @@ begin
         (p_client_id, p_company_id, v_pr, 'PR-GRN', 'Goods Receipt',    '/purchase/grn',      1, 'PR-TXN', 'Transactions', 0, true,  false, false),
         (p_client_id, p_company_id, v_pr, 'PR-INV', 'Purchase Invoice', '/purchase/invoices', 2, 'PR-TXN', 'Transactions', 0, true,  false, false),
         (p_client_id, p_company_id, v_pr, 'PR-RET', 'Purchase Return',  '/purchase/returns',  3, 'PR-TXN', 'Transactions', 0, true,  false, false),
-        (p_client_id, p_company_id, v_pr, 'PR-PAY', 'Supplier Payment', '/purchase/payments', 4, 'PR-TXN', 'Transactions', 0, false, false, false)
+        (p_client_id, p_company_id, v_pr, 'PR-PAY', 'Supplier Payment', '/purchase/payments', 4, 'PR-TXN', 'Transactions', 0, false, false, false),
+        (p_client_id, p_company_id, v_pr, 'PR-RPT-POR', 'Purchase Order Register', '/reports/PURCHASE_ORDER_REGISTER', 1, 'PR-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_pr, 'PR-RPT-PPO', 'Pending Purchase Orders', '/reports/PENDING_PURCHASE_ORDERS', 2, 'PR-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_pr, 'PR-RPT-GRN', 'GRN Register', '/reports/GRN_REGISTER', 3, 'PR-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_pr, 'PR-RPT-GPB', 'GRN Pending to Bill', '/reports/GRN_PENDING_TO_BILL', 4, 'PR-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_pr, 'PR-RPT-PIR', 'Purchase Invoice Register', '/reports/PURCHASE_INVOICE_REGISTER', 5, 'PR-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_pr, 'PR-RPT-PRR', 'Purchase Return Register', '/reports/PURCHASE_RETURN_REGISTER', 6, 'PR-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_pr, 'PR-RPT-CHG', 'Purchase Charges Register', '/reports/PURCHASE_CHARGES_REGISTER', 7, 'PR-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_pr, 'PR-RPT-SUP', 'Supplier-wise Purchase Analysis', '/reports/SUPPLIER_PURCHASE_ANALYSIS', 8, 'PR-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_pr, 'PR-RPT-ITM', 'Item-wise Purchase History', '/reports/ITEM_PURCHASE_HISTORY', 9, 'PR-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_pr, 'PR-RPT-ROR', 'Reorder / Replenishment', '/reports/REORDER_REPLENISHMENT', 10, 'PR-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_pr, 'PR-RPT-OTD', 'Vendor On-Time Delivery', '/reports/VENDOR_ON_TIME_DELIVERY', 11, 'PR-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_pr, 'PR-RPT-PPV', 'Purchase Price Variance', '/reports/PURCHASE_PRICE_VARIANCE', 12, 'PR-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_pr, 'PR-RPT-TAX', 'Purchase Tax Summary', '/reports/PURCHASE_TAX_SUMMARY', 13, 'PR-RPT', 'Reports', 1, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set module_id       = excluded.module_id,
             feature_name    = excluded.feature_name,
