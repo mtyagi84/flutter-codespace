@@ -28,7 +28,16 @@ ALTER TABLE rid_purchase_order_lines
 CREATE OR REPLACE VIEW v_purchase_order_lines AS
 SELECT
     h.client_id, h.company_id,
-    h.order_no, h.order_date, h.po_type, h.payment_terms, h.status,
+    h.order_no, h.order_date, h.po_type,
+    -- payment_terms moved to a multi-select child table in migration 040
+    -- (rid_po_payment_terms) — a PO can carry several terms, so this is
+    -- an aggregate, not a plain column passthrough.
+    (SELECT string_agg(pt.term_name, ', ' ORDER BY pt.serial_no)
+     FROM rid_po_payment_terms pt
+     WHERE pt.client_id = h.client_id AND pt.company_id = h.company_id
+       AND pt.order_no = h.order_no AND pt.order_date = h.order_date
+       AND pt.is_deleted = false) AS payment_terms,
+    h.status,
     h.location_id, loc.location_name,
     h.supplier_id, s.account_code AS supplier_code, s.account_name AS supplier_name,
     h.grand_total,

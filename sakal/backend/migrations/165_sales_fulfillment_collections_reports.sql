@@ -335,7 +335,7 @@ BEGIN
         VALUES
             (v_company.client_id, v_company.company_id, v_report_id, 'customer_id', 'Customer', 'ACCOUNT_PICKER', NULL, NULL, NULL, 'customer_id', false, NULL, 1),
             (v_company.client_id, v_company.company_id, v_report_id, 'location_id', 'Location', 'DROPDOWN_LOOKUP', 'v_user_accessible_locations', 'location_name', NULL, 'location_id', false, NULL, 2),
-            (v_company.client_id, v_company.company_id, v_report_id, 'days_since_invoice_over', 'Aging Over (days)', 'NUMBER_INPUT', NULL, NULL, NULL, 'days_since_invoice_over', false, NULL, 3);
+            (v_company.client_id, v_company.company_id, v_report_id, 'days_since_invoice_over', 'Aging Over (days)', 'TEXT', NULL, NULL, NULL, 'days_since_invoice_over', false, NULL, 3);
 
         INSERT INTO ric_master_menus
             (client_id, company_id, module_id, feature_code, feature_name, screen_name, serial_no, group_code, group_name, group_serial_no, approve_allowed, copy_allowed, excel_upload_allowed)

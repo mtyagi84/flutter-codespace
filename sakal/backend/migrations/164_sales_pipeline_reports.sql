@@ -522,7 +522,7 @@ BEGIN
             (v_company.client_id, v_company.company_id, v_report_id, 'location_id', 'Location', 'DROPDOWN_LOOKUP', 'v_user_accessible_locations', 'location_name', NULL, 'location_id', false, NULL, 3),
             (v_company.client_id, v_company.company_id, v_report_id, 'order_mode', 'Order Mode', 'DROPDOWN_STATIC', NULL, NULL,
                 '[{"value":"DIRECT","label":"Direct"},{"value":"AGAINST_QUOTATION","label":"Against Quotation"}]'::jsonb, 'order_mode', false, NULL, 4),
-            (v_company.client_id, v_company.company_id, v_report_id, 'days_open_over', 'Aging Over (days)', 'NUMBER_INPUT', NULL, NULL, NULL, 'days_open_over', false, NULL, 5);
+            (v_company.client_id, v_company.company_id, v_report_id, 'days_open_over', 'Aging Over (days)', 'TEXT', NULL, NULL, NULL, 'days_open_over', false, NULL, 5);
 
         INSERT INTO ric_master_menus
             (client_id, company_id, module_id, feature_code, feature_name, screen_name, serial_no, group_code, group_name, group_serial_no, approve_allowed, copy_allowed, excel_upload_allowed)
