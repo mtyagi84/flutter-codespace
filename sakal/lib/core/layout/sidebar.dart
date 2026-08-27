@@ -99,14 +99,14 @@ class _SidebarState extends ConsumerState<Sidebar> {
       // surface (light/semi-transparent white) rather than that fix's
       // light-surface colors.
       child: ScrollbarTheme(
-        data: ScrollbarThemeData(
-          thickness: const WidgetStatePropertyAll(8),
-          radius: const Radius.circular(4),
-          trackVisibility: const WidgetStatePropertyAll(true),
-          thumbVisibility: const WidgetStatePropertyAll(true),
-          trackColor: const WidgetStatePropertyAll(Colors.white12),
-          trackBorderColor: const WidgetStatePropertyAll(Colors.white12),
-          thumbColor: const WidgetStatePropertyAll(Colors.white38),
+        data: const ScrollbarThemeData(
+          thickness: WidgetStatePropertyAll(8),
+          radius: Radius.circular(4),
+          trackVisibility: WidgetStatePropertyAll(true),
+          thumbVisibility: WidgetStatePropertyAll(true),
+          trackColor: WidgetStatePropertyAll(Colors.white12),
+          trackBorderColor: WidgetStatePropertyAll(Colors.white12),
+          thumbColor: WidgetStatePropertyAll(Colors.white38),
         ),
         child: Scrollbar(
           controller: _scrollController,
