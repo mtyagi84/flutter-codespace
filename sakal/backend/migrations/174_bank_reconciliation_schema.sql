@@ -424,7 +424,8 @@ BEGIN
         VALUES
             (v_company.client_id, v_company.company_id, v_fn_module_id, 'FN-BSF', 'Bank Statement Format Master', '/finance/bank-statement-formats', 0, 'FN-BRC', 'Bank Reconciliation', 9, false, false, false),
             (v_company.client_id, v_company.company_id, v_fn_module_id, 'FN-BAC', 'Bank Accounts', '/finance/bank-accounts', 1, 'FN-BRC', 'Bank Reconciliation', 9, false, false, false),
-            (v_company.client_id, v_company.company_id, v_fn_module_id, 'FN-BST', 'Bank Statement Upload & Review', '/finance/bank-statements', 2, 'FN-BRC', 'Bank Reconciliation', 9, true, false, false)
+            (v_company.client_id, v_company.company_id, v_fn_module_id, 'FN-BST', 'Bank Statement Upload & Review', '/finance/bank-statements', 2, 'FN-BRC', 'Bank Reconciliation', 9, true, false, false),
+            (v_company.client_id, v_company.company_id, v_fn_module_id, 'FN-BRM', 'Bank Reconciliation Matching', '/finance/bank-reconciliation', 3, 'FN-BRC', 'Bank Reconciliation', 9, true, false, false)
         ON CONFLICT (client_id, company_id, feature_code) DO UPDATE
             SET screen_name = excluded.screen_name, group_code = excluded.group_code, group_name = excluded.group_name, group_serial_no = excluded.group_serial_no;
 
@@ -448,7 +449,7 @@ JOIN (
     ON  existing.client_id  = mm.client_id
     AND existing.company_id = mm.company_id
     AND existing.module_id  = mm.module_id
-WHERE mm.feature_code IN ('FN-BSF', 'FN-BAC', 'FN-BST')
+WHERE mm.feature_code IN ('FN-BSF', 'FN-BAC', 'FN-BST', 'FN-BRM')
 AND mm.is_deleted = false
 ON CONFLICT (client_id, company_id, user_id, feature_code) DO UPDATE
     SET view_allowed = true, updated_at = now();

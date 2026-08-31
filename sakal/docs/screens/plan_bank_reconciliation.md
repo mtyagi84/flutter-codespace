@@ -1,4 +1,4 @@
-Status: Approved 2026-08-28, implementation starting.
+Status: Implemented 2026-08-28 (migrations 174-176 + 5 new Flutter screens, not yet run/tested by user).
 
 # Bank Reconciliation — full feature (schema + Format Master + 3 screens + report)
 
@@ -75,3 +75,37 @@ screens; the report goes under the existing `FN-RPT` group.
 See the full plan file (`C:\Users\manglu.singh\.claude\plans\act-as-a-senior-cheerful-hickey.md`) for the
 complete verification checklist — covers Auto-Match correctness, PDF review gating, many-to-many
 matching, inline quick-entry, and the reconciliation report tying to zero.
+
+## As-built summary
+- **174**: schema (`rim_bank_statement_formats`, `rim_bank_accounts`, `rih_bank_statement_headers`/
+  `rid_bank_statement_lines`) + `fn_save_bank_statement`/`fn_approve_bank_statement` + menu seed
+  (`FN-BSF`/`FN-BAC`/`FN-BST`/`FN-BRM` under new group `FN-BRC`).
+- **175**: `rid_bank_reconciliation_matches` (group-based junction table) + views
+  (`v_bank_reconciliation_book_lines`/`v_bank_reconciliation_statement_lines`) +
+  `fn_create_reconciliation_match`/`fn_remove_reconciliation_match`/`fn_auto_match_bank_statement`/
+  `fn_bank_reconciliation_summary`.
+- **176**: registers `BANK_RECONCILIATION_STATEMENT` on the existing generic reporting engine.
+- **Flutter**: `bank_statement_format_screen.dart`, `bank_accounts_screen.dart` (small master CRUD,
+  direct DioClient, no repository layer — mirrors `sales_executive_master_screen.dart`),
+  `bank_statement_list_screen.dart` + `bank_statement_entry_screen.dart` (upload/parse/review/save/
+  approve), `bank_reconciliation_matching_screen.dart` (the novel two-pane matching UI + inline
+  quick-entry that composes the existing `fn_save_finance_voucher`/`fn_post_finance_voucher`).
+  Parsing logic lives in `lib/features/finance/data/bank_statement_parser.dart` (CSV via the `csv`
+  package, Excel via the already-used `excel` package, PDF via `syncfusion_flutter_pdf` — user
+  confirmed the Community License applies at this project's current size/revenue).
+- New pubspec dependencies: `csv: ^6.0.0`, `syncfusion_flutter_pdf: ^27.2.5`.
+- New routes: `bankStatementFormats`, `bankAccounts`, `bankStatements`, `bankStatementEntry`,
+  `bankReconciliation` (`route_names.dart`/`app_router.dart`).
+
+## Known simplifications, stated explicitly (not silently glossed over)
+- The inline quick-entry in the Matching screen always posts in the company's BASE currency at rate 1
+  — no multi-currency handling. Anything needing a different currency should use the full Journal/
+  Payment/Receipt Voucher screen instead (explicitly stated in the dialog's own helper text).
+- Unmatch has a backend function (`fn_remove_reconciliation_match`) but no dedicated UI button in v1 —
+  an already-matched pair simply doesn't appear on the Matching screen anymore (it's no longer
+  "unreconciled"), so there was no natural place to surface an unmatch action without adding a third
+  "already matched" panel. Flagged as a v2 UI enhancement, not an oversight.
+- PDF table reconstruction in `BankStatementParser.parsePdf` uses a simple horizontal-gap-clustering
+  heuristic (`gapThreshold = 12.0`) — reasonable for a typical bank statement table, but not tuned
+  against real bank PDF samples yet. Every PDF-sourced row is flagged unreviewed specifically because
+  of this — the mandatory review step is the real safety net, not the heuristic's accuracy.

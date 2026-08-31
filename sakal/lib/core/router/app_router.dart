@@ -99,6 +99,9 @@ import '../../features/finance/presentation/screens/expense_voucher_entry_screen
 import '../../features/finance/presentation/screens/expense_voucher_list_screen.dart';
 import '../../features/finance/presentation/screens/bank_statement_format_screen.dart';
 import '../../features/finance/presentation/screens/bank_accounts_screen.dart';
+import '../../features/finance/presentation/screens/bank_statement_list_screen.dart';
+import '../../features/finance/presentation/screens/bank_statement_entry_screen.dart';
+import '../../features/finance/presentation/screens/bank_reconciliation_matching_screen.dart';
 import '../layout/app_shell.dart';
 import '../layout/group_landing_screen.dart';
 import '../providers/session_provider.dart';
@@ -526,6 +529,18 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.exchangeRates, builder: (c, s) => const ExchangeRateScreen()),
         GoRoute(path: RouteNames.bankStatementFormats, builder: (c, s) => const BankStatementFormatScreen()),
         GoRoute(path: RouteNames.bankAccounts, builder: (c, s) => const BankAccountsScreen()),
+        GoRoute(path: RouteNames.bankStatements, builder: (c, s) => const BankStatementListScreen()),
+        GoRoute(
+          path: RouteNames.bankStatementEntry,
+          builder: (c, s) {
+            final extra = s.extra as Map<String, dynamic>?;
+            return BankStatementEntryScreen(
+              statementNo:   extra?['statementNo']   as String?,
+              statementDate: extra?['statementDate'] as String?,
+            );
+          },
+        ),
+        GoRoute(path: RouteNames.bankReconciliation, builder: (c, s) => const BankReconciliationMatchingScreen()),
         GoRoute(
           path: RouteNames.paymentReceipt,
           builder: (c, s) {

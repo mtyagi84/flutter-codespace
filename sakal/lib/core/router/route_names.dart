@@ -129,6 +129,7 @@ class RouteNames {
   static const String bankStatementFormats = '/finance/bank-statement-formats';
   static const String bankAccounts         = '/finance/bank-accounts';
   static const String bankStatements       = '/finance/bank-statements';
+  static const String bankStatementEntry   = '/finance/bank-statements/entry';
   static const String bankReconciliation   = '/finance/bank-reconciliation';
 
   // Reporting Engine — ONE parameterized route serves every report; a

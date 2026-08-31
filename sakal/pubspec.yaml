@@ -54,6 +54,14 @@ dependencies:
   file_picker: ^8.1.2
   excel: ^4.0.6
 
+  # Bank Statement Upload & Review — CSV parsing (pure Dart), PDF text
+  # extraction for native-text bank statements (Syncfusion Community
+  # License — confirmed acceptable for this project's current size).
+  # Both run fully on-device, no network calls, consistent with the
+  # offline-first rule.
+  csv: ^6.0.0
+  syncfusion_flutter_pdf: ^27.2.5
+
   # Web-only download interop (report Excel export) — package:web +
   # dart:js_interop, the non-deprecated replacement for dart:html.
   web: ^1.1.1

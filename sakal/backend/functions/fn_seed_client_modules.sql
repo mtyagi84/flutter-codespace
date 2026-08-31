@@ -371,7 +371,9 @@ begin
         (p_client_id, p_company_id, v_fn, 'FN-RPT-CBP', 'Cash & Bank Position Summary',  '/reports/CASH_BANK_POSITION_SUMMARY',   20, 'FN-RPT', 'Reports', 1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-BSF', 'Bank Statement Format Master',      '/finance/bank-statement-formats',       0, 'FN-BRC', 'Bank Reconciliation', 9, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-BAC', 'Bank Accounts',                     '/finance/bank-accounts',                1, 'FN-BRC', 'Bank Reconciliation', 9, false, false, false),
-        (p_client_id, p_company_id, v_fn, 'FN-BST', 'Bank Statement Upload & Review',    '/finance/bank-statements',              2, 'FN-BRC', 'Bank Reconciliation', 9, true,  false, false)
+        (p_client_id, p_company_id, v_fn, 'FN-BST', 'Bank Statement Upload & Review',    '/finance/bank-statements',              2, 'FN-BRC', 'Bank Reconciliation', 9, true,  false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-BRM', 'Bank Reconciliation Matching',      '/finance/bank-reconciliation',          3, 'FN-BRC', 'Bank Reconciliation', 9, true,  false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-RPT-BRS', 'Bank Reconciliation Statement', '/reports/BANK_RECONCILIATION_STATEMENT', 21, 'FN-RPT', 'Reports', 1, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set module_id       = excluded.module_id,
             feature_name    = excluded.feature_name,
