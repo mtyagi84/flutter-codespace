@@ -193,7 +193,20 @@ begin
         (p_client_id, p_company_id, v_ad, 'MST-IAL', 'Item Account Links',  '/master/item-account-links',  4, 'FN-MST', 'Finance Masters', 5, false, false, false),
         (p_client_id, p_company_id, v_ad, 'MST-CHG', 'Additional Charges',  '/master/additional-charges',  5, 'FN-MST', 'Finance Masters', 5, false, false, false),
         (p_client_id, p_company_id, v_ad, 'FN-EX',   'Exchange Rates',      '/finance/exchange-rates',     6, 'FN-MST', 'Finance Masters', 5, false, false, false),
-        (p_client_id, p_company_id, v_ad, 'MST-OB',  'Opening Balance',     '/master/opening-balances',    7, 'FN-MST', 'Finance Masters', 5, false, false, true)
+        (p_client_id, p_company_id, v_ad, 'MST-OB',  'Opening Balance',     '/master/opening-balances',    7, 'FN-MST', 'Finance Masters', 5, false, false, true),
+        (p_client_id, p_company_id, v_ad, 'MST-RPT-PRD', 'Item / Product Master Report',       '/reports/PRODUCT_MASTER_REPORT',          1,  'MST-RPT', 'Master Reports', 6, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-RPT-CUS', 'Customer Master Report',             '/reports/CUSTOMER_MASTER_REPORT',         2,  'MST-RPT', 'Master Reports', 6, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-RPT-SUP', 'Supplier Master Report',             '/reports/SUPPLIER_MASTER_REPORT',         3,  'MST-RPT', 'Master Reports', 6, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-RPT-COA', 'Chart of Accounts Report',           '/reports/CHART_OF_ACCOUNTS_REPORT',       4,  'MST-RPT', 'Master Reports', 6, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-RPT-GRP', 'Chart of Groups Report',             '/reports/CHART_OF_GROUPS_REPORT',         5,  'MST-RPT', 'Master Reports', 6, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-RPT-ITC', 'Item Category Master Report',        '/reports/ITEM_CATEGORY_MASTER_REPORT',    6,  'MST-RPT', 'Master Reports', 6, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-RPT-CMN', 'Common Masters Report',              '/reports/COMMON_MASTERS_REPORT',          7,  'MST-RPT', 'Master Reports', 6, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-RPT-TAX', 'Tax Master Report',                  '/reports/TAX_MASTER_REPORT',              8,  'MST-RPT', 'Master Reports', 6, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-RPT-TXG', 'Tax Group Master Report',            '/reports/TAX_GROUP_MASTER_REPORT',        9,  'MST-RPT', 'Master Reports', 6, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-RPT-PYT', 'Payment Terms Master Report',        '/reports/PAYMENT_TERMS_MASTER_REPORT',    10, 'MST-RPT', 'Master Reports', 6, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-RPT-SEX', 'Sales Executives Master Report',     '/reports/SALES_EXECUTIVES_MASTER_REPORT', 11, 'MST-RPT', 'Master Reports', 6, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-RPT-CHG', 'Additional Charges Master Report',   '/reports/ADDITIONAL_CHARGES_MASTER_REPORT', 12, 'MST-RPT', 'Master Reports', 6, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-RPT-PRC', 'Price List Report',                  '/reports/PRICE_LIST_REPORT',              13, 'MST-RPT', 'Master Reports', 6, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set module_id       = excluded.module_id,
             feature_name    = excluded.feature_name,
