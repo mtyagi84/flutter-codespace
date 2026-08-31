@@ -368,7 +368,10 @@ begin
         (p_client_id, p_company_id, v_fn, 'FN-RPT-VAT', 'VAT / Tax Return Summary',      '/reports/VAT_TAX_RETURN_SUMMARY',       17, 'FN-RPT', 'Reports', 1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-RPT-WHT', 'Withholding Tax Summary',       '/reports/WITHHOLDING_TAX_SUMMARY',      18, 'FN-RPT', 'Reports', 1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-RPT-RAT', 'Financial Ratio Analysis',      '/reports/FINANCIAL_RATIO_ANALYSIS',     19, 'FN-RPT', 'Reports', 1, false, false, false),
-        (p_client_id, p_company_id, v_fn, 'FN-RPT-CBP', 'Cash & Bank Position Summary',  '/reports/CASH_BANK_POSITION_SUMMARY',   20, 'FN-RPT', 'Reports', 1, false, false, false)
+        (p_client_id, p_company_id, v_fn, 'FN-RPT-CBP', 'Cash & Bank Position Summary',  '/reports/CASH_BANK_POSITION_SUMMARY',   20, 'FN-RPT', 'Reports', 1, false, false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-BSF', 'Bank Statement Format Master',      '/finance/bank-statement-formats',       0, 'FN-BRC', 'Bank Reconciliation', 9, false, false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-BAC', 'Bank Accounts',                     '/finance/bank-accounts',                1, 'FN-BRC', 'Bank Reconciliation', 9, false, false, false),
+        (p_client_id, p_company_id, v_fn, 'FN-BST', 'Bank Statement Upload & Review',    '/finance/bank-statements',              2, 'FN-BRC', 'Bank Reconciliation', 9, true,  false, false)
     on conflict (client_id, company_id, feature_code) do update
         set module_id       = excluded.module_id,
             feature_name    = excluded.feature_name,
