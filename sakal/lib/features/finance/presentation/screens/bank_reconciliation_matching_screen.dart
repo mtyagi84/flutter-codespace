@@ -224,6 +224,7 @@ class _BankReconciliationMatchingScreenState extends ConsumerState<BankReconcili
       'select': 'id,account_code,account_name', 'order': 'account_name.asc',
     });
     final accounts = List<Map<String, dynamic>>.from(accountsRes.data as List);
+    if (!mounted) return;
 
     String? counterpartAccountId;
     final amountCtrl = TextEditingController(text: line.amount.toStringAsFixed(2));
