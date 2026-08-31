@@ -126,6 +126,10 @@ class RouteNames {
   static const String trialBalance   = '/finance/trial-balance';
   static const String profitLoss     = '/finance/profit-loss';
   static const String balanceSheet   = '/finance/balance-sheet';
+  static const String bankStatementFormats = '/finance/bank-statement-formats';
+  static const String bankAccounts         = '/finance/bank-accounts';
+  static const String bankStatements       = '/finance/bank-statements';
+  static const String bankReconciliation   = '/finance/bank-reconciliation';
 
   // Reporting Engine — ONE parameterized route serves every report; a
   // report's own ric_master_menus row points its screen_name at

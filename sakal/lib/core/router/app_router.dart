@@ -97,6 +97,8 @@ import '../../features/finance/presentation/screens/contra_voucher_entry_screen.
 import '../../features/finance/presentation/screens/contra_voucher_list_screen.dart';
 import '../../features/finance/presentation/screens/expense_voucher_entry_screen.dart';
 import '../../features/finance/presentation/screens/expense_voucher_list_screen.dart';
+import '../../features/finance/presentation/screens/bank_statement_format_screen.dart';
+import '../../features/finance/presentation/screens/bank_accounts_screen.dart';
 import '../layout/app_shell.dart';
 import '../layout/group_landing_screen.dart';
 import '../providers/session_provider.dart';
@@ -522,6 +524,8 @@ final appRouter = GoRouter(
 
         // Finance
         GoRoute(path: RouteNames.exchangeRates, builder: (c, s) => const ExchangeRateScreen()),
+        GoRoute(path: RouteNames.bankStatementFormats, builder: (c, s) => const BankStatementFormatScreen()),
+        GoRoute(path: RouteNames.bankAccounts, builder: (c, s) => const BankAccountsScreen()),
         GoRoute(
           path: RouteNames.paymentReceipt,
           builder: (c, s) {
