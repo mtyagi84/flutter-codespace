@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:collection/collection.dart';
+import 'package:csv/csv.dart';
+import 'package:excel/excel.dart' as xls;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +11,7 @@ import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
+import '../../../../core/reporting/web_download.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
@@ -17,6 +21,12 @@ import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../data/bank_statement_parser.dart';
+
+/// Canonical column order for a downloadable template — mirrors
+/// _mappingKeys in bank_statement_format_screen.dart so a generated
+/// template reads in the same left-to-right order a user would see in the
+/// Format Master's own entry dialog.
+const _templateColumnOrder = ['serial_no', 'txn_no', 'txn_date', 'remarks', 'debit', 'credit', 'running_balance'];
 
 class _LineRow implements DisposableRow {
   int? serialNo;
@@ -291,6 +301,74 @@ class _BankStatementEntryScreenState extends ConsumerState<BankStatementEntryScr
     }
   }
 
+  /// Fallback for when PDF/Excel extraction doesn't work for a given
+  /// statement: generates a blank CSV/Excel file whose header row is built
+  /// from THIS format's own column_mapping (the exact text
+  /// _resolveHeaderIndexes will match against on re-upload, not a
+  /// hardcoded label), so the user can fill it in by hand (or copy values
+  /// from the bank's PDF/portal) and upload it back through the normal,
+  /// far more reliable CSV/EXCEL parse path. Never offered for a PDF-type
+  /// format — its column_mapping values are column ORDER numbers, not
+  /// header text, so there's no meaningful header row to generate.
+  Future<void> _downloadTemplate() async {
+    final format = _selectedFormat;
+    if (format == null) return;
+    final fileType = format['file_type'] as String;
+    if (fileType == 'PDF') return;
+
+    final columnMapping = (format['column_mapping'] as Map<String, dynamic>? ?? {});
+    final headerSkipRows = (format['header_skip_rows'] as num? ?? 0).toInt();
+    final headers = _templateColumnOrder
+        .map((k) => columnMapping[k]?.toString().trim())
+        .where((v) => v != null && v.isNotEmpty)
+        .cast<String>()
+        .toList();
+    if (headers.isEmpty) {
+      _showSnack('This format has no column mapping configured yet — set it up in Bank Statement Formats first.', color: AppColors.negative);
+      return;
+    }
+
+    final formatName = (format['format_name'] as String? ?? 'statement').replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_').toLowerCase();
+
+    if (fileType == 'EXCEL') {
+      final workbook = xls.Excel.createExcel();
+      final sheetName = workbook.getDefaultSheet()!;
+      final sheet = workbook[sheetName];
+      for (var i = 0; i < headerSkipRows; i++) {
+        sheet.appendRow(List.generate(headers.length, (_) => xls.TextCellValue('')));
+      }
+      sheet.appendRow(headers.map((h) => xls.TextCellValue(h)).toList());
+      final bytes = workbook.encode();
+      if (bytes == null) return;
+      await _saveTemplateBytes(bytes, '${formatName}_template.xlsx', 'xlsx', 'Save $formatName template');
+    } else {
+      final rows = <List<String>>[
+        for (var i = 0; i < headerSkipRows; i++) List.generate(headers.length, (_) => ''),
+        headers,
+      ];
+      final csvString = const ListToCsvConverter(eol: '\n').convert(rows);
+      await _saveTemplateBytes(utf8.encode(csvString), '${formatName}_template.csv', 'csv', 'Save $formatName template');
+    }
+  }
+
+  /// FilePicker.platform.saveFile() goes through Chrome's File System
+  /// Access API on web, which requires a still-valid "user activation" —
+  /// timing-sensitive enough that it can silently fail. Same fix already
+  /// proven in report_excel_export.dart / opening_stock_entry_screen.dart:
+  /// a Blob+anchor download on web, FilePicker unchanged elsewhere.
+  Future<void> _saveTemplateBytes(List<int> bytes, String filename, String extension, String dialogTitle) async {
+    if (kIsWeb) {
+      downloadBytesOnWeb(bytes, filename);
+      return;
+    }
+    await FilePicker.platform.saveFile(
+      dialogTitle: dialogTitle,
+      fileName: filename,
+      bytes: Uint8List.fromList(bytes),
+      type: FileType.custom, allowedExtensions: [extension],
+    );
+  }
+
   void _addBlankLine() {
     setState(() => _lines.add(_LineRow(isReviewed: true)));
   }
@@ -439,11 +517,23 @@ class _BankStatementEntryScreenState extends ConsumerState<BankStatementEntryScr
               ]),
               if (canEditNow) ...[
                 const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: _parsing ? null : _pickAndParseFile,
-                  icon: _parsing ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.upload_file, size: 16),
-                  label: Text(_parsing ? 'Parsing…' : 'Upload Statement File (CSV / Excel / PDF)'),
-                ),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  FilledButton.icon(
+                    onPressed: _parsing ? null : _pickAndParseFile,
+                    icon: _parsing ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.upload_file, size: 16),
+                    label: Text(_parsing ? 'Parsing…' : 'Upload Statement File (CSV / Excel / PDF)'),
+                  ),
+                  Tooltip(
+                    message: (_selectedFormat?['file_type'] == 'PDF')
+                        ? "PDF formats don't have a fill-in template — pick or create a CSV/Excel Format for manual entry."
+                        : 'If extraction fails or looks wrong, download a blank file matching this format\'s columns, fill it in by hand, and upload it back.',
+                    child: OutlinedButton.icon(
+                      onPressed: (_formatId == null || _selectedFormat?['file_type'] == 'PDF') ? null : _downloadTemplate,
+                      icon: const Icon(Icons.download, size: 16),
+                      label: const Text('Download Template'),
+                    ),
+                  ),
+                ]),
               ],
             ]),
           ),
