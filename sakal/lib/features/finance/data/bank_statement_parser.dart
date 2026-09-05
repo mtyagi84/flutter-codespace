@@ -159,12 +159,23 @@ class BankStatementParser {
     }
   }
 
+  /// Collapses any run of whitespace (including embedded newlines from a
+  /// header cell that wraps onto two visual lines, e.g. "Withdrawal\nAmount
+  /// (INR)") into a single space, then trims/lowercases. A bare trim only
+  /// strips the ends — it would still fail to match "Withdrawal  Amount
+  /// (INR)" (double space/newline in the middle) against a Format Master
+  /// mapping value typed as "Withdrawal Amount (INR)", silently leaving
+  /// that one column unmapped with no error, indistinguishable on screen
+  /// from "nothing extracted."
+  static String _normalizeHeader(String raw) => raw.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+
   static Map<String, int> _resolveHeaderIndexes(List<String> headerRow, Map<String, dynamic> mapping) {
     final result = <String, int>{};
+    final normalizedHeaderRow = headerRow.map(_normalizeHeader).toList();
     mapping.forEach((key, value) {
-      final headerName = value?.toString().trim().toLowerCase();
-      if (headerName == null || headerName.isEmpty) return;
-      final idx = headerRow.indexWhere((h) => h.trim().toLowerCase() == headerName);
+      final headerName = value?.toString();
+      if (headerName == null || headerName.trim().isEmpty) return;
+      final idx = normalizedHeaderRow.indexOf(_normalizeHeader(headerName));
       if (idx >= 0) result[key] = idx;
     });
     return result;
