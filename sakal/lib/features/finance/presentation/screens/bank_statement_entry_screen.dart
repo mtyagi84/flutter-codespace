@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:collection/collection.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
@@ -10,12 +11,14 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../../../../core/utils/deferred_row_disposal.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
+import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../data/bank_statement_parser.dart';
 
-class _LineRow {
+class _LineRow implements DisposableRow {
   int? serialNo;
   final TextEditingController txnNoCtrl;
   DateTime? txnDate;
@@ -46,6 +49,7 @@ class _LineRow {
         isReviewed: p.isReviewed,
       );
 
+  @override
   void dispose() {
     txnNoCtrl.dispose();
     remarksCtrl.dispose();
@@ -71,7 +75,8 @@ class BankStatementEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _BankStatementEntryScreenState extends ConsumerState<BankStatementEntryScreen>
-    with ScreenPermissionMixin<BankStatementEntryScreen>, ScreenHeaderMixin<BankStatementEntryScreen> {
+    with ScreenPermissionMixin<BankStatementEntryScreen>, ScreenHeaderMixin<BankStatementEntryScreen>,
+        DeferredRowDisposal<BankStatementEntryScreen> {
   @override String get screenName => RouteNames.bankStatements;
 
   bool get _isNew => widget.statementNo == null;
@@ -92,6 +97,8 @@ class _BankStatementEntryScreenState extends ConsumerState<BankStatementEntryScr
   bool _saving = false;
   bool _parsing = false;
   String? _actionError;
+  String? _parseResultMessage;
+  bool _parseResultIsWarning = false;
 
   @override
   ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
@@ -114,6 +121,7 @@ class _BankStatementEntryScreenState extends ConsumerState<BankStatementEntryScr
     for (final l in _lines) {
       l.dispose();
     }
+    disposeDeferredRows();
     super.dispose();
   }
 
@@ -213,56 +221,71 @@ class _BankStatementEntryScreenState extends ConsumerState<BankStatementEntryScr
       return;
     }
 
-    setState(() => _parsing = true);
+    setState(() {
+      _parsing = true;
+      _parseResultMessage = null;
+    });
     try {
       final fileType = format['file_type'] as String;
       final headerSkipRows = (format['header_skip_rows'] as num? ?? 0).toInt();
       final columnMapping = (format['column_mapping'] as Map<String, dynamic>? ?? {});
       final dateFormat = format['date_format'] as String? ?? 'DD/MM/YYYY';
 
+      // Heavy parsing (esp. PDF text extraction) is synchronous/CPU-bound —
+      // run it on a background isolate via compute() so the main isolate
+      // stays free to actually paint the "Parsing…" spinner above, rather
+      // than blocking the whole UI thread with no visible feedback.
       List<ParsedStatementLine> parsed;
       switch (fileType) {
         case 'EXCEL':
-          parsed = BankStatementParser.parseExcel(
+          parsed = await compute(parseExcelIsolate, CsvOrExcelParseParams(
               bytes: Uint8List.fromList(bytes), headerSkipRows: headerSkipRows,
-              columnMapping: columnMapping, dateFormat: dateFormat);
+              columnMapping: columnMapping, dateFormat: dateFormat));
           break;
         case 'PDF':
-          parsed = BankStatementParser.parsePdf(
+          parsed = await compute(parsePdfIsolate, CsvOrExcelParseParams(
               bytes: Uint8List.fromList(bytes), headerSkipRows: headerSkipRows,
-              columnMapping: columnMapping, dateFormat: dateFormat);
+              columnMapping: columnMapping, dateFormat: dateFormat));
           break;
         case 'CSV':
         default:
-          parsed = BankStatementParser.parseCsv(
+          parsed = await compute(parseCsvIsolate, CsvOrExcelParseParams(
               csvContent: String.fromCharCodes(bytes), headerSkipRows: headerSkipRows,
-              columnMapping: columnMapping, dateFormat: dateFormat);
+              columnMapping: columnMapping, dateFormat: dateFormat));
       }
 
+      if (!mounted) return;
+
       if (parsed.isEmpty) {
-        _showSnack('No transaction rows were found in this file — check the Format Master\'s header-skip and column mapping.', color: AppColors.negative);
+        setState(() {
+          _parseResultMessage = 'No transaction rows were found in this file — check the Format Master\'s header-skip row count and column mapping, then try again.';
+          _parseResultIsWarning = true;
+        });
         return;
       }
 
+      final unreviewedCount = parsed.where((p) => !p.isReviewed).length;
       setState(() {
         for (final l in _lines) {
-          l.dispose();
+          deferRowDisposal(l);
         }
         _lines
           ..clear()
           ..addAll(parsed.map(_LineRow.fromParsed));
         _sourceFileType = fileType;
+        _parseResultIsWarning = unreviewedCount > 0;
+        _parseResultMessage = unreviewedCount > 0
+            ? 'Extracted ${parsed.length} line(s) — $unreviewedCount need review (PDF-extracted, marked below) before this statement can be approved.'
+            : 'Extracted ${parsed.length} line(s) successfully.';
       });
-
-      final unreviewedCount = parsed.where((p) => !p.isReviewed).length;
-      if (unreviewedCount > 0) {
-        _showSnack('$unreviewedCount line(s) extracted from the PDF need review before this statement can be approved.', color: AppColors.secondary);
-      } else {
-        _showSnack('${parsed.length} line(s) parsed.', color: AppColors.positive);
-      }
     } catch (e, st) {
       AppLogger.error('BankStatementParse', e, st);
-      _showSnack(ErrorPresenter.format(e, action: 'parse this file'), color: AppColors.negative);
+      if (mounted) {
+        setState(() {
+          _parseResultMessage = ErrorPresenter.format(e, action: 'parse this file');
+          _parseResultIsWarning = true;
+        });
+      }
     } finally {
       if (mounted) setState(() => _parsing = false);
     }
@@ -274,7 +297,7 @@ class _BankStatementEntryScreenState extends ConsumerState<BankStatementEntryScr
 
   void _removeLine(_LineRow row) {
     setState(() => _lines.remove(row));
-    row.dispose();
+    deferRowDisposal(row);
   }
 
   void _showSnack(String msg, {required Color color}) {
@@ -426,15 +449,34 @@ class _BankStatementEntryScreenState extends ConsumerState<BankStatementEntryScr
           ),
         ),
         const SizedBox(height: 14),
+        if (_parseResultMessage != null)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: (_parseResultIsWarning ? AppColors.secondary : AppColors.positive).withValues(alpha: 0.08),
+              border: Border.all(color: (_parseResultIsWarning ? AppColors.secondary : AppColors.positive).withValues(alpha: 0.4)),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(children: [
+              Icon(_parseResultIsWarning ? Icons.warning_amber_rounded : Icons.check_circle_outline, size: 16, color: _parseResultIsWarning ? AppColors.secondary : AppColors.positive),
+              const SizedBox(width: 8),
+              Expanded(child: Text(_parseResultMessage!, style: TextStyle(fontSize: 12, color: _parseResultIsWarning ? AppColors.secondary : AppColors.positive))),
+              IconButton(icon: const Icon(Icons.close, size: 14), onPressed: () => setState(() => _parseResultMessage = null), tooltip: 'Dismiss'),
+            ]),
+          ),
         Row(children: [
-          const Text('Statement Lines', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+          Text('Statement Lines${_lines.isNotEmpty ? ' (${_lines.length})' : ''}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
           const Spacer(),
           if (canEditNow) TextButton.icon(onPressed: _addBlankLine, icon: const Icon(Icons.add, size: 16), label: const Text('Add Line')),
         ]),
         const SizedBox(height: 8),
         if (_lines.isEmpty)
           const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: Text('No lines yet — upload a statement file above.', style: TextStyle(color: AppColors.textSecondary)))),
-        ..._lines.map((row) => _buildLineCard(row, canEditNow, isMobile)),
+        if (_lines.isNotEmpty)
+          isMobile
+              ? Column(children: _lines.map((row) => _buildLineCard(row, canEditNow, isMobile)).toList())
+              : _buildLinesTable(canEditNow),
         const SizedBox(height: 20),
         if (canEditNow)
           Row(children: [
@@ -466,6 +508,93 @@ class _BankStatementEntryScreenState extends ConsumerState<BankStatementEntryScr
         decoration: InputDecoration(labelText: label),
         child: Text(value == null ? '—' : '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}'),
       ),
+    );
+  }
+
+  static const List<(String, double)> _tableCols = [
+    ('SR', 40),
+    ('TXN NO', 110),
+    ('DATE', 130),
+    ('REMARKS', 300),
+    ('DEBIT', 110),
+    ('CREDIT', 110),
+    ('BALANCE', 110),
+    ('STATUS / ACTIONS', 170),
+  ];
+
+  double get _tableWidth => _tableCols.fold(0.0, (sum, c) => sum + c.$2);
+
+  /// Desktop-only tabular rendering of the line list — a per-line "small
+  /// form" card (still used on mobile, see _buildLineCard) is unusable once
+  /// a statement has 250+ lines (a real user report: unmanageable to scroll
+  /// and review). One SakalTableHeaderBar + a virtualized ListView.builder,
+  /// fixed-height with its own vertical scroll, wrapped in a horizontal
+  /// scroll for narrower desktop widths — per CLAUDE.md's documented
+  /// "SakalTableHeaderBar (desktop) + SakalLineItemCard (mobile)" rule.
+  Widget _buildLinesTable(bool canEditNow) {
+    return Scrollbar(
+      thumbVisibility: true,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SizedBox(
+          width: _tableWidth,
+          height: 560,
+          child: Column(children: [
+            SakalTableHeaderBar(cells: _tableCols.map((c) => SizedBox(width: c.$2, child: SakalTableHeaderBar.label(c.$1))).toList()),
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(border: Border.all(color: AppColors.border), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10))),
+                child: ListView.builder(
+                  itemCount: _lines.length,
+                  itemBuilder: (context, index) => _buildLineTableRow(_lines[index], index, canEditNow),
+                ),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLineTableRow(_LineRow row, int index, bool canEditNow) {
+    final needsReview = !row.isReviewed;
+    Widget cell(double width, Widget child) => SizedBox(width: width, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6), child: child));
+    InputDecoration dec() => const InputDecoration(isDense: true, border: InputBorder.none, contentPadding: EdgeInsets.symmetric(vertical: 4));
+
+    return Container(
+      decoration: BoxDecoration(
+        color: needsReview ? AppColors.secondary.withValues(alpha: 0.08) : (index.isEven ? Colors.white : AppColors.background),
+        border: const Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        cell(_tableCols[0].$2, Text('${index + 1}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
+        cell(_tableCols[1].$2, TextFormField(controller: row.txnNoCtrl, enabled: canEditNow, style: const TextStyle(fontSize: 12), decoration: dec())),
+        cell(_tableCols[2].$2, InkWell(
+          onTap: canEditNow ? () async { final d = await _pickDate(row.txnDate); if (d != null) setState(() => row.txnDate = d); } : null,
+          child: Text(row.txnDate == null ? '—' : '${row.txnDate!.year}-${row.txnDate!.month.toString().padLeft(2, '0')}-${row.txnDate!.day.toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 12)),
+        )),
+        cell(_tableCols[3].$2, TextFormField(controller: row.remarksCtrl, enabled: canEditNow, maxLines: 1, style: const TextStyle(fontSize: 12), decoration: dec())),
+        cell(_tableCols[4].$2, TextFormField(controller: row.debitCtrl, enabled: canEditNow, keyboardType: TextInputType.number, style: const TextStyle(fontSize: 12), decoration: dec())),
+        cell(_tableCols[5].$2, TextFormField(controller: row.creditCtrl, enabled: canEditNow, keyboardType: TextInputType.number, style: const TextStyle(fontSize: 12), decoration: dec())),
+        cell(_tableCols[6].$2, TextFormField(controller: row.balanceCtrl, enabled: canEditNow, keyboardType: TextInputType.number, style: const TextStyle(fontSize: 12), decoration: dec())),
+        cell(_tableCols[7].$2, Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 2, children: [
+          if (needsReview)
+            needsReview && canEditNow
+                ? TextButton(
+                    onPressed: () => setState(() => row.isReviewed = true),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                    child: const Text('Mark Reviewed', style: TextStyle(fontSize: 11)),
+                  )
+                : const Icon(Icons.warning_amber_rounded, size: 14, color: AppColors.secondary),
+          if (canEditNow)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 15),
+              padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              visualDensity: VisualDensity.compact,
+              onPressed: () => _removeLine(row), tooltip: 'Remove',
+            ),
+        ])),
+      ]),
     );
   }
 

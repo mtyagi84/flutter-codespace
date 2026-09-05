@@ -257,21 +257,24 @@ class _BankAccountsScreenState extends ConsumerState<BankAccountsScreen>
   @override
   Widget build(BuildContext context) {
     refreshScreenHeader();
-    return SakalAdaptiveList<BankAccount>(
-      loading: _loading,
-      error: _error,
-      rows: _rows,
-      columns: const [
-        SakalListColumn('Ledger Account', flex: 3),
-        SakalListColumn('Bank Name', flex: 3),
-        SakalListColumn('Account Number', flex: 2),
-        SakalListColumn('Default Format', flex: 2),
-        SakalListColumn('Status', flex: 2),
-        SakalListColumn('', flex: 1),
-      ],
-      rowBuilder: _buildRow,
-      cardBuilder: _buildCard,
-      emptyState: _emptyState(),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+      child: SakalAdaptiveList<BankAccount>(
+        loading: _loading,
+        error: _error,
+        rows: _rows,
+        columns: const [
+          SakalListColumn('Ledger Account', flex: 3),
+          SakalListColumn('Bank Name', flex: 3),
+          SakalListColumn('Account Number', flex: 2),
+          SakalListColumn('Default Format', flex: 2),
+          SakalListColumn('Status', flex: 2),
+          SakalListColumn('', flex: 2),
+        ],
+        rowBuilder: _buildRow,
+        cardBuilder: _buildCard,
+        emptyState: _emptyState(),
+      ),
     );
   }
 
@@ -300,10 +303,17 @@ class _BankAccountsScreenState extends ConsumerState<BankAccountsScreen>
               child: Text(r.defaultFormatName ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
               child: _statusBadge(r.isActive))),
-          Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                if (canEdit) IconButton(icon: const Icon(Icons.edit_outlined, size: 16), onPressed: () => _showEntryDialog(existing: r), tooltip: 'Edit'),
-                if (canEdit) IconButton(icon: Icon(r.isActive ? Icons.block : Icons.check_circle_outline, size: 16, color: r.isActive ? AppColors.negative : AppColors.positive),
+          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Wrap(alignment: WrapAlignment.start, spacing: 0, runSpacing: 0, children: [
+                if (canEdit) IconButton(
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => _showEntryDialog(existing: r), tooltip: 'Edit'),
+                if (canEdit) IconButton(
+                    icon: Icon(r.isActive ? Icons.block : Icons.check_circle_outline, size: 16, color: r.isActive ? AppColors.negative : AppColors.positive),
+                    padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    visualDensity: VisualDensity.compact,
                     onPressed: () => _toggleActive(r), tooltip: r.isActive ? 'Deactivate' : 'Activate'),
               ]))),
         ]),

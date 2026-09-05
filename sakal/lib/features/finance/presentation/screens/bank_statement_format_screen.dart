@@ -43,6 +43,7 @@ class BankStatementFormat {
 }
 
 const _mappingKeys = <String, String>{
+  'serial_no': 'Serial No (as printed, optional — helps count PDF columns correctly)',
   'txn_no': 'Transaction No',
   'txn_date': 'Transaction Date',
   'remarks': 'Remarks',
@@ -51,7 +52,7 @@ const _mappingKeys = <String, String>{
   'running_balance': 'Running Balance',
 };
 
-const _dateFormats = ['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'];
+const _dateFormats = ['DD/MM/YYYY', 'DD-MM-YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'];
 const _fileTypes = ['CSV', 'EXCEL', 'PDF'];
 
 /// Bank Statement Format Master (migration 174) — tells the Upload &
@@ -247,20 +248,23 @@ class _BankStatementFormatScreenState extends ConsumerState<BankStatementFormatS
   @override
   Widget build(BuildContext context) {
     refreshScreenHeader();
-    return SakalAdaptiveList<BankStatementFormat>(
-      loading: _loading,
-      error: _error,
-      rows: _rows,
-      columns: const [
-        SakalListColumn('Format Name', flex: 3),
-        SakalListColumn('File Type', flex: 2),
-        SakalListColumn('Skip Rows', flex: 2),
-        SakalListColumn('Status', flex: 2),
-        SakalListColumn('', flex: 1),
-      ],
-      rowBuilder: _buildRow,
-      cardBuilder: _buildCard,
-      emptyState: _emptyState(),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+      child: SakalAdaptiveList<BankStatementFormat>(
+        loading: _loading,
+        error: _error,
+        rows: _rows,
+        columns: const [
+          SakalListColumn('Format Name', flex: 3),
+          SakalListColumn('File Type', flex: 2),
+          SakalListColumn('Skip Rows', flex: 2),
+          SakalListColumn('Status', flex: 2),
+          SakalListColumn('', flex: 2),
+        ],
+        rowBuilder: _buildRow,
+        cardBuilder: _buildCard,
+        emptyState: _emptyState(),
+      ),
     );
   }
 
@@ -287,10 +291,17 @@ class _BankStatementFormatScreenState extends ConsumerState<BankStatementFormatS
               child: Text('${r.headerSkipRows}', style: const TextStyle(fontSize: 13)))),
           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
               child: _statusBadge(r.isActive))),
-          Expanded(flex: 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                if (canEdit) IconButton(icon: const Icon(Icons.edit_outlined, size: 16), onPressed: () => _showEntryDialog(existing: r), tooltip: 'Edit'),
-                if (canEdit) IconButton(icon: Icon(r.isActive ? Icons.block : Icons.check_circle_outline, size: 16, color: r.isActive ? AppColors.negative : AppColors.positive),
+          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Wrap(alignment: WrapAlignment.start, spacing: 0, runSpacing: 0, children: [
+                if (canEdit) IconButton(
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => _showEntryDialog(existing: r), tooltip: 'Edit'),
+                if (canEdit) IconButton(
+                    icon: Icon(r.isActive ? Icons.block : Icons.check_circle_outline, size: 16, color: r.isActive ? AppColors.negative : AppColors.positive),
+                    padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    visualDensity: VisualDensity.compact,
                     onPressed: () => _toggleActive(r), tooltip: r.isActive ? 'Deactivate' : 'Activate'),
               ]))),
         ]),

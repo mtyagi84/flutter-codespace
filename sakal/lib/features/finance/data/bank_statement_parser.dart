@@ -86,6 +86,14 @@ class BankStatementParser {
   /// there's no reliable header text to key off. Every resulting row is
   /// flagged isReviewed=false — this is a best-effort extraction, not a
   /// trusted read, by design (see the class doc comment).
+  ///
+  /// A real bank statement's Remarks column often WRAPS onto its own extra
+  /// PDF text line (a physical line with no date/amount at all — just the
+  /// tail of the previous row's description). A textLine whose own
+  /// txn_date-mapped column does NOT parse as a valid date is treated as a
+  /// continuation of the previous row (its text is appended to that row's
+  /// `remarks`) rather than a spurious new row — never emitted as its own
+  /// line, and never occurring before any real row has been seen.
   static List<ParsedStatementLine> parsePdf({
     required Uint8List bytes,
     required int headerSkipRows,
@@ -100,7 +108,12 @@ class BankStatementParser {
       if (textLines.length <= headerSkipRows) return [];
       final dataLines = textLines.sublist(headerSkipRows);
 
+      final orderIndex = _resolveOrderIndexes(columnMapping);
+      final dateColIdx = orderIndex['txn_date'];
+
       final lines = <ParsedStatementLine>[];
+      ParsedStatementLine? lastLine;
+
       for (final textLine in dataLines) {
         // Sort word fragments left-to-right, then cluster into columns on
         // a horizontal-gap threshold — a plain heuristic, not a real
@@ -126,7 +139,19 @@ class BankStatementParser {
 
         if (columns.every((c) => c.isEmpty)) continue;
 
-        lines.add(_rowToLine(columns, _resolveOrderIndexes(columnMapping), dateFormat, isReviewed: false));
+        final dateCell = (dateColIdx != null && dateColIdx < columns.length) ? columns[dateColIdx] : '';
+        final isNewRow = _parseDate(dateCell, dateFormat) != null;
+
+        if (isNewRow || lastLine == null) {
+          final line = _rowToLine(columns, orderIndex, dateFormat, isReviewed: false);
+          lines.add(line);
+          lastLine = line;
+        } else {
+          final wrapped = columns.where((c) => c.isNotEmpty).join(' ');
+          if (wrapped.isNotEmpty) {
+            lastLine.remarks = lastLine.remarks.isEmpty ? wrapped : '${lastLine.remarks} $wrapped';
+          }
+        }
       }
       return lines;
     } finally {
@@ -205,3 +230,46 @@ class BankStatementParser {
     }
   }
 }
+
+/// Bundled single-argument param objects for [compute] — heavy parsing
+/// (especially PDF text extraction) is synchronous and CPU-bound, so
+/// running it on the main isolate blocks UI repaint entirely (the caller's
+/// own "parsing…" spinner would never actually render). `compute()`
+/// requires exactly one argument and a top-level/static function
+/// reference — these three pairs exist purely for that isolate boundary,
+/// not because the parsing logic itself changed.
+class CsvOrExcelParseParams {
+  final Uint8List? bytes;
+  final String? csvContent;
+  final int headerSkipRows;
+  final Map<String, dynamic> columnMapping;
+  final String dateFormat;
+  const CsvOrExcelParseParams({
+    this.bytes,
+    this.csvContent,
+    required this.headerSkipRows,
+    required this.columnMapping,
+    required this.dateFormat,
+  });
+}
+
+List<ParsedStatementLine> parseCsvIsolate(CsvOrExcelParseParams p) => BankStatementParser.parseCsv(
+      csvContent: p.csvContent!,
+      headerSkipRows: p.headerSkipRows,
+      columnMapping: p.columnMapping,
+      dateFormat: p.dateFormat,
+    );
+
+List<ParsedStatementLine> parseExcelIsolate(CsvOrExcelParseParams p) => BankStatementParser.parseExcel(
+      bytes: p.bytes!,
+      headerSkipRows: p.headerSkipRows,
+      columnMapping: p.columnMapping,
+      dateFormat: p.dateFormat,
+    );
+
+List<ParsedStatementLine> parsePdfIsolate(CsvOrExcelParseParams p) => BankStatementParser.parsePdf(
+      bytes: p.bytes!,
+      headerSkipRows: p.headerSkipRows,
+      columnMapping: p.columnMapping,
+      dateFormat: p.dateFormat,
+    );
