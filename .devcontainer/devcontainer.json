@@ -1,6 +1,6 @@
 {
   "name": "Flutter Dev Environment",
-  "image": "ghcr.io/cirruslabs/flutter:3.44.1",
+  "image": "ghcr.io/cirruslabs/flutter:3.44.0",
   "customizations": {
     "vscode": {
       "extensions": [
