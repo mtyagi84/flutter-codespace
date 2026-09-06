@@ -36,12 +36,20 @@
 -- ============================================================
 
 -- ── 1. rim_exchange_rates: mid_rate -> independently-editable exchange_rate ──
--- NOTE: unlike most migrations in this project, the RENAME COLUMN below is
--- NOT safely re-runnable (a second run would fail with "column mid_rate
--- does not exist") -- this is a genuine one-time structural rename, not a
--- CREATE TRIGGER/POLICY needing the usual DROP IF EXISTS guard. Run once.
-ALTER TABLE rim_exchange_rates ALTER COLUMN mid_rate DROP EXPRESSION IF EXISTS;
-ALTER TABLE rim_exchange_rates RENAME COLUMN mid_rate TO exchange_rate;
+-- Guarded to be safely re-runnable: a raw RENAME COLUMN has no IF EXISTS
+-- form, so re-running this unconditionally on a DB where the rename
+-- already happened fails with "column mid_rate does not exist" (a real
+-- gotcha hit live) — checked via information_schema instead.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'rim_exchange_rates' AND column_name = 'mid_rate'
+    ) THEN
+        ALTER TABLE rim_exchange_rates ALTER COLUMN mid_rate DROP EXPRESSION IF EXISTS;
+        ALTER TABLE rim_exchange_rates RENAME COLUMN mid_rate TO exchange_rate;
+    END IF;
+END $$;
 ALTER TABLE rim_exchange_rates ALTER COLUMN exchange_rate SET NOT NULL;
 ALTER TABLE rim_exchange_rates DROP CONSTRAINT IF EXISTS rim_exchange_rates_exchange_rate_check;
 ALTER TABLE rim_exchange_rates ADD CONSTRAINT rim_exchange_rates_exchange_rate_check CHECK (exchange_rate > 0);
