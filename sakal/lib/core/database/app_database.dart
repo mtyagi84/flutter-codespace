@@ -275,12 +275,9 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(expenseVoucherHeadersCache);
             await m.createTable(expenseVoucherLinesCache);
           }
-          // v26: Exchange Rate's "Mid (auto)" column became an
-          // independently user-entered "Exchange Rate" field (migration
-          // 179, no longer (buying+selling)/2) — added to the local cache
-          // too, defaulted to 0 for any row cached before this upgrade
-          // (a pure server-synced cache, so a stale 0 only lasts until the
-          // next sync overwrites it).
+          // v26: Exchange Rate redesign (migration 179) — mid_rate is no
+          // longer a generated column; the offline cache mirrors it as a
+          // plain stored value.
           if (from < 26) {
             await m.addColumn(exchangeRateCache, exchangeRateCache.exchangeRate);
           }
