@@ -1,0 +1,13 @@
+targets:
+  $default:
+    builders:
+      # freezed is a declared dev_dependency but has zero real usage anywhere
+      # in lib/ (confirmed via grep for @freezed/@unfreezed) -- per CLAUDE.md,
+      # "code generation not yet activated." It still runs on every file
+      # looking for annotations that don't exist, and its own pinned
+      # analyzer version is incompatible with newer Dart SDKs ("Missing
+      # implementation of visitDotShorthandPropertyAccess"), which aborts
+      # the WHOLE build_runner run -- including drift_dev's real output.
+      # Disabled until freezed is actually adopted for real models.
+      freezed:
+        enabled: false
