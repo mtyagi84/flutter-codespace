@@ -327,6 +327,23 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
   /// billed/traces to a PO) is looked up fresh from the source GRN's own
   /// lines, same data getGrnLines already returns when a GRN is freshly
   /// picked, so both code paths end up with an identically-shaped row.
+  /// The GRN line's own `rate` is the GROSS per-unit price, before any
+  /// line-level discount — using it directly here would credit the supplier
+  /// for more than they were actually billed for the returned units. Derives
+  /// the net-of-discount, net-of-tax unit price the same way GRN's own
+  /// landed-cost fix does: (final_amount - tax_amount) / base_qty, since
+  /// final_amount is already net-of-discount + tax and both are already
+  /// fetched by getGrnLines. Never includes the GRN's apportioned charge —
+  /// that's handled separately by this screen's own Additional Charges
+  /// section, already proportional to the returned quantity.
+  static double _netUnitRate(Map<String, dynamic> gl) {
+    final baseQty = (gl['base_qty'] as num? ?? 0).toDouble();
+    if (baseQty <= 0) return (gl['rate'] as num? ?? 0).toDouble();
+    final finalAmount = (gl['final_amount'] as num? ?? 0).toDouble();
+    final taxAmount = (gl['tax_amount'] as num? ?? 0).toDouble();
+    return (finalAmount - taxAmount) / baseQty;
+  }
+
   Future<void> _loadExistingLinesAndCharges(UserSession session) async {
     final savedLines = await _ds.getReturnLines(
       clientId: session.clientId, companyId: session.companyId,
@@ -370,7 +387,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
         uomLabel: uom?['description'] as String?,
         uomConversionFactor: (gl['uom_conversion_factor'] as num? ?? 1).toDouble(),
         grnQty: (gl['base_qty'] as num? ?? 0).toDouble(),
-        rate: (gl['rate'] as num? ?? 0).toDouble(),
+        rate: _netUnitRate(gl),
         taxGroupId: gl['tax_group_id'] as String?,
         grnTaxAmount: (gl['tax_amount'] as num? ?? 0).toDouble(),
         isBilled: isBilled,
@@ -508,7 +525,7 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
               uomLabel: uom?['description'] as String?,
               uomConversionFactor: (gl['uom_conversion_factor'] as num? ?? 1).toDouble(),
               grnQty: (gl['base_qty'] as num? ?? 0).toDouble(),
-              rate: (gl['rate'] as num? ?? 0).toDouble(),
+              rate: _netUnitRate(gl),
               taxGroupId: gl['tax_group_id'] as String?,
               grnTaxAmount: (gl['tax_amount'] as num? ?? 0).toDouble(),
               isBilled: isBilled,
