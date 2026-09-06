@@ -275,10 +275,19 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
       _reasons = reasonRows.map((r) => r['description'] as String).toList();
       _users = await _ds.getUsers(clientId: session.clientId, companyId: session.companyId);
 
-      if (widget.editReturnNo != null) {
+      // Falls back to the local _returnNo/_returnDate (not just
+      // widget.editReturnNo/editReturnDate) so a re-fetch after
+      // Approve/Save-then-Approve on a brand-new return -- where the widget
+      // itself was built with editReturnNo: null and never gets rebuilt
+      // with the newly-assigned number -- still actually reloads the
+      // header and picks up the new status. Without this, _status stayed
+      // stuck on 'DRAFT' after a successful Approve in the same session,
+      // leaving Save Draft/Approve visible on an already-approved return.
+      final effectiveReturnNo = widget.editReturnNo ?? _returnNo;
+      if (effectiveReturnNo != null) {
         final header = await _ds.getHeader(
           clientId: session.clientId, companyId: session.companyId,
-          returnNo: widget.editReturnNo!, returnDate: widget.editReturnDate,
+          returnNo: effectiveReturnNo, returnDate: widget.editReturnDate ?? _fmtDate(_returnDate),
         );
         if (header != null) {
           _returnNo           = header.returnNo;
@@ -713,7 +722,14 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
   /// note after every GRN/qty change.
   void _recomputeTotals() {
     final taxable = _lines.fold(0.0, (s, l) => s + l.grossAmount);
-    final tax     = _lines.fold(0.0, (s, l) => s + l.suggestedTaxAmount);
+    // Only a BILLED line has real posted VAT to reverse -- an unbilled
+    // GRN's own tax_amount is just the still-deferred GR/IR estimate (see
+    // fn_approve_purchase_return's own NO_BILLED_LINES_FOR_TAX guard,
+    // which checks the identical billed-only condition server-side).
+    // Summing every line regardless of isBilled left a return that only
+    // touches unbilled GRNs with a non-zero suggested tax_amount and no
+    // way to approve it -- a real bug, not the backend guard being wrong.
+    final tax = _lines.where((l) => l.isBilled).fold(0.0, (s, l) => s + l.suggestedTaxAmount);
     setState(() {
       _taxableAmountCtrl.text = taxable.toStringAsFixed(2);
       _taxAmountCtrl.text     = tax.toStringAsFixed(2);
