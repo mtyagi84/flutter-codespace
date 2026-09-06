@@ -135,7 +135,7 @@ class PurchaseReturnRemoteDs {
       'supplier_id': 'eq.$supplierId',
       'is_deleted':  'eq.false',
       'status':      'eq.APPROVED',
-      'select':      'grn_no,grn_date,grn_currency_id,billed_invoice_no,'
+      'select':      'grn_no,grn_date,grn_currency_id,billed_invoice_no,rate_to_base,rate_to_local,'
           'currency:rim_currencies!grn_currency_id(currency_id)',
       'order':       'grn_date.asc,grn_no.asc',
     });

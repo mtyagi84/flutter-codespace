@@ -505,6 +505,18 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
           _returnCurrencyId   = grn['grn_currency_id'] as String?;
           final currency = grn['currency'] as Map<String, dynamic>?;
           _returnCurrencyCode = currency?['currency_id'] as String?;
+          // Default to the FIRST selected GRN's own confirmed rate rather
+          // than leaving the field's literal '1' default — same rate-
+          // inheritance convention already used by GRN's own Against-PO
+          // consolidation and Purchase Bill (see CLAUDE.md "Rate
+          // inheritance"). Without this, every return silently posted its
+          // base-currency GL lines at rate 1 regardless of the GRN's real
+          // currency, a real bug found live leaving the Supplier/Stock/VAT
+          // accounts un-zeroed in base currency after a full return.
+          final grnRateToBase  = (grn['rate_to_base'] as num?)?.toDouble();
+          final grnRateToLocal = (grn['rate_to_local'] as num?)?.toDouble();
+          if (grnRateToBase != null) _rateToBaseCtrl.text = grnRateToBase.toString();
+          if (grnRateToLocal != null) _rateToLocalCtrl.text = grnRateToLocal.toString();
         }
       });
       try {
