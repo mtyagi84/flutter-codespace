@@ -104,7 +104,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 25;
+  int get schemaVersion => 26;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -274,6 +274,15 @@ class AppDatabase extends _$AppDatabase {
           if (from < 25) {
             await m.createTable(expenseVoucherHeadersCache);
             await m.createTable(expenseVoucherLinesCache);
+          }
+          // v26: Exchange Rate's "Mid (auto)" column became an
+          // independently user-entered "Exchange Rate" field (migration
+          // 179, no longer (buying+selling)/2) — added to the local cache
+          // too, defaulted to 0 for any row cached before this upgrade
+          // (a pure server-synced cache, so a stale 0 only lasts until the
+          // next sync overwrites it).
+          if (from < 26) {
+            await m.addColumn(exchangeRateCache, exchangeRateCache.exchangeRate);
           }
         },
       );

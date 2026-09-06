@@ -38,6 +38,7 @@ class ExchangeRateLocalDs {
             toCurrency:   r.toCurrency,
             buyingRate:   r.buyingRate,
             sellingRate:  r.sellingRate,
+            exchangeRate: r.exchangeRate,
             source:       r.source,
             isDeleted:    r.isDeleted,
             syncedAt:     DateTime.now(),
@@ -58,6 +59,7 @@ class ExchangeRateLocalDs {
         toCurrency:   e.toCurrency,
         buyingRate:   e.buyingRate,
         sellingRate:  e.sellingRate,
+        exchangeRate: e.exchangeRate,
         source:       e.source,
         isDeleted:    e.isDeleted,
       );
