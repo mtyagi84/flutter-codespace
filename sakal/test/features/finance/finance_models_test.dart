@@ -7,8 +7,10 @@ void main() {
   // Note: unlike most models in this app, ExchangeRateModel.fromJson uses
   // strict (non-nullable) casts for its core identity/rate fields — it
   // throws rather than defaulting if those are missing, since every real
-  // caller always selects the full row. Only source/is_deleted/mid_rate
-  // are genuinely optional.
+  // caller always selects the full row. Only source/is_deleted are
+  // genuinely optional. exchange_rate (migration 179) is independently
+  // user-entered, mandatory like buying_rate/selling_rate — no longer a
+  // DB-generated (buying+selling)/2 value, so it's always present too.
 
   group('ExchangeRateModel', () {
     const fullJson = {
@@ -21,6 +23,7 @@ void main() {
       'to_currency': 'CDF',
       'buying_rate': 2800,
       'selling_rate': 2850,
+      'exchange_rate': 2825,
     };
 
     test('fromJson — required fields present, optional fields default', () {
@@ -30,34 +33,27 @@ void main() {
       expect(r.toCurrency, 'CDF');
       expect(r.buyingRate, 2800.0);
       expect(r.sellingRate, 2850.0);
-      expect(r.midRate, isNull);
+      expect(r.exchangeRate, 2825.0);
       expect(r.source, 'MANUAL');
       expect(r.isDeleted, false);
     });
 
-    test('fromJson — mid_rate present (DB-generated), source/is_deleted explicit', () {
+    test('fromJson — source/is_deleted explicit', () {
       final r = ExchangeRateModel.fromJson({
         ...fullJson,
-        'mid_rate': 2825,
         'source': 'API',
         'is_deleted': true,
       });
-      expect(r.midRate, 2825.0);
       expect(r.source, 'API');
       expect(r.isDeleted, true);
     });
 
-    test('toJson — round-trips the required fields, omits null mid_rate', () {
+    test('toJson — round-trips every field, including exchange_rate', () {
       final r = ExchangeRateModel.fromJson(fullJson);
       final json = r.toJson();
       expect(json['from_currency'], 'USD');
       expect(json['buying_rate'], 2800.0);
-      expect(json.containsKey('mid_rate'), false);
-    });
-
-    test('toJson — includes mid_rate when present', () {
-      final r = ExchangeRateModel.fromJson({...fullJson, 'mid_rate': 2825});
-      expect(r.toJson()['mid_rate'], 2825.0);
+      expect(json['exchange_rate'], 2825.0);
     });
   });
 

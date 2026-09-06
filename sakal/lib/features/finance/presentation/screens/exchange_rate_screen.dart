@@ -9,6 +9,7 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/offline_banner.dart';
+import '../../../../core/widgets/sakal_header_action_button.dart';
 import '../../data/models/exchange_rate_model.dart';
 import '../providers/exchange_rate_providers.dart';
 
@@ -30,30 +31,30 @@ class _RateRow {
   final String currencyName;
   final TextEditingController buyingCtrl;
   final TextEditingController sellingCtrl;
+  final TextEditingController exchangeCtrl;
 
   _RateRow({
     required this.currencyCode,
     required this.currencyName,
-    String buying  = '',
-    String selling = '',
-  })  : buyingCtrl  = TextEditingController(text: buying),
-        sellingCtrl = TextEditingController(text: selling);
+    String buying   = '',
+    String selling  = '',
+    String exchange = '',
+  })  : buyingCtrl   = TextEditingController(text: buying),
+        sellingCtrl  = TextEditingController(text: selling),
+        exchangeCtrl = TextEditingController(text: exchange);
 
   void dispose() {
     buyingCtrl.dispose();
     sellingCtrl.dispose();
+    exchangeCtrl.dispose();
   }
 
-  double? get mid {
-    final b = double.tryParse(buyingCtrl.text);
-    final s = double.tryParse(sellingCtrl.text);
-    if (b != null && s != null && b > 0 && s > 0) return (b + s) / 2;
-    return null;
-  }
-
+  // Independently user-entered (migration 179) — no longer derived from
+  // buying/selling. All three fields are mandatory.
   bool get isValid =>
       (double.tryParse(buyingCtrl.text) ?? 0) > 0 &&
-      (double.tryParse(sellingCtrl.text) ?? 0) > 0;
+      (double.tryParse(sellingCtrl.text) ?? 0) > 0 &&
+      (double.tryParse(exchangeCtrl.text) ?? 0) > 0;
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -68,12 +69,34 @@ class ExchangeRateScreen extends ConsumerStatefulWidget {
 class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen>
     with ScreenHeaderMixin<ExchangeRateScreen> {
   @override
-  ScreenHeaderInfo buildScreenHeader() => ScreenHeaderInfo(
-        title: 'Exchange Rates',
-        subtitle: _baseCurrency.isEmpty
-            ? 'Set base currency in Company Setup first'
-            : 'Daily buying & selling rates  ·  Base currency: $_baseCurrency',
-      );
+  ScreenHeaderInfo buildScreenHeader() {
+    // ref.read, not ref.watch — this method runs inside a deferred
+    // microtask (see refreshScreenHeader's own doc comment), not the live
+    // widget build phase, so ref.watch would be invalid here. Matches
+    // every other screen's own buildScreenHeader() convention.
+    final isOffline = ref.read(sessionProvider)?.offlineMode ?? false;
+    final menus     = ref.read(menuProvider);
+    final feature   = _findFeature(menus, RouteNames.exchangeRates);
+    final canSave   = feature != null && (feature.addAllowed || feature.editAllowed);
+
+    return ScreenHeaderInfo(
+      title: 'Exchange Rates',
+      subtitle: _baseCurrency.isEmpty
+          ? 'Set base currency in Company Setup first'
+          : 'Daily Buying, Selling & Exchange rates  ·  Base currency: $_baseCurrency',
+      actions: (!isOffline && !_loading && _rows.isNotEmpty && canSave)
+          ? [
+              SakalHeaderActionButton(
+                label: _saving ? 'Saving…' : 'Save Rates',
+                icon: Icons.save_outlined,
+                kind: SakalActionKind.save,
+                loading: _saving,
+                onPressed: _saving ? null : _save,
+              ),
+            ]
+          : const [],
+    );
+  }
 
   List<Map<String, dynamic>> _locations = [];
   String?   _locationId;
@@ -158,8 +181,9 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen>
         rows.add(_RateRow(
           currencyCode: code,
           currencyName: c['currency_name'] as String? ?? code,
-          buying:  existing != null ? _fmtRate(existing.buyingRate) : '',
-          selling: existing != null ? _fmtRate(existing.sellingRate) : '',
+          buying:   existing != null ? _fmtRate(existing.buyingRate) : '',
+          selling:  existing != null ? _fmtRate(existing.sellingRate) : '',
+          exchange: existing != null ? _fmtRate(existing.exchangeRate) : '',
         ));
       }
 
@@ -201,8 +225,9 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen>
       for (final row in _rows) {
         final prev = latest[row.currencyCode];
         if (prev != null) {
-          row.buyingCtrl.text  = _fmtRate(prev.buyingRate);
-          row.sellingCtrl.text = _fmtRate(prev.sellingRate);
+          row.buyingCtrl.text   = _fmtRate(prev.buyingRate);
+          row.sellingCtrl.text  = _fmtRate(prev.sellingRate);
+          row.exchangeCtrl.text = _fmtRate(prev.exchangeRate);
         }
       }
       setState(() => _loading = false);
@@ -220,7 +245,7 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen>
     final validRows = _rows.where((r) => r.isValid).toList();
     if (validRows.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter at least one buying and selling rate.')),
+        const SnackBar(content: Text('Enter a Buying, Selling, and Exchange rate for at least one currency.')),
       );
       return;
     }
@@ -236,6 +261,7 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen>
         'to_currency':   r.currencyCode,
         'buying_rate':   double.parse(r.buyingCtrl.text),
         'selling_rate':  double.parse(r.sellingCtrl.text),
+        'exchange_rate': double.parse(r.exchangeCtrl.text),
         'source':        'MANUAL',
         'created_by':    session.userId,
         'updated_by':    session.userId,
@@ -389,11 +415,6 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen>
     return rate.toStringAsFixed(8); // sub-1 rates need full 8 places
   }
 
-  String _midLabel(double? mid) {
-    if (mid == null) return '—';
-    return _fmtRate(mid);
-  }
-
   String _monthAbbr(int m) => const [
     '', 'Jan','Feb','Mar','Apr','May','Jun',
     'Jul','Aug','Sep','Oct','Nov','Dec'
@@ -424,13 +445,12 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen>
       );
     }
 
-    final canSave = feature.addAllowed || feature.editAllowed;
     final canCopy = feature.addAllowed || feature.editAllowed;
     final canBulk = feature.approveAllowed;
 
-    // Title + subtitle now live in the shared TopBar via ScreenHeaderMixin
-    // (see CLAUDE.md's "Screen header" pattern) — not rendered here as
-    // body content.
+    // Title + subtitle + Save button now live in the shared TopBar via
+    // ScreenHeaderMixin (see CLAUDE.md's "Screen header" pattern) — not
+    // rendered here as body content.
     refreshScreenHeader();
 
     return Column(
@@ -572,23 +592,10 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen>
                       : _buildDesktopTable(),
         ),
 
-        // ── Save button ──────────────────────────────────────────────────────
-        if (!isOffline && !_loading && _rows.isNotEmpty && canSave)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
-            child: FilledButton.icon(
-              icon: _saving
-                  ? const SizedBox(width: 16, height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.save_outlined, size: 18),
-              label: Text(_saving ? 'Saving…' : 'Save Rates'),
-              onPressed: _saving ? null : _save,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                minimumSize: const Size(160, 44),
-              ),
-            ),
-          ),
+        // Save action now lives top-right in the shared TopBar (see
+        // buildScreenHeader() above), matching every other entry screen's
+        // convention — no body-level button here anymore.
+        const SizedBox(height: 16),
       ],
     );
   }
@@ -605,10 +612,10 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen>
             borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
           ),
           child: Row(children: [
-            _colHdr('Currency',    flex: 3),
-            _colHdr('Buying Rate', flex: 2),
-            _colHdr('Selling Rate',flex: 2),
-            _colHdr('Mid (auto)',  flex: 2),
+            _colHdr('Currency',      flex: 3),
+            _colHdr('Buying Rate',   flex: 2),
+            _colHdr('Selling Rate',  flex: 2),
+            _colHdr('Exchange Rate', flex: 2),
           ]),
         ),
         Container(
@@ -673,14 +680,8 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen>
             Expanded(
               flex: 2,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Text(
-                  _midLabel(row.mid),
-                  style: TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w500,
-                    color: row.mid != null ? AppColors.primary : Colors.grey.shade400,
-                  ),
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: _rateField(row.exchangeCtrl, () => setRowState(() {})),
               ),
             ),
           ]),
@@ -717,19 +718,6 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen>
                     child: Text(row.currencyName,
                         style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
                   ),
-                  if (row.mid != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        'Mid: ${_midLabel(row.mid)}',
-                        style: const TextStyle(fontSize: 11, color: AppColors.primary,
-                            fontWeight: FontWeight.w600),
-                      ),
-                    ),
                 ]),
                 const SizedBox(height: 10),
                 Row(children: [
@@ -750,6 +738,16 @@ class _ExchangeRateScreenState extends ConsumerState<ExchangeRateScreen>
                           style: TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
                       const SizedBox(height: 4),
                       _rateField(row.sellingCtrl, () => setRowState(() {})),
+                    ],
+                  )),
+                  const SizedBox(width: 12),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Exchange',
+                          style: TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+                      const SizedBox(height: 4),
+                      _rateField(row.exchangeCtrl, () => setRowState(() {})),
                     ],
                   )),
                 ]),

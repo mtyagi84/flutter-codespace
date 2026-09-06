@@ -6,7 +6,7 @@ class ExchangeRateRemoteDs {
   static const _table = '/rim_exchange_rates';
   static const _select =
       'id,client_id,company_id,location_id,rate_date,'
-      'from_currency,to_currency,buying_rate,selling_rate,mid_rate,source,is_deleted';
+      'from_currency,to_currency,buying_rate,selling_rate,exchange_rate,source,is_deleted';
 
   Future<List<ExchangeRateModel>> getRates({
     required String clientId,
