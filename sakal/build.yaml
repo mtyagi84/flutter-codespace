@@ -1,13 +1,18 @@
 targets:
   $default:
     builders:
-      # freezed is a declared dev_dependency but has zero real usage anywhere
-      # in lib/ (confirmed via grep for @freezed/@unfreezed) -- per CLAUDE.md,
-      # "code generation not yet activated." It still runs on every file
-      # looking for annotations that don't exist, and its own pinned
-      # analyzer version is incompatible with newer Dart SDKs ("Missing
-      # implementation of visitDotShorthandPropertyAccess"), which aborts
-      # the WHOLE build_runner run -- including drift_dev's real output.
-      # Disabled until freezed is actually adopted for real models.
+      # Neither freezed nor json_serializable has any real usage anywhere in
+      # lib/ (confirmed via grep for @freezed/@unfreezed/@JsonSerializable --
+      # zero hits for all three; every model in this app hand-writes its own
+      # fromJson/toJson instead). Per CLAUDE.md: "code generation not yet
+      # activated." Both still scan every file looking for annotations that
+      # don't exist, and their own pinned analyzer version can't parse newer
+      # Dart SDK syntax ("Missing implementation of
+      # visitDotShorthandPropertyAccess"), which was aborting/erroring during
+      # the WHOLE build_runner run -- including drift_dev's real output
+      # (the one builder actually needed and actually used). Disabled until
+      # either is actually adopted for real models.
       freezed:
+        enabled: false
+      json_serializable:
         enabled: false
