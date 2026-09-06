@@ -1,6 +1,11 @@
 {
   "name": "Flutter Dev Environment",
   "image": "ghcr.io/cirruslabs/flutter:3.44.0",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
+  },
   "customizations": {
     "vscode": {
       "extensions": [
@@ -9,5 +14,5 @@
       ]
     }
   },
-  "postCreateCommand": "flutter doctor"
+  "postCreateCommand": "flutter doctor && npm install -g wrangler"
 }
