@@ -358,6 +358,17 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
       clientId: session.clientId, companyId: session.companyId,
       returnNo: _returnNo!, returnDate: _fmtDate(_returnDate),
     );
+
+    // This function previously only ever appended — fine the first time
+    // _init() runs, but _init() is also called a SECOND time after a
+    // successful Approve (to pick up the new status), which would
+    // silently duplicate every already-loaded line/charge on screen.
+    for (final l in _lines) { l.dispose(); }
+    for (final c in _charges) { c.dispose(); }
+    _lines.clear();
+    _charges.clear();
+    _selectedGrnKeys.clear();
+
     if (savedLines.isEmpty) return;
 
     final grnKeys = <String>{};
@@ -913,6 +924,16 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
         reopenPo: reopenPo, approvedBy: session.userId,
       );
       if (mounted) {
+        // Set directly rather than relying entirely on _init()'s own
+        // re-fetch to flip it — _init() swallows its own errors into
+        // _error (never rethrown), so if that reload fails for any reason
+        // (or a subtler bug in it silently no-ops), _status would
+        // otherwise stay stuck on 'DRAFT' despite a successful approve,
+        // leaving Save Draft/Approve visible on an already-approved
+        // return. This was flagged as a known risk in this exact spot
+        // (see the comment on the finally block below) but never actually
+        // guarded against until now.
+        setState(() => _status = 'APPROVED');
         _showSnack('Purchase Return $_returnNo approved.', color: AppColors.positive);
         await _init();
       }
