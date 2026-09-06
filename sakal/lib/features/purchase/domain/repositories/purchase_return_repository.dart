@@ -61,6 +61,13 @@ abstract class PurchaseReturnRepository {
     required String grnDate,
   });
 
+  Future<Map<int, double>> getAlreadyReturnedQtyByGrnLine({
+    required String clientId,
+    required String companyId,
+    required String grnNo,
+    required String grnDate,
+  });
+
   Future<List<Map<String, dynamic>>> getGrnCharges({
     required String clientId,
     required String companyId,

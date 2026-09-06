@@ -187,6 +187,51 @@ class PurchaseReturnRemoteDs {
     return List<Map<String, dynamic>>.from(res.data as List);
   }
 
+  /// Already-returned qty per GRN line, counting only APPROVED returns
+  /// (a still-DRAFT return doesn't reduce what's left returnable — same
+  /// definition fn_approve_purchase_return itself uses for its own
+  /// RETURN_QTY_EXCEEDS_RECEIVED check). Used to pre-fill a NEW return's
+  /// suggested qty with what's actually still returnable, not the GRN
+  /// line's full original qty — a GRN can be returned against across
+  /// several separate documents over time.
+  Future<Map<int, double>> getAlreadyReturnedQtyByGrnLine({
+    required String clientId,
+    required String companyId,
+    required String grnNo,
+    required String grnDate,
+  }) async {
+    final linesRes = await _dio.get('/rid_purchase_return_lines', queryParameters: {
+      'client_id': 'eq.$clientId', 'company_id': 'eq.$companyId',
+      'source_grn_no': 'eq.$grnNo', 'source_grn_date': 'eq.$grnDate',
+      'is_deleted': 'eq.false',
+      'select': 'return_no,return_date,source_grn_line_serial,base_qty',
+    });
+    final lines = List<Map<String, dynamic>>.from(linesRes.data as List);
+    if (lines.isEmpty) return {};
+
+    final returnNos = lines.map((l) => l['return_no'] as String).toSet().toList();
+    final headersRes = await _dio.get('/rih_purchase_return_headers', queryParameters: {
+      'client_id': 'eq.$clientId', 'company_id': 'eq.$companyId',
+      'return_no': 'in.(${returnNos.join(',')})',
+      'select': 'return_no,return_date,status',
+    });
+    final approvedKeys = (headersRes.data as List)
+        .map((h) => h as Map<String, dynamic>)
+        .where((h) => h['status'] == 'APPROVED')
+        .map((h) => '${h['return_no']}|${h['return_date']}')
+        .toSet();
+
+    final result = <int, double>{};
+    for (final l in lines) {
+      final key = '${l['return_no']}|${l['return_date']}';
+      if (!approvedKeys.contains(key)) continue;
+      final serial = l['source_grn_line_serial'] as int;
+      final qty = (l['base_qty'] as num? ?? 0).toDouble();
+      result[serial] = (result[serial] ?? 0) + qty;
+    }
+    return result;
+  }
+
   /// The batches this specific GRN line originally received — candidates the
   /// user can pick to return from. Actual returnability is capped by each
   /// batch's CURRENT ledger balance (getBatchBalance below), not just what

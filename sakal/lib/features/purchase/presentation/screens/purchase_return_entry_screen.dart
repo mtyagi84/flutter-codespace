@@ -510,15 +510,23 @@ class _PurchaseReturnEntryScreenState extends ConsumerState<PurchaseReturnEntryS
       try {
         final grnLines   = await _ds.getGrnLines(clientId: session.clientId, companyId: session.companyId, grnNo: grnNo, grnDate: grnDate);
         final grnCharges = await _ds.getGrnCharges(clientId: session.clientId, companyId: session.companyId, grnNo: grnNo, grnDate: grnDate);
+        // Only what's still returnable should be suggested — a GRN line may
+        // already have been partially returned in an earlier, separate
+        // Purchase Return document. Same "APPROVED returns only" definition
+        // fn_approve_purchase_return itself enforces server-side.
+        final alreadyReturned = await _ds.getAlreadyReturnedQtyByGrnLine(clientId: session.clientId, companyId: session.companyId, grnNo: grnNo, grnDate: grnDate);
         if (!mounted) return;
         final newLines = <_ReturnLineRow>[];
         setState(() {
           for (final gl in grnLines) {
             final product = gl['product'] as Map<String, dynamic>?;
             final uom     = gl['uom'] as Map<String, dynamic>?;
+            final grnLineQty = (gl['base_qty'] as num? ?? 0).toDouble();
+            final remainingQty = (grnLineQty - (alreadyReturned[gl['serial_no'] as int] ?? 0)).clamp(0, grnLineQty);
             final row = _ReturnLineRow(
               sourceGrnNo: grnNo, sourceGrnDate: grnDate,
               sourceGrnLineSerial: gl['serial_no'] as int,
+              initialQtyPack: remainingQty.toDouble(),
               productId: gl['product_id'] as String,
               productDisplay: product != null ? '[${product['product_code']}] ${product['product_name']}' : '',
               uomId: gl['uom_id'] as String?,

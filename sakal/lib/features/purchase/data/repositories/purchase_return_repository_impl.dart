@@ -91,6 +91,14 @@ class PurchaseReturnRepositoryImpl implements PurchaseReturnRepository {
   }) => _remote.getGrnLines(clientId: clientId, companyId: companyId, grnNo: grnNo, grnDate: grnDate);
 
   @override
+  Future<Map<int, double>> getAlreadyReturnedQtyByGrnLine({
+    required String clientId,
+    required String companyId,
+    required String grnNo,
+    required String grnDate,
+  }) => _remote.getAlreadyReturnedQtyByGrnLine(clientId: clientId, companyId: companyId, grnNo: grnNo, grnDate: grnDate);
+
+  @override
   Future<List<Map<String, dynamic>>> getGrnCharges({
     required String clientId,
     required String companyId,
