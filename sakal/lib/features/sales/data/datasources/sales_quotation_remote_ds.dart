@@ -321,7 +321,7 @@ class SalesQuotationRemoteDs {
         'p_from_currency': fromCurrency,
         'p_to_currency':   toCurrency,
         'p_rate_date':     rateDate,
-        'p_rate_type':     'SELLING',
+        'p_rate_type':     'MID',
       });
       return (res.data as num?)?.toDouble();
     } on DioException {
