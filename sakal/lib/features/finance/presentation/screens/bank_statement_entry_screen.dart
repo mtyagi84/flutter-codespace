@@ -290,8 +290,16 @@ class _BankStatementEntryScreenState extends ConsumerState<BankStatementEntryScr
     } catch (e, st) {
       AppLogger.error('BankStatementParse', e, st);
       if (mounted) {
+        // ErrorPresenter.format is built for DioException/API errors — its
+        // fallback for any other error type is a bare 'Unable to $action.
+        // Please try again.' with zero diagnostic value, which is exactly
+        // what was hiding every real CSV/PDF parse failure here (a
+        // malformed row, a header-name mismatch, an unparseable date). This
+        // is local, on-device parsing with no server response to promote a
+        // `details` field from, so the parser's own exception message IS
+        // the only real diagnostic available — show it directly.
         setState(() {
-          _parseResultMessage = ErrorPresenter.format(e, action: 'parse this file');
+          _parseResultMessage = 'Unable to parse this file: $e\n\nCheck the Format Master\'s column mapping, header-skip rows, and date format, or use Download Template to enter this statement by hand.';
           _parseResultIsWarning = true;
         });
       }
@@ -647,10 +655,11 @@ class _BankStatementEntryScreenState extends ConsumerState<BankStatementEntryScr
 
   Widget _buildLineTableRow(_LineRow row, int index, bool canEditNow) {
     final needsReview = !row.isReviewed;
-    Widget cell(double width, Widget child) => SizedBox(width: width, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6), child: child));
-    InputDecoration dec() => const InputDecoration(isDense: true, border: InputBorder.none, contentPadding: EdgeInsets.symmetric(vertical: 4));
+    Widget cell(double width, Widget child) => SizedBox(width: width, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10), child: child));
+    InputDecoration dec() => const InputDecoration(isDense: true, border: InputBorder.none, contentPadding: EdgeInsets.symmetric(vertical: 10));
 
     return Container(
+      constraints: const BoxConstraints(minHeight: 48),
       decoration: BoxDecoration(
         color: needsReview ? AppColors.secondary.withValues(alpha: 0.08) : (index.isEven ? Colors.white : AppColors.background),
         border: const Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
