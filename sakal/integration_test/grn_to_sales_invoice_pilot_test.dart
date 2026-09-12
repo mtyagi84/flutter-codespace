@@ -4,12 +4,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:sakal/app.dart';
 import 'package:sakal/core/router/route_names.dart';
+import 'package:sakal/test_support/backend_verifier.dart';
+import 'package:sakal/test_support/report_diff.dart';
+import 'package:sakal/test_support/tenant_reset.dart';
+import 'package:sakal/test_support/test_tenant_config.dart';
 
-import '../support/backend_verifier.dart';
-import '../support/report_diff.dart';
-import '../support/screen_driver.dart';
-import '../support/tenant_reset.dart';
-import '../support/test_tenant_config.dart';
+// screen_driver.dart depends on flutter_test (a dev-only package, not
+// resolvable from anything under lib/) -- it must stay under
+// integration_test/ rather than lib/test_support/ alongside the other
+// support files, and can only be reached via a same-directory relative
+// import: Flutter Web's integration_test build does NOT resolve a
+// PARENT-directory relative import (`../support/...`) even though the
+// identical code works fine on mobile/desktop -- confirmed live when this
+// test was first run ("File not found" for every ../support/ import).
+// Keeping this file in the SAME directory as the test itself sidesteps
+// that entirely.
+import 'screen_driver.dart';
 
 /// The pilot flow from the approved E2E test automation plan: GRN -> Sales
 /// Invoice -> Stock Ledger + Trial Balance, multi-currency (base=USD,

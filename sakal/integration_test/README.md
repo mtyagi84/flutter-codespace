@@ -31,7 +31,7 @@ chromedriver --port=4444
 # Terminal 2 — the actual test run:
 flutter drive \
   --driver=test_driver/integration_test.dart \
-  --target=integration_test/flows/grn_to_sales_invoice_pilot_test.dart \
+  --target=integration_test/grn_to_sales_invoice_pilot_test.dart \
   -d web-server \
   --dart-define=QA_CLIENT_NO=SK-12345 \
   --dart-define=QA_USERNAME=qa_admin \
@@ -77,15 +77,38 @@ convention before inventing a new one.
 ## Folder layout
 
 ```
-support/
-  screen_driver.dart       # navigate/fillForm/submit/approve via WidgetTester
+sakal/lib/test_support/          # pure-Dart helpers (dio + PostgREST only,
+                                  # no flutter_test dependency) -- safe to
+                                  # live under lib/ and imported everywhere
+                                  # via package:sakal/test_support/...
   backend_verifier.dart    # fn_login + PostgREST GET/RPC, QA-tenant-scoped
   report_diff.dart         # actual report RPC output vs. a raw ledger sum
   test_tenant_config.dart  # reads QA IDs from --dart-define
   tenant_reset.dart        # calls fn_reset_qa_tenant() between runs
-flows/
+
+sakal/integration_test/           # everything here depends on flutter_test/
+                                   # integration_test (dev-only packages) --
+                                   # CANNOT live under lib/, and a test file
+                                   # here can only reach another file in
+                                   # this same directory via relative import
+                                   # (see screen_driver.dart's own comment
+                                   # in the pilot test for why: Flutter
+                                   # Web's integration_test build doesn't
+                                   # resolve a `../` parent-directory
+                                   # import, confirmed live).
+  screen_driver.dart        # navigate/fillForm/submit/approve via WidgetTester
   grn_to_sales_invoice_pilot_test.dart   # the pilot — see the plan
+
+sakal/test_driver/integration_test.dart  # required boilerplate for `flutter
+                                          # drive` on web -- see "Running" below
 ```
+
+**Adding a new flow test**: put it directly in `integration_test/` (not a
+subfolder) so its relative import of `screen_driver.dart` stays same-
+directory. Anything that doesn't touch `WidgetTester`/`find`/`expect`
+belongs in `lib/test_support/` instead, imported via `package:sakal/...` —
+that's what keeps working regardless of which directory a test file lives
+in.
 
 ## Running
 
