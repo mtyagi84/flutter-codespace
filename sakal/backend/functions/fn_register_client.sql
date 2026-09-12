@@ -59,8 +59,13 @@ begin
     ) returning id into v_client_id;
 
     -- Create company
+    -- NOTE: ric_companies.company_short was renamed to company_alias by
+    -- migration 006_alter_companies.sql -- this function's own insert was
+    -- never updated to match (found live 2026-09-12, when it broke the
+    -- QA-tenant seed script; confirmed via the live function definition
+    -- that real signups have been failing on this exact error).
     insert into ric_companies (
-        client_id, company_name, company_short,
+        client_id, company_name, company_alias,
         country, base_currency, local_currency,
         created_at
     ) values (

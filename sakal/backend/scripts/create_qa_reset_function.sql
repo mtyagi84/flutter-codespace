@@ -38,13 +38,10 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-    -- ── CUSTOMIZE: paste the QA tenant's IDs from seed_qa_master_data.sql ──
-    v_client_id  UUID := '00000000-0000-0000-0000-000000000000';  -- PASTE
-    v_company_id UUID := '00000000-0000-0000-0000-000000000000';  -- PASTE
+    -- ── QA Automation Co tenant, seeded 2026-09-12 ──────────────────────
+    v_client_id  UUID := 'd2189b7a-ac5a-4322-935b-be3d8e68d37b';
+    v_company_id UUID := 'e7c73bdc-93c9-4bb1-bff2-e5e3ba133abe';
 BEGIN
-    IF v_client_id = '00000000-0000-0000-0000-000000000000' THEN
-        RAISE EXCEPTION 'fn_reset_qa_tenant: edit this function and paste the real QA client_id/company_id before using it.';
-    END IF;
 
     -- 1. Cross-module dependency — must go first
     DELETE FROM rid_bank_reconciliation_matches WHERE client_id = v_client_id AND company_id = v_company_id;
