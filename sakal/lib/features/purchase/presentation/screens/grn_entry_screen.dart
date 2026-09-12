@@ -189,11 +189,13 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
           ? [
               if (canSaveNow)
                 SakalHeaderActionButton(
+                  key: const Key('btn_save'),
                   label: 'Save Draft', icon: Icons.save_outlined, kind: SakalActionKind.save,
                   loading: _saving, onPressed: _saving ? null : () => _saveDraft(),
                 ),
               if (canApproveNow)
                 SakalHeaderActionButton(
+                  key: const Key('btn_approve'),
                   label: 'Approve', icon: Icons.check_circle_outline, kind: SakalActionKind.approve,
                   loading: _approving, onPressed: _approving ? null : _approveGrn,
                 ),
@@ -1500,20 +1502,24 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
           )
         : SakalFieldCard(
             label: 'Supplier', required: true, editable: !locked,
-            child: _searchField<Map<String, dynamic>>(
-              options: _suppliers,
-              initialText: _supplierDisplay ?? '',
-              locked: locked,
-              displayString: (a) => '[${a['account_code']}] ${a['account_name']}',
-              matches: (a, q) => (a['account_code'] as String? ?? '').toLowerCase().contains(q) ||
-                  (a['account_name'] as String? ?? '').toLowerCase().contains(q),
-              onSelected: (a) => _onSupplierSelected(a),
-              onCleared: () => setState(() { _supplierId = null; _supplierDisplay = ''; }),
+            child: KeyedSubtree(
+              key: const Key('grn_supplier_picker'),
+              child: _searchField<Map<String, dynamic>>(
+                options: _suppliers,
+                initialText: _supplierDisplay ?? '',
+                locked: locked,
+                displayString: (a) => '[${a['account_code']}] ${a['account_name']}',
+                matches: (a, q) => (a['account_code'] as String? ?? '').toLowerCase().contains(q) ||
+                    (a['account_name'] as String? ?? '').toLowerCase().contains(q),
+                onSelected: (a) => _onSupplierSelected(a),
+                onCleared: () => setState(() { _supplierId = null; _supplierDisplay = ''; }),
+              ),
             ),
           );
     final locationField = SakalFieldCard(
       label: 'Location', required: true, editable: !locked,
       child: DropdownButtonFormField<String>(
+        key: const Key('grn_location'),
         decoration: bare, isExpanded: true, isDense: true, itemHeight: null, style: style,
         initialValue: _locationId,
         items: _locations.map((l) => DropdownMenuItem(value: l['id'] as String,
@@ -1681,7 +1687,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
         Row(children: [
           const Text('Line Items', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
           const Spacer(),
-          if (!locked) TextButton.icon(onPressed: _addLine, icon: const Icon(Icons.add, size: 16), label: const Text('Add Item')),
+          if (!locked) TextButton.icon(key: const Key('btn_add_line'), onPressed: _addLine, icon: const Icon(Icons.add, size: 16), label: const Text('Add Item')),
         ]),
         const SizedBox(height: 8),
         if (_lines.isEmpty)
@@ -1748,15 +1754,18 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
         : SakalFieldCard(
             label: 'Product', required: true, editable: !locked,
             showLabel: isMobile,
-            child: _searchField<Map<String, dynamic>>(
-              options: _products,
-              initialText: row.productDisplay,
-              locked: locked,
-              displayString: (p) => '[${p['product_code']}] ${p['product_name']}',
-              matches: (p, q) => (p['product_code'] as String? ?? '').toLowerCase().contains(q) ||
-                  (p['product_name'] as String? ?? '').toLowerCase().contains(q),
-              onSelected: (p) => _onProductSelected(row, p),
-              onCleared: () => setState(() { row.productId = null; row.productDisplay = ''; row.convFactorLocked = false; row.uomOptions = []; row.uomId = null; }),
+            child: KeyedSubtree(
+              key: Key('grn_line_product_$idx'),
+              child: _searchField<Map<String, dynamic>>(
+                options: _products,
+                initialText: row.productDisplay,
+                locked: locked,
+                displayString: (p) => '[${p['product_code']}] ${p['product_name']}',
+                matches: (p, q) => (p['product_code'] as String? ?? '').toLowerCase().contains(q) ||
+                    (p['product_name'] as String? ?? '').toLowerCase().contains(q),
+                onSelected: (p) => _onProductSelected(row, p),
+                onCleared: () => setState(() { row.productId = null; row.productDisplay = ''; row.convFactorLocked = false; row.uomOptions = []; row.uomId = null; }),
+              ),
             ),
           );
     final uomField = SakalFieldCard(
@@ -1792,6 +1801,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
       label: showLooseQty ? 'Qty Pack' : 'Quantity', editable: !locked,
       showLabel: isMobile,
       child: TextFormField(
+        key: Key('grn_line_qty_$idx'),
         controller: row.qtyPackCtrl, enabled: !locked,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         decoration: bare, style: style,
@@ -1814,6 +1824,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
       label: 'Rate', editable: !locked && !row.isFromPo,
       showLabel: isMobile,
       child: TextFormField(
+        key: Key('grn_line_rate_$idx'),
         controller: row.rateCtrl, enabled: !locked && !row.isFromPo,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         decoration: bare.copyWith(

@@ -261,5 +261,6 @@ BEGIN
     RAISE NOTICE 'product_id:  % (code QA-PROD-001)', v_product_id;
     RAISE NOTICE 'customer_id: % (rim_accounts row)', v_customer_id;
     RAISE NOTICE 'supplier_id: % (rim_accounts row)', v_supplier_id;
+    RAISE NOTICE 'stock_account_id: % (QA Stock Account, for report-diff GL checks)', v_stock_acct;
     RAISE NOTICE 'Password is whatever you set in v_password above -- not printed here.';
 END $$;

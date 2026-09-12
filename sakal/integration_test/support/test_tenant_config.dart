@@ -30,6 +30,7 @@ class TestTenantConfig {
   static const productId  = String.fromEnvironment('QA_PRODUCT_ID');
   static const customerId = String.fromEnvironment('QA_CUSTOMER_ID');
   static const supplierId = String.fromEnvironment('QA_SUPPLIER_ID');
+  static const stockAccountId = String.fromEnvironment('QA_STOCK_ACCOUNT_ID');
 
   static void assertConfigured() {
     final missing = <String>[
@@ -40,6 +41,7 @@ class TestTenantConfig {
       if (productId.isEmpty) 'QA_PRODUCT_ID',
       if (customerId.isEmpty) 'QA_CUSTOMER_ID',
       if (supplierId.isEmpty) 'QA_SUPPLIER_ID',
+      if (stockAccountId.isEmpty) 'QA_STOCK_ACCOUNT_ID',
     ];
     if (missing.isNotEmpty) {
       throw StateError(

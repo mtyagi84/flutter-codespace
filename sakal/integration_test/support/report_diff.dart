@@ -20,10 +20,35 @@ class ReportDiff {
   /// Sums a numeric column across rows from a raw ledger/journal table,
   /// scoped to the QA tenant — the "independent expected value" side of a
   /// diff. Callers pass whatever filters narrow it to the specific
-  /// transaction(s) under test (e.g. {'product_id': 'eq.<id>'}).
+  /// transaction(s) under test (e.g. {'product_id': 'eq.<id>'}). Use this
+  /// for an already-signed column (e.g. `ril_stock_ledger.qty_change`,
+  /// which is positive for inward, negative for outward movements).
   Future<double> sumColumn(String table, String column, Map<String, String> filters) async {
     final rows = await verifier.get(table, filters, select: column);
     return rows.fold<double>(0, (sum, row) => sum + ((row[column] as num?)?.toDouble() ?? 0));
+  }
+
+  /// Sums an UNSIGNED amount column that has a separate Dr/Cr nature
+  /// column, netting Dr as positive and Cr as negative (e.g.
+  /// `rid_finance_lines.base_amount` + `trans_nature`, which stores a
+  /// plain magnitude, not a signed value — confirmed via
+  /// 019_finance_vouchers.sql's own `CASE WHEN trans_nature = 'DR' THEN
+  /// trans_amount ELSE -trans_amount END` convention). Plain [sumColumn]
+  /// would silently sum Dr and Cr as if both were positive, never netting
+  /// to zero even when a voucher is perfectly balanced.
+  Future<double> sumSignedByNature(
+    String table,
+    String amountColumn,
+    Map<String, String> filters, {
+    String natureColumn = 'trans_nature',
+    String debitValue = 'DR',
+  }) async {
+    final rows = await verifier.get(table, filters, select: '$amountColumn,$natureColumn');
+    return rows.fold<double>(0, (sum, row) {
+      final amount = (row[amountColumn] as num?)?.toDouble() ?? 0;
+      final isDebit = row[natureColumn] == debitValue;
+      return sum + (isDebit ? amount : -amount);
+    });
   }
 
   /// Asserts two numeric values match within a small rounding tolerance

@@ -24,12 +24,13 @@ flutter test integration_test/flows/grn_to_sales_invoice_pilot_test.dart \
   --dart-define=QA_LOCATION_ID=... \
   --dart-define=QA_PRODUCT_ID=... \
   --dart-define=QA_CUSTOMER_ID=... \
-  --dart-define=QA_SUPPLIER_ID=...
+  --dart-define=QA_SUPPLIER_ID=... \
+  --dart-define=QA_STOCK_ACCOUNT_ID=...
 ```
 
 ## Widget key-naming convention
 
-`ScreenDriver.fillForm`/`submitAndCaptureDocNo`/`approve` all find widgets by
+`ScreenDriver.fillForm`/`submit`/`approve` all find widgets by
 `Key('some_key')`. Only 44/101 screen files have any `Key(` today — adding
 them is real, per-screen, incremental work (see the plan's own effort/risk
 callouts). Convention, applied one screen at a time as it enters test scope:
@@ -39,8 +40,17 @@ callouts). Convention, applied one screen at a time as it enters test scope:
   — e.g. `Key('grn_line_product_0')`.
 - The primary Save/Submit button: `Key('btn_save')`.
 - The Approve button (when distinct from Save): `Key('btn_approve')`.
-- The doc-number display (usually in the screen's header/title, via
-  `ScreenHeaderMixin`): `Key('header_doc_no')`.
+- A picker (`SakalAutocomplete`/similar) that already carries its own
+  rebuild-identity key for a documented, unrelated reason (see
+  `screen_driver.dart`'s own comment) gets wrapped in a
+  `KeyedSubtree(key: Key('<screen>_<field>'), child: ...)` instead of
+  having its existing key replaced — `ScreenDriver` resolves to the actual
+  editable descendant either way.
+
+No doc-number widget key is needed — `ScreenDriver.submit()` deliberately
+doesn't scrape a generated document number back out of the UI; a test
+looks it up via `BackendVerifier` after submitting, since that's the
+authoritative source of truth anyway.
 
 Never reintroduce a screen-specific ad-hoc naming scheme — grep this file's
 convention before inventing a new one.

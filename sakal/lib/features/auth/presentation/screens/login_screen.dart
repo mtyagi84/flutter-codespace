@@ -304,6 +304,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 16),
               ] else ...[
                 TextFormField(
+                  key: const Key('login_client_no'),
                   controller: _clientNoCtrl,
                   textCapitalization: TextCapitalization.characters,
                   decoration: const InputDecoration(
@@ -319,6 +320,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
               // Username
               TextFormField(
+                key: const Key('login_username'),
                 controller: _usernameCtrl,
                 decoration: const InputDecoration(
                   labelText: 'Username',
@@ -332,6 +334,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
               // Password
               TextFormField(
+                key: const Key('login_password'),
                 controller: _passwordCtrl,
                 obscureText: _obscure,
                 decoration: InputDecoration(
@@ -447,6 +450,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
+                  key: const Key('btn_login'),
                   style: _workOffline
                       ? ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFE65100))

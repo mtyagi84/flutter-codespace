@@ -207,6 +207,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
           ? [
               if (canSaveNow)
                 SakalHeaderActionButton(
+                  key: const Key('btn_save'),
                   label: 'Save Invoice', icon: Icons.save_outlined, kind: SakalActionKind.save,
                   loading: _saving, onPressed: _saving ? null : _saveAndApprove,
                 ),
@@ -1872,7 +1873,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                           // table in the app already makes.
                           child: SakalScrollableTable(
                             header: _buildLineItemsHeader(showLooseQty, showBarcode && !locked, !locked && !_isAgainstSource, _showOverrideReasonColumn),
-                            rows: _lines.map((row) => _buildLineTile(row, locked, showLooseQty, showBarcode, isMobile, _showOverrideReasonColumn)).toList(),
+                            rows: _lines.asMap().entries.map((e) => _buildLineTile(e.value, e.key, locked, showLooseQty, showBarcode, isMobile, _showOverrideReasonColumn)).toList(),
                           ),
                         ),
                       ),
@@ -1881,7 +1882,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                         padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
                         sliver: SliverList(
                           delegate: SliverChildBuilderDelegate(
-                            (context, index) => _buildLineTile(_lines[index], locked, showLooseQty, showBarcode, isMobile, _showOverrideReasonColumn),
+                            (context, index) => _buildLineTile(_lines[index], index, locked, showLooseQty, showBarcode, isMobile, _showOverrideReasonColumn),
                             childCount: _lines.length,
                           ),
                         ),
@@ -1946,6 +1947,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
             // unconditionally hiding it here would crash instead of just
             // blocking new entry into that mode.
             SegmentedButton<String>(
+              key: const Key('invoice_mode_segment'),
               segments: [
                 const ButtonSegment(value: 'DIRECT', label: Text('Direct'), icon: Icon(Icons.point_of_sale_outlined)),
                 if (!isOffline || _invoiceMode == 'AGAINST_QUOTATION')
@@ -1961,6 +1963,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
               TextButton(onPressed: _reselectSource, child: const Text('Change')),
             ],
             SegmentedButton<String>(
+              key: const Key('sale_type_segment'),
               segments: const [
                 ButtonSegment(value: 'CASH', label: Text('Cash'), icon: Icon(Icons.payments_outlined)),
                 ButtonSegment(value: 'CREDIT', label: Text('Credit'), icon: Icon(Icons.credit_card_outlined)),
@@ -1994,7 +1997,9 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                     label: 'Customer',
                     required: true,
                     editable: true,
-                    child: SakalAutocomplete<Map<String, dynamic>>(
+                    child: KeyedSubtree(
+                      key: const Key('invoice_customer_picker'),
+                      child: SakalAutocomplete<Map<String, dynamic>>(
                         initialValue: TextEditingValue(text: _customerDisplay),
                         enabled: !locked,
                         displayStringForOption: (a) => '[${a['account_code']}] ${a['account_name']}',
@@ -2036,6 +2041,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                         decoration: SakalFieldCard.bareDecoration,
                         style: fieldTextStyle,
                       ),
+                    ),
                     )
                 : SakalFieldCard.readOnly(label: 'Customer', value: _customerDisplay.isEmpty ? '—' : _customerDisplay),
             SakalFieldCard(
@@ -2162,7 +2168,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     ]);
   }
 
-  Widget _buildLineTile(_InvoiceLineRow row, bool locked, bool showLooseQty, bool showBarcode, bool isMobile, bool showOverrideReasonColumn) {
+  Widget _buildLineTile(_InvoiceLineRow row, int idx, bool locked, bool showLooseQty, bool showBarcode, bool isMobile, bool showOverrideReasonColumn) {
     final rowLocked = locked || _isAgainstSource;
     final rateEditable = !locked && !_isAgainstSource && (row.priceSource == 'MANUAL_OVERRIDE' || (!row.priceResolved && _canOverridePrice));
     final isCompact = ref.watch(isCompactDensityProvider);
@@ -2176,18 +2182,21 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
             required: true,
             editable: true,
             showLabel: isMobile,
-            child: SakalAutocomplete<Map<String, dynamic>>(
-              initialValue: TextEditingValue(text: row.productDisplay),
-              focusNode: row.productFocusNode,
-              displayStringForOption: (p) => '[${p['product_code']}] ${p['product_name']}',
-              optionsBuilder: (v) async {
-                final session = ref.read(sessionProvider)!;
-                final ds = ref.read(salesInvoiceRepositoryProvider);
-                return ds.getProductsForPicker(clientId: session.clientId, companyId: session.companyId, search: v.text);
-              },
-              onSelected: (p) => _onProductSelected(row, p),
-              decoration: SakalFieldCard.bareDecoration,
-              style: fieldTextStyle,
+            child: KeyedSubtree(
+              key: Key('invoice_line_product_$idx'),
+              child: SakalAutocomplete<Map<String, dynamic>>(
+                initialValue: TextEditingValue(text: row.productDisplay),
+                focusNode: row.productFocusNode,
+                displayStringForOption: (p) => '[${p['product_code']}] ${p['product_name']}',
+                optionsBuilder: (v) async {
+                  final session = ref.read(sessionProvider)!;
+                  final ds = ref.read(salesInvoiceRepositoryProvider);
+                  return ds.getProductsForPicker(clientId: session.clientId, companyId: session.companyId, search: v.text);
+                },
+                onSelected: (p) => _onProductSelected(row, p),
+                decoration: SakalFieldCard.bareDecoration,
+                style: fieldTextStyle,
+              ),
             ),
           );
     final barcodeField = SakalFieldCard(
@@ -2199,7 +2208,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     );
     final qtyPackField = SakalFieldCard(
       label: showLooseQty ? 'Qty Pack' : 'Quantity', required: true, editable: !rowLocked, showLabel: isMobile,
-      child: TextFormField(controller: row.qtyPackCtrl, enabled: !rowLocked, keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      child: TextFormField(key: Key('invoice_line_qty_$idx'), controller: row.qtyPackCtrl, enabled: !rowLocked, keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle, onChanged: (_) => _onLineQtyChanged(row)),
     );
     final qtyLooseField = SakalFieldCard(
@@ -2210,6 +2219,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     final rateField = SakalFieldCard(
       label: 'Rate', editable: rateEditable, showLabel: isMobile,
       child: SakalFormattedNumberField(
+        key: Key('invoice_line_rate_$idx'),
         controller: row.rateCtrl, enabled: rateEditable,
         decimalPlaces: _rateDecimalPlaces, numberFormatStyle: numberFormat,
         decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle,
@@ -2240,7 +2250,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     final overrideReasonField = overrideReasonVisible
         ? SakalFieldCard(
             label: 'Override Reason', required: true, editable: true, showLabel: isMobile,
-            child: TextFormField(controller: row.overrideReasonCtrl, decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle),
+            child: TextFormField(key: Key('invoice_line_reason_$idx'), controller: row.overrideReasonCtrl, decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle),
           )
         : const SizedBox.shrink();
     final batchSerialVisible = _dispatchStock && (row.isBatchTracked || row.isSerialTracked);
@@ -2249,7 +2259,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
         ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             if (overrideVisible)
               Padding(padding: const EdgeInsets.only(bottom: 6),
-                  child: TextButton(onPressed: () => setState(() => row.priceSource = 'MANUAL_OVERRIDE'), child: const Text('Override Price'))),
+                  child: TextButton(key: Key('btn_override_price_$idx'), onPressed: () => setState(() => row.priceSource = 'MANUAL_OVERRIDE'), child: const Text('Override Price'))),
             if (batchSerialVisible) _buildBatchSerialSection(row, locked, isMobile),
           ])
         : null;

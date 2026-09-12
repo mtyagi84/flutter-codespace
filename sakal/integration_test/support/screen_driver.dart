@@ -29,51 +29,64 @@ class ScreenDriver {
   }
 
   /// Fills a form from a field-key -> value map. Each key must match a
-  /// `Key('fieldKey')` on the target screen. Dispatches per value type:
-  /// - `String`/`num` -> enters text into a TextFormField-like widget.
-  /// - `_Select(optionText)` -> opens a dropdown/autocomplete and picks the
-  ///   option matching `optionText`.
-  /// - `DateTime` -> taps the field (opens a date picker) then selects that
-  ///   date — actual picker interaction is screen-specific enough that this
-  ///   currently just taps the field open; extend per-screen if a
-  ///   screen's date picker needs bespoke handling.
+  /// `Key('fieldKey')` on the target screen — either directly on a
+  /// `TextFormField`, or on a `KeyedSubtree` wrapping a picker (e.g. a
+  /// `SakalAutocomplete`-based field, which already carries its OWN
+  /// rebuild-identity key for a documented, unrelated reason — see this
+  /// folder's README — so a test hook wraps it rather than replacing it).
+  /// [_resolveEditable] finds the actual interactive descendant either way.
+  /// Dispatches per value type:
+  /// - `String`/`num` -> enters text.
+  /// - `Select(optionText)` -> taps to open, picks the matching option.
+  /// - `DateTime` -> taps the field open — actual picker interaction is
+  ///   screen-specific enough that this currently just opens it; extend
+  ///   per-screen if a screen's date picker needs bespoke handling.
   Future<void> fillForm(Map<String, dynamic> fieldValues) async {
     for (final entry in fieldValues.entries) {
-      final finder = find.byKey(ValueKey(entry.key));
-      expect(finder, findsOneWidget, reason: 'Missing Key("${entry.key}") on screen — add it before this field can be driven.');
+      final outer = find.byKey(ValueKey(entry.key));
+      expect(outer, findsOneWidget, reason: 'Missing Key("${entry.key}") on screen — add it before this field can be driven.');
+      final target = _resolveEditable(outer);
 
       final value = entry.value;
       if (value is Select) {
-        await tester.tap(finder);
+        await tester.tap(target);
         await tester.pumpAndSettle();
         final optionFinder = find.text(value.optionText).last;
         await tester.tap(optionFinder);
         await tester.pumpAndSettle();
       } else if (value is DateTime) {
-        await tester.tap(finder);
+        await tester.tap(target);
         await tester.pumpAndSettle();
         // Screen-specific date-picker interaction goes here per screen as
         // this driver is extended — deliberately not generalized further
         // until a second screen's date picker proves what's actually common.
       } else {
-        await tester.enterText(finder, value.toString());
+        await tester.enterText(target, value.toString());
         await tester.pumpAndSettle();
       }
     }
   }
 
+  /// A `Key('fieldKey')` may sit on a non-editable wrapper (`KeyedSubtree`)
+  /// around a picker rather than directly on the editable widget itself —
+  /// resolve to the actual `TextFormField`/`TextField` descendant when so.
+  Finder _resolveEditable(Finder outer) {
+    final textFormField = find.descendant(of: outer, matching: find.byType(TextFormField));
+    if (tester.any(textFormField)) return textFormField;
+    final textField = find.descendant(of: outer, matching: find.byType(TextField));
+    if (tester.any(textField)) return textField;
+    return outer;
+  }
+
   /// Taps a Save/Submit button by key and waits for the resulting
-  /// confirmation, then reads back the generated document number from a
-  /// widget carrying [docNoKey] (most entry screens surface this via
-  /// ScreenHeaderMixin's title, e.g. Text(key: Key('header_doc_no'))).
-  Future<String> submitAndCaptureDocNo({
-    required String saveButtonKey,
-    required String docNoKey,
-  }) async {
+  /// confirmation. Deliberately does NOT try to scrape the generated
+  /// document number back out of the UI (e.g. a header title string like
+  /// "Goods Receipt · GRN-123") — per the plan, backend verification is the
+  /// authoritative source of truth anyway, so a test looks up the newly
+  /// created row directly via `BackendVerifier` after calling this.
+  Future<void> submit({String saveButtonKey = 'btn_save'}) async {
     await tester.tap(find.byKey(ValueKey(saveButtonKey)));
     await tester.pumpAndSettle();
-    final docNoWidget = tester.widget<Text>(find.byKey(ValueKey(docNoKey)));
-    return docNoWidget.data ?? '';
   }
 
   /// Taps an Approve button by key — kept separate from submit since
