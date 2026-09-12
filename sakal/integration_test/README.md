@@ -13,10 +13,25 @@ PostgREST+JWT only, no service-role key).
 2. Edit `sakal/backend/scripts/create_qa_reset_function.sql`, paste in the
    `client_id`/`company_id` the seed script just printed, and run it once.
 3. Keep the printed values somewhere private (a local, gitignored file, a
-   password manager) — never commit them. Pass them at test-run time:
+   password manager) — never commit them. Pass them at test-run time.
+
+**Web does NOT support `flutter test integration_test/... -d web-server`**
+("Web devices are not supported for integration tests yet") — that path
+only works for mobile/desktop. Web integration tests must go through
+`flutter drive` instead, driven by `test_driver/integration_test.dart`
+(already present), against a running `chromedriver`:
 
 ```bash
-flutter test integration_test/flows/grn_to_sales_invoice_pilot_test.dart \
+# One-time per machine: install chromedriver if it isn't already present.
+which chromedriver || apt-get install -y chromium-chromedriver
+
+# Terminal 1 — leave this running for the whole test session:
+chromedriver --port=4444
+
+# Terminal 2 — the actual test run:
+flutter drive \
+  --driver=test_driver/integration_test.dart \
+  --target=integration_test/flows/grn_to_sales_invoice_pilot_test.dart \
   -d web-server \
   --dart-define=QA_CLIENT_NO=SK-12345 \
   --dart-define=QA_USERNAME=qa_admin \
@@ -27,6 +42,10 @@ flutter test integration_test/flows/grn_to_sales_invoice_pilot_test.dart \
   --dart-define=QA_SUPPLIER_ID=... \
   --dart-define=QA_STOCK_ACCOUNT_ID=...
 ```
+
+If `-d web-server` still complains, try `-d chrome` instead — both need
+chromedriver either way; `flutter drive` on web drives the browser over
+the WebDriver protocol regardless of which web device name is passed.
 
 ## Widget key-naming convention
 
