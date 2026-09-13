@@ -306,7 +306,11 @@ void main() {
       expect(find.text('1000.0'), findsOneWidget); // amountCtrl set via row.transAmount.toString()
       expect(find.text('Line remark A'), findsOneWidget);
 
-      expect(find.text('1,000.00 USD'), findsOneWidget); // totals bar
+      // Appears twice: the totals bar AND the line's own Party Amount field —
+      // fixed 2026-09-13 (a172574) to actually populate on a same-currency
+      // On Account line instead of showing '—'. Was findsOneWidget before
+      // that fix; this now correctly asserts the fixed behavior.
+      expect(find.text('1,000.00 USD'), findsNWidgets(2));
       expect(find.text('Balanced'), findsOneWidget);
 
       expect(find.text('Save Draft'), findsOneWidget);
