@@ -35,7 +35,7 @@ class ScreenDriver {
   /// navigation/permission path a real user hits.
   Future<void> navigateTo(String routeName) async {
     appRouter.go(routeName);
-    await tester.pumpAndSettle(timeout: const Duration(seconds: 15));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 15));
   }
 
   /// Fills a form from a field-key -> value map. Each key must match a
@@ -60,19 +60,19 @@ class ScreenDriver {
       final value = entry.value;
       if (value is Select) {
         await tester.tap(target);
-        await tester.pumpAndSettle(timeout: const Duration(seconds: 15));
+        await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 15));
         final optionFinder = find.text(value.optionText).last;
         await tester.tap(optionFinder);
-        await tester.pumpAndSettle(timeout: const Duration(seconds: 15));
+        await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 15));
       } else if (value is DateTime) {
         await tester.tap(target);
-        await tester.pumpAndSettle(timeout: const Duration(seconds: 15));
+        await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 15));
         // Screen-specific date-picker interaction goes here per screen as
         // this driver is extended — deliberately not generalized further
         // until a second screen's date picker proves what's actually common.
       } else {
         await tester.enterText(target, value.toString());
-        await tester.pumpAndSettle(timeout: const Duration(seconds: 15));
+        await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 15));
       }
     }
   }
@@ -96,7 +96,7 @@ class ScreenDriver {
   /// created row directly via `BackendVerifier` after calling this.
   Future<void> submit({String saveButtonKey = 'btn_save'}) async {
     await tester.tap(find.byKey(ValueKey(saveButtonKey)));
-    await tester.pumpAndSettle(timeout: const Duration(seconds: 15));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 15));
   }
 
   /// Taps an Approve button by key — kept separate from submit since
@@ -104,7 +104,7 @@ class ScreenDriver {
   /// `canAdd`/`canEdit` on many screens.
   Future<void> approve({String approveButtonKey = 'btn_approve'}) async {
     await tester.tap(find.byKey(ValueKey(approveButtonKey)));
-    await tester.pumpAndSettle(timeout: const Duration(seconds: 15));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 15));
   }
 
   /// Asserts the current screen shows no error state — the "does this

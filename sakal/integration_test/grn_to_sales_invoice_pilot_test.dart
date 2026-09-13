@@ -57,7 +57,7 @@ void main() {
     // exercises the exact same fn_login call path a real user hits.
     await tester.pumpWidget(const ProviderScope(child: SakalApp()));
     print('[pilot] pumpWidget done, settling');
-    await tester.pumpAndSettle(timeout: const Duration(seconds: 15));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 15));
     print('[pilot] initial settle done, entering login credentials');
 
     await tester.enterText(find.byKey(const Key('login_client_no')), TestTenantConfig.clientNo);
@@ -65,7 +65,7 @@ void main() {
     await tester.enterText(find.byKey(const Key('login_password')), TestTenantConfig.password);
     await tester.tap(find.byKey(const Key('btn_login')));
     print('[pilot] login submitted, settling');
-    await tester.pumpAndSettle(timeout: const Duration(seconds: 20));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 20));
     print('[pilot] logged in, navigating to GRN entry');
 
     final driver = ScreenDriver(tester);
@@ -77,7 +77,7 @@ void main() {
       'grn_supplier_picker': const Select('QA Test Supplier'),
     });
     await tester.tap(find.byKey(const Key('btn_add_line')));
-    await tester.pumpAndSettle(timeout: const Duration(seconds: 15));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 15));
     print('[pilot] filling GRN line');
     await driver.fillForm({
       'grn_line_product_0': const Select('QA Test Product'),
@@ -135,7 +135,7 @@ void main() {
     });
     print('[pilot] filled invoice line, opening price override');
     await tester.tap(find.byKey(const Key('btn_override_price_0')));
-    await tester.pumpAndSettle(timeout: const Duration(seconds: 15));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 15));
     await driver.fillForm({
       'invoice_line_rate_0': '30000', // CDF/unit -- an arbitrary sale price;
       // COGS correctness (the thing this pilot actually verifies) does not
