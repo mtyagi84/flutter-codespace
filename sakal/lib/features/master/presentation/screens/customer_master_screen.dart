@@ -66,6 +66,12 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
   List<Map<String, dynamic>> _customers  = [];
   List<Map<String, dynamic>> _filtered   = [];
   List<Map<String, dynamic>> _currencies = [];
+  // Real bug fixed 2026-09-13: a brand-new customer's Ledger Currency used
+  // to default to blank (NULL account_currency_id), leaving every report
+  // that shows a party's own currency (e.g. Account Ledger) with nothing
+  // to display. Defaults to the company's base currency now -- still
+  // freely changeable before the first save.
+  String? _baseCurrencyId;
   List<Map<String, dynamic>> _countries  = [];
   List<Map<String, dynamic>> _divisions  = [];
   List<Map<String, dynamic>> _cities     = [];
@@ -171,24 +177,28 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
         'select':         'id,account_code,account_name',
         'order':          'account_code.asc',
       });
-      final currenciesFuture  = ref.read(currenciesProvider.future);
-      final countriesFuture   = ref.read(countriesProvider.future);
-      final categoriesFuture  = _fetchCategories(session);
+      final currenciesFuture    = ref.read(currenciesProvider.future);
+      final countriesFuture     = ref.read(countriesProvider.future);
+      final categoriesFuture    = _fetchCategories(session);
+      final baseCurrencyFuture  = ref.read(baseCurrencyProvider.future);
 
       final accountsRes = await accountsFuture;
       final groupRes    = await groupFuture;
       final currencies  = await currenciesFuture;
       final countries   = await countriesFuture;
       final categories  = await categoriesFuture;
+      final baseCurrencyCode = await baseCurrencyFuture;
 
       if (mounted) {
         final groups = List<Map<String, dynamic>>.from(groupRes.data as List);
+        final baseCurrencyRow = currencies.where((c) => c['currency_id'] == baseCurrencyCode).firstOrNull;
         setState(() {
           _customers       = List<Map<String, dynamic>>.from(accountsRes.data as List);
           _groups          = groups;
           _categories      = categories;
           _currencies      = currencies;
           _countries       = countries;
+          _baseCurrencyId  = baseCurrencyRow?['id'] as String?;
           _totalCount      = _parseTotal(accountsRes) ?? _customers.length;
           _loading         = false;
         });
@@ -578,7 +588,7 @@ class _CustomerMasterScreenState extends ConsumerState<CustomerMasterScreen>
         _addr1Ctrl, _addr2Ctrl, _taxIdCtrl, _limitCtrl, _daysCtrl]) {
       c.clear();
     }
-    _partyType = null; _currencyId = null;
+    _partyType = null; _currencyId = _baseCurrencyId;
     _countryId = null; _divisionId = null; _cityId = null;
     _category  = null;
     _creditBlocked = false; _isActive = true;
