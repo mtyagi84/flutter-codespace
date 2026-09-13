@@ -41,7 +41,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _locationShortCtrl = TextEditingController();
   String _locationType = 'STORE';
 
-  // Step 3 — Admin User
+  // Step 3 — Accounting Setup (Chart of Accounts standard + Financial
+  // Year start). Chained into fn_register_client's own registration flow
+  // via fn_complete_accounting_setup right after the account is created --
+  // this used to be a wholly separate, later, easy-to-miss manual step on
+  // accounting_setup_screen.dart; that screen stays as a fallback for any
+  // tenant that skips this step (or a pre-existing tenant from before this
+  // change), but a fresh registration completes it inline now.
+  String _accountingStd = 'OHADA';
+  bool   _accountingStdTouched = false;
+  int    _fyStartMonth = 1;
+
+  // Step 4 — Admin User
   final _key3 = GlobalKey<FormState>();
   final _adminNameCtrl = TextEditingController();
   final _usernameCtrl  = TextEditingController();
@@ -50,7 +61,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePass    = true;
   bool _obscureConfirm = true;
 
-  static const _currencies = ['USD', 'EUR', 'GBP', 'ZAR', 'CDF', 'ZMW', 'NGN', 'KES'];
+  static const _currencies = ['USD', 'EUR', 'GBP', 'ZAR', 'CDF', 'ZMW', 'NGN', 'KES', 'INR'];
   static const _locationTypes = ['STORE', 'WAREHOUSE', 'OFFICE'];
 
   @override
@@ -66,19 +77,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   bool _validateStep() {
-    final keys = [_key0, _key1, _key2, _key3];
-    if (_step >= keys.length) return true;
-    return keys[_step].currentState!.validate();
+    // Step 3 (Accounting Setup) is dropdown-only -- always a valid value,
+    // no Form/GlobalKey needed.
+    if (_step == 3) return true;
+    final keys = [_key0, _key1, _key2, null, _key3];
+    final key = keys[_step];
+    if (key == null) return true;
+    return key.currentState!.validate();
   }
 
   void _next() {
     setState(() => _error = null);
     if (!_validateStep()) return;
-    if (_step == 3) {
+    if (_step == 4) {
       _submit();
     } else {
       setState(() => _step++);
     }
+  }
+
+  static const _accountingStdByCurrency = {
+    'CDF': 'OHADA',
+    'ZMW': 'ZAMBIA',
+    'INR': 'INDIAN',
+  };
+
+  void _onLocalCurrencyChanged(String? v) {
+    if (v == null) return;
+    setState(() {
+      _localCurrency = v;
+      if (!_accountingStdTouched) {
+        _accountingStd = _accountingStdByCurrency[v] ?? _accountingStd;
+      }
+    });
   }
 
   void _back() {
@@ -110,7 +141,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
         clientNo: data['client_no'] as String,
         clientId: data['client_id'] as String,
       );
-      setState(() { _clientNo = data['client_no'] as String; _step = 4; });
+
+      // Best-effort: the company/location/admin above are already fully
+      // created regardless of what happens here. If this fails for any
+      // reason, the tenant still lands on accounting_setup_screen.dart's
+      // own fallback form the first time they open the app -- never block
+      // the "Registration Complete" screen on this step.
+      try {
+        await DioClient.instance.post('/rpc/fn_complete_accounting_setup', data: {
+          'p_client_id':      data['client_id'],
+          'p_company_id':     data['company_id'],
+          'p_accounting_std': _accountingStd,
+          'p_fy_start_month': _fyStartMonth,
+          'p_fy_start_day':   1,
+        });
+      } catch (_) {
+        // Swallowed deliberately -- see comment above.
+      }
+
+      setState(() { _clientNo = data['client_no'] as String; _step = 5; });
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] as String? ?? '';
       setState(() => _error = msg.contains('EMAIL_EXISTS')
@@ -125,7 +174,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: _step < 4
+      appBar: _step < 5
           ? AppBar(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
@@ -142,14 +191,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
             )
           : null,
-      body: _step == 4 ? _buildSuccess() : _buildForm(),
+      body: _step == 5 ? _buildSuccess() : _buildForm(),
     );
   }
 
   Widget _buildForm() {
     return Column(
       children: [
-        _StepIndicator(current: _step, total: 4),
+        _StepIndicator(current: _step, total: 5),
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
@@ -173,7 +222,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 width: 20, height: 20,
                                 child: CircularProgressIndicator(
                                     color: Colors.white, strokeWidth: 2))
-                            : Text(_step == 3 ? 'Complete Registration' : 'Continue',
+                            : Text(_step == 4 ? 'Complete Registration' : 'Continue',
                                 style: const TextStyle(
                                     fontSize: 15, fontWeight: FontWeight.w600)),
                       ),
@@ -193,9 +242,90 @@ class _RegisterScreenState extends State<RegisterScreen> {
       case 0: return _buildStep0();
       case 1: return _buildStep1();
       case 2: return _buildStep2();
-      case 3: return _buildStep3();
+      case 3: return _buildStepAccounting();
+      case 4: return _buildStep3();
       default: return const SizedBox.shrink();
     }
+  }
+
+  Widget _buildStepAccounting() {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _stepTitle('Accounting Setup'),
+        const Text('Accounting Standard',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+        const SizedBox(height: 4),
+        const Text('Pre-selected from your local currency -- change it if this business follows a different standard.',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        const SizedBox(height: 10),
+        RadioGroup<String>(
+          groupValue: _accountingStd,
+          onChanged: (v) { if (v != null) setState(() { _accountingStd = v; _accountingStdTouched = true; }); },
+          child: Column(children: [
+            _accountingStdCard('OHADA', 'OHADA / SYSCOHADA', 'For DRC and Francophone Africa.'),
+            const SizedBox(height: 8),
+            _accountingStdCard('INDIAN', 'Indian Accounting Standards', 'Assets / Liabilities / Equity / Revenue / Expense.'),
+            const SizedBox(height: 8),
+            _accountingStdCard('ZAMBIA', 'Zambia (IFRS for SMEs)', 'Assets / Liabilities / Equity / Revenue / Expense, with VAT and PAYE/NAPSA.'),
+          ]),
+        ),
+        const SizedBox(height: 24),
+        const Text('Financial Year Start Month',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<int>(
+          initialValue: _fyStartMonth,
+          decoration: const InputDecoration(isDense: true),
+          items: List.generate(12, (i) => DropdownMenuItem(value: i + 1, child: Text(months[i]))),
+          onChanged: (v) => setState(() => _fyStartMonth = v!),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(8)),
+          child: const Row(children: [
+            Icon(Icons.info_outline, size: 16, color: AppColors.textSecondary),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'A ready-to-use Chart of Accounts, default tax rates, and your first Financial Year will be set up automatically once you complete registration.',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ),
+          ]),
+        ),
+      ],
+    );
+  }
+
+  Widget _accountingStdCard(String value, String title, String subtitle) {
+    final selected = _accountingStd == value;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => setState(() { _accountingStd = value; _accountingStdTouched = true; }),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: selected ? AppColors.primary : AppColors.border, width: selected ? 2 : 1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(children: [
+          Radio<String>(value: value),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: selected ? AppColors.primary : AppColors.textPrimary)),
+              Text(subtitle, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+            ]),
+          ),
+        ]),
+      ),
+    );
   }
 
   Widget _buildStep0() {
@@ -249,7 +379,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             label: 'Local Currency (regional)',
             value: _localCurrency,
             items: _currencies,
-            onChanged: (v) => setState(() => _localCurrency = v!),
+            onChanged: _onLocalCurrencyChanged,
           ),
         ],
       ),
@@ -518,7 +648,7 @@ class _StepIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final labels = ['Business', 'Company', 'Location', 'Admin'];
+    final labels = ['Business', 'Company', 'Location', 'Accounting', 'Admin'];
     return Container(
       color: AppColors.primary,
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),

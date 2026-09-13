@@ -86,35 +86,23 @@ class _AccountingSetupScreenState
     final session = ref.read(sessionProvider)!;
     setState(() { _saving = true; _saveError = null; });
     try {
-      // 1 — Save accounting setup
+      // One RPC does the whole flow (accounting setup row + Chart of
+      // Accounts + default leaf accounts/Account Link Setup + default tax
+      // setup + first Financial Year) -- same fn_complete_accounting_setup
+      // the registration wizard's own Accounting Setup step now calls, so
+      // this screen and the wizard can never drift apart. Kept as a
+      // fallback path for any tenant that skips the wizard step.
       await DioClient.instance.post(
-        '/rim_accounting_setup',
+        '/rpc/fn_complete_accounting_setup',
         data: {
-          'client_id':      session.clientId,
-          'company_id':     session.companyId,
-          'accounting_std': _std,
-          'fy_start_month': _fyStartMonth,
-          'fy_start_day':   1,
-          'created_by':     session.userId,
-          'updated_by':     session.userId,
-        },
-        options: Options(headers: {
-          'Prefer': 'resolution=ignore-duplicates',
-        }),
-      );
-
-      // 2 — Seed Chart of Accounts
-      await DioClient.instance.post(
-        '/rpc/fn_seed_chart_of_accounts',
-        data: {
-          'p_client_id':  session.clientId,
-          'p_company_id': session.companyId,
-          'p_std':        _std,
+          'p_client_id':      session.clientId,
+          'p_company_id':     session.companyId,
+          'p_accounting_std': _std,
+          'p_fy_start_month': _fyStartMonth,
+          'p_fy_start_day':   1,
+          'p_user_id':        session.userId,
         },
       );
-
-      // 3 — Create first financial year
-      await _createFirstFY(session.clientId, session.companyId, session.userId);
 
       await _load();
     } on DioException catch (e) {
@@ -125,46 +113,6 @@ class _AccountingSetupScreenState
       if (mounted) setState(() { _saving = false; });
     }
   }
-
-  Future<void> _createFirstFY(
-      String clientId, String companyId, String userId) async {
-    final now   = DateTime.now();
-    final start = _fyStartForYear(now.year, _fyStartMonth);
-    final end   = DateTime(start.year + 1, start.month, start.day)
-        .subtract(const Duration(days: 1));
-    final name  = _fyName(start, end);
-
-    await DioClient.instance.post(
-      '/rim_financial_years',
-      data: {
-        'client_id':      clientId,
-        'company_id':     companyId,
-        'fy_name':        name,
-        'fy_start_date':  '${start.year}-${_pad(start.month)}-${_pad(start.day)}',
-        'fy_end_date':    '${end.year}-${_pad(end.month)}-${_pad(end.day)}',
-        'is_active':      true,
-        'is_closed':      false,
-        'created_by':     userId,
-        'updated_by':     userId,
-      },
-      options: Options(headers: {'Prefer': 'resolution=ignore-duplicates'}),
-    );
-  }
-
-  DateTime _fyStartForYear(int year, int startMonth) {
-    final now = DateTime.now();
-    final candidate = DateTime(year, startMonth, 1);
-    // If the FY start month is ahead of current month, use previous year's start
-    if (candidate.isAfter(now)) return DateTime(year - 1, startMonth, 1);
-    return candidate;
-  }
-
-  String _fyName(DateTime start, DateTime end) {
-    if (start.year == end.year) return 'FY ${start.year}';
-    return 'FY ${start.year}-${(end.year % 100).toString().padLeft(2, '0')}';
-  }
-
-  String _pad(int v) => v.toString().padLeft(2, '0');
 
   // ── Build ─────────────────────────────────────────────────────────────────
 
@@ -203,9 +151,11 @@ class _AccountingSetupScreenState
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _infoRow('Accounting Standard', std == 'OHADA'
-                ? 'OHADA / SYSCOHADA (DRC & Francophone Africa)'
-                : 'Indian Accounting Standards'),
+            _infoRow('Accounting Standard', switch (std) {
+              'OHADA'  => 'OHADA / SYSCOHADA (DRC & Francophone Africa)',
+              'ZAMBIA' => 'Zambia (IFRS for SMEs)',
+              _        => 'Indian Accounting Standards',
+            }),
             const SizedBox(height: 16),
             _infoRow('Financial Year', '${_months[month - 1]} 1  →  ${_months[endMonth - 1]} ${endMonth == 2 ? 28 : [4,6,9,11].contains(endMonth) ? 30 : 31}'),
             const SizedBox(height: 28),
@@ -277,6 +227,10 @@ class _AccountingSetupScreenState
                     _stdCard('INDIAN', 'Indian Accounting Standards',
                         'Assets / Liabilities / Equity / Revenue / Expense structure.',
                         Icons.account_balance_outlined),
+                    const SizedBox(height: 10),
+                    _stdCard('ZAMBIA', 'Zambia (IFRS for SMEs)',
+                        'Assets / Liabilities / Equity / Revenue / Expense structure, with VAT and PAYE/NAPSA lines.',
+                        Icons.savings_outlined),
                   ],
                 ),
               ),
