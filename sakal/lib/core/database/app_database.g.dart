@@ -489,6 +489,14 @@ class $ExchangeRateCacheTable extends ExchangeRateCache
   late final GeneratedColumn<double> sellingRate = GeneratedColumn<double>(
       'selling_rate', aliasedName, false,
       type: DriftSqlType.double, requiredDuringInsert: true);
+  static const VerificationMeta _exchangeRateMeta =
+      const VerificationMeta('exchangeRate');
+  @override
+  late final GeneratedColumn<double> exchangeRate = GeneratedColumn<double>(
+      'exchange_rate', aliasedName, false,
+      type: DriftSqlType.double,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
   static const VerificationMeta _sourceMeta = const VerificationMeta('source');
   @override
   late final GeneratedColumn<String> source = GeneratedColumn<String>(
@@ -523,6 +531,7 @@ class $ExchangeRateCacheTable extends ExchangeRateCache
         toCurrency,
         buyingRate,
         sellingRate,
+        exchangeRate,
         source,
         isDeleted,
         syncedAt
@@ -601,6 +610,12 @@ class $ExchangeRateCacheTable extends ExchangeRateCache
     } else if (isInserting) {
       context.missing(_sellingRateMeta);
     }
+    if (data.containsKey('exchange_rate')) {
+      context.handle(
+          _exchangeRateMeta,
+          exchangeRate.isAcceptableOrUnknown(
+              data['exchange_rate']!, _exchangeRateMeta));
+    }
     if (data.containsKey('source')) {
       context.handle(_sourceMeta,
           source.isAcceptableOrUnknown(data['source']!, _sourceMeta));
@@ -640,6 +655,8 @@ class $ExchangeRateCacheTable extends ExchangeRateCache
           .read(DriftSqlType.double, data['${effectivePrefix}buying_rate'])!,
       sellingRate: attachedDatabase.typeMapping
           .read(DriftSqlType.double, data['${effectivePrefix}selling_rate'])!,
+      exchangeRate: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}exchange_rate'])!,
       source: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}source'])!,
       isDeleted: attachedDatabase.typeMapping
@@ -666,6 +683,7 @@ class ExchangeRateCacheEntry extends DataClass
   final String toCurrency;
   final double buyingRate;
   final double sellingRate;
+  final double exchangeRate;
   final String source;
   final bool isDeleted;
   final DateTime? syncedAt;
@@ -679,6 +697,7 @@ class ExchangeRateCacheEntry extends DataClass
       required this.toCurrency,
       required this.buyingRate,
       required this.sellingRate,
+      required this.exchangeRate,
       required this.source,
       required this.isDeleted,
       this.syncedAt});
@@ -694,6 +713,7 @@ class ExchangeRateCacheEntry extends DataClass
     map['to_currency'] = Variable<String>(toCurrency);
     map['buying_rate'] = Variable<double>(buyingRate);
     map['selling_rate'] = Variable<double>(sellingRate);
+    map['exchange_rate'] = Variable<double>(exchangeRate);
     map['source'] = Variable<String>(source);
     map['is_deleted'] = Variable<bool>(isDeleted);
     if (!nullToAbsent || syncedAt != null) {
@@ -713,6 +733,7 @@ class ExchangeRateCacheEntry extends DataClass
       toCurrency: Value(toCurrency),
       buyingRate: Value(buyingRate),
       sellingRate: Value(sellingRate),
+      exchangeRate: Value(exchangeRate),
       source: Value(source),
       isDeleted: Value(isDeleted),
       syncedAt: syncedAt == null && nullToAbsent
@@ -734,6 +755,7 @@ class ExchangeRateCacheEntry extends DataClass
       toCurrency: serializer.fromJson<String>(json['toCurrency']),
       buyingRate: serializer.fromJson<double>(json['buyingRate']),
       sellingRate: serializer.fromJson<double>(json['sellingRate']),
+      exchangeRate: serializer.fromJson<double>(json['exchangeRate']),
       source: serializer.fromJson<String>(json['source']),
       isDeleted: serializer.fromJson<bool>(json['isDeleted']),
       syncedAt: serializer.fromJson<DateTime?>(json['syncedAt']),
@@ -752,6 +774,7 @@ class ExchangeRateCacheEntry extends DataClass
       'toCurrency': serializer.toJson<String>(toCurrency),
       'buyingRate': serializer.toJson<double>(buyingRate),
       'sellingRate': serializer.toJson<double>(sellingRate),
+      'exchangeRate': serializer.toJson<double>(exchangeRate),
       'source': serializer.toJson<String>(source),
       'isDeleted': serializer.toJson<bool>(isDeleted),
       'syncedAt': serializer.toJson<DateTime?>(syncedAt),
@@ -768,6 +791,7 @@ class ExchangeRateCacheEntry extends DataClass
           String? toCurrency,
           double? buyingRate,
           double? sellingRate,
+          double? exchangeRate,
           String? source,
           bool? isDeleted,
           Value<DateTime?> syncedAt = const Value.absent()}) =>
@@ -781,6 +805,7 @@ class ExchangeRateCacheEntry extends DataClass
         toCurrency: toCurrency ?? this.toCurrency,
         buyingRate: buyingRate ?? this.buyingRate,
         sellingRate: sellingRate ?? this.sellingRate,
+        exchangeRate: exchangeRate ?? this.exchangeRate,
         source: source ?? this.source,
         isDeleted: isDeleted ?? this.isDeleted,
         syncedAt: syncedAt.present ? syncedAt.value : this.syncedAt,
@@ -802,6 +827,9 @@ class ExchangeRateCacheEntry extends DataClass
           data.buyingRate.present ? data.buyingRate.value : this.buyingRate,
       sellingRate:
           data.sellingRate.present ? data.sellingRate.value : this.sellingRate,
+      exchangeRate: data.exchangeRate.present
+          ? data.exchangeRate.value
+          : this.exchangeRate,
       source: data.source.present ? data.source.value : this.source,
       isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
       syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
@@ -820,6 +848,7 @@ class ExchangeRateCacheEntry extends DataClass
           ..write('toCurrency: $toCurrency, ')
           ..write('buyingRate: $buyingRate, ')
           ..write('sellingRate: $sellingRate, ')
+          ..write('exchangeRate: $exchangeRate, ')
           ..write('source: $source, ')
           ..write('isDeleted: $isDeleted, ')
           ..write('syncedAt: $syncedAt')
@@ -838,6 +867,7 @@ class ExchangeRateCacheEntry extends DataClass
       toCurrency,
       buyingRate,
       sellingRate,
+      exchangeRate,
       source,
       isDeleted,
       syncedAt);
@@ -854,6 +884,7 @@ class ExchangeRateCacheEntry extends DataClass
           other.toCurrency == this.toCurrency &&
           other.buyingRate == this.buyingRate &&
           other.sellingRate == this.sellingRate &&
+          other.exchangeRate == this.exchangeRate &&
           other.source == this.source &&
           other.isDeleted == this.isDeleted &&
           other.syncedAt == this.syncedAt);
@@ -870,6 +901,7 @@ class ExchangeRateCacheCompanion
   final Value<String> toCurrency;
   final Value<double> buyingRate;
   final Value<double> sellingRate;
+  final Value<double> exchangeRate;
   final Value<String> source;
   final Value<bool> isDeleted;
   final Value<DateTime?> syncedAt;
@@ -884,6 +916,7 @@ class ExchangeRateCacheCompanion
     this.toCurrency = const Value.absent(),
     this.buyingRate = const Value.absent(),
     this.sellingRate = const Value.absent(),
+    this.exchangeRate = const Value.absent(),
     this.source = const Value.absent(),
     this.isDeleted = const Value.absent(),
     this.syncedAt = const Value.absent(),
@@ -899,6 +932,7 @@ class ExchangeRateCacheCompanion
     required String toCurrency,
     required double buyingRate,
     required double sellingRate,
+    this.exchangeRate = const Value.absent(),
     this.source = const Value.absent(),
     this.isDeleted = const Value.absent(),
     this.syncedAt = const Value.absent(),
@@ -922,6 +956,7 @@ class ExchangeRateCacheCompanion
     Expression<String>? toCurrency,
     Expression<double>? buyingRate,
     Expression<double>? sellingRate,
+    Expression<double>? exchangeRate,
     Expression<String>? source,
     Expression<bool>? isDeleted,
     Expression<DateTime>? syncedAt,
@@ -937,6 +972,7 @@ class ExchangeRateCacheCompanion
       if (toCurrency != null) 'to_currency': toCurrency,
       if (buyingRate != null) 'buying_rate': buyingRate,
       if (sellingRate != null) 'selling_rate': sellingRate,
+      if (exchangeRate != null) 'exchange_rate': exchangeRate,
       if (source != null) 'source': source,
       if (isDeleted != null) 'is_deleted': isDeleted,
       if (syncedAt != null) 'synced_at': syncedAt,
@@ -954,6 +990,7 @@ class ExchangeRateCacheCompanion
       Value<String>? toCurrency,
       Value<double>? buyingRate,
       Value<double>? sellingRate,
+      Value<double>? exchangeRate,
       Value<String>? source,
       Value<bool>? isDeleted,
       Value<DateTime?>? syncedAt,
@@ -968,6 +1005,7 @@ class ExchangeRateCacheCompanion
       toCurrency: toCurrency ?? this.toCurrency,
       buyingRate: buyingRate ?? this.buyingRate,
       sellingRate: sellingRate ?? this.sellingRate,
+      exchangeRate: exchangeRate ?? this.exchangeRate,
       source: source ?? this.source,
       isDeleted: isDeleted ?? this.isDeleted,
       syncedAt: syncedAt ?? this.syncedAt,
@@ -1005,6 +1043,9 @@ class ExchangeRateCacheCompanion
     if (sellingRate.present) {
       map['selling_rate'] = Variable<double>(sellingRate.value);
     }
+    if (exchangeRate.present) {
+      map['exchange_rate'] = Variable<double>(exchangeRate.value);
+    }
     if (source.present) {
       map['source'] = Variable<String>(source.value);
     }
@@ -1032,6 +1073,7 @@ class ExchangeRateCacheCompanion
           ..write('toCurrency: $toCurrency, ')
           ..write('buyingRate: $buyingRate, ')
           ..write('sellingRate: $sellingRate, ')
+          ..write('exchangeRate: $exchangeRate, ')
           ..write('source: $source, ')
           ..write('isDeleted: $isDeleted, ')
           ..write('syncedAt: $syncedAt, ')
@@ -55282,6 +55324,7 @@ typedef $$ExchangeRateCacheTableCreateCompanionBuilder
   required String toCurrency,
   required double buyingRate,
   required double sellingRate,
+  Value<double> exchangeRate,
   Value<String> source,
   Value<bool> isDeleted,
   Value<DateTime?> syncedAt,
@@ -55298,6 +55341,7 @@ typedef $$ExchangeRateCacheTableUpdateCompanionBuilder
   Value<String> toCurrency,
   Value<double> buyingRate,
   Value<double> sellingRate,
+  Value<double> exchangeRate,
   Value<String> source,
   Value<bool> isDeleted,
   Value<DateTime?> syncedAt,
@@ -55339,6 +55383,9 @@ class $$ExchangeRateCacheTableFilterComposer
 
   ColumnFilters<double> get sellingRate => $composableBuilder(
       column: $table.sellingRate, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get exchangeRate => $composableBuilder(
+      column: $table.exchangeRate, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get source => $composableBuilder(
       column: $table.source, builder: (column) => ColumnFilters(column));
@@ -55387,6 +55434,10 @@ class $$ExchangeRateCacheTableOrderingComposer
   ColumnOrderings<double> get sellingRate => $composableBuilder(
       column: $table.sellingRate, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<double> get exchangeRate => $composableBuilder(
+      column: $table.exchangeRate,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<String> get source => $composableBuilder(
       column: $table.source, builder: (column) => ColumnOrderings(column));
 
@@ -55432,6 +55483,9 @@ class $$ExchangeRateCacheTableAnnotationComposer
 
   GeneratedColumn<double> get sellingRate => $composableBuilder(
       column: $table.sellingRate, builder: (column) => column);
+
+  GeneratedColumn<double> get exchangeRate => $composableBuilder(
+      column: $table.exchangeRate, builder: (column) => column);
 
   GeneratedColumn<String> get source =>
       $composableBuilder(column: $table.source, builder: (column) => column);
@@ -55481,6 +55535,7 @@ class $$ExchangeRateCacheTableTableManager extends RootTableManager<
             Value<String> toCurrency = const Value.absent(),
             Value<double> buyingRate = const Value.absent(),
             Value<double> sellingRate = const Value.absent(),
+            Value<double> exchangeRate = const Value.absent(),
             Value<String> source = const Value.absent(),
             Value<bool> isDeleted = const Value.absent(),
             Value<DateTime?> syncedAt = const Value.absent(),
@@ -55496,6 +55551,7 @@ class $$ExchangeRateCacheTableTableManager extends RootTableManager<
             toCurrency: toCurrency,
             buyingRate: buyingRate,
             sellingRate: sellingRate,
+            exchangeRate: exchangeRate,
             source: source,
             isDeleted: isDeleted,
             syncedAt: syncedAt,
@@ -55511,6 +55567,7 @@ class $$ExchangeRateCacheTableTableManager extends RootTableManager<
             required String toCurrency,
             required double buyingRate,
             required double sellingRate,
+            Value<double> exchangeRate = const Value.absent(),
             Value<String> source = const Value.absent(),
             Value<bool> isDeleted = const Value.absent(),
             Value<DateTime?> syncedAt = const Value.absent(),
@@ -55526,6 +55583,7 @@ class $$ExchangeRateCacheTableTableManager extends RootTableManager<
             toCurrency: toCurrency,
             buyingRate: buyingRate,
             sellingRate: sellingRate,
+            exchangeRate: exchangeRate,
             source: source,
             isDeleted: isDeleted,
             syncedAt: syncedAt,
