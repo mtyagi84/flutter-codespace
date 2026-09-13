@@ -734,6 +734,16 @@ class _SalesDeliveryEntryScreenState extends ConsumerState<SalesDeliveryEntryScr
         deliveryNo: _deliveryNo!, deliveryDate: _fmtDate(_deliveryDate), approvedBy: session.userId,
       );
       if (mounted) {
+        // Real bug fixed 2026-09-13: this used to rely ENTIRELY on _init()'s
+        // re-fetch to pick up the new status -- if that reload raced or
+        // transiently failed, _status stayed 'DRAFT' in memory even though
+        // the backend had already approved, leaving Save Draft/Approve
+        // visibly enabled. Set it directly here first, matching the proven
+        // pattern GRN's own _approveGrn() already uses (`_status =
+        // 'APPROVED'` in the same setState as the success path) -- the
+        // buttons hide immediately and correctly regardless of what the
+        // follow-up reload does.
+        setState(() => _status = 'APPROVED');
         _showSnack('Sales Delivery $_deliveryNo approved.', color: AppColors.positive);
         await _init();
       }

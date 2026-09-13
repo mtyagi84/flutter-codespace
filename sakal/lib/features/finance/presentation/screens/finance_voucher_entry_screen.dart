@@ -553,12 +553,15 @@ class _FinanceVoucherEntryScreenState
     if (_isOnAccount) {
       rows = _accountLines.where((l) => l.accountId != null && l.amount > 0).map((l) {
         final lineCurr = l.accountCurrency.isEmpty ? _baseCurrency : l.accountCurrency;
-        final isCross  = lineCurr != tc;
         final partyAmt = l.amount * l.partyRate;
         return {
           'particulars':  l.accountName ?? '',
           'amount':       l.amount,
-          'party_amount': isCross && partyAmt > 0 ? '${partyAmt.toStringAsFixed(2)} $lineCurr' : '—',
+          // Same fix as the on-screen Party Amt field (2026-09-13): never
+          // gate this behind a cross-currency check -- partyAmt is always a
+          // valid converted value (rate=1.0 when currencies match), and the
+          // "Against Bill" branch just below never gated this either.
+          'party_amount': partyAmt > 0 ? '${partyAmt.toStringAsFixed(2)} $lineCurr' : '—',
           'remarks':      l.remarksCtrl.text,
         };
       }).toList();
@@ -1676,7 +1679,6 @@ class _FinanceVoucherEntryScreenState
     final numberFormat = ref.watch(sessionProvider)?.numberFormat ?? 'INTERNATIONAL';
     final tc = _transCurrency.isEmpty ? _baseCurrency : _transCurrency;
     final lineCurr    = line.accountCurrency.isEmpty ? _baseCurrency : line.accountCurrency;
-    final isCrossCurr = line.accountId != null && lineCurr != tc;
     final partyAmt    = line.amount * line.partyRate;
 
     final accountField = SakalFieldCard(
@@ -1728,10 +1730,18 @@ class _FinanceVoucherEntryScreenState
         onChanged: (_) => setState(() {}),
       ),
     );
-    // Party Amount — read-only, shows converted amount in account's currency
+    // Party Amount — read-only, shows the amount converted into the account's
+    // own currency. Real bug fixed 2026-09-13: this used to be gated behind
+    // `isCrossCurr`, so it stayed blank ("—") whenever the selected account's
+    // currency happened to match the transaction currency -- the common case
+    // -- even though `partyAmt` (amount × partyRate) is always a valid,
+    // correct value regardless of whether the two currencies match (partyRate
+    // is 1.0 in the same-currency case, so partyAmt just equals amount, which
+    // is exactly what should display). Always show it once an amount is
+    // entered.
     final partyAmountField = SakalFieldCard.readOnly(
       label: 'Party Amt',
-      value: isCrossCurr && partyAmt > 0
+      value: partyAmt > 0
           ? '${AppNumberFormat.amount(partyAmt, numberFormat)} $lineCurr'
           : '—',
       numeric: true,
