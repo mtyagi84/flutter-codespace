@@ -518,6 +518,16 @@ GRANT SELECT, INSERT[, UPDATE] ON <table> TO authenticated;
 ```
 Never `CREATE POLICY ... FOR ALL USING (true) WITH CHECK (true)` on a real migration table — that permissive shape belongs only in pgTAP test fixtures, and was mistakenly copied into a real migration once already (caught and fixed same-session).
 
+### Every `CREATE VIEW` MUST include `WITH (security_invoker = true)` — CRITICAL, no exceptions
+**A real, severe production bug, found live 2026-09-13 via a user report** (Purchase Order Register showed another tenant's own purchase orders): a PostgreSQL view executes Row Level Security using the **view owner's** security context by default, not the querying user's — this is documented Postgres behavior, not a bug in Postgres itself. Every view in this schema is created via a direct superuser connection during development (the Supabase SQL Editor, or a direct `psql`/`pg`-based deploy tool), so every view is owned by `postgres`, which has `rolbypassrls = true`. Without `security_invoker = true`, querying such a view via PostgREST silently runs with `postgres`'s RLS-bypassing context **regardless of the actual JWT's client_id/company_id** — every tenant's rows leak to whichever tenant happens to query the report. Any `client_id`/`company_id` filter written into the view's own SQL is NOT the real security boundary and never was — RLS on the underlying tables is supposed to be that boundary, and `security_invoker=false` silently defeats it entirely.
+```sql
+CREATE OR REPLACE VIEW v_my_report AS
+SELECT ...
+FROM ...
+WITH (security_invoker = true);   -- MANDATORY on every view, no exceptions
+```
+Fixed app-wide in migration 185 (`ALTER VIEW ... SET (security_invoker = true)` on all 73 existing views, metadata-only, no recreation needed) — verified directly by querying a view as the `authenticated` role with a real tenant's JWT claims set and confirming only that tenant's rows come back. **Any future `CREATE VIEW`/`CREATE OR REPLACE VIEW` that omits this clause reintroduces a cross-tenant data leak** — this applies to every reporting-engine view (Sales/Purchase/Inventory/Finance/Master Data reports) and any future view of any kind. Functions (`SECURITY DEFINER`/`SECURITY INVOKER`, e.g. Account Ledger, Trial Balance) are a separate, already-correct mechanism and are not affected by this specific issue — this rule is about `CREATE VIEW` specifically.
+
 ### Migration idempotency — every CREATE TRIGGER / CREATE POLICY needs a DROP IF EXISTS first
 `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `ALTER TABLE ADD COLUMN IF NOT EXISTS`, `INSERT ... ON CONFLICT DO NOTHING`, and `CREATE OR REPLACE FUNCTION` are all naturally safe to re-run — but plain `CREATE TRIGGER` and `CREATE POLICY` are NOT (Postgres has no `IF NOT EXISTS` for either) and will error on a second run. Since a migration is very often re-run mid-session while iterating on a new module (a later statement fails, you fix it, you re-run the whole file), every new trigger/policy needs:
 ```sql
