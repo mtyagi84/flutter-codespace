@@ -26,6 +26,25 @@ import 'screen_driver.dart';
 /// invoice currency=CDF) — the exact path that already caught the
 /// SELLING/MID exchange-rate bug (fixed in 25b4806) earlier this session.
 ///
+/// Split into two named `testWidgets` blocks (2026-09-13), not one --
+/// confirmed live that `print()` output from inside a driven test is NEVER
+/// forwarded to `flutter drive`'s own CLI output (checked with `-v` too,
+/// still nothing) -- a real Flutter Web tooling limitation, not a bug in
+/// this file. `flutter drive` DOES show live pass/fail per named test as
+/// it runs (confirmed via the ordinary `flutter test` suite's own output
+/// format), so splitting into named steps is the only real way to see
+/// WHICH step got stuck if a run ever hangs again, since `print()`-based
+/// checkpoints are a dead end here. This split also doubles as the first
+/// piece of a screen-by-screen test structure, not just a debugging aid.
+///
+/// Both tests share the SAME browser tab / Dart isolate within one
+/// `flutter drive` invocation (`testWidgets` tears down the WIDGET TREE
+/// between tests, not the browser page) -- backend state in Supabase
+/// naturally carries over from test 1 to test 2 in file order. Test 2
+/// defensively checks whether the login screen is showing before assuming
+/// it needs to log in again, since a restored session from test 1 could
+/// route straight to the dashboard instead.
+///
 /// Success criteria per the plan:
 ///   1. Tenant reset runs cleanly.
 ///   2. ScreenDriver handles both entry screens with no per-screen hacks.
@@ -34,60 +53,46 @@ import 'screen_driver.dart';
 ///      25b4806, re-run, confirm this test's diff step fails) is a
 ///      separate manual step, not part of this file.
 ///   4. The report-diff logic (stock ledger net movement) is reusable.
-///
-/// `print()` checkpoints throughout: confirmed live 2026-09-13 that a run
-/// can go completely silent for 15+ minutes with zero further `flutter
-/// drive` CLI output between "Debug service listening" and either a result
-/// or a timeout -- these checkpoints exist so the NEXT such silent run at
-/// least shows which step it never got past, since the alternative is
-/// re-diagnosing from zero information every time.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('GRN -> Sales Invoice zeroes out stock/COGS exactly (multi-currency)', (tester) async {
-    print('[pilot] starting BackendVerifier.login()');
+  Future<void> loginIfNeeded(WidgetTester tester) async {
+    await tester.pumpWidget(const ProviderScope(child: SakalApp()));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 20));
+
+    if (tester.any(find.byKey(const Key('login_client_no')))) {
+      await tester.enterText(find.byKey(const Key('login_client_no')), TestTenantConfig.clientNo);
+      await tester.enterText(find.byKey(const Key('login_username')), TestTenantConfig.username);
+      await tester.enterText(find.byKey(const Key('login_password')), TestTenantConfig.password);
+      await tester.tap(find.byKey(const Key('btn_login')));
+      await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 20));
+    }
+  }
+
+  testWidgets('Step 1: GRN entry + approve receives 100 units at $10 USD', (tester) async {
     final verifier = BackendVerifier();
     await verifier.login();
-    print('[pilot] login() done, starting resetQaTenant()');
     await resetQaTenant(verifier);
-    print('[pilot] resetQaTenant() done, pumping widget');
 
-    // ── Launch the real app, log in through the real Login screen ────────
     // Deliberately NOT injecting a session via provider override — this
     // exercises the exact same fn_login call path a real user hits.
-    await tester.pumpWidget(const ProviderScope(child: SakalApp()));
-    print('[pilot] pumpWidget done, settling');
-    await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 15));
-    print('[pilot] initial settle done, entering login credentials');
-
-    await tester.enterText(find.byKey(const Key('login_client_no')), TestTenantConfig.clientNo);
-    await tester.enterText(find.byKey(const Key('login_username')), TestTenantConfig.username);
-    await tester.enterText(find.byKey(const Key('login_password')), TestTenantConfig.password);
-    await tester.tap(find.byKey(const Key('btn_login')));
-    print('[pilot] login submitted, settling');
-    await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 20));
-    print('[pilot] logged in, navigating to GRN entry');
+    await loginIfNeeded(tester);
 
     final driver = ScreenDriver(tester);
 
-    // ── GRN: receive 100 units at $10 USD/unit (base currency, no FX) ────
     await driver.navigateTo(RouteNames.grnEntry);
-    print('[pilot] on GRN entry screen, filling supplier');
     await driver.fillForm({
       'grn_supplier_picker': const Select('QA Test Supplier'),
     });
     await tester.tap(find.byKey(const Key('btn_add_line')));
     await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 15));
-    print('[pilot] filling GRN line');
     await driver.fillForm({
       'grn_line_product_0': const Select('QA Test Product'),
       'grn_line_qty_0': '100',
       'grn_line_rate_0': '10',
     });
-    print('[pilot] submitting GRN');
     await driver.submit(saveButtonKey: 'btn_save');
     driver.expectNoErrorState();
-    print('[pilot] GRN saved, verifying via backend');
 
     final grnHeader = await verifier.getOne(
       'rih_grn_headers',
@@ -95,11 +100,9 @@ void main() {
       select: 'grn_no,status',
     );
     expect(grnHeader['status'], 'DRAFT');
-    print('[pilot] GRN ${grnHeader['grn_no']} confirmed DRAFT, approving');
 
     await driver.approve(approveButtonKey: 'btn_approve');
     driver.expectNoErrorState();
-    print('[pilot] GRN approved, verifying');
 
     final grnAfterApprove = await verifier.getOne(
       'rih_grn_headers',
@@ -115,7 +118,15 @@ void main() {
     );
     expect((productLocation['current_stock'] as num).toDouble(), 100);
     expect((productLocation['cost_price'] as num).toDouble(), closeTo(10, 0.01));
-    print('[pilot] stock confirmed at 100 units, navigating to Sales Invoice');
+  });
+
+  testWidgets('Step 2: Sales Invoice of all 100 units zeroes out stock/COGS exactly (multi-currency)', (tester) async {
+    final verifier = BackendVerifier();
+    await verifier.login();
+
+    await loginIfNeeded(tester);
+
+    final driver = ScreenDriver(tester);
 
     // ── Sales Invoice: sell all 100 units to the QA customer, in CDF ─────
     // No Price Master row exists for this product -> the app's own
@@ -133,7 +144,6 @@ void main() {
       'invoice_line_product_0': const Select('QA Test Product'),
       'invoice_line_qty_0': '100',
     });
-    print('[pilot] filled invoice line, opening price override');
     await tester.tap(find.byKey(const Key('btn_override_price_0')));
     await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 15));
     await driver.fillForm({
@@ -142,10 +152,8 @@ void main() {
       // depend on what the customer is charged.
       'invoice_line_reason_0': 'QA pilot test - no Price Master row configured',
     });
-    print('[pilot] submitting Sales Invoice');
     await driver.submit(saveButtonKey: 'btn_save'); // Save IS Approve for this screen
     driver.expectNoErrorState();
-    print('[pilot] Sales Invoice saved, verifying');
 
     final invoiceHeader = await verifier.getOne(
       'rih_sales_invoices',
@@ -153,7 +161,6 @@ void main() {
       select: 'invoice_no,status,invoice_currency_id',
     );
     expect(invoiceHeader['status'], 'APPROVED');
-    print('[pilot] Invoice ${invoiceHeader['invoice_no']} confirmed APPROVED, running report diff');
 
     // ── The actual regression check: stock/COGS must zero out exactly ────
     final diff = ReportDiff(verifier);
@@ -184,6 +191,5 @@ void main() {
       {'account_id': 'eq.${TestTenantConfig.stockAccountId}'},
     );
     diff.expectClose(stockAccountMovement, 0, tolerance: 0.01, reason: 'Stock account net GL movement (base currency) after buying and selling all 100 units');
-    print('[pilot] ALL ASSERTIONS PASSED');
   });
 }
