@@ -16,6 +16,16 @@ import 'package:sakal/core/router/app_router.dart';
 /// README.md for the naming convention. A screen with no keys yet cannot be
 /// driven reliably; that's real, incremental retrofit work, not a gap in
 /// this class.
+///
+/// Every `pumpAndSettle()` call below passes an explicit `timeout:` --
+/// confirmed live 2026-09-13 that the bare, unbounded form
+/// (`pumpAndSettle()` with no timeout) hangs indefinitely against this app:
+/// something in the widget tree never fully settles (a subtle ongoing
+/// animation somewhere, not yet root-caused further), so a driven test run
+/// sat idle past a 15-minute outer `timeout` with 0% CPU usage -- not
+/// "slow," genuinely stuck forever. `pumpAndSettle(timeout: ...)` instead
+/// throws a catchable, informative `FlutterError` once the bound is hit.
+/// Never add a new bare `pumpAndSettle()` call to this file.
 class ScreenDriver {
   final WidgetTester tester;
   ScreenDriver(this.tester);
@@ -25,7 +35,7 @@ class ScreenDriver {
   /// navigation/permission path a real user hits.
   Future<void> navigateTo(String routeName) async {
     appRouter.go(routeName);
-    await tester.pumpAndSettle();
+    await tester.pumpAndSettle(timeout: const Duration(seconds: 15));
   }
 
   /// Fills a form from a field-key -> value map. Each key must match a
@@ -50,19 +60,19 @@ class ScreenDriver {
       final value = entry.value;
       if (value is Select) {
         await tester.tap(target);
-        await tester.pumpAndSettle();
+        await tester.pumpAndSettle(timeout: const Duration(seconds: 15));
         final optionFinder = find.text(value.optionText).last;
         await tester.tap(optionFinder);
-        await tester.pumpAndSettle();
+        await tester.pumpAndSettle(timeout: const Duration(seconds: 15));
       } else if (value is DateTime) {
         await tester.tap(target);
-        await tester.pumpAndSettle();
+        await tester.pumpAndSettle(timeout: const Duration(seconds: 15));
         // Screen-specific date-picker interaction goes here per screen as
         // this driver is extended — deliberately not generalized further
         // until a second screen's date picker proves what's actually common.
       } else {
         await tester.enterText(target, value.toString());
-        await tester.pumpAndSettle();
+        await tester.pumpAndSettle(timeout: const Duration(seconds: 15));
       }
     }
   }
@@ -86,7 +96,7 @@ class ScreenDriver {
   /// created row directly via `BackendVerifier` after calling this.
   Future<void> submit({String saveButtonKey = 'btn_save'}) async {
     await tester.tap(find.byKey(ValueKey(saveButtonKey)));
-    await tester.pumpAndSettle();
+    await tester.pumpAndSettle(timeout: const Duration(seconds: 15));
   }
 
   /// Taps an Approve button by key — kept separate from submit since
@@ -94,7 +104,7 @@ class ScreenDriver {
   /// `canAdd`/`canEdit` on many screens.
   Future<void> approve({String approveButtonKey = 'btn_approve'}) async {
     await tester.tap(find.byKey(ValueKey(approveButtonKey)));
-    await tester.pumpAndSettle();
+    await tester.pumpAndSettle(timeout: const Duration(seconds: 15));
   }
 
   /// Asserts the current screen shows no error state — the "does this
