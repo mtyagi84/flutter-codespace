@@ -113,6 +113,13 @@ begin
     -- as new report migrations are added.
     perform fn_seed_report_definitions_for_company(v_client_id, v_company_id, null);
 
+    -- Same gap, four more places (found 2026-09-13): Purchase Return
+    -- Reason, Stock Adjustment Reason, Incoterm, Customer/Supplier
+    -- Category default values, plus a bare-minimum UOM/Brand/Color/Item-
+    -- Category starter set -- see fn_seed_common_masters_for_company's
+    -- own header comment for the full story.
+    perform fn_seed_common_masters_for_company(v_client_id, v_company_id);
+
     return json_build_object(
         'client_id',   v_client_id,
         'client_no',   v_client_no,
