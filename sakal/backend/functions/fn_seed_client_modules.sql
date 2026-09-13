@@ -349,7 +349,14 @@ begin
         (p_client_id, p_company_id, v_fn, 'FN-EXP', 'Expense Voucher',          '/finance/expense-vouchers',   2, 'FN-TXN', 'Transactions', 0, true,  false, false),
         (p_client_id, p_company_id, v_fn, 'FN-CBK', 'Cash Book',                '/finance/cashbook',           3, 'FN-TXN', 'Transactions', 0, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-PRV', 'Payment/Receipt Voucher',  '/finance/voucher-list',       4, 'FN-TXN', 'Transactions', 0, true,  false, false),
-        (p_client_id, p_company_id, v_fn, 'FN-TRB', 'Trial Balance',            '/finance/trial-balance',      0, 'FN-RPT', 'Reports',      1, false, false, false),
+        -- Real bug found live 2026-09-13: migration 135 repointed FN-TRB's
+        -- screen_name from the dead '/finance/trial-balance' route to the
+        -- real '/reports/TRIAL_BALANCE' registry route, but only via a
+        -- one-time UPDATE against companies that existed at the time --
+        -- this seed function's own hardcoded value was never updated to
+        -- match, so every company registered since then (including the QA
+        -- Automation tenant) got the dead route baked in on day one.
+        (p_client_id, p_company_id, v_fn, 'FN-TRB', 'Trial Balance',            '/reports/TRIAL_BALANCE',      0, 'FN-RPT', 'Reports',      1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-PNL', 'Profit & Loss',            '/reports/PROFIT_LOSS_SUMMARY', 1, 'FN-RPT', 'Reports',     1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-BSH', 'Balance Sheet',            '/reports/BALANCE_SHEET_SUMMARY', 2, 'FN-RPT', 'Reports',  1, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-RPT-PBR', 'Pending Bills Register',      '/reports/PENDING_BILLS_REGISTER',      3, 'FN-RPT', 'Reports', 1, false, false, false),
