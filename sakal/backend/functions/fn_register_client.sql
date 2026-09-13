@@ -104,6 +104,15 @@ begin
     -- Seed modules, master menus, and grant full admin access to first user
     perform fn_seed_client_modules(v_client_id, v_company_id, v_user_id);
 
+    -- Real bug found live 2026-09-13: no report-registration migration was
+    -- ever wired into registration itself, so every new company got a menu
+    -- full of reports with zero backing ric_report_definitions rows (see
+    -- fn_seed_report_definitions_for_company's own header comment for the
+    -- full story). NULL template = auto-pick whichever existing company
+    -- currently has the most reports, so this never needs updating again
+    -- as new report migrations are added.
+    perform fn_seed_report_definitions_for_company(v_client_id, v_company_id, null);
+
     return json_build_object(
         'client_id',   v_client_id,
         'client_no',   v_client_no,
