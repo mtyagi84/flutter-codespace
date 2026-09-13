@@ -6,12 +6,12 @@ accuracy vs. a real transaction / Currency & Dr-Cr display (CCC #1/#2) / Export 
 Print / Permission-denied / CCC**.
 
 ---
-## FN-RPT-LDG — Account Ledger (`/reports/ACCOUNT_LEDGER`) — 2 KNOWN OPEN BUGS
+## FN-RPT-LDG — Account Ledger (`/reports/ACCOUNT_LEDGER`) — 2 bugs FIXED 2026-09-13, pending redeploy verification
 
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
 |---|---|---|---|---|---|---|
-| **LDG-BUG-01** | **[OPEN BUG, found 2026-09-13] Closing balance shows as a bare negative** | Open Account Ledger for any account whose closing balance is a credit balance | **Expected**: balance displays as e.g. `12,500.00 Cr`, never `-12,500.00`. **Actual**: shows a bare negative number. | **High** | **Failed** | Not yet fixed — root-cause and fix the display formatting (likely in the ledger's amount-rendering widget/formatter, not the underlying SQL sign convention, which per `rid_finance_lines`'s own always-unsigned + `trans_nature` design is presumably already correct at the data layer) |
-| **LDG-BUG-02** | **[OPEN BUG, found 2026-09-13] Party-currency statement doesn't show the currency** | Open Account Ledger for a customer/supplier whose ledger currency differs from base, in their own ledger currency | **Expected**: every amount column shows the currency code/symbol (e.g. "CDF 1,250.00"). **Actual**: no currency indicator shown at all. | **High** | **Failed** | Not yet fixed |
+| **LDG-BUG-01** | **Closing balance shows as a bare negative** | Open Account Ledger for any account whose closing balance is a credit balance | **Expected**: balance displays as e.g. `12,500.00 Cr`, never `-12,500.00`. | High | **Fixed (commit `a172574`, migration 184)** | Root cause: `running_balance` was a genuinely signed value with no Dr/Cr label. Fixed by applying Trial Balance's own proven ABS()+`_type` column pattern (135). Verified live against QA data. **Re-test in the app once redeployed, then mark Passed.** |
+| **LDG-BUG-02** | **Party-currency statement doesn't show the currency** | Open Account Ledger for a customer/supplier in their own ledger currency | **Expected**: every amount column shows the currency code (e.g. "CDF"). | High | **Fixed (commit `a172574`, migration 184)** | Root cause: `fn_account_ledger_totals` (the footer row) never returned `currency_code` at all, in any mode — the per-row currency was already correct. Verified live: a Customer account's totals now show `currency_code='CDF'`. **Re-test in the app once redeployed, then mark Passed.** |
 | LDG-01 | Every account nature loads | Run for a Customer, a Supplier, and a General account | All three load without error | High | Not Started | |
 | LDG-02 | Opening balance carries forward | Run for a date range starting mid-year | Opening balance line matches the account's true balance as of the start date | High | Not Started | |
 | LDG-03 | Data accuracy vs. a real transaction | Post a Journal Voucher touching this account, re-run the ledger | The new line appears with the exact amount and correct Dr/Cr side | High | Not Started | |

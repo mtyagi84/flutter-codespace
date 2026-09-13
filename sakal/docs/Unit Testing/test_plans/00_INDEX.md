@@ -132,7 +132,7 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 | Sales Invoice | SL-INV | /sales/invoices | [sales_invoice.md](sales/sales_invoice.md) | Not Started | |
 | Pending Approvals | SL-INR | /sales/pending-approvals | [pending_approvals.md](sales/pending_approvals.md) | Not Started | |
 | Sales Return | SL-RET | /sales/returns | [sales_return.md](sales/sales_return.md) | Not Started | |
-| Sales Delivery | SL-DEL | /sales/deliveries | [sales_delivery.md](sales/sales_delivery.md) | Not Started | **Buttons stay enabled after Approve** |
+| Sales Delivery | SL-DEL | /sales/deliveries | [sales_delivery.md](sales/sales_delivery.md) | Not Started | Buttons-stay-enabled bug fixed `a172574`, pending redeploy verification |
 | Cash Receipt | SL-RCP | /sales/receipts | [cash_receipt.md](sales/cash_receipt.md) | Not Started | |
 | Credit Sales Invoice | SL-CINV | /sales/credit-invoices | [credit_sales_invoice.md](sales/credit_sales_invoice.md) | Not Started | |
 
@@ -231,7 +231,7 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 | Contra Voucher | FN-CTR | /finance/contra | [contra_voucher.md](finance/contra_voucher.md) | Not Started | |
 | Expense Voucher | FN-EXP | /finance/expense-vouchers | [expense_voucher.md](finance/expense_voucher.md) | Not Started | |
 | Cash Book | FN-CBK | /finance/cashbook | — | **N/A — Not Built** | Route is still a placeholder |
-| Payment/Receipt Voucher | FN-PRV | /finance/voucher-list | [payment_receipt_voucher.md](finance/payment_receipt_voucher.md) | Not Started | **Party Amount doesn't populate on On-Account line** |
+| Payment/Receipt Voucher | FN-PRV | /finance/voucher-list | [payment_receipt_voucher.md](finance/payment_receipt_voucher.md) | Not Started | Party-Amount bug fixed `a172574`, pending redeploy verification |
 
 ### Reports incl. Bank Reconciliation (21 + 4 = 25) — detail file: [`reports/finance_reports.md`](reports/finance_reports.md)
 | Screen | Feature Code | Route | Status | Open Bugs |
@@ -241,7 +241,7 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 | Balance Sheet | FN-BSH | /reports/BALANCE_SHEET_SUMMARY | Not Started | |
 | Pending Bills Register | FN-RPT-PBR | /reports/PENDING_BILLS_REGISTER | Not Started | |
 | Pending Bills by Customer | FN-RPT-PBG | /reports/PENDING_BILLS_BY_CUSTOMER | Not Started | |
-| **Account Ledger** | FN-RPT-LDG | /reports/ACCOUNT_LEDGER | Not Started | **Shows negative instead of Dr/Cr; party-currency statement missing currency** |
+| **Account Ledger** | FN-RPT-LDG | /reports/ACCOUNT_LEDGER | Not Started | Dr/Cr + currency bugs fixed migration 184 (`a172574`), verified live vs. real data, pending redeploy verification |
 | Customer Ageing | FN-RPT-CAG | /reports/CUSTOMER_AGEING | Not Started | |
 | Supplier Ageing | FN-RPT-SAG | /reports/SUPPLIER_AGEING | Not Started | |
 | Pending Bills by Supplier | FN-RPT-PBS | /reports/PENDING_BILLS_BY_SUPPLIER | Not Started | |
