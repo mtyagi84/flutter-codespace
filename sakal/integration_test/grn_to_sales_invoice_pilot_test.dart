@@ -69,7 +69,7 @@ void main() {
     }
   }
 
-  testWidgets('Step 1: GRN entry + approve receives 100 units at $10 USD', (tester) async {
+  testWidgets(r'Step 1: GRN entry + approve receives 100 units at $10 USD', (tester) async {
     final verifier = BackendVerifier();
     await verifier.login();
     await resetQaTenant(verifier);
