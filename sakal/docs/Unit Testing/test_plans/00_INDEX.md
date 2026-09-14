@@ -193,8 +193,8 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 | Stock List | IN-STK | /inventory/stock | — | **N/A — Not Built** | Route is still a placeholder |
 | Stock Transfer | IN-TRF | /inventory/transfers | [stock_transfer.md](inventory/stock_transfer.md) | Not Started | |
 | Stock Adjustment | IN-ADJ | /inventory/adjustments | [stock_adjustment.md](inventory/stock_adjustment.md) | Not Started | |
-| Material Requisition | IN-MRQ | /inventory/requisitions | [material_requisition.md](inventory/material_requisition.md) | Not Started | |
-| Material Issue | IN-MIS | /inventory/material-issue | [material_issue.md](inventory/material_issue.md) | Not Started | |
+| Material Requisition | IN-MRQ | /inventory/requisitions | [material_requisition.md](inventory/material_requisition.md) | Passed (backend) | Create/Approve/immutability verified, plus LINE_DEPARTMENT_AREA_REQUIRED correctly rejects a line with no department/area. Verified via `test/backend/material_requisition_backend_test.dart`, 2026-09-14. CCC #4/#7 not yet UI-verified. |
+| Material Issue | IN-MIS | /inventory/material-issue | [material_issue.md](inventory/material_issue.md) | Passed (backend) | Consolidate-from-requisition/Approve/stock decrease/Dr-Expense-Cr-Stock GL posting verified via `test/backend/material_issue_backend_test.dart`, 2026-09-14. Found+fixed a real QA-tenant fixture gap (see AUTOMATED_RUN_LOG.md). CCC #4/#7 not yet UI-verified. |
 | Stock Transfer Request | IN-STR | /inventory/stock-transfer-requests | [stock_transfer_request.md](inventory/stock_transfer_request.md) | Not Started | |
 | Stock Receipt | IN-SRC | /inventory/stock-receipts | [stock_receipt.md](inventory/stock_receipt.md) | Not Started | |
 | Opening Stock | IN-OPN | /inventory/opening-stock | [opening_stock.md](inventory/opening_stock.md) | Not Started | |

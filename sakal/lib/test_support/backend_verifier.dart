@@ -73,6 +73,23 @@ class BackendVerifier {
     return (res.data as List).cast<Map<String, dynamic>>();
   }
 
+  /// Plain PostgREST GET with NO automatic client_id/company_id filters —
+  /// for genuinely global/shared tables that have no such columns at all
+  /// (e.g. `rim_common_master_types`, confirmed via a direct query
+  /// 2026-09-14: `column rim_common_master_types.client_id does not
+  /// exist`). Use `get()` instead for any tenant-scoped table — this
+  /// exists specifically for the exception, not as a general-purpose
+  /// alternative.
+  Future<List<Map<String, dynamic>>> getUnscoped(
+    String table,
+    Map<String, String> filters, {
+    String select = '*',
+  }) async {
+    if (_accessToken == null) throw StateError('Call login() first');
+    final res = await _dio.get('/$table', queryParameters: {'select': select, ...filters});
+    return (res.data as List).cast<Map<String, dynamic>>();
+  }
+
   /// Convenience for the common "expect exactly one row" case — throws with
   /// a clear message if zero or more than one row comes back, rather than
   /// letting a caller silently index into an empty/ambiguous list.
@@ -98,5 +115,27 @@ class BackendVerifier {
     if (_accessToken == null) throw StateError('Call login() first');
     final res = await _dio.post('/rpc/$functionName', data: params);
     return res.data;
+  }
+
+  /// Plain PostgREST POST (insert) for master/setup tables that have no
+  /// dedicated `fn_save_*` RPC — e.g. seeding test-fixture master data
+  /// (a Department/Consumption Area mapping) that a real onboarding flow
+  /// would set up once through the admin UI. `client_id`/`company_id` are
+  /// injected automatically, same convention as `get()`. Returns the
+  /// inserted row (PostgREST `Prefer: return=representation` — safe here
+  /// since this is test-only code, not the app's own save path, which
+  /// CLAUDE.md documents avoiding that header for due to an RLS+401
+  /// interaction on the app's own JWT-refresh timing, not a concern here).
+  Future<Map<String, dynamic>> insert(
+    String table,
+    Map<String, dynamic> data,
+  ) async {
+    if (_accessToken == null) throw StateError('Call login() first');
+    final res = await _dio.post(
+      '/$table',
+      data: {'client_id': _clientId, 'company_id': _companyId, ...data},
+      options: Options(headers: {'Prefer': 'return=representation'}),
+    );
+    return (res.data as List).cast<Map<String, dynamic>>().first;
   }
 }
