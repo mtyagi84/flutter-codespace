@@ -52,8 +52,16 @@ class BackendVerifier {
   /// Still the QA tenant's own client_no (TestTenantConfig.clientNo) —
   /// only the username/password vary.
   Future<void> loginAs(String username, String password) async {
+    await loginToTenant(TestTenantConfig.clientNo, username, password);
+  }
+
+  /// Same fn_login call, but for an ENTIRELY DIFFERENT tenant (a different
+  /// client_no) — for multi-tenant isolation tests that register and log
+  /// into a real second tenant, not just a second user within the QA
+  /// tenant's own client_no.
+  Future<void> loginToTenant(String clientNo, String username, String password) async {
     final res = await _dio.post('/rpc/fn_login', data: {
-      'p_client_no': TestTenantConfig.clientNo,
+      'p_client_no': clientNo,
       'p_username':  username,
       'p_password':  password,
     });
@@ -63,6 +71,79 @@ class BackendVerifier {
     _companyId   = d['company_id'] as String;
     _userId      = d['user_id'] as String;
     _dio.options.headers['Authorization'] = 'Bearer $_accessToken';
+  }
+
+  /// Calls fn_register_client (and optionally fn_complete_accounting_setup)
+  /// with NO Authorization header — exactly like the real Registration
+  /// screen does, before any JWT/session exists. Only for tests that need a
+  /// genuinely fresh SECOND tenant (multi-tenant isolation proof) — never
+  /// use this against the QA tenant's own identity. Returns the raw JSON
+  /// map fn_register_client itself returns (client_id/client_no/company_id/
+  /// location_id) — does NOT log in as the new tenant; call loginToTenant()
+  /// separately afterward.
+  Future<Map<String, dynamic>> registerNewTenant({
+    required String businessName,
+    required String country,
+    required String contactName,
+    required String email,
+    required String phone,
+    required String companyName,
+    required String companyShort,
+    required String baseCurrency,
+    required String localCurrency,
+    required String locationName,
+    required String locationShort,
+    required String locationType,
+    required String adminName,
+    required String username,
+    required String password,
+  }) async {
+    try {
+      final res = await _dio.post('/rpc/fn_register_client', data: {
+        'p_business_name':  businessName,
+        'p_country':        country,
+        'p_contact_name':   contactName,
+        'p_email':          email,
+        'p_phone':          phone,
+        'p_company_name':   companyName,
+        'p_company_short':  companyShort,
+        'p_base_currency':  baseCurrency,
+        'p_local_currency': localCurrency,
+        'p_location_name':  locationName,
+        'p_location_short': locationShort,
+        'p_location_type':  locationType,
+        'p_admin_name':     adminName,
+        'p_username':       username,
+        'p_password':       password,
+      });
+      return res.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw StateError('registerNewTenant failed: ${e.response?.statusCode} ${e.response?.data}');
+    }
+  }
+
+  /// Calls fn_complete_accounting_setup with NO Authorization header, same
+  /// pre-login context as registerNewTenant() — exactly how the real
+  /// Registration screen chains the two calls together.
+  Future<Map<String, dynamic>> completeAccountingSetup({
+    required String clientId,
+    required String companyId,
+    required String accountingStd,
+    required int fyStartMonth,
+    int fyStartDay = 1,
+  }) async {
+    try {
+      final res = await _dio.post('/rpc/fn_complete_accounting_setup', data: {
+        'p_client_id':      clientId,
+        'p_company_id':     companyId,
+        'p_accounting_std': accountingStd,
+        'p_fy_start_month': fyStartMonth,
+        'p_fy_start_day':   fyStartDay,
+      });
+      return res.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw StateError('completeAccountingSetup failed: ${e.response?.statusCode} ${e.response?.data}');
+    }
   }
 
   /// Plain PostgREST GET, e.g. `get('rih_grn_headers', {'grn_no': 'eq.GRN-1'})`.

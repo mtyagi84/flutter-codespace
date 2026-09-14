@@ -255,3 +255,13 @@ Before building Phase B's second-tenant registration test, a grep of every migra
 **Fixed in `backend/migrations/188_tenancy_root_tables_rls_fix.sql`** — `auth_rw_<table>`-style policies scoped to the JWT's own `client_id`/`company_id` claims (non-standard shape since these tables sit ABOVE those columns — `ric_clients.id`/`ric_companies.id` themselves ARE the client/company identity; see the migration file and CLAUDE.md's new "root tenancy tables" section for the exact scoping). Deployed and confirmed live 2026-09-14: a before/after probe test went from 4 clients/4 companies/21 locations visible to exactly 1/1/16 (this tenant's own). Kept as a permanent regression test (`test/backend/scenarios/tenancy_rls_probe_test.dart`, real assertions not just prints) rather than a one-off script. Full 71-test suite (70 + this new test) still green after the fix — zero app behavior depended on the leak.
 
 **Also discovered this session**: local Flutter/Dart toolchain (3.44.0) is now available directly in this environment — no more SSH-to-Codespace round-trip needed to run `flutter test`/`flutter analyze` locally.
+
+## Phase B — Multi-tenant isolation, full end-to-end proof (2026-09-14)
+
+Beyond migration 188's root-table fix above, built `multi_tenant_isolation_scenario_test.dart` — registers a genuinely new, independent tenant through the exact same public RPC the real Registration screen calls (`fn_register_client` + `fn_complete_accounting_setup`, no fixture shortcuts), posts a real Journal Voucher in it, then proves isolation in BOTH directions: the new tenant cannot see the QA tenant's accounts/transactions/company/location by direct ID lookup, and the QA tenant cannot see the new tenant's. PASS. New `BackendVerifier` methods: `registerNewTenant()`, `completeAccountingSetup()`, `loginToTenant()` (generalizes `loginAs()` to an arbitrary `client_no`, not just a second user within the QA tenant).
+
+**Known, deliberate tradeoff**: this tenant is PERMANENT — `fn_register_client` has no corresponding delete function anywhere in the schema (confirmed via a full grep), and this ran against the same Supabase project QA testing uses (user's own explicit choice, given "no client yet" — see the roadmap). One extra always-empty tenant (`QA Isolation Test Co <timestamp>`) now exists permanently in this project.
+
+Full backend suite is now **72 tests** (71 + this one), all passing together.
+
+Phase B is now fully complete: both the root-cause fix (migration 188) and the full live end-to-end registration+transaction+isolation proof are done.
