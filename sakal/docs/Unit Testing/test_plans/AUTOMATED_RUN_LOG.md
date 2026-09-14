@@ -121,6 +121,14 @@ automation" per screen until that track is revisited.
 
 **Master-data test-authoring lesson, reinforced by this file**: grepping a migration file for a table's `CREATE TABLE` is necessary but not sufficient — always verify against the CURRENT live schema (a failed insert naming the real column, or PostgREST's own "did you mean" hint) before trusting an old migration's column list, since later migrations frequently rename/restructure columns (`mid_rate`→`exchange_rate`) or fully supersede a table (`rim_opening_balances`→`rid_opening_balance_lines`) without a matching update to the original file's own comments.
 
+### Inventory Masters (remaining 4 of 5 — Product Master already covered)
+| Screen | Result | Notes |
+|---|---|---|
+| AD-PCS Product Category Level Setup | PASS | Levels are seeded 1-4 per company (CHECK level_no BETWEEN 1 AND 4) — this screen edits existing rows (label/mandatory/active), never creates a 5th level. Test toggles then restores `is_mandatory` on level 1, since this is shared seed config other future tests could depend on. |
+| MST-ITC Item Categories | PASS | `flags` JSONB round-trips correctly (`{"is_saleable": true, ...}`), same generic-flags mechanism as `rim_products.flags`. |
+| AD-PGS Product Flag Types | PASS | Plain CRUD on `rim_product_flag_types`. |
+| IN-DCA Consumption Area Setup | PASS (indirect) | Not a new dedicated test — `rim_department_consumption_areas` has been exercised repeatedly, all session, via `CommonRefs.loadOrCreateDepartmentArea()` as fixture setup for Material Requisition/Issue tests. Same reasoning as MST-ALS above — writing a redundant CRUD test would duplicate real coverage that already exists. |
+
 **Note on running this suite**: always `flutter test test/backend/ --concurrency=1` — files race resetQaTenant() against each other in parallel (see `test/backend/README.md`).
 
 **Real bugs found and fixed this session (not test-plan execution, but surfaced while setting up the local toolchain to run it)**:

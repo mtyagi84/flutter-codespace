@@ -86,10 +86,10 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 | Screen | Feature Code | Route | Status | Open Bugs |
 |---|---|---|---|---|
 | Product Master | MST-PRD | /master/products | Passed (backend) | |
-| Item Categories | MST-ITC | /master/item-categories | Not Started | |
-| Product Category Level Setup | AD-PCS | /setup/category-levels | Not Started | |
-| Product Flag Types | AD-PGS | /setup/product-flag-types | Not Started | |
-| Consumption Area Setup | IN-DCA | /inventory/department-consumption-areas | Not Started | |
+| Item Categories | MST-ITC | /master/item-categories | Passed (backend) | |
+| Product Category Level Setup | AD-PCS | /setup/category-levels | Passed (backend) | |
+| Product Flag Types | AD-PGS | /setup/product-flag-types | Passed (backend) | |
+| Consumption Area Setup | IN-DCA | /inventory/department-consumption-areas | Passed (backend, indirect) | Exercised repeatedly via CommonRefs.loadOrCreateDepartmentArea() against the real rim_department_consumption_areas table |
 
 ### Finance Masters (8) — detail file: [`masters/finance_masters.md`](masters/finance_masters.md)
 | Screen | Feature Code | Route | Status | Open Bugs |

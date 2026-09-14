@@ -36,7 +36,7 @@ void main() {
       'rim_tax_groups': 'group_code',
       'rim_additional_charges': 'charge_code',
     }.entries) {
-      final rows = await verifier.get(entry.key, {'${entry.value}': 'eq.QA-CRUD-01'}, select: 'id');
+      final rows = await verifier.get(entry.key, {entry.value: 'eq.QA-CRUD-01'}, select: 'id');
       for (final row in rows) {
         await verifier.patch(entry.key, {'id': 'eq.${row['id']}'},
             {entry.value: 'QA-CRUD-01-STALE-${row['id']}'.substring(0, 20)});
