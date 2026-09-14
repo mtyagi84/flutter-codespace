@@ -245,3 +245,13 @@ Full backend suite is now **70 tests** (52 per-screen + 10 original scenarios + 
 **Real bugs found and fixed this session (not test-plan execution, but surfaced while setting up the local toolchain to run it)**:
 1. `app_database.g.dart` was stale relative to `app_database.dart` (missing `exchangeRate` column) since commit `f2108fe` — regenerated, commit `066d6d6`.
 2. `finance_voucher_entry_screen_test.dart` asserted the OLD buggy Party Amount behavior (`findsOneWidget` for a value that now legitimately renders twice after the `a172574` fix) — updated to `findsNWidgets(2)`, commit `5e8f1e7`.
+
+## 🔴 CRITICAL — Phase B prep found a root-table cross-tenant RLS leak (2026-09-14)
+
+Before building Phase B's second-tenant registration test, a grep of every migration for GRANT/REVOKE/POLICY statements touching `ric_clients`/`ric_companies`/`ric_locations` (the three root tenancy tables, migration 001) found NOTHING after 001 itself — they were still on the original `dev_allow_all` permissive policy (`USING (true) WITH CHECK (true)`), whose own comment said "tighten before production deployment." That tightening never happened.
+
+**Confirmed live**: logging in as the QA tenant and querying these three tables with no filter returned **all 4 existing tenants' full rows** — client names, company names, location names — including a tenant named "Rigvedam Innovations" and two others ("Test Zambia Trading", "Test India Trading"). Same bug class as migration 185's view-security-invoker fix, except at the foundational client/company/location level, not a report view.
+
+**Fixed in `backend/migrations/188_tenancy_root_tables_rls_fix.sql`** — `auth_rw_<table>`-style policies scoped to the JWT's own `client_id`/`company_id` claims (non-standard shape since these tables sit ABOVE those columns — `ric_clients.id`/`ric_companies.id` themselves ARE the client/company identity; see the migration file and CLAUDE.md's new "root tenancy tables" section for the exact scoping). Deployed and confirmed live 2026-09-14: a before/after probe test went from 4 clients/4 companies/21 locations visible to exactly 1/1/16 (this tenant's own). Kept as a permanent regression test (`test/backend/scenarios/tenancy_rls_probe_test.dart`, real assertions not just prints) rather than a one-off script. Full 71-test suite (70 + this new test) still green after the fix — zero app behavior depended on the leak.
+
+**Also discovered this session**: local Flutter/Dart toolchain (3.44.0) is now available directly in this environment — no more SSH-to-Codespace round-trip needed to run `flutter test`/`flutter analyze` locally.
