@@ -5,31 +5,34 @@ All 25 Transaction screens, all 34 Master screens, and all 79 Report screens
 (via one generic Reporting Engine smoke test) now have automated backend
 coverage under `sakal/test/backend/` — run with
 `flutter test test/backend/ --concurrency=1` (see that folder's own README).
-Full detail in `AUTOMATED_RUN_LOG.md`. **Three things remain genuinely open,
-each blocked on something outside this session's reach, not further backend
-work:**
-1. **Migration `186_reporting_engine_smoke_test_fixes.sql` is written but NOT
-   deployed** — fixes 6 real bugs found by the Reports smoke test (see that
-   file's own header comment). This session had no direct Postgres/Supabase
-   SQL-editor credential to run it. Next session with DB access: run it, then
-   remove the corresponding entries from `reports_smoke_backend_test.dart`'s
-   `knownBrokenPendingMigration186` set one at a time.
-2. **Cross-Cutting Checklist items #4 (button state after action) and #7
-   (responsive at ~400px), and Dr/Cr-label + currency-display (#1/#2) on
-   every report, are NOT verifiable from a backend RPC call** — these are UI
-   rendering concerns. `flutter drive` chained-flow automation is a known
-   dead end in this environment (see `reference_automation_capabilities_
-   2026_09_13.md`); genuine coverage here needs either manual click-testing
-   or a single-screen `flutter drive` test per screen (proven reliable,
-   just not yet built for most screens). **Update 2026-09-14**: the known
-   CODE-LEVEL cause of CCC#4 (stale in-memory status after Approve/Submit,
-   relying solely on a reload) was found via static review on 19 screens and
-   fixed on all of them (commit `e79cf74`) — see AUTOMATED_RUN_LOG.md. The
-   fix is a source-code guarantee, not a substitute for an actual click-test
-   confirming the button visually disables — CCC#4 stays "not yet
-   UI-verified" on every screen's own row until that click-test happens.
-3. **3 screens are still unbuilt placeholders** (Supplier Payment, Stock
+Full detail in `AUTOMATED_RUN_LOG.md`. Migration 186 (6 report bugs) is now
+**deployed and confirmed live** (was pending DB access, resolved same day).
+
+**Two things remain genuinely open:**
+1. **Cross-Cutting Checklist items #1/#2/#4/#7 (Dr/Cr label, currency
+   display, button state after action, responsive at ~400px) are NOT
+   verifiable from a backend RPC call** — pure UI rendering concerns.
+   `flutter drive` automation was attempted directly in this environment
+   2026-09-14 and hit a genuine dead end: no chromedriver build exists for
+   this environment's installed Chrome version, and the Windows-desktop
+   alternative needs a machine-wide Developer Mode setting change,
+   deliberately not made without asking. **`PHASE_C_MANUAL_WALKTHROUGH.md`**
+   is the resulting script for a short manual pass over the ~18
+   highest-traffic screens — this is genuinely the fastest remaining path,
+   not a fallback. CCC#4's code-level cause is already fixed app-wide
+   (commit `e79cf74`) — the walkthrough just needs to visually confirm it.
+2. **3 screens are still unbuilt placeholders** (Supplier Payment, Stock
    List, Cash Book) — nothing to test yet.
+
+## UPDATE 2026-09-14 (later) — Production-Readiness Roadmap, Phases A+B complete
+Migrations 187 (critical Sales Return bug) and 188 (critical root-tenancy
+RLS leak, found during Phase B prep) both deployed and confirmed live.
+Phase B's full live second-tenant registration + isolation proof also
+passed. Full backend suite now **72 tests**, all green. See
+`AUTOMATED_RUN_LOG.md` for complete detail on both. `PHASE_D_NONFUNCTIONAL_
+CHECKLIST.md` covers what's left before go-live beyond correctness/UI
+(environment separation, backup, monitoring, load testing) — mostly
+decisions only the user can make, documented there rather than guessed at.
 
 ## UPDATE 2026-09-14 (later) — Business Scenario Integration Tests added
 Per-screen tests above prove each document type works IN ISOLATION. A new
