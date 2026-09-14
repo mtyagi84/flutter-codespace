@@ -74,8 +74,8 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 | Screen | Feature Code | Route | Status | Open Bugs |
 |---|---|---|---|---|
 | Customer Master | MST-CUST | /master/customers | Passed (backend) | |
-| Price Master | SL-PRC | /sales/price-master | Not Started | |
-| Sales Executives | SL-EXE | /sales/sales-executives | Not Started | |
+| Price Master | SL-PRC | /sales/price-master | Passed (backend) | Has a real Draft/Approve lifecycle (fn_save_price_master_batch/fn_approve_price_master_batch), unlike every other Master screen — closer in shape to a transaction screen |
+| Sales Executives | SL-EXE | /sales/sales-executives | Passed (backend) | |
 
 ### Purchase Masters (1) — detail file: [`masters/purchase_masters.md`](masters/purchase_masters.md)
 | Screen | Feature Code | Route | Status | Open Bugs |

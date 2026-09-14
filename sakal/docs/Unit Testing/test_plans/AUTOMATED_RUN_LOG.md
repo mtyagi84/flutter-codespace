@@ -129,6 +129,12 @@ automation" per screen until that track is revisited.
 | AD-PGS Product Flag Types | PASS | Plain CRUD on `rim_product_flag_types`. |
 | IN-DCA Consumption Area Setup | PASS (indirect) | Not a new dedicated test — `rim_department_consumption_areas` has been exercised repeatedly, all session, via `CommonRefs.loadOrCreateDepartmentArea()` as fixture setup for Material Requisition/Issue tests. Same reasoning as MST-ALS above — writing a redundant CRUD test would duplicate real coverage that already exists. |
 
+### Sales Masters (remaining 2 of 3 — Customer Master already covered)
+| Screen | Result | Notes |
+|---|---|---|
+| SL-PRC Price Master | PASS | **Real exception among Master screens**: has its own Draft/Approve RPC pair (`fn_save_price_master_batch`/`fn_approve_price_master_batch`, migration 083) — a real product-level unique-price-per-location/date business rule, not plain table CRUD. Tested like a transaction screen: create GENERIC batch → approve → header status APPROVED → immutability (re-save after approve throws). Confirmed `rih_price_master_headers`/`rid_price_master_lines` ARE wiped by `resetQaTenant()` (unlike every other Master table this session) — re-running the file twice in a row hit no `PRICE_ALREADY_EXISTS` collision. |
+| SL-EXE Sales Executives | PASS | Plain CRUD, `rim_sales_executives`. |
+
 **Note on running this suite**: always `flutter test test/backend/ --concurrency=1` — files race resetQaTenant() against each other in parallel (see `test/backend/README.md`).
 
 **Real bugs found and fixed this session (not test-plan execution, but surfaced while setting up the local toolchain to run it)**:
