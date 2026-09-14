@@ -86,6 +86,59 @@ class CommonRefs {
       accountId: mapping['account_id'] as String,
     );
   }
+
+  /// Get-or-create a SECOND location for the QA tenant — Stock Transfer
+  /// (Request/Transfer/Receipt) genuinely needs two distinct locations to
+  /// test at all, and the QA tenant had exactly ONE (`TestTenantConfig.
+  /// locationId`, "QA Head Office") as of 2026-09-14. The company's
+  /// `inter_location_model` is `SIMPLE` (confirmed live), so a plain
+  /// `group_id: null` location is correct — no location-group setup needed
+  /// for a same-book stock transfer. Idempotent, persists across runs
+  /// (`resetQaTenant()` never touches master/setup tables).
+  static Future<String> loadOrCreateSecondLocation(BackendVerifier verifier) async {
+    final existing = await verifier.get(
+      'ric_locations',
+      {'id': 'neq.${TestTenantConfig.locationId}', 'limit': '1'},
+    );
+    if (existing.isNotEmpty) {
+      return existing.first['id'] as String;
+    }
+    final created = await verifier.insert('ric_locations', {
+      'location_name': 'QA Warehouse 2',
+      'location_short': 'QAWH2',
+      'location_type': 'WAREHOUSE',
+      'is_active': true,
+      'is_negative_stock_allowed': false,
+      'is_issue_allowed': true,
+    });
+    return created['id'] as String;
+  }
+
+  /// Get-or-create a COMPANY-granularity STOCK_IN_TRANSIT_ACCOUNT link —
+  /// needed by Stock Transfer's Approve (`fn_approve_stock_transfer` raises
+  /// `ACCOUNT_LINK_NOT_CONFIGURED` without it, confirmed live 2026-09-14).
+  /// Reuses the existing Stock account as a pragmatic stand-in — no
+  /// dedicated "Stock in Transit" account existed in the QA tenant's seeded
+  /// COA, and this test cares about the transfer's status/quantity
+  /// transitions, not the specific GL account chosen for the transit leg.
+  static Future<void> ensureStockInTransitAccountLink(BackendVerifier verifier) async {
+    final types = await verifier.getUnscoped('rim_account_link_types', const {}, select: 'id,link_key');
+    final linkTypeId = types.firstWhere((t) => t['link_key'] == 'STOCK_IN_TRANSIT_ACCOUNT')['id'] as String;
+
+    final existing = await verifier.get('rim_account_link_defaults', {'link_type_id': 'eq.$linkTypeId'});
+    if (existing.isNotEmpty) return;
+
+    await verifier.insert('rim_account_link_setup', {
+      'link_type_id': linkTypeId,
+      'link_type': 'COMPANY',
+    });
+    await verifier.insert('rim_account_link_defaults', {
+      'link_type_id': linkTypeId,
+      'link_key_id': null,
+      'account_id': TestTenantConfig.stockAccountId,
+      'is_active': true,
+    });
+  }
 }
 
 class DepartmentAreaRef {

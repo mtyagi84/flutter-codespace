@@ -191,12 +191,12 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 | Screen | Feature Code | Route | Detail File | Status | Open Bugs |
 |---|---|---|---|---|---|
 | Stock List | IN-STK | /inventory/stock | — | **N/A — Not Built** | Route is still a placeholder |
-| Stock Transfer | IN-TRF | /inventory/transfers | [stock_transfer.md](inventory/stock_transfer.md) | Not Started | |
+| Stock Transfer | IN-TRF | /inventory/transfers | [stock_transfer.md](inventory/stock_transfer.md) | Passed (backend) | DIRECT/SAME_BOOK mode: create/Approve/stock leaves FROM/immutability verified via `test/backend/stock_transfer_backend_test.dart`, 2026-09-14. Found+fixed missing STOCK_IN_TRANSIT_ACCOUNT link (QA tenant fixture gap). AGAINST_REQUEST + INTER_ENTITY modes not yet covered. CCC #4/#7 not yet UI-verified. |
 | Stock Adjustment | IN-ADJ | /inventory/adjustments | [stock_adjustment.md](inventory/stock_adjustment.md) | Not Started | |
 | Material Requisition | IN-MRQ | /inventory/requisitions | [material_requisition.md](inventory/material_requisition.md) | Passed (backend) | Create/Approve/immutability verified, plus LINE_DEPARTMENT_AREA_REQUIRED correctly rejects a line with no department/area. Verified via `test/backend/material_requisition_backend_test.dart`, 2026-09-14. CCC #4/#7 not yet UI-verified. |
 | Material Issue | IN-MIS | /inventory/material-issue | [material_issue.md](inventory/material_issue.md) | Passed (backend) | Consolidate-from-requisition/Approve/stock decrease/Dr-Expense-Cr-Stock GL posting verified via `test/backend/material_issue_backend_test.dart`, 2026-09-14. Found+fixed a real QA-tenant fixture gap (see AUTOMATED_RUN_LOG.md). CCC #4/#7 not yet UI-verified. |
-| Stock Transfer Request | IN-STR | /inventory/stock-transfer-requests | [stock_transfer_request.md](inventory/stock_transfer_request.md) | Not Started | |
-| Stock Receipt | IN-SRC | /inventory/stock-receipts | [stock_receipt.md](inventory/stock_receipt.md) | Not Started | |
+| Stock Transfer Request | IN-STR | /inventory/stock-transfer-requests | [stock_transfer_request.md](inventory/stock_transfer_request.md) | Passed (backend) | Create/Approve/immutability verified via `test/backend/stock_transfer_request_backend_test.dart`, 2026-09-14. CCC #4/#7 not yet UI-verified. |
+| Stock Receipt | IN-SRC | /inventory/stock-receipts | [stock_receipt.md](inventory/stock_receipt.md) | Passed (backend) | Completes a Stock Transfer — stock arrives correctly at TO location. Verified via `test/backend/stock_receipt_backend_test.dart`, 2026-09-14. CCC #4/#7 not yet UI-verified. |
 | Opening Stock | IN-OPN | /inventory/opening-stock | [opening_stock.md](inventory/opening_stock.md) | Not Started | |
 | Stock Count | IN-CNT | /inventory/stock-count | [stock_count.md](inventory/stock_count.md) | Not Started | |
 | Stock Count Review | IN-CNR | /inventory/stock-count-review | [stock_count_review.md](inventory/stock_count_review.md) | Not Started | |
