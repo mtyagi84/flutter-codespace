@@ -110,6 +110,62 @@ belongs in `lib/test_support/` instead, imported via `package:sakal/...` —
 that's what keeps working regardless of which directory a test file lives
 in.
 
+## OPEN: login() reliably reverts session to null in flutter drive (2026-09-13/14)
+
+Confirmed NOT an app bug — a manual `flutter run -d chrome` login with the
+exact same QA credentials works perfectly every time (clean Dashboard load,
+correct session, no flicker), user-verified live 2026-09-14. Yet every
+`flutter drive` run of `grn_entry_test.dart` shows the identical symptom:
+`ScreenDriver.login()`'s own poll detects `btn_login` disappear (implying a
+real, if brief, redirect to `/dashboard`), but by the next check
+`sessionNotifier.value` is back to `null` and the login screen is showing
+again — a `fn_login`+`fn_get_user_menu` round trip that appears to complete,
+then silently un-happens. Ruled out: CORS (both `BackendVerifier` and the UI
+login run inside the same browser context and use the identical
+`AppConfig.restBaseUrl`), config mismatch (verified identical), wrong widget
+keys (verified against `login_screen.dart` directly), and a plain
+`enterText` race (a separate, real, already-fixed issue — see
+`ScreenDriver._enterTextResilient` below — but fixing it did not fix this).
+`refreshListenable: sessionNotifier` IS correctly wired in `app_router.dart`.
+Root cause not yet found — likely specific to how
+`IntegrationTestWidgetsFlutterBinding`/the WebDriver bridge interacts with a
+REAL async Dio round trip's timing, not something in `login_screen.dart`
+itself. **Strategy pivot**: rather than keep blocking the screen-by-screen
+test plan on this one automation-harness issue, use direct backend/API
+verification (`BackendVerifier`, already proven reliable) as the primary
+test method going forward; treat full `flutter drive` UI automation as a
+secondary, opportunistic track to revisit once this is actually root-caused
+— not a prerequisite for testing every screen.
+
+## Gotcha: replicate main.dart's bootstrap before pumping SakalApp()
+
+`main.dart` does `await LocalStorage.init()` before `runApp(...)` — a test
+that does `tester.pumpWidget(const ProviderScope(child: SakalApp()))`
+directly (every test in this folder) skips that entirely. The app boots far
+enough to render the login screen, but the moment ANY code path touches a
+`LocalStorage` getter (`clientNo`, `deviceOfflineEnabled`, ...) it throws
+`LateInitializationError: Field '_prefs' has not been initialized.`
+Confirmed live 2026-09-13 on `grn_entry_test.dart`'s first-ever local run.
+Fix: call `await LocalStorage.init();` immediately before `pumpWidget` in
+every new test file (see `grn_entry_test.dart` for the reference shape) —
+this is the ONE piece of `main.dart`'s bootstrap a test actually needs;
+`OfflineSessionCache.tryRestoreSession()` and the `DioClient.onSessionExpired`
+wiring are safe to skip since a fresh QA-tenant test run has no prior session
+to restore anyway.
+
+## Local Windows setup (chromedriver)
+
+`flutter drive -d chrome` on Windows needs a `chromedriver.exe` matching the
+installed Chrome version running on port 4444 — download it from
+`https://storage.googleapis.com/chrome-for-testing-public/<version>/win64/chromedriver-win64.zip`
+(check the installed Chrome version via `flutter doctor -v`), then:
+```powershell
+Start-Process -FilePath "<path>\chromedriver.exe" -ArgumentList "--port=4444" -WindowStyle Hidden
+```
+`CHROME_EXECUTABLE` does NOT need to be set on Windows (unlike the Linux
+Codespace container, where Chrome-for-Testing isn't on PATH by default) —
+Windows Chrome is discovered normally.
+
 ## Running
 
 - `-d web-server` for headless CI-style runs (matches the only deployed

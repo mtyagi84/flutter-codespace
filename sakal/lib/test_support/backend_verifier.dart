@@ -36,6 +36,7 @@ class BackendVerifier {
 
   String get companyId => _companyId ?? (throw StateError('Call login() first'));
   String get clientId => _clientId ?? (throw StateError('Call login() first'));
+  String get userId => _userId ?? (throw StateError('Call login() first'));
 
   /// Direct fn_login call — same RPC the real Login screen calls, just
   /// invoked straight from test code instead of by driving the UI.

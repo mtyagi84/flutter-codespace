@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:sakal/app.dart';
 import 'package:sakal/core/router/route_names.dart';
+import 'package:sakal/core/services/local_storage.dart';
 import 'package:sakal/test_support/backend_verifier.dart';
 import 'package:sakal/test_support/tenant_reset.dart';
 import 'package:sakal/test_support/test_tenant_config.dart';
@@ -28,6 +29,14 @@ import 'screen_driver.dart';
 /// column here, not a UI-side disabled-button assertion — that half of CCC
 /// #4 needs a widget-tree assertion once Sales Delivery/GRN's own
 /// post-approve button state is in scope for a dedicated test).
+///
+/// KNOWN UNRELIABLE as of 2026-09-14 — see integration_test/README.md's
+/// "OPEN" section: `driver.login()` intermittently reverts session to null
+/// after an apparently-successful login, confirmed NOT an app bug (manual
+/// `flutter run -d chrome` login works every time). The equivalent backend-
+/// only coverage (no UI, no browser, reliable) is
+/// `test/backend/grn_backend_test.dart` — prefer that until this is
+/// root-caused.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -36,18 +45,17 @@ void main() {
     await verifier.login();
     await resetQaTenant(verifier);
 
-    await tester.pumpWidget(const ProviderScope(child: SakalApp()));
-    await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 20));
+    // main.dart's real bootstrap awaits LocalStorage.init() before runApp —
+    // an integration_test that pumps SakalApp() directly must replicate
+    // that, or every LocalStorage getter (clientNo, deviceOfflineEnabled,
+    // ...) throws LateInitializationError the moment app.dart's own
+    // startup path touches one. Confirmed live 2026-09-13.
+    await LocalStorage.init();
 
-    if (tester.any(find.byKey(const Key('login_client_no')))) {
-      await tester.enterText(find.byKey(const Key('login_client_no')), TestTenantConfig.clientNo);
-      await tester.enterText(find.byKey(const Key('login_username')), TestTenantConfig.username);
-      await tester.enterText(find.byKey(const Key('login_password')), TestTenantConfig.password);
-      await tester.tap(find.byKey(const Key('btn_login')));
-      await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 20));
-    }
+    await tester.pumpWidget(const ProviderScope(child: SakalApp()));
 
     final driver = ScreenDriver(tester);
+    await driver.login();
 
     await driver.navigateTo(RouteNames.grnEntry);
     await driver.fillForm({

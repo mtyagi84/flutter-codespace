@@ -161,7 +161,7 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 | Screen | Feature Code | Route | Detail File | Status | Open Bugs |
 |---|---|---|---|---|---|
 | Purchase Order | PR-PO | /purchase/orders | [purchase_order.md](purchase/purchase_order.md) | Not Started | |
-| Goods Receipt (GRN) | PR-GRN | /purchase/grn | [grn.md](purchase/grn.md) | Not Started | |
+| Goods Receipt (GRN) | PR-GRN | /purchase/grn | [grn.md](purchase/grn.md) | Passed (backend) | Create/Approve/stock-cost/immutability verified via `test/backend/grn_backend_test.dart`, 2026-09-14. CCC #4/#7 (button state, responsive) not yet UI-verified — see `AUTOMATED_RUN_LOG.md`. |
 | Purchase Invoice | PR-INV | /purchase/invoices | [purchase_invoice.md](purchase/purchase_invoice.md) | Not Started | |
 | Purchase Return | PR-RET | /purchase/returns | [purchase_return.md](purchase/purchase_return.md) | Not Started | |
 | Supplier Payment | PR-PAY | /purchase/payments | — | **N/A — Not Built** | Route is still a placeholder |

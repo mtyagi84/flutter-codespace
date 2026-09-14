@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sakal/core/router/app_router.dart';
+import 'package:sakal/test_support/test_tenant_config.dart';
 
 /// Drives the real app's widget tree via `integration_test` — never the DOM
 /// (Flutter Web renders to canvas/WebGL, so DOM-based tools like Playwright
@@ -30,12 +31,99 @@ class ScreenDriver {
   final WidgetTester tester;
   ScreenDriver(this.tester);
 
+  /// Logs in as the QA tenant, tolerating all three real login-screen states
+  /// — never assume only the full 3-field form exists. The browser profile
+  /// used by a local `flutter drive` run persists `LocalStorage.clientNo`
+  /// (and the JWT, via `flutter_secure_storage`'s web backend) ACROSS
+  /// separate runs, same as it would for a real returning user's browser —
+  /// confirmed live 2026-09-13 (a first run showed the full Client
+  /// ID/Username/Password form; every run after showed the "quick login"
+  /// state — client_no already saved, only Username/Password fields exist).
+  /// A test that only ever fills the 3-field form (gated by `login_client_no`
+  /// being present) silently no-ops on every run after the first, then fails
+  /// confusingly downstream when `navigateTo` lands back on `/login`. This
+  /// method fills whichever fields actually exist, using `btn_login`'s own
+  /// presence as the single reliable "still need to log in" signal, and
+  /// treats its absence after pumping the app as "already authenticated,
+  /// nothing to do" (a real state this app supports but this test suite
+  /// doesn't currently exercise, since every test calls `resetQaTenant`
+  /// first via a fresh `BackendVerifier`, not the driven UI session).
+  Future<void> login() async {
+    // pumpAndSettle does NOT reliably wait out a bare async gap with no
+    // continuous frame scheduling (e.g. an async initial-route/session
+    // check before the router picks a screen) — confirmed live 2026-09-13:
+    // it returned after its full 20s timeout with the login screen still
+    // not yet rendered, making `btn_login` absent look identical to "already
+    // authenticated." Poll explicitly for either signal instead of trusting
+    // a single pumpAndSettle call.
+    var loginVisible = false;
+    for (var i = 0; i < 100 && !loginVisible; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+      loginVisible = tester.any(find.byKey(const Key('btn_login')));
+    }
+    if (!loginVisible) {
+      return; // already authenticated — nothing to do
+    }
+    // Extra settle: LoginScreen's own initState kicks off a real async
+    // OfflineSessionCache lookup (_checkCache) that can still be in flight
+    // the instant btn_login first appears — confirmed live 2026-09-13 as a
+    // "Bad state: No element" race inside enterText immediately after this
+    // poll, on a field that WAS present one line earlier. flutter drive runs
+    // on a real wall clock with real I/O, unlike flutter test's synthetic
+    // clock, so this class of race is real, not hypothetical.
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+    if (tester.any(find.byKey(const Key('login_client_no')))) {
+      await _enterTextResilient(const Key('login_client_no'), TestTenantConfig.clientNo);
+    }
+    await _enterTextResilient(const Key('login_username'), TestTenantConfig.username);
+    await _enterTextResilient(const Key('login_password'), TestTenantConfig.password);
+    await tester.tap(find.byKey(const Key('btn_login')));
+
+    // Same reasoning as the poll above — login here is two sequential real
+    // network round trips (fn_login + fn_get_user_menu), and pumpAndSettle
+    // is not a reliable substitute for actually waiting them out.
+    var stillOnLogin = true;
+    for (var i = 0; i < 150 && stillOnLogin; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+      stillOnLogin = tester.any(find.byKey(const Key('btn_login')));
+    }
+    if (stillOnLogin) {
+      fail('Still on login screen after submitting credentials — login did not succeed.\n'
+          'Visible text: ${visibleText()}');
+    }
+  }
+
+  /// `tester.enterText` occasionally throws `StateError: Bad state: No
+  /// element` on a field confirmed present one statement earlier — a real
+  /// wall-clock rebuild race (see `login()`'s own comment), not a bug in the
+  /// target screen. One short settle + one retry is standard, proportionate
+  /// resilience for a real-device/real-I/O test; a SECOND failure is a real
+  /// problem and is allowed to propagate.
+  Future<void> _enterTextResilient(Key key, String value) async {
+    try {
+      await tester.enterText(find.byKey(key), value);
+    } on StateError {
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.enterText(find.byKey(key), value);
+    }
+  }
+
   /// Navigates via the app's own router (never a hand-typed route string —
   /// always pass a `RouteNames` constant), exercising the same
   /// navigation/permission path a real user hits.
   Future<void> navigateTo(String routeName) async {
     appRouter.go(routeName);
     await tester.pumpAndSettle(const Duration(milliseconds: 100), EnginePhase.sendSemanticsUpdate, const Duration(seconds: 15));
+    // A freshly-navigated screen's own async data load (pickers' options
+    // lists, etc.) is the same pumpAndSettle-vs-real-async-gap class of
+    // issue as login() above — a fixed real-time pump buffer here is a
+    // general safety net every future screen benefits from, since this
+    // method has no specific key to poll for.
+    for (var i = 0; i < 25; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
   }
 
   /// Fills a form from a field-key -> value map. Each key must match a
@@ -54,7 +142,10 @@ class ScreenDriver {
   Future<void> fillForm(Map<String, dynamic> fieldValues) async {
     for (final entry in fieldValues.entries) {
       final outer = find.byKey(ValueKey(entry.key));
-      expect(outer, findsOneWidget, reason: 'Missing Key("${entry.key}") on screen — add it before this field can be driven.');
+      if (tester.any(outer) == false) {
+        fail('Missing Key("${entry.key}") on screen — add it before this field can be driven.\n'
+            'Visible text on screen right now (to tell "wrong screen" from "wrong key name"):\n${visibleText()}');
+      }
       final target = _resolveEditable(outer);
 
       final value = entry.value;
@@ -113,6 +204,22 @@ class ScreenDriver {
   void expectNoErrorState() {
     expect(find.textContaining('Unable to'), findsNothing);
     expect(find.byIcon(Icons.error_outline), findsNothing);
+  }
+
+  /// Dumps every visible Text widget's string — a cheap diagnostic for
+  /// "which screen am I actually on" when a key-driven action fails. Added
+  /// 2026-09-13 after a Missing-Key failure gave no way to tell "wrong
+  /// screen (nav/permission/login issue)" from "wrong key name" without
+  /// re-running under a debugger.
+  String visibleText() {
+    final texts = <String>{};
+    for (final element in find.byType(Text).evaluate()) {
+      final widget = element.widget;
+      if (widget is Text && widget.data != null && widget.data!.trim().isNotEmpty) {
+        texts.add(widget.data!.trim());
+      }
+    }
+    return texts.isEmpty ? '(no Text widgets found)' : texts.join(' | ');
   }
 }
 
