@@ -175,6 +175,24 @@ class BackendVerifier {
     }
   }
 
+  /// Raw PostgREST GET against an arbitrary path (a view, or `/rpc/<fn>`)
+  /// with a caller-fully-specified query string — no automatic client_id/
+  /// company_id injection, no result wrapping. Built for the Reporting
+  /// Engine smoke test, which needs to call ~80 different views/functions
+  /// generically from data-driven `ric_report_definitions` rows, each with
+  /// its own filter shape — `get()`'s fixed tenant-scoping assumption
+  /// doesn't fit a call that's sometimes a VIEW (RLS-scoped for free) and
+  /// sometimes a FUNCTION (needs explicit p_client_id/p_company_id args).
+  Future<List<dynamic>> rawGet(String path, Map<String, dynamic> params) async {
+    if (_accessToken == null) throw StateError('Call login() first');
+    try {
+      final res = await _dio.get(path, queryParameters: params);
+      return res.data as List<dynamic>;
+    } on DioException catch (e) {
+      throw StateError('rawGet($path) failed: ${e.response?.statusCode} ${e.response?.data}');
+    }
+  }
+
   /// Plain PostgREST DELETE — for the rare test-fixture cleanup case where
   /// a table's own UNIQUE constraint is NOT partial on is_deleted (so a
   /// soft-delete-then-rename cleanup, the pattern used everywhere else in

@@ -106,19 +106,19 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 ### Master Reports (13) — detail file: [`reports/master_data_reports.md`](reports/master_data_reports.md)
 | Screen | Feature Code | Route | Status | Open Bugs |
 |---|---|---|---|---|
-| Item/Product Master Report | MST-RPT-PRD | /reports/PRODUCT_MASTER_REPORT | Not Started | |
-| Customer Master Report | MST-RPT-CUS | /reports/CUSTOMER_MASTER_REPORT | Not Started | |
-| Supplier Master Report | MST-RPT-SUP | /reports/SUPPLIER_MASTER_REPORT | Not Started | |
-| Chart of Accounts Report | MST-RPT-COA | /reports/CHART_OF_ACCOUNTS_REPORT | Not Started | |
-| Chart of Groups Report | MST-RPT-GRP | /reports/CHART_OF_GROUPS_REPORT | Not Started | |
-| Item Category Master Report | MST-RPT-ITC | /reports/ITEM_CATEGORY_MASTER_REPORT | Not Started | |
-| Common Masters Report | MST-RPT-CMN | /reports/COMMON_MASTERS_REPORT | Not Started | |
-| Tax Master Report | MST-RPT-TAX | /reports/TAX_MASTER_REPORT | Not Started | |
-| Tax Group Master Report | MST-RPT-TXG | /reports/TAX_GROUP_MASTER_REPORT | Not Started | |
-| Payment Terms Master Report | MST-RPT-PYT | /reports/PAYMENT_TERMS_MASTER_REPORT | Not Started | |
-| Sales Executives Master Report | MST-RPT-SEX | /reports/SALES_EXECUTIVES_MASTER_REPORT | Not Started | |
-| Additional Charges Master Report | MST-RPT-CHG | /reports/ADDITIONAL_CHARGES_MASTER_REPORT | Not Started | |
-| Price List Report | MST-RPT-PRC | /reports/PRICE_LIST_REPORT | Not Started | |
+| Item/Product Master Report | MST-RPT-PRD | /reports/PRODUCT_MASTER_REPORT | Passed (backend, smoke) | |
+| Customer Master Report | MST-RPT-CUS | /reports/CUSTOMER_MASTER_REPORT | Passed (backend, smoke) | |
+| Supplier Master Report | MST-RPT-SUP | /reports/SUPPLIER_MASTER_REPORT | Passed (backend, smoke) | |
+| Chart of Accounts Report | MST-RPT-COA | /reports/CHART_OF_ACCOUNTS_REPORT | Passed (backend, smoke) | |
+| Chart of Groups Report | MST-RPT-GRP | /reports/CHART_OF_GROUPS_REPORT | Passed (backend, smoke) | |
+| Item Category Master Report | MST-RPT-ITC | /reports/ITEM_CATEGORY_MASTER_REPORT | Passed (backend, smoke) | |
+| Common Masters Report | MST-RPT-CMN | /reports/COMMON_MASTERS_REPORT | Passed (backend, smoke) | |
+| Tax Master Report | MST-RPT-TAX | /reports/TAX_MASTER_REPORT | Passed (backend, smoke) | |
+| Tax Group Master Report | MST-RPT-TXG | /reports/TAX_GROUP_MASTER_REPORT | Passed (backend, smoke) | |
+| Payment Terms Master Report | MST-RPT-PYT | /reports/PAYMENT_TERMS_MASTER_REPORT | Passed (backend, smoke) | |
+| Sales Executives Master Report | MST-RPT-SEX | /reports/SALES_EXECUTIVES_MASTER_REPORT | Passed (backend, smoke) | |
+| Additional Charges Master Report | MST-RPT-CHG | /reports/ADDITIONAL_CHARGES_MASTER_REPORT | Passed (backend, smoke) | |
+| Price List Report | MST-RPT-PRC | /reports/PRICE_LIST_REPORT | Passed (backend, smoke) | |
 
 ---
 
@@ -139,19 +139,19 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 ### Reports (13) — detail file: [`reports/sales_reports.md`](reports/sales_reports.md)
 | Screen | Feature Code | Route | Status | Open Bugs |
 |---|---|---|---|---|
-| Sales Register | SL-RPT-REG | /reports/SALES_REGISTER | Not Started | |
-| Item-wise Gross Profit | SL-RPT-IGP | /reports/ITEM_GROSS_PROFIT | Not Started | |
-| Invoice-wise Gross Profit | SL-RPT-VGP | /reports/INVOICE_GROSS_PROFIT | Not Started | |
-| Customer-wise Gross Profit | SL-RPT-CGP | /reports/CUSTOMER_GROSS_PROFIT | Not Started | |
-| Salesperson-wise Performance | SL-RPT-SPP | /reports/SALESPERSON_PERFORMANCE | Not Started | |
-| Sales Return Register | SL-RPT-RET | /reports/SALES_RETURN_REGISTER | Not Started | |
-| Sales Quotation Register | SL-RPT-SQR | /reports/SALES_QUOTATION_REGISTER | Not Started | |
-| Sales Order Register | SL-RPT-SOR | /reports/SALES_ORDER_REGISTER | Not Started | |
-| Quotation Conversion Analysis | SL-RPT-QCA | /reports/QUOTATION_CONVERSION_ANALYSIS | Not Started | |
-| Open Sales Orders | SL-RPT-OSO | /reports/OPEN_SALES_ORDERS | Not Started | |
-| Sales Delivery Register | SL-RPT-SDR | /reports/SALES_DELIVERY_REGISTER | Not Started | |
-| Pending Deliveries | SL-RPT-PDL | /reports/PENDING_DELIVERIES | Not Started | |
-| Cash Receipt / Collections Register | SL-RPT-CRR | /reports/CASH_RECEIPT_REGISTER | Not Started | |
+| Sales Register | SL-RPT-REG | /reports/SALES_REGISTER | Passed (backend, smoke) | |
+| Item-wise Gross Profit | SL-RPT-IGP | /reports/ITEM_GROSS_PROFIT | Passed (backend, smoke) | |
+| Invoice-wise Gross Profit | SL-RPT-VGP | /reports/INVOICE_GROSS_PROFIT | Passed (backend, smoke) | |
+| Customer-wise Gross Profit | SL-RPT-CGP | /reports/CUSTOMER_GROSS_PROFIT | Passed (backend, smoke) | |
+| Salesperson-wise Performance | SL-RPT-SPP | /reports/SALESPERSON_PERFORMANCE | Passed (backend, smoke) | |
+| Sales Return Register | SL-RPT-RET | /reports/SALES_RETURN_REGISTER | Passed (backend, smoke) | |
+| Sales Quotation Register | SL-RPT-SQR | /reports/SALES_QUOTATION_REGISTER | Passed (backend, smoke) | |
+| Sales Order Register | SL-RPT-SOR | /reports/SALES_ORDER_REGISTER | Passed (backend, smoke) | |
+| Quotation Conversion Analysis | SL-RPT-QCA | /reports/QUOTATION_CONVERSION_ANALYSIS | Passed (backend, smoke) | |
+| Open Sales Orders | SL-RPT-OSO | /reports/OPEN_SALES_ORDERS | Passed (backend, smoke) | |
+| Sales Delivery Register | SL-RPT-SDR | /reports/SALES_DELIVERY_REGISTER | Passed (backend, smoke) | |
+| Pending Deliveries | SL-RPT-PDL | /reports/PENDING_DELIVERIES | Passed (backend, smoke) | |
+| Cash Receipt / Collections Register | SL-RPT-CRR | /reports/CASH_RECEIPT_REGISTER | Passed (backend, smoke) | |
 
 ---
 
@@ -169,19 +169,19 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 ### Reports (13) — detail file: [`reports/purchase_reports.md`](reports/purchase_reports.md)
 | Screen | Feature Code | Route | Status | Open Bugs |
 |---|---|---|---|---|
-| Purchase Order Register | PR-RPT-POR | /reports/PURCHASE_ORDER_REGISTER | Not Started | |
-| Pending Purchase Orders | PR-RPT-PPO | /reports/PENDING_PURCHASE_ORDERS | Not Started | |
-| GRN Register | PR-RPT-GRN | /reports/GRN_REGISTER | Not Started | |
-| GRN Pending to Bill | PR-RPT-GPB | /reports/GRN_PENDING_TO_BILL | Not Started | |
-| Purchase Invoice Register | PR-RPT-PIR | /reports/PURCHASE_INVOICE_REGISTER | Not Started | |
-| Purchase Return Register | PR-RPT-PRR | /reports/PURCHASE_RETURN_REGISTER | Not Started | |
-| Purchase Charges Register | PR-RPT-CHG | /reports/PURCHASE_CHARGES_REGISTER | Not Started | |
-| Supplier-wise Purchase Analysis | PR-RPT-SUP | /reports/SUPPLIER_PURCHASE_ANALYSIS | Not Started | |
-| Item-wise Purchase History | PR-RPT-ITM | /reports/ITEM_PURCHASE_HISTORY | Not Started | |
-| Reorder / Replenishment | PR-RPT-ROR | /reports/REORDER_REPLENISHMENT | Not Started | |
-| Vendor On-Time Delivery | PR-RPT-OTD | /reports/VENDOR_ON_TIME_DELIVERY | Not Started | |
-| Purchase Price Variance | PR-RPT-PPV | /reports/PURCHASE_PRICE_VARIANCE | Not Started | |
-| Purchase Tax Summary | PR-RPT-TAX | /reports/PURCHASE_TAX_SUMMARY | Not Started | |
+| Purchase Order Register | PR-RPT-POR | /reports/PURCHASE_ORDER_REGISTER | Passed (backend, smoke) | |
+| Pending Purchase Orders | PR-RPT-PPO | /reports/PENDING_PURCHASE_ORDERS | Passed (backend, smoke) | |
+| GRN Register | PR-RPT-GRN | /reports/GRN_REGISTER | Passed (backend, smoke) | |
+| GRN Pending to Bill | PR-RPT-GPB | /reports/GRN_PENDING_TO_BILL | Passed (backend, smoke) | |
+| Purchase Invoice Register | PR-RPT-PIR | /reports/PURCHASE_INVOICE_REGISTER | Passed (backend, smoke) | |
+| Purchase Return Register | PR-RPT-PRR | /reports/PURCHASE_RETURN_REGISTER | Passed (backend, smoke) | |
+| Purchase Charges Register | PR-RPT-CHG | /reports/PURCHASE_CHARGES_REGISTER | Passed (backend, smoke) | |
+| Supplier-wise Purchase Analysis | PR-RPT-SUP | /reports/SUPPLIER_PURCHASE_ANALYSIS | Passed (backend, smoke) | |
+| Item-wise Purchase History | PR-RPT-ITM | /reports/ITEM_PURCHASE_HISTORY | Passed (backend, smoke) | |
+| Reorder / Replenishment | PR-RPT-ROR | /reports/REORDER_REPLENISHMENT | Passed (backend, smoke) | |
+| Vendor On-Time Delivery | PR-RPT-OTD | /reports/VENDOR_ON_TIME_DELIVERY | Failed (backend, smoke) | param_target mismatch (expected_date vs expected_delivery_date) — fix written, migration 186 not yet deployed
+| Purchase Price Variance | PR-RPT-PPV | /reports/PURCHASE_PRICE_VARIANCE | Passed (backend, smoke) | |
+| Purchase Tax Summary | PR-RPT-TAX | /reports/PURCHASE_TAX_SUMMARY | Passed (backend, smoke) | |
 
 ---
 
@@ -204,21 +204,21 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 ### Reports (15) — detail file: [`reports/inventory_reports.md`](reports/inventory_reports.md)
 | Screen | Feature Code | Route | Status | Open Bugs |
 |---|---|---|---|---|
-| Stock Balance by Location | IN-RPT-SBM | /reports/STOCK_BALANCE_MATRIX | Not Started | |
-| Stock Value by Location | IN-RPT-SVL | /reports/STOCK_VALUE_BY_LOCATION | Not Started | |
-| Stock Details | IN-RPT-SDT | /reports/STOCK_DETAILS | Not Started | |
-| Stock Ledger | IN-RPT-SDL | /reports/STOCK_LEDGER | Not Started | |
-| Stock Transfer Register | IN-RPT-STR | /reports/STOCK_TRANSFER_REGISTER | Not Started | |
-| Pending Transfer to Receive | IN-RPT-STP | /reports/STOCK_TRANSFER_PENDING_RECEIPT | Not Started | |
-| Stock Receipt Register | IN-RPT-SRR | /reports/STOCK_RECEIPT_REGISTER | Not Started | |
-| Stock Adjustment Register | IN-RPT-SAD | /reports/STOCK_ADJUSTMENT_REGISTER | Not Started | |
-| Stock Adjustment Register (with Value) | IN-RPT-SAV | /reports/STOCK_ADJUSTMENT_REGISTER_VALUE | Not Started | |
-| Material Requisition Register | IN-RPT-MRQ | /reports/MATERIAL_REQUISITION_REGISTER | Not Started | |
-| Material Issue Register | IN-RPT-MIS | /reports/MATERIAL_ISSUE_REGISTER | Not Started | |
-| Stock Count Worksheet Register | IN-RPT-SCW | /reports/STOCK_COUNT_WORKSHEET_REGISTER | Not Started | |
-| Stock Count Variance Report | IN-RPT-SCV | /reports/STOCK_COUNT_VARIANCE_REPORT | Not Started | |
-| Stock Count Variance Report (with Value) | IN-RPT-SCV-V | /reports/STOCK_COUNT_VARIANCE_REPORT_VALUE | Not Started | |
-| Product Movement Analysis | IN-RPT-PMA | /reports/PRODUCT_MOVEMENT_ANALYSIS | Not Started | |
+| Stock Balance by Location | IN-RPT-SBM | /reports/STOCK_BALANCE_MATRIX | Passed (backend, smoke) | |
+| Stock Value by Location | IN-RPT-SVL | /reports/STOCK_VALUE_BY_LOCATION | Passed (backend, smoke) | |
+| Stock Details | IN-RPT-SDT | /reports/STOCK_DETAILS | Passed (backend, smoke) | |
+| Stock Ledger | IN-RPT-SDL | /reports/STOCK_LEDGER | Passed (backend, smoke) | |
+| Stock Transfer Register | IN-RPT-STR | /reports/STOCK_TRANSFER_REGISTER | Passed (backend, smoke) | |
+| Pending Transfer to Receive | IN-RPT-STP | /reports/STOCK_TRANSFER_PENDING_RECEIPT | Passed (backend, smoke) | |
+| Stock Receipt Register | IN-RPT-SRR | /reports/STOCK_RECEIPT_REGISTER | Passed (backend, smoke) | |
+| Stock Adjustment Register | IN-RPT-SAD | /reports/STOCK_ADJUSTMENT_REGISTER | Passed (backend, smoke) | |
+| Stock Adjustment Register (with Value) | IN-RPT-SAV | /reports/STOCK_ADJUSTMENT_REGISTER_VALUE | Passed (backend, smoke) | |
+| Material Requisition Register | IN-RPT-MRQ | /reports/MATERIAL_REQUISITION_REGISTER | Passed (backend, smoke) | |
+| Material Issue Register | IN-RPT-MIS | /reports/MATERIAL_ISSUE_REGISTER | Passed (backend, smoke) | |
+| Stock Count Worksheet Register | IN-RPT-SCW | /reports/STOCK_COUNT_WORKSHEET_REGISTER | Passed (backend, smoke) | |
+| Stock Count Variance Report | IN-RPT-SCV | /reports/STOCK_COUNT_VARIANCE_REPORT | Passed (backend, smoke) | |
+| Stock Count Variance Report (with Value) | IN-RPT-SCV-V | /reports/STOCK_COUNT_VARIANCE_REPORT_VALUE | Passed (backend, smoke) | |
+| Product Movement Analysis | IN-RPT-PMA | /reports/PRODUCT_MOVEMENT_ANALYSIS | Failed (backend, smoke) | RLS/GRANT regression from migration 185 — fix written, migration 186 not yet deployed
 
 ---
 
@@ -236,27 +236,27 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 ### Reports incl. Bank Reconciliation (21 + 4 = 25) — detail file: [`reports/finance_reports.md`](reports/finance_reports.md)
 | Screen | Feature Code | Route | Status | Open Bugs |
 |---|---|---|---|---|
-| Trial Balance | FN-TRB | /reports/TRIAL_BALANCE | Not Started | |
-| Profit & Loss | FN-PNL | /reports/PROFIT_LOSS_SUMMARY | Not Started | |
-| Balance Sheet | FN-BSH | /reports/BALANCE_SHEET_SUMMARY | Not Started | |
-| Pending Bills Register | FN-RPT-PBR | /reports/PENDING_BILLS_REGISTER | Not Started | |
-| Pending Bills by Customer | FN-RPT-PBG | /reports/PENDING_BILLS_BY_CUSTOMER | Not Started | |
-| **Account Ledger** | FN-RPT-LDG | /reports/ACCOUNT_LEDGER | Not Started | Dr/Cr + currency bugs fixed migration 184 (`a172574`), verified live vs. real data, pending redeploy verification |
-| Customer Ageing | FN-RPT-CAG | /reports/CUSTOMER_AGEING | Not Started | |
-| Supplier Ageing | FN-RPT-SAG | /reports/SUPPLIER_AGEING | Not Started | |
-| Pending Bills by Supplier | FN-RPT-PBS | /reports/PENDING_BILLS_BY_SUPPLIER | Not Started | |
-| Expense Report | FN-RPT-EXR | /reports/EXPENSE_REPORT_MATRIX | Not Started | |
-| Profit & Loss Account Detail | FN-RPT-PNL | /reports/PROFIT_LOSS_DETAIL | Not Started | |
-| Balance Sheet Account Detail | FN-RPT-BSD | /reports/BALANCE_SHEET_DETAIL | Not Started | |
-| Cash Flow Summary | FN-RPT-CFS | /reports/CASH_FLOW_SUMMARY | Not Started | |
-| Cash Flow Account Detail | FN-RPT-CFD | /reports/CASH_FLOW_DETAIL | Not Started | |
-| Day Book / Voucher Register | FN-RPT-DBK | /reports/DAY_BOOK_REGISTER | Not Started | |
-| Cheque Register | FN-RPT-CHQ | /reports/CHEQUE_REGISTER | Not Started | |
-| VAT / Tax Return Summary | FN-RPT-VAT | /reports/VAT_TAX_RETURN_SUMMARY | Not Started | |
-| Withholding Tax Summary | FN-RPT-WHT | /reports/WITHHOLDING_TAX_SUMMARY | Not Started | |
-| Financial Ratio Analysis | FN-RPT-RAT | /reports/FINANCIAL_RATIO_ANALYSIS | Not Started | |
-| Cash & Bank Position Summary | FN-RPT-CBP | /reports/CASH_BANK_POSITION_SUMMARY | Not Started | |
-| Bank Reconciliation Statement | FN-RPT-BRS | /reports/BANK_RECONCILIATION_STATEMENT | Not Started | |
+| Trial Balance | FN-TRB | /reports/TRIAL_BALANCE | Passed (backend, smoke) | |
+| Profit & Loss | FN-PNL | /reports/PROFIT_LOSS_SUMMARY | Passed (backend, smoke) | |
+| Balance Sheet | FN-BSH | /reports/BALANCE_SHEET_SUMMARY | Passed (backend, smoke) | |
+| Pending Bills Register | FN-RPT-PBR | /reports/PENDING_BILLS_REGISTER | Passed (backend, smoke) | |
+| Pending Bills by Customer | FN-RPT-PBG | /reports/PENDING_BILLS_BY_CUSTOMER | Passed (backend, smoke) | |
+| **Account Ledger** | FN-RPT-LDG | /reports/ACCOUNT_LEDGER | Passed (backend, smoke) | Dr/Cr + currency bugs fixed migration 184 (`a172574`), verified live vs. real data, pending redeploy verification. Underlying fn_account_ledger call itself confirmed reachable via reports_smoke_backend_test.dart, 2026-09-14. |
+| Customer Ageing | FN-RPT-CAG | /reports/CUSTOMER_AGEING | Passed (backend, smoke) | |
+| Supplier Ageing | FN-RPT-SAG | /reports/SUPPLIER_AGEING | Passed (backend, smoke) | |
+| Pending Bills by Supplier | FN-RPT-PBS | /reports/PENDING_BILLS_BY_SUPPLIER | Passed (backend, smoke) | |
+| Expense Report | FN-RPT-EXR | /reports/EXPENSE_REPORT_MATRIX | Passed (backend, smoke) | |
+| Profit & Loss Account Detail | FN-RPT-PNL | /reports/PROFIT_LOSS_DETAIL | Passed (backend, smoke) | |
+| Balance Sheet Account Detail | FN-RPT-BSD | /reports/BALANCE_SHEET_DETAIL | Passed (backend, smoke) | |
+| Cash Flow Summary | FN-RPT-CFS | /reports/CASH_FLOW_SUMMARY | Passed (backend, smoke) | |
+| Cash Flow Account Detail | FN-RPT-CFD | /reports/CASH_FLOW_DETAIL | Passed (backend, smoke) | |
+| Day Book / Voucher Register | FN-RPT-DBK | /reports/DAY_BOOK_REGISTER | Failed (backend, smoke) | param_target mismatch (date vs trans_date) — fix written, migration 186 not yet deployed
+| Cheque Register | FN-RPT-CHQ | /reports/CHEQUE_REGISTER | Failed (backend, smoke) | param_target mismatch (date vs trans_date) — fix written, migration 186 not yet deployed
+| VAT / Tax Return Summary | FN-RPT-VAT | /reports/VAT_TAX_RETURN_SUMMARY | Failed (backend, smoke) | param_target mismatch (date vs trans_date) — fix written, migration 186 not yet deployed
+| Withholding Tax Summary | FN-RPT-WHT | /reports/WITHHOLDING_TAX_SUMMARY | Failed (backend, smoke) | param_target mismatch (date vs trans_date) — fix written, migration 186 not yet deployed
+| Financial Ratio Analysis | FN-RPT-RAT | /reports/FINANCIAL_RATIO_ANALYSIS | Passed (backend, smoke) | |
+| Cash & Bank Position Summary | FN-RPT-CBP | /reports/CASH_BANK_POSITION_SUMMARY | Passed (backend, smoke) | |
+| Bank Reconciliation Statement | FN-RPT-BRS | /reports/BANK_RECONCILIATION_STATEMENT | Passed (backend, smoke) | |
 
 ### Bank Reconciliation (4) — detail file: [`finance/bank_reconciliation.md`](finance/bank_reconciliation.md)
 | Screen | Feature Code | Route | Status | Open Bugs |
