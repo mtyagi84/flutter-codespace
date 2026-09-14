@@ -107,6 +107,20 @@ automation" per screen until that track is revisited.
 
 **Real test-authoring gotcha, worth flagging for every future Masters test file**: `resetQaTenant()` only wipes TRANSACTION data, never master data — a master-data insert test is NOT automatically idempotent across re-runs the way every transaction test is. `masters_crud_backend_test.dart`'s `setUpAll` now renames/relocates any leftover row from a prior run (by its known unique code) before inserting fresh ones, specifically so re-running the file (or the whole suite) doesn't fail on a duplicate-key 409 from its own previous run.
 
+### Finance Masters (5 of 8 given dedicated tests — 3 covered elsewhere, see notes)
+| Screen | Result | Notes |
+|---|---|---|
+| MST-COA Chart of Accounts | PASS | Already covered by `masters_crud_backend_test.dart` (same `rim_accounts` table). |
+| MST-TAX Tax Master | PASS | `rim_tax_types` is a genuinely global lookup table (no client_id/company_id at all) — first test file to need `getUnscoped()` for it. |
+| MST-TXG Tax Groups | PASS | Group + member junction row round-trip. |
+| MST-ALS Account Link Setup | PASS (indirect) | Not a new dedicated test — this exact mechanism (`rim_account_link_setup`/`rim_account_link_defaults`) has been exercised repeatedly, all session, by `CommonRefs`' `ensure*AccountLink()` fixture helpers used as setup in a dozen+ transaction tests. Writing a redundant CRUD test would duplicate real coverage that already exists. |
+| MST-IAL Item Account Links | Not Started | `rim_account_links` (per-product override) — genuinely untested so far, real follow-up. |
+| MST-CHG Additional Charges | PASS | |
+| FN-EX Exchange Rates | PASS | **Real schema drift found**: migration 018 originally defined `mid_rate` as a GENERATED column (`(buying_rate+selling_rate)/2`); migration 179 dropped the generated expression and renamed it to a plain, independently user-editable `exchange_rate` column — CLAUDE.md/this file's own earlier description of `mid_rate` as "always computed" is now stale for any tenant that's run migration 179. A `uq_rim_exchange_rates` unique constraint (company/location/date/from/to) also exists live but isn't visible in migration 018's own file — added by a later migration not yet cross-referenced. |
+| MST-OB Opening Balance | PASS | **Real dead-schema finding**: `rim_opening_balances` (migration 013) is completely orphaned — `opening_balance_remote_ds.dart` actually POSTs to `/rid_opening_balance_lines` (migration 133, a differently-shaped table with `base_amount`/`local_amount`/`party_amount`/`party_currency` instead of a single `ob_amount`). The old table still exists live and accepts inserts, so nothing user-facing is broken, but it's a genuine follow-up candidate for cleanup (a future migration to `DROP TABLE rim_opening_balances`) since it could mislead a future session grepping migrations for "where does Opening Balance live." |
+
+**Master-data test-authoring lesson, reinforced by this file**: grepping a migration file for a table's `CREATE TABLE` is necessary but not sufficient — always verify against the CURRENT live schema (a failed insert naming the real column, or PostgREST's own "did you mean" hint) before trusting an old migration's column list, since later migrations frequently rename/restructure columns (`mid_rate`→`exchange_rate`) or fully supersede a table (`rim_opening_balances`→`rid_opening_balance_lines`) without a matching update to the original file's own comments.
+
 **Note on running this suite**: always `flutter test test/backend/ --concurrency=1` — files race resetQaTenant() against each other in parallel (see `test/backend/README.md`).
 
 **Real bugs found and fixed this session (not test-plan execution, but surfaced while setting up the local toolchain to run it)**:

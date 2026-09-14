@@ -94,14 +94,14 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 ### Finance Masters (8) — detail file: [`masters/finance_masters.md`](masters/finance_masters.md)
 | Screen | Feature Code | Route | Status | Open Bugs |
 |---|---|---|---|---|
-| Chart of Accounts | MST-COA | /master/accounts | Not Started | |
-| Tax Master | MST-TAX | /master/tax-master | Not Started | |
-| Tax Groups | MST-TXG | /master/tax-groups | Not Started | |
-| Account Link Setup | MST-ALS | /master/account-link-setup | Not Started | |
+| Chart of Accounts | MST-COA | /master/accounts | Passed (backend) | Covered via masters_crud_backend_test.dart (same rim_accounts table as Customer/Supplier) |
+| Tax Master | MST-TAX | /master/tax-master | Passed (backend) | |
+| Tax Groups | MST-TXG | /master/tax-groups | Passed (backend) | |
+| Account Link Setup | MST-ALS | /master/account-link-setup | Passed (backend, indirect) | Exercised repeatedly all session via CommonRefs ensure*AccountLink() helpers against the real rim_account_link_setup/rim_account_link_defaults tables |
 | Item Account Links | MST-IAL | /master/item-account-links | Not Started | |
-| Additional Charges | MST-CHG | /master/additional-charges | Not Started | |
-| Exchange Rates | FN-EX | /finance/exchange-rates | Not Started | |
-| Opening Balance | MST-OB | /master/opening-balances | Not Started | |
+| Additional Charges | MST-CHG | /master/additional-charges | Passed (backend) | |
+| Exchange Rates | FN-EX | /finance/exchange-rates | Passed (backend) | mid_rate renamed to exchange_rate (migration 179) — not a bare-computed column anymore |
+| Opening Balance | MST-OB | /master/opening-balances | Passed (backend) | Real table is rid_opening_balance_lines (migration 133) — rim_opening_balances (migration 013) is dead/orphaned schema, never consumed by the screen |
 
 ### Master Reports (13) — detail file: [`reports/master_data_reports.md`](reports/master_data_reports.md)
 | Screen | Feature Code | Route | Status | Open Bugs |
