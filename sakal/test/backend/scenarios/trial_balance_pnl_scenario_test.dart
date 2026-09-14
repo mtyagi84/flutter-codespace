@@ -13,24 +13,25 @@ import 'scenario_helpers.dart';
 ///
 /// income_total is hand-verifiable exactly ($360 sold - $120 returned =
 /// $240, since revenue reversal on return is a SEPARATE, unconditional
-/// code path — 099_sales_return.sql's v_crn_lines block — unaffected by
-/// the Sales-Return-doesn't-reverse-COGS-for-deferred-dispatch bug
-/// documented in order_to_cash_scenario_test.dart). expense_total/
+/// code path — 099_sales_return.sql's v_crn_lines block). expense_total/
 /// net_profit are DELIBERATELY not asserted as exact hand-derived numbers
-/// here: besides that same COGS-reversal bug (which alone would make
-/// expense_total $300, not the "if fixed" $200), settling a PARTIAL
-/// residual balance via Cash Receipt after a Sales Return also triggers a
-/// real Exchange Gain/Loss ('EXC') voucher (104_cash_receipt.sql line
-/// ~656) — confirmed live to post ~$239.91 to the fixture's shared
-/// EXCHANGE_GAIN_LOSS_ACCOUNT stand-in, itself a side effect of this
-/// test's own nominal (non-real-FX) local_amount convention (same
-/// documented convention as cash_receipt_backend_test.dart) meeting a
-/// genuinely different code path once a bill is partially settled after a
-/// return, not a new app bug worth chasing further here. Rather than
-/// asserting a number that depends on stacking two independent
-/// complications, this test asserts the thing scenario 10 actually
-/// exists to prove: whatever P&L's net_profit comes out to, the Balance
-/// Sheet's own Current Year Earnings node exactly equals it.
+/// here: settling a PARTIAL residual balance via Cash Receipt after a
+/// Sales Return also triggers a real Exchange Gain/Loss ('EXC') voucher
+/// (104_cash_receipt.sql line ~656) — confirmed live to post ~$239.91 to
+/// the fixture's shared EXCHANGE_GAIN_LOSS_ACCOUNT stand-in, itself a side
+/// effect of this test's own nominal (non-real-FX) local_amount
+/// convention (same documented convention as cash_receipt_backend_test.
+/// dart) meeting a genuinely different code path once a bill is partially
+/// settled after a return — a test-fixture artifact, not an app bug.
+/// (The Sales-Return-doesn't-reverse-COGS-for-deferred-dispatch bug this
+/// same scenario-testing effort found is now FIXED — migration 187,
+/// deployed 2026-09-14 — so expense_total DOES correctly include the
+/// COGS reversal; it just isn't asserted to an exact hand-derived number
+/// here because of the separate FX-noise complication above.) Rather than
+/// asserting a number that depends on an unrelated fixture artifact, this
+/// test asserts the thing scenario 10 actually exists to prove: whatever
+/// P&L's net_profit comes out to, the Balance Sheet's own Current Year
+/// Earnings node exactly equals it.
 void main() {
   late BackendVerifier verifier;
   late CommonRefs refs;

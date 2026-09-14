@@ -15,10 +15,12 @@ import 'scenario_helpers.dart';
 ///
 /// Numbers: Purchase-to-Pay buys 10 units @ $50 (never sold, all 10 remain
 /// in stock). Order-to-Cash separately buys another 10 @ $50, sells 6 @
-/// $60, returns 2 (deferred-dispatch return bug means stock stays at 4 for
-/// that chain — see order_to_cash_scenario_test.dart's own doc comment).
-/// Combined remaining stock: 10 (untouched) + 4 (Order-to-Cash chain,
-/// after the confirmed return bug) = 14 units @ $50 = $700 inventory.
+/// $60, returns 2 — the deferred-dispatch Sales Return bug found by this
+/// same scenario-testing effort (see order_to_cash_scenario_test.dart) is
+/// now FIXED (migration 187, deployed 2026-09-14), so the return
+/// genuinely restores those 2 units. Combined remaining stock: 10
+/// (untouched) + 6 (Order-to-Cash chain: 10 bought - 6 sold + 2 returned)
+/// = 16 units @ $50 = $800 inventory.
 void main() {
   late BackendVerifier verifier;
   late CommonRefs refs;
@@ -55,16 +57,12 @@ void main() {
 
     // Cross-check the specific inventory asset figure — computed
     // precisely from each chain's own actually-observed remaining stock,
-    // not assumed independently. The Order-to-Cash chain's own return step
-    // has a confirmed bug (see order_to_cash_scenario_test.dart) that
-    // leaves its stock at 4 instead of the "correct" 6 — this scenario
-    // reflects whatever the REAL current numbers are, not a hypothetical
-    // fixed-bug state.
+    // not assumed independently.
     final combinedStock = await ScenarioHelpers.stockAt(verifier, TestTenantConfig.locationId);
-    // ptp never sells (10 remain) + otc buys 10, sells 6 (delivered), of
-    // which the return does NOT restore 2 (confirmed bug) = 10 + 4 = 14.
-    expect(combinedStock.currentStock, 14,
-        reason: 'Combined remaining stock across both independent chains, reflecting the confirmed Sales Return deferred-dispatch bug\'s real effect — not a hand-assumed "should be" figure');
+    // ptp never sells (10 remain) + otc buys 10, sells 6 (delivered), then
+    // the return correctly restores 2 (fixed by migration 187) = 10 + 6 = 16.
+    expect(combinedStock.currentStock, 16,
+        reason: 'Combined remaining stock across both independent chains');
 
     // Also independently confirm the customer and supplier sides both
     // reconcile to what each chain's own scenario test already proved in

@@ -79,62 +79,37 @@ void main() {
     final cogsLine = cosOnDelivery.firstWhere((l) => l['trans_nature'] == 'DR');
     expect((cogsLine['base_amount'] as num).toDouble(), closeTo(300, 0.01), reason: '6 units at the GRN cost of 50/unit');
 
-    // ── REAL BUG FOUND, NOT FIXED (documented, not silently worked around) ──
-    // Sales Return's own stock/COGS reversal is gated ENTIRELY on
-    // `v_invoice.stock_dispatch_mode = 'IMMEDIATE'` (099_sales_return.sql
-    // line ~788) — for a DEFERRED-dispatch invoice (Credit Sales Invoice ->
-    // Sales Delivery, exactly this scenario's own chain), that condition
-    // is false, so the ENTIRE stock+COGS reversal block is skipped
-    // unconditionally, even though the goods were genuinely delivered (via
-    // Sales Delivery, which posted a real COS voucher tagged
-    // `source_doc_type='SALES_DELIVERY'`). Confirmed live 2026-09-14: the
-    // return posts only its CRN (customer credit) voucher — no stock comes
-    // back, no COGS reverses. This is a real inventory/financial-reporting
-    // integrity gap for any deferred-dispatch credit sale that gets
-    // returned after delivery: stock stays permanently understated by the
-    // returned quantity, and COGS stays permanently overstated.
-    //
-    // A correct fix is NOT a one-line condition change: the cost-reversal
-    // lookup (line ~816-823) reads the ORIGINAL per-unit cost from
-    // `rid_finance_lines` filtered `source_doc_type='SALES_INVOICE'`,
-    // `source_line_type='STOCK'`, `source_line_no=<invoice_line_serial>` —
-    // but a Sales Delivery's own COS lines are tagged `source_line_no =
-    // <the DELIVERY's own line serial_no>` (102_sales_delivery.sql line
-    // ~679), NOT the invoice's line serial. A correct fix needs to join
-    // through `rid_sales_delivery_lines` (which does carry
-    // `invoice_line_serial`) to translate invoice-line-serial into the
-    // right delivery-line-serial before it can find the matching COS
-    // line — and must also account for a single invoice line being
-    // delivered across more than one Sales Delivery (partial delivery),
-    // which this schema's own design already allows for
-    // (`delivered_qty` accumulates across deliveries, migration 102 line
-    // ~685). Writing that multi-table join correctly blind, with no way
-    // to run it against the live database this session, risks a WRONG
-    // fix to accounting-critical code being worse than no fix — flagged
-    // here for a future session with database access, not attempted.
-    //
-    // This test asserts the CONFIRMED CURRENT (buggy) behavior below —
-    // update these assertions once `fn_approve_sales_return` is actually
-    // fixed, don't leave this test silently "passing against a bug"
-    // without this comment block explaining why.
+    // ── REAL BUG FOUND 2026-09-14, FIXED SAME DAY (migration 187) ──────────
+    // Sales Return's own stock/COGS reversal was gated ENTIRELY on
+    // `v_invoice.stock_dispatch_mode = 'IMMEDIATE'` — for a DEFERRED-
+    // dispatch invoice (Credit Sales Invoice -> Sales Delivery, exactly
+    // this scenario's own chain), that condition was false, so the entire
+    // reversal block was skipped even though the goods were genuinely
+    // delivered. Fixed in `187_sales_return_deferred_dispatch_reversal_
+    // fix.sql`, deployed and confirmed live the same day once direct
+    // database access became available: the fix broadens the gate to also
+    // fire when the invoice is DEFERRED but has at least one APPROVED
+    // Sales Delivery — `rid_sales_return_lines.cost_price` was ALREADY
+    // correctly populated for both dispatch modes (migrations 121/123
+    // resolve/copy it unconditionally), so no join-based cost re-lookup
+    // was actually needed once the current function body was read
+    // correctly — only the gate itself was wrong.
     final returnStatus = await verifier.getOne('rih_sales_return_headers', {'return_no': 'eq.${result.returnNo}'}, select: 'status');
     expect(returnStatus['status'], 'APPROVED');
 
     final returnCos = await ScenarioHelpers.financeLinesFor(
       verifier, sourceDocType: 'SALES_RETURN', sourceDocNo: result.returnNo, voucherTypeCode: 'COS',
     );
-    expect(returnCos, isEmpty,
-        reason: 'CONFIRMED BUG (see comment above): a return against a DEFERRED-dispatch invoice posts NO COS reversal at all, even after delivery');
+    expect(returnCos, isNotEmpty, reason: 'Sales Return must reverse the returned units\' own cost, even for a deferred-dispatch sale (187)');
+    ScenarioHelpers.assertLinesBalance(returnCos);
+    final cogsReversalLine = returnCos.firstWhere((l) => l['trans_nature'] == 'CR');
+    expect((cogsReversalLine['base_amount'] as num).toDouble(), closeTo(100, 0.01), reason: '2 returned units at 50/unit cost');
 
-    // Stock stays at 4 (does NOT return to 6) — the confirmed bug's
-    // inventory-side symptom.
+    // Final stock: 10 bought - 6 sold (at Delivery) + 2 returned = 6.
     final stock = await ScenarioHelpers.stockAt(verifier, TestTenantConfig.locationId);
-    expect(stock.currentStock, 4,
-        reason: 'CONFIRMED BUG: the returned 2 units never come back into stock for a deferred-dispatch sale — this SHOULD be 6 once fixed');
+    expect(stock.currentStock, 6);
 
     // Customer ledger: 360 Dr (invoice) - 120 (return) - 240 (receipt) = 0.
-    // The CUSTOMER side of the return is unaffected by the stock/COGS bug
-    // above — the CRN voucher posts correctly regardless.
     final receiptStatus = await verifier.getOne('rih_cash_receipt_headers', {'receipt_no': 'eq.${result.receiptNo}'}, select: 'status');
     expect(receiptStatus['status'], 'APPROVED');
 

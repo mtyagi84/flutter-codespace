@@ -41,16 +41,15 @@ settlement contrast, and Trial-Balance/Balance-Sheet/P&L cross-report
 reconciliation — asserting actual computed numbers, not just "no error."
 Full detail and results table in `AUTOMATED_RUN_LOG.md`.
 
-**🔴 Found the single most significant bug of this entire test-plan
-effort**: Sales Return silently skips ALL stock+COGS reversal for a
-DEFERRED-dispatch sale (any Credit Sales Invoice fulfilled via a separate
-Sales Delivery) — confirmed live with real numbers, NOT fixed (the correct
-fix needs a multi-table join this session couldn't safely write blind
-without database access to test it). Every DRC/Zambia business running
-deferred-dispatch credit sales and processing a routine customer return is
-silently understating inventory and overstating COGS. See
-`AUTOMATED_RUN_LOG.md`'s own dedicated section for the full root-cause
-trace and exactly what a fix needs to do.
+**🔴 Found AND FIXED the single most significant bug of this entire
+test-plan effort**: Sales Return silently skipped ALL stock+COGS reversal
+for a DEFERRED-dispatch sale (any Credit Sales Invoice fulfilled via a
+separate Sales Delivery). Confirmed live with real numbers, then fixed
+and re-confirmed live once direct database access became available —
+migration 187, deployed 2026-09-14. The real fix turned out to be a
+one-condition broadening, not the multi-table join originally feared (the
+initial analysis had read a stale, superseded version of the function).
+See `AUTOMATED_RUN_LOG.md`'s own dedicated section for the full trace.
 
 **Last updated:** 2026-09-14
 **How to use this document:** every screen in the app has one row below, linking to
