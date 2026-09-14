@@ -117,13 +117,33 @@ class CommonRefs {
   /// Get-or-create a COMPANY-granularity STOCK_IN_TRANSIT_ACCOUNT link —
   /// needed by Stock Transfer's Approve (`fn_approve_stock_transfer` raises
   /// `ACCOUNT_LINK_NOT_CONFIGURED` without it, confirmed live 2026-09-14).
-  /// Reuses the existing Stock account as a pragmatic stand-in — no
-  /// dedicated "Stock in Transit" account existed in the QA tenant's seeded
-  /// COA, and this test cares about the transfer's status/quantity
-  /// transitions, not the specific GL account chosen for the transit leg.
-  static Future<void> ensureStockInTransitAccountLink(BackendVerifier verifier) async {
+  static Future<void> ensureStockInTransitAccountLink(BackendVerifier verifier) =>
+      _ensureCompanyAccountLink(verifier, 'STOCK_IN_TRANSIT_ACCOUNT', TestTenantConfig.stockAccountId);
+
+  /// Get-or-create a COMPANY-granularity STOCK_ADJUSTMENT_ACCOUNT link —
+  /// needed by Stock Adjustment's Approve (`fn_approve_stock_adjustment`
+  /// raises `ACCOUNT_LINK_NOT_CONFIGURED` without it, confirmed live
+  /// 2026-09-14 — the identical gap class as Stock Transfer's own missing
+  /// link, both apparently never backfilled when this QA tenant was seeded).
+  static Future<void> ensureStockAdjustmentAccountLink(BackendVerifier verifier) =>
+      _ensureCompanyAccountLink(verifier, 'STOCK_ADJUSTMENT_ACCOUNT', TestTenantConfig.stockAccountId);
+
+  /// Shared get-or-create for any COMPANY-granularity `rim_account_link_*`
+  /// pair — the generic mechanism CLAUDE.md's "Account Link Setup
+  /// Framework" describes, used identically by Stock Transfer's
+  /// STOCK_IN_TRANSIT_ACCOUNT and Stock Adjustment's STOCK_ADJUSTMENT_
+  /// ACCOUNT (a THIRD occurrence would just add another one-line wrapper
+  /// here, not new logic). Reuses whatever account is passed in as a
+  /// pragmatic stand-in — no dedicated accounts of these exact names
+  /// existed in the QA tenant's seeded COA, and these tests care about
+  /// status/quantity transitions, not the specific GL account chosen.
+  static Future<void> _ensureCompanyAccountLink(
+    BackendVerifier verifier,
+    String linkKey,
+    String accountId,
+  ) async {
     final types = await verifier.getUnscoped('rim_account_link_types', const {}, select: 'id,link_key');
-    final linkTypeId = types.firstWhere((t) => t['link_key'] == 'STOCK_IN_TRANSIT_ACCOUNT')['id'] as String;
+    final linkTypeId = types.firstWhere((t) => t['link_key'] == linkKey)['id'] as String;
 
     final existing = await verifier.get('rim_account_link_defaults', {'link_type_id': 'eq.$linkTypeId'});
     if (existing.isNotEmpty) return;
@@ -135,7 +155,7 @@ class CommonRefs {
     await verifier.insert('rim_account_link_defaults', {
       'link_type_id': linkTypeId,
       'link_key_id': null,
-      'account_id': TestTenantConfig.stockAccountId,
+      'account_id': accountId,
       'is_active': true,
     });
   }
