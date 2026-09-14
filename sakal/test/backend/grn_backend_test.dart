@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sakal/test_support/backend_verifier.dart';
+import 'package:sakal/test_support/common_refs.dart';
 import 'package:sakal/test_support/tenant_reset.dart';
 import 'package:sakal/test_support/test_tenant_config.dart';
 
@@ -29,27 +30,13 @@ import 'package:sakal/test_support/test_tenant_config.dart';
 /// used throughout the integration_test/ suite for consistency).
 void main() {
   late BackendVerifier verifier;
-  late String uomId;
-  late String currencyId; // rim_currencies.id (UUID surrogate, not the ISO code)
+  late CommonRefs refs;
 
   setUpAll(() async {
     verifier = BackendVerifier();
     await verifier.login();
     await resetQaTenant(verifier);
-
-    final product = await verifier.getOne(
-      'rim_products',
-      {'id': 'eq.${TestTenantConfig.productId}'},
-      select: 'base_uom_id',
-    );
-    uomId = product['base_uom_id'] as String;
-
-    final currency = await verifier.getOne(
-      'rim_currencies',
-      {'currency_id': 'eq.USD'},
-      select: 'id',
-    );
-    currencyId = currency['id'] as String;
+    refs = await CommonRefs.load(verifier);
   });
 
   test('GRN: create DRAFT, approve, stock+cost posts correctly', () async {
@@ -62,7 +49,7 @@ void main() {
         'grn_date': DateTime.now().toIso8601String().split('T').first,
         'supplier_id': TestTenantConfig.supplierId,
         'receipt_mode': 'DIRECT',
-        'grn_currency_id': currencyId,
+        'grn_currency_id': refs.currencyId,
         'rate_to_base': 1,
         'rate_to_local': 1,
         'gross_amount': 1000,
@@ -76,7 +63,7 @@ void main() {
         {
           'serial_no': 1,
           'product_id': TestTenantConfig.productId,
-          'uom_id': uomId,
+          'uom_id': refs.uomId,
           'uom_conversion_factor': 1,
           'qty_pack': 100,
           'qty_loose': 0,
@@ -144,7 +131,7 @@ void main() {
           'grn_date': DateTime.now().toIso8601String().split('T').first,
           'supplier_id': TestTenantConfig.supplierId,
           'receipt_mode': 'DIRECT',
-          'grn_currency_id': currencyId,
+          'grn_currency_id': refs.currencyId,
           'rate_to_base': 1,
           'rate_to_local': 1,
           'gross_amount': 2000,

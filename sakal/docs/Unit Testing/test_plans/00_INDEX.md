@@ -160,7 +160,7 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 ### Transactions (5) — each has its own detail file in [`purchase/`](purchase/)
 | Screen | Feature Code | Route | Detail File | Status | Open Bugs |
 |---|---|---|---|---|---|
-| Purchase Order | PR-PO | /purchase/orders | [purchase_order.md](purchase/purchase_order.md) | Not Started | |
+| Purchase Order | PR-PO | /purchase/orders | [purchase_order.md](purchase/purchase_order.md) | Passed (backend) | Create/Approve/immutability/PO_NO_LINES verified via `test/backend/purchase_order_backend_test.dart`, 2026-09-14. CCC #4/#7 not yet UI-verified. |
 | Goods Receipt (GRN) | PR-GRN | /purchase/grn | [grn.md](purchase/grn.md) | Passed (backend) | Create/Approve/stock-cost/immutability verified via `test/backend/grn_backend_test.dart`, 2026-09-14. CCC #4/#7 (button state, responsive) not yet UI-verified — see `AUTOMATED_RUN_LOG.md`. |
 | Purchase Invoice | PR-INV | /purchase/invoices | [purchase_invoice.md](purchase/purchase_invoice.md) | Not Started | |
 | Purchase Return | PR-RET | /purchase/returns | [purchase_return.md](purchase/purchase_return.md) | Not Started | |

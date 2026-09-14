@@ -44,6 +44,9 @@ automation" per screen until that track is revisited.
 | Screen | Method | Result | Bugs found | Notes |
 |---|---|---|---|---|
 | PR-GRN (GRN entry) | Backend RPC (`test/backend/grn_backend_test.dart`) | PASS | None (business logic) | Create DRAFT → Approve → stock/cost verified (100 units @ $10) → immutability (edit-after-approve) blocked correctly. CCC #4/#7 not covered (needs UI). |
+| PR-PO (Purchase Order) | Backend RPC (`test/backend/purchase_order_backend_test.dart`) | PASS | None (business logic) | Create DRAFT → Approve → immutability blocked → zero-line DRAFT save succeeds but Approve correctly rejects (PO_NO_LINES, enforced only at Approve per migration 040's own comment). CCC #4/#7 not covered. |
+
+**Note on running this suite**: always `flutter test test/backend/ --concurrency=1` — files race resetQaTenant() against each other in parallel (see `test/backend/README.md`).
 
 **Real bugs found and fixed this session (not test-plan execution, but surfaced while setting up the local toolchain to run it)**:
 1. `app_database.g.dart` was stale relative to `app_database.dart` (missing `exchangeRate` column) since commit `f2108fe` — regenerated, commit `066d6d6`.
