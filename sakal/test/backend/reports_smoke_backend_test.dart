@@ -89,21 +89,12 @@ void main() {
       return id;
     }
 
-    // Known-broken as of 2026-09-14, fixed in migration 186 but NOT yet
-    // deployable from this session (no direct Postgres/Supabase SQL-editor
-    // access available here — see docs/Unit Testing/test_plans/
-    // AUTOMATED_RUN_LOG.md's Reports section). Once 186 is run against the
-    // live tenant, remove entries here one at a time and confirm each
-    // newly passes before deleting its line, rather than clearing the
-    // whole list at once.
-    const knownBrokenPendingMigration186 = {
-      'PRODUCT_MOVEMENT_ANALYSIS',    // ric_product_movement_snapshot RLS/grant
-      'VENDOR_ON_TIME_DELIVERY',      // param_target 'expected_date' -> 'expected_delivery_date'
-      'DAY_BOOK_REGISTER',            // param_target 'date' -> 'trans_date'
-      'CHEQUE_REGISTER',              // param_target 'date' -> 'trans_date'
-      'VAT_TAX_RETURN_SUMMARY',       // param_target 'date' -> 'trans_date'
-      'WITHHOLDING_TAX_SUMMARY',      // param_target 'date' -> 'trans_date'
-    };
+    // Migration 186 deployed 2026-09-14 (direct DB access became available
+    // this session) — all 6 previously-known-broken reports confirmed
+    // fixed live, see AUTOMATED_RUN_LOG.md. Kept as an empty set (rather
+    // than deleted outright) so a future regression here has an obvious
+    // place to land, matching this file's own original intent.
+    const knownBrokenPendingMigration186 = <String>{};
 
     final failures = <String>[];
 
