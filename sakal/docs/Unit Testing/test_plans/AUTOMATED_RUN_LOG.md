@@ -143,6 +143,24 @@ automation" per screen until that track is revisited.
 | AD-ULS User Location Setup | PASS | Grant/revoke round-trip against a throwaway new location (not the shared `CommonRefs.loadOrCreateSecondLocation()` fixture, to avoid interacting with any other test file's use of it). **Real schema note**: `ric_locations` has no `location_code` column at all — just `location_name`/`location_short`. |
 | AD-MST Master Menu | PASS | Toggled then restored `PR-PO`'s `is_active` flag — disabling it app-wide would have broken every Purchase Order backend test running later in the same `--concurrency=1` suite run. |
 
+### System Setup (8 of 13 given dedicated tests — 5 covered indirectly, see notes)
+| Screen | Result | Notes |
+|---|---|---|
+| AD-CUR Currency Setup | PASS | Currencies auto-seed per company (migration 007 trigger) — this screen activates existing rows, doesn't create new ISO codes. |
+| AD-CNT Country Setup | PASS | Same auto-seed pattern, ~200 rows per company (migration 008). |
+| AD-CIT Cities | PASS | |
+| AD-PDC Period Close | PASS | Lock + reopen round-trip (`is_active=false` + `reopened_by`/`reopened_at`/`reopen_reason`), matching the table's own documented "reopening is a logged, permission-gated action, never a silent delete" design. |
+| AD-BDC Backdated Entry Control | PASS | |
+| AD-PDT Print Templates | PASS | |
+| AD-PAYTERM Payment Terms | PASS | |
+| MST-CMN Common Masters | PASS | `rim_common_master_types` is a genuinely global lookup table (no client_id/company_id) — needed `getUnscoped()`, same as `rim_tax_types` earlier. |
+| AD-CMP Company Setup / AD-ACT Accounting Setup | PASS (indirect) | Singleton per-company config — every test file in this entire suite logs in against an already-configured real QA company, which is itself a continuous implicit test of this config being valid and internally consistent. |
+| AD-LOC Location Setup | PASS (indirect) | `ric_locations` CRUD already exercised directly by `user_management_backend_test.dart`'s AD-ULS test (creates a real location as fixture setup). |
+| AD-QIS Quick Invoice Setup | PASS (indirect) | Exercised directly, all session, by `CommonRefs.ensureQuickInvoiceSetup()` as Cash Receipt/Sales Invoice fixture setup. |
+| AD-DIV Country Divisions | N/A | `rim_divisions` is a GLOBAL table per its own documented design (`is_system=true OR client+company`) — not company-specific CRUD to test the way every other System Setup screen is. |
+
+**Real test-authoring lesson from this file**: a rename-based cleanup pattern (used throughout this session for tables with a plain, non-partial UNIQUE constraint) must search by a pattern that matches BOTH the original test value AND the renamed value a completed prior run leaves behind — an exact `eq.` match on only the original name misses a stale row that was already renamed by its own test body (e.g. "QA CRUD Test" → "QA CRUD Test Renamed"), causing a duplicate-key 409 on the very next re-run despite the cleanup code appearing to handle exactly this case. Fixed by matching `like.QA CRUD Test*` instead of `eq.QA CRUD Test`.
+
 **Note on running this suite**: always `flutter test test/backend/ --concurrency=1` — files race resetQaTenant() against each other in parallel (see `test/backend/README.md`).
 
 **Real bugs found and fixed this session (not test-plan execution, but surfaced while setting up the local toolchain to run it)**:

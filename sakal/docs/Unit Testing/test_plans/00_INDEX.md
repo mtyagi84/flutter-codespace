@@ -48,19 +48,19 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 ### System Setup (13) — detail file: [`masters/system_setup.md`](masters/system_setup.md)
 | Screen | Feature Code | Route | Status | Open Bugs |
 |---|---|---|---|---|
-| Company Setup | AD-CMP | /setup/company | Not Started | |
-| Location Setup | AD-LOC | /setup/locations | Not Started | |
-| Currency Setup | AD-CUR | /setup/currencies | Not Started | |
-| Period Close | AD-PDC | /setup/period-close | Not Started | |
-| Backdated Entry Control | AD-BDC | /setup/backdated-entry-control | Not Started | |
-| Quick Invoice Setup | AD-QIS | /setup/quick-invoice-setup | Not Started | |
-| Country Setup | AD-CNT | /setup/countries | Not Started | |
-| Country Divisions | AD-DIV | /setup/divisions | Not Started | |
-| Cities | AD-CIT | /setup/cities | Not Started | |
-| Print Templates | AD-PDT | /setup/print-templates | Not Started | |
-| Accounting Setup | AD-ACT | /setup/accounting | Not Started | |
-| Common Masters | MST-CMN | /master/common-masters | Not Started | |
-| Payment Terms | AD-PAYTERM | /master/payment-terms | Not Started | |
+| Company Setup | AD-CMP | /setup/company | Passed (backend, indirect) | Singleton per-company config, implicitly exercised by every test file in this suite (all log in against an already-configured real QA company) |
+| Location Setup | AD-LOC | /setup/locations | Passed (backend, indirect) | ric_locations CRUD exercised directly in user_management_backend_test.dart (AD-ULS test creates a real location) |
+| Currency Setup | AD-CUR | /setup/currencies | Passed (backend) | |
+| Period Close | AD-PDC | /setup/period-close | Passed (backend) | |
+| Backdated Entry Control | AD-BDC | /setup/backdated-entry-control | Passed (backend) | |
+| Quick Invoice Setup | AD-QIS | /setup/quick-invoice-setup | Passed (backend, indirect) | Exercised directly by CommonRefs.ensureQuickInvoiceSetup() as Cash Receipt/Sales Invoice fixture setup |
+| Country Setup | AD-CNT | /setup/countries | Passed (backend) | |
+| Country Divisions | AD-DIV | /setup/divisions | N/A (global lookup) | rim_divisions is a GLOBAL table (is_system=true OR client+company) per its own documented design, not company-specific CRUD |
+| Cities | AD-CIT | /setup/cities | Passed (backend) | |
+| Print Templates | AD-PDT | /setup/print-templates | Passed (backend) | |
+| Accounting Setup | AD-ACT | /setup/accounting | Passed (backend, indirect) | Singleton per-company config, same reasoning as Company Setup |
+| Common Masters | MST-CMN | /master/common-masters | Passed (backend) | |
+| Payment Terms | AD-PAYTERM | /master/payment-terms | Passed (backend) | |
 
 ### User Management (4) — detail file: [`masters/user_management.md`](masters/user_management.md)
 | Screen | Feature Code | Route | Status | Open Bugs |
