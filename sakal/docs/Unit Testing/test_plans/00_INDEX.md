@@ -98,7 +98,7 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 | Tax Master | MST-TAX | /master/tax-master | Passed (backend) | |
 | Tax Groups | MST-TXG | /master/tax-groups | Passed (backend) | |
 | Account Link Setup | MST-ALS | /master/account-link-setup | Passed (backend, indirect) | Exercised repeatedly all session via CommonRefs ensure*AccountLink() helpers against the real rim_account_link_setup/rim_account_link_defaults tables |
-| Item Account Links | MST-IAL | /master/item-account-links | Not Started | |
+| Item Account Links | MST-IAL | /master/item-account-links | Passed (backend) | |
 | Additional Charges | MST-CHG | /master/additional-charges | Passed (backend) | |
 | Exchange Rates | FN-EX | /finance/exchange-rates | Passed (backend) | mid_rate renamed to exchange_rate (migration 179) — not a bare-computed column anymore |
 | Opening Balance | MST-OB | /master/opening-balances | Passed (backend) | Real table is rid_opening_balance_lines (migration 133) — rim_opening_balances (migration 013) is dead/orphaned schema, never consumed by the screen |

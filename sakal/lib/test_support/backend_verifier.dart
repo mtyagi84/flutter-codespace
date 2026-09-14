@@ -174,4 +174,19 @@ class BackendVerifier {
       throw StateError('insert($table) failed: ${e.response?.statusCode} ${e.response?.data}');
     }
   }
+
+  /// Plain PostgREST DELETE — for the rare test-fixture cleanup case where
+  /// a table's own UNIQUE constraint is NOT partial on is_deleted (so a
+  /// soft-delete-then-rename cleanup, the pattern used everywhere else in
+  /// this suite, can't free the key for a fresh insert on re-run) and a
+  /// hard delete of a throwaway test row is the only practical option.
+  /// Never use this against a real transaction/document row.
+  Future<void> delete(String table, Map<String, String> filters) async {
+    if (_accessToken == null) throw StateError('Call login() first');
+    try {
+      await _dio.delete('/$table', queryParameters: filters);
+    } on DioException catch (e) {
+      throw StateError('delete($table, $filters) failed: ${e.response?.statusCode} ${e.response?.data}');
+    }
+  }
 }

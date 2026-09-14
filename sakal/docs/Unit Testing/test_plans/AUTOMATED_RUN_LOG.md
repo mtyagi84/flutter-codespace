@@ -161,6 +161,13 @@ automation" per screen until that track is revisited.
 
 **Real test-authoring lesson from this file**: a rename-based cleanup pattern (used throughout this session for tables with a plain, non-partial UNIQUE constraint) must search by a pattern that matches BOTH the original test value AND the renamed value a completed prior run leaves behind — an exact `eq.` match on only the original name misses a stale row that was already renamed by its own test body (e.g. "QA CRUD Test" → "QA CRUD Test Renamed"), causing a duplicate-key 409 on the very next re-run despite the cleanup code appearing to handle exactly this case. Fixed by matching `like.QA CRUD Test*` instead of `eq.QA CRUD Test`.
 
+### MST-IAL Item Account Links (last of the 34 Master screens)
+| Screen | Result | Notes |
+|---|---|---|
+| MST-IAL Item Account Links | PASS | Per-product override layer (`rim_account_links`, `link_type='ITEM'`) on top of the company/category/location-level `rim_account_link_setup` mechanism already exercised elsewhere. **New `BackendVerifier.delete()` added** — this table's `UNIQUE(client_id, company_id, link_type_id, product_id)` is plain, not partial on `is_deleted`, so the soft-delete-then-rename cleanup pattern used everywhere else in this suite can't free the key; a real hard delete of the throwaway test row is the only practical option here. First (and expected to stay rare) use of a genuine DELETE in this test suite. |
+
+**Milestone: all 34 Master screens now have backend-RPC test coverage** (24 direct + 9 indirect/already-exercised + 1 N/A global-lookup). Combined with the earlier 25/25 Transaction screens, that's 59 of 141 total screens (Masters + Transactions) fully covered. Reports (79 screens) are next.
+
 **Note on running this suite**: always `flutter test test/backend/ --concurrency=1` — files race resetQaTenant() against each other in parallel (see `test/backend/README.md`).
 
 **Real bugs found and fixed this session (not test-plan execution, but surfaced while setting up the local toolchain to run it)**:
