@@ -94,6 +94,19 @@ automation" per screen until that track is revisited.
 
 **Real bug found this session (test-fixture setup, not app code)**: `CommonRefs.loadOrCreateDepartmentArea()` first tried account `5200` ("Operating Expense") as the QA tenant's test expense account — `fn_approve_material_issue`/`fn_post_voucher` correctly rejected it with `ACCOUNT_NOT_POSTABLE` ("Account 5200 is a group/header account and cannot receive postings"). This is the GL engine's own validation working exactly as intended — 5200 is a parent/header account in the seeded COA, its child `5210` ("Administrative Expenses") is the real postable leaf. Fixed by switching to `5210` (confirmed via `rim_accounts.posting_allowed = true`) and correcting the already-inserted `rim_department_consumption_areas` row in the live QA tenant (a one-time PATCH, not a code path — this is fixture data, not a migration). Worth remembering: **any new test fixture that references a GL account must confirm `posting_allowed = true` first** — a plausible-sounding account name is not enough, and the group/header vs. leaf distinction is invisible without checking that column directly.
 
+### Masters module (started 2026-09-14)
+| Screen | Result | Notes |
+|---|---|---|
+| MST-CUST Customer Master | PASS | Plain `rim_accounts` insert/read/update/deactivate round-trip. Masters have **no dedicated RPC layer** — confirmed by reading `customer_master_screen.dart`/`supplier_master_screen.dart`/`products_remote_ds.dart`/`chart_of_accounts_screen.dart` directly, they POST/PATCH straight to their own PostgREST table. So Master testing is fundamentally CRUD+RLS, not multi-step lifecycle — RLS itself already exhaustively verified by the earlier `security_invoker` fix. |
+| MST-SUPP Supplier Master | PASS | Same pattern, Supplier group account `2110` ("Trade Payables"). |
+| MST-PRD Product Master | PASS | `rim_products` insert/update round-trip. **UOM is not its own table** — resolved via `rim_common_master_types` (`type_key='UNIT'`) → `rim_common_masters`, same generic mechanism as Brand/Color. |
+
+**Two real fixture/schema-shape gaps found while diagnosing (not app bugs, both fixed in the test file)**:
+1. `rim_accounts.accounting_std` is a hidden NOT NULL column (`'INDIAN'`/`'OHADA'` CHECK) not visible from the screen's own obviously-required fields — every insert needs it explicitly.
+2. `rim_products` has no `is_saleable`/`is_purchasable` columns at all — those are keys inside the `flags` JSONB column, not dedicated columns (confirmed via `026_product_master.sql`'s own doc comment: "Business flags — dynamic, admin defines via rim_product_flag_types screen").
+
+**Real test-authoring gotcha, worth flagging for every future Masters test file**: `resetQaTenant()` only wipes TRANSACTION data, never master data — a master-data insert test is NOT automatically idempotent across re-runs the way every transaction test is. `masters_crud_backend_test.dart`'s `setUpAll` now renames/relocates any leftover row from a prior run (by its known unique code) before inserting fresh ones, specifically so re-running the file (or the whole suite) doesn't fail on a duplicate-key 409 from its own previous run.
+
 **Note on running this suite**: always `flutter test test/backend/ --concurrency=1` — files race resetQaTenant() against each other in parallel (see `test/backend/README.md`).
 
 **Real bugs found and fixed this session (not test-plan execution, but surfaced while setting up the local toolchain to run it)**:

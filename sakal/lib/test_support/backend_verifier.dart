@@ -88,7 +88,11 @@ class BackendVerifier {
     Map<String, dynamic> data,
   ) async {
     if (_accessToken == null) throw StateError('Call login() first');
-    await _dio.patch('/$table', queryParameters: filters, data: data);
+    try {
+      await _dio.patch('/$table', queryParameters: filters, data: data);
+    } on DioException catch (e) {
+      throw StateError('patch($table, $filters) failed: ${e.response?.statusCode} ${e.response?.data}');
+    }
   }
 
   /// Plain PostgREST GET with NO automatic client_id/company_id filters —
@@ -159,11 +163,15 @@ class BackendVerifier {
     Map<String, dynamic> data,
   ) async {
     if (_accessToken == null) throw StateError('Call login() first');
-    final res = await _dio.post(
-      '/$table',
-      data: {'client_id': _clientId, 'company_id': _companyId, ...data},
-      options: Options(headers: {'Prefer': 'return=representation'}),
-    );
-    return (res.data as List).cast<Map<String, dynamic>>().first;
+    try {
+      final res = await _dio.post(
+        '/$table',
+        data: {'client_id': _clientId, 'company_id': _companyId, ...data},
+        options: Options(headers: {'Prefer': 'return=representation'}),
+      );
+      return (res.data as List).cast<Map<String, dynamic>>().first;
+    } on DioException catch (e) {
+      throw StateError('insert($table) failed: ${e.response?.statusCode} ${e.response?.data}');
+    }
   }
 }

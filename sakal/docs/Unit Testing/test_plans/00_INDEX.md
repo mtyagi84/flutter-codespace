@@ -73,19 +73,19 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 ### Sales Masters (3) — detail file: [`masters/sales_masters.md`](masters/sales_masters.md)
 | Screen | Feature Code | Route | Status | Open Bugs |
 |---|---|---|---|---|
-| Customer Master | MST-CUST | /master/customers | Not Started | |
+| Customer Master | MST-CUST | /master/customers | Passed (backend) | |
 | Price Master | SL-PRC | /sales/price-master | Not Started | |
 | Sales Executives | SL-EXE | /sales/sales-executives | Not Started | |
 
 ### Purchase Masters (1) — detail file: [`masters/purchase_masters.md`](masters/purchase_masters.md)
 | Screen | Feature Code | Route | Status | Open Bugs |
 |---|---|---|---|---|
-| Supplier Master | MST-SUPP | /master/suppliers | Not Started | |
+| Supplier Master | MST-SUPP | /master/suppliers | Passed (backend) | |
 
 ### Inventory Masters (5) — detail file: [`masters/inventory_masters.md`](masters/inventory_masters.md)
 | Screen | Feature Code | Route | Status | Open Bugs |
 |---|---|---|---|---|
-| Product Master | MST-PRD | /master/products | Not Started | |
+| Product Master | MST-PRD | /master/products | Passed (backend) | |
 | Item Categories | MST-ITC | /master/item-categories | Not Started | |
 | Product Category Level Setup | AD-PCS | /setup/category-levels | Not Started | |
 | Product Flag Types | AD-PGS | /setup/product-flag-types | Not Started | |
