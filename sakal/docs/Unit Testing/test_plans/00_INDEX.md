@@ -31,6 +31,27 @@ work:**
 3. **3 screens are still unbuilt placeholders** (Supplier Payment, Stock
    List, Cash Book) — nothing to test yet.
 
+## UPDATE 2026-09-14 (later) — Business Scenario Integration Tests added
+Per-screen tests above prove each document type works IN ISOLATION. A new
+`test/backend/scenarios/` layer (10 files, 12 test cases, all passing) now
+chains real documents end-to-end — Purchase-to-Pay, Order-to-Cash, both
+Purchase Return branches (billed/unbilled), the full Stock Transfer chain,
+Material Requisition→Issue, Stock Adjustment (+/-), a Customer-vs-Supplier
+settlement contrast, and Trial-Balance/Balance-Sheet/P&L cross-report
+reconciliation — asserting actual computed numbers, not just "no error."
+Full detail and results table in `AUTOMATED_RUN_LOG.md`.
+
+**🔴 Found the single most significant bug of this entire test-plan
+effort**: Sales Return silently skips ALL stock+COGS reversal for a
+DEFERRED-dispatch sale (any Credit Sales Invoice fulfilled via a separate
+Sales Delivery) — confirmed live with real numbers, NOT fixed (the correct
+fix needs a multi-table join this session couldn't safely write blind
+without database access to test it). Every DRC/Zambia business running
+deferred-dispatch credit sales and processing a routine customer return is
+silently understating inventory and overstating COGS. See
+`AUTOMATED_RUN_LOG.md`'s own dedicated section for the full root-cause
+trace and exactly what a fix needs to do.
+
 **Last updated:** 2026-09-14
 **How to use this document:** every screen in the app has one row below, linking to
 its detail file. Update the **Status** column as you test. When you find a bug,
