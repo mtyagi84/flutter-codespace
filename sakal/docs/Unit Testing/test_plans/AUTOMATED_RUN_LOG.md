@@ -181,6 +181,13 @@ Reports are DATA-DRIVEN, not per-screen Flutter code — every one of the 79 rep
 
 **One test-fixture gap found and fixed (not an app bug)**: `BANK_RECONCILIATION_STATEMENT`'s `bank_account_id` filter is required with no default — the QA tenant had zero `rim_bank_accounts` rows (the module was only added 2026-08-28, after seed data was built). Fixed by seeding one directly in the test's own `setUpAll` against any existing Bank-nature `rim_accounts` row.
 
+### Cross-Cutting Checklist #4 (button state after action) — spot-checked and fixed app-wide, 2026-09-14
+The Sales Delivery "buttons stay enabled after Approve" bug (fixed earlier, `a172574`) was flagged as a PATTERN that needed spot-checking against every other transaction screen's own approve/submit method, not just fixed in isolation. Two parallel background code-review agents did this (and the companion Payment Voucher Party-Amount cross-currency-gate pattern) via pure static code reading — no DB/UI access needed:
+
+- **Cross-currency-gate pattern (Party Amount): CLEAN.** Checked Contra Voucher's From/To/gap logic, Journal Voucher's own Party Amount, Expense Voucher, Opening Balance, Bank Reconciliation Matching, plus confirmed Sales Invoice/Credit Sales Invoice/Sales Return/Cash Receipt/Sales Order/Quotation have no such field at all. The bug was isolated to Payment/Receipt Voucher and never recurred.
+- **Stale-status-after-approve pattern: FOUND on 19 of ~24 screens with their own approve/submit method, fixed on all 19** (`e79cf74`): Contra Voucher, Expense Voucher, Journal Voucher, Material Issue, Material Requisition, Opening Stock, Stock Adjustment, Stock Count (Submit), Stock Count Review, Stock Receipt, Stock Transfer, Stock Transfer Request, Purchase Invoice, Credit Sales Invoice, Price Master, Sales Invoice, Sales Order, Sales Quotation (both `_approve()` and `_updateStatus()`), Sales Return. Each relied entirely on a subsequent `_init()`/`_loadExisting()` reload to pick up the new status — fixed by setting the status field directly inside the same `setState` as the RPC success path, matching the already-correct reference pattern already used by GRN/Purchase Order/Purchase Return/Cash Receipt/Payment-Receipt Voucher/Sales Delivery (confirmed clean, no fix needed on those 6).
+- `flutter analyze` clean app-wide; full non-backend test suite (594 tests) passes with zero regressions from these 19 edits.
+
 **Note on running this suite**: always `flutter test test/backend/ --concurrency=1` — files race resetQaTenant() against each other in parallel (see `test/backend/README.md`).
 
 **Real bugs found and fixed this session (not test-plan execution, but surfaced while setting up the local toolchain to run it)**:

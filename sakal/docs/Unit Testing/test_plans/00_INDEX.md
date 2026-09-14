@@ -1,6 +1,37 @@
 # SAKAL Screen-by-Screen Test Plan — Master Index
 
-**Last updated:** 2026-09-13
+## STATUS AS OF 2026-09-14 — backend-RPC layer complete for all 141 screens
+All 25 Transaction screens, all 34 Master screens, and all 79 Report screens
+(via one generic Reporting Engine smoke test) now have automated backend
+coverage under `sakal/test/backend/` — run with
+`flutter test test/backend/ --concurrency=1` (see that folder's own README).
+Full detail in `AUTOMATED_RUN_LOG.md`. **Three things remain genuinely open,
+each blocked on something outside this session's reach, not further backend
+work:**
+1. **Migration `186_reporting_engine_smoke_test_fixes.sql` is written but NOT
+   deployed** — fixes 6 real bugs found by the Reports smoke test (see that
+   file's own header comment). This session had no direct Postgres/Supabase
+   SQL-editor credential to run it. Next session with DB access: run it, then
+   remove the corresponding entries from `reports_smoke_backend_test.dart`'s
+   `knownBrokenPendingMigration186` set one at a time.
+2. **Cross-Cutting Checklist items #4 (button state after action) and #7
+   (responsive at ~400px), and Dr/Cr-label + currency-display (#1/#2) on
+   every report, are NOT verifiable from a backend RPC call** — these are UI
+   rendering concerns. `flutter drive` chained-flow automation is a known
+   dead end in this environment (see `reference_automation_capabilities_
+   2026_09_13.md`); genuine coverage here needs either manual click-testing
+   or a single-screen `flutter drive` test per screen (proven reliable,
+   just not yet built for most screens). **Update 2026-09-14**: the known
+   CODE-LEVEL cause of CCC#4 (stale in-memory status after Approve/Submit,
+   relying solely on a reload) was found via static review on 19 screens and
+   fixed on all of them (commit `e79cf74`) — see AUTOMATED_RUN_LOG.md. The
+   fix is a source-code guarantee, not a substitute for an actual click-test
+   confirming the button visually disables — CCC#4 stays "not yet
+   UI-verified" on every screen's own row until that click-test happens.
+3. **3 screens are still unbuilt placeholders** (Supplier Payment, Stock
+   List, Cash Book) — nothing to test yet.
+
+**Last updated:** 2026-09-14
 **How to use this document:** every screen in the app has one row below, linking to
 its detail file. Update the **Status** column as you test. When you find a bug,
 note it in **Open Bugs** with a one-line description and (once fixed) the fix
