@@ -809,6 +809,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
         approvedBy: session.userId,
       );
       if (mounted) {
+        setState(() => _status = 'APPROVED');
         _showSnack('Sales Quotation $_quotationNo approved.', color: AppColors.positive);
         await _loadExisting(_quotationNo!, _fmtDate(_quotationDate));
       }
@@ -833,6 +834,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
         newStatus: newStatus, userId: session.userId,
       );
       if (mounted) {
+        setState(() => _status = newStatus);
         _showSnack('Sales Quotation $_quotationNo marked $newStatus.', color: AppColors.positive);
         await _loadExisting(_quotationNo!, _fmtDate(_quotationDate));
       }

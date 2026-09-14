@@ -656,6 +656,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
         entryNo: _entryNo!, entryDate: _fmtDate(_entryDate), approvedBy: session.userId,
       );
       if (mounted) {
+        setState(() => _status = 'APPROVED');
         _showSnack('Price Master batch $_entryNo approved.', color: AppColors.positive);
         await _loadExisting(_entryNo!, _fmtDate(_entryDate));
       }

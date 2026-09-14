@@ -566,6 +566,7 @@ class _ExpenseVoucherEntryScreenState extends ConsumerState<ExpenseVoucherEntryS
     try {
       await _ds.approve(clientId: session.clientId, companyId: session.companyId, locationId: _locationId!, transNo: _transNo!, transDate: _fmtDate(_transDate), approvedBy: session.userId);
       if (mounted) {
+        setState(() => _status = 'APPROVED');
         _showSnack('Expense Voucher $_transNo approved.', color: AppColors.positive);
         await _init();
       }

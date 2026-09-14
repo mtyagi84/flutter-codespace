@@ -335,6 +335,7 @@ class _StockTransferRequestEntryScreenState extends ConsumerState<StockTransferR
         approvedBy: session.userId,
       );
       if (mounted) {
+        setState(() => _status = 'APPROVED');
         _showSnack('Stock Transfer Request $_requestNo approved.', color: AppColors.positive);
         await _init();
       }

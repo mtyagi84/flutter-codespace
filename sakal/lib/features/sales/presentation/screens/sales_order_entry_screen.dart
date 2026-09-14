@@ -1015,6 +1015,7 @@ class _SalesOrderEntryScreenState extends ConsumerState<SalesOrderEntryScreen>
         orderNo: _orderNo!, orderDate: _fmtDate(_orderDate), approvedBy: session.userId,
       );
       if (mounted) {
+        setState(() => _status = 'APPROVED');
         _showSnack('Sales Order $_orderNo approved.', color: AppColors.positive);
         await _loadExisting(_orderNo!, _fmtDate(_orderDate));
       }

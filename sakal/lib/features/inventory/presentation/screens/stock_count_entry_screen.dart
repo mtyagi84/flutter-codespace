@@ -518,6 +518,7 @@ class _StockCountEntryScreenState extends ConsumerState<StockCountEntryScreen>
     try {
       await _ds.submit(clientId: session.clientId, companyId: session.companyId, countNo: _countNo!, countDate: _fmtDate(_countDate), userId: session.userId);
       if (mounted) {
+        setState(() => _status = 'SUBMITTED');
         _showSnack('Stock Count $_countNo submitted.', color: AppColors.positive);
         await _init();
       }

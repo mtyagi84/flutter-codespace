@@ -486,6 +486,7 @@ class _MaterialIssueEntryScreenState extends ConsumerState<MaterialIssueEntryScr
         issueNo: _issueNo!, issueDate: _fmtDate(_issueDate), approvedBy: session.userId,
       );
       if (mounted) {
+        setState(() => _status = 'APPROVED');
         _showSnack('Material Issue $_issueNo approved.', color: AppColors.positive);
         await _init();
       }

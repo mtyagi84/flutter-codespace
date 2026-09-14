@@ -363,6 +363,7 @@ class _PurchaseInvoiceEntryScreenState extends ConsumerState<PurchaseInvoiceEntr
         invoiceNo: _invoiceNo!, invoiceDate: _fmtDate(_invoiceDate), approvedBy: session.userId,
       );
       if (mounted) {
+        setState(() => _status = 'APPROVED');
         _showSnack('Purchase Bill $_invoiceNo approved.', color: AppColors.positive);
         await _init();
       }

@@ -1641,6 +1641,7 @@ class _CreditSalesInvoiceEntryScreenState extends ConsumerState<CreditSalesInvoi
         clientId: session.clientId, companyId: session.companyId,
         invoiceNo: _invoiceNo!, invoiceDate: _fmtDate(_invoiceDate), approvedBy: session.userId,
       );
+      if (mounted) setState(() => _status = 'APPROVED');
       await _loadExisting(_invoiceNo!, _fmtDate(_invoiceDate));
       if (mounted) {
         setState(() => _approving = false);

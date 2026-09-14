@@ -623,6 +623,7 @@ class _StockAdjustmentEntryScreenState extends ConsumerState<StockAdjustmentEntr
         adjustmentNo: _adjustmentNo!, adjustmentDate: _fmtDate(_adjustmentDate), approvedBy: session.userId,
       );
       if (mounted) {
+        setState(() => _status = 'APPROVED');
         _showSnack('Stock Adjustment $_adjustmentNo approved.', color: AppColors.positive);
         await _init();
       }

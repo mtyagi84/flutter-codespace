@@ -559,6 +559,7 @@ class _StockReceiptEntryScreenState extends ConsumerState<StockReceiptEntryScree
         receiptNo: _receiptNo!, receiptDate: _fmtDate(_receiptDate), approvedBy: session.userId,
       );
       if (mounted) {
+        setState(() => _status = 'APPROVED');
         _showSnack('Stock Receipt $_receiptNo approved.', color: AppColors.positive);
         await _init();
       }

@@ -294,6 +294,7 @@ class _StockCountReviewEntryScreenState extends ConsumerState<StockCountReviewEn
         reviewNo: _reviewNo!, reviewDate: _fmtDate(_reviewDate), approvedBy: session.userId,
       );
       if (mounted) {
+        setState(() => _status = 'APPROVED');
         _showSnack('Stock Count Review $_reviewNo approved — Stock Adjustment $adjNo posted.', color: AppColors.positive);
         await _init();
       }

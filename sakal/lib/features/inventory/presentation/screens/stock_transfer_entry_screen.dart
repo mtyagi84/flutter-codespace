@@ -734,6 +734,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
         transferNo: _transferNo!, transferDate: _fmtDate(_transferDate), approvedBy: session.userId,
       );
       if (mounted) {
+        setState(() => _status = 'APPROVED');
         _showSnack('Stock Transfer $_transferNo approved.', color: AppColors.positive);
         await _init();
       }

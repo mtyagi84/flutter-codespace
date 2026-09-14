@@ -1592,6 +1592,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
 
       final invoiceNo = await ds.save(header: header, lines: lines, charges: charges, batches: batches, serials: serials, userId: session.userId);
       await ds.approve(clientId: session.clientId, companyId: session.companyId, invoiceNo: invoiceNo, invoiceDate: _fmtDate(_invoiceDate), approvedBy: session.userId);
+      if (mounted) setState(() => _status = 'APPROVED');
       await _loadExisting(invoiceNo, _fmtDate(_invoiceDate));
       if (mounted) {
         setState(() => _saving = false);

@@ -365,6 +365,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
         approvedBy: session.userId,
       );
       if (mounted) {
+        setState(() => _status = 'APPROVED');
         _showSnack('Material Requisition $_requisitionNo approved.', color: AppColors.positive);
         await _init();
       }

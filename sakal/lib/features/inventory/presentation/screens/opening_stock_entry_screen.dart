@@ -552,6 +552,7 @@ class _OpeningStockEntryScreenState extends ConsumerState<OpeningStockEntryScree
         openingNo: _openingNo!, openingDate: _fmtDate(_openingDate), approvedBy: session.userId,
       );
       if (mounted) {
+        setState(() => _status = 'APPROVED');
         _showSnack('Opening Stock $_openingNo approved.', color: AppColors.positive);
         await _init();
       }

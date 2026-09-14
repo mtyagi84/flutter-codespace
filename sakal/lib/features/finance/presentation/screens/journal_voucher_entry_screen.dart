@@ -674,6 +674,7 @@ class _JournalVoucherEntryScreenState extends ConsumerState<JournalVoucherEntryS
     try {
       await _ds.post(clientId: session.clientId, companyId: session.companyId, locationId: _locationId!, transNo: _transNo!, transDate: _fmtDate(_transDate), postedBy: session.userId);
       if (mounted) {
+        setState(() => _isPosted = true);
         _showSnack('Journal Voucher $_transNo approved.', color: AppColors.positive);
         await _init();
       }

@@ -821,6 +821,7 @@ class _SalesReturnEntryScreenState extends ConsumerState<SalesReturnEntryScreen>
         returnNo: _returnNo!, returnDate: _fmtDate(_returnDate), approvedBy: session.userId,
       );
       if (mounted) {
+        setState(() => _status = 'APPROVED');
         _showSnack('Sales Return $_returnNo approved.', color: AppColors.positive);
         await _init();
       }
