@@ -135,6 +135,14 @@ automation" per screen until that track is revisited.
 | SL-PRC Price Master | PASS | **Real exception among Master screens**: has its own Draft/Approve RPC pair (`fn_save_price_master_batch`/`fn_approve_price_master_batch`, migration 083) — a real product-level unique-price-per-location/date business rule, not plain table CRUD. Tested like a transaction screen: create GENERIC batch → approve → header status APPROVED → immutability (re-save after approve throws). Confirmed `rih_price_master_headers`/`rid_price_master_lines` ARE wiped by `resetQaTenant()` (unlike every other Master table this session) — re-running the file twice in a row hit no `PRICE_ALREADY_EXISTS` collision. |
 | SL-EXE Sales Executives | PASS | Plain CRUD, `rim_sales_executives`. |
 
+### User Management (all 4)
+| Screen | Result | Notes |
+|---|---|---|
+| AD-USR User Management | PASS | Has its own `fn_create_user` RPC (migration 011) — server-side `crypt()` password hashing means a plain `rim_users` insert isn't possible from a client. **Real schema gotcha**: `uq_users_client_username` is NOT a partial index (unlike almost every other soft-delete UNIQUE in this schema) — its own migration comment says "includes soft-deleted, prevents username reuse" — so a stale test row from a prior run needs its `username` renamed, not just `is_deleted=true`, or a re-run's `fn_create_user` call hits a duplicate-key 409. |
+| AD-PRM User Permissions | PASS | Read-then-update (not insert) against the QA admin's own already-seeded `ric_user_menus` row for `PR-PO` — respects the table's `UNIQUE(user_id, feature_code)`. Toggled then restored, since this is the live QA admin's real permission other test files in this suite depend on. |
+| AD-ULS User Location Setup | PASS | Grant/revoke round-trip against a throwaway new location (not the shared `CommonRefs.loadOrCreateSecondLocation()` fixture, to avoid interacting with any other test file's use of it). **Real schema note**: `ric_locations` has no `location_code` column at all — just `location_name`/`location_short`. |
+| AD-MST Master Menu | PASS | Toggled then restored `PR-PO`'s `is_active` flag — disabling it app-wide would have broken every Purchase Order backend test running later in the same `--concurrency=1` suite run. |
+
 **Note on running this suite**: always `flutter test test/backend/ --concurrency=1` — files race resetQaTenant() against each other in parallel (see `test/backend/README.md`).
 
 **Real bugs found and fixed this session (not test-plan execution, but surfaced while setting up the local toolchain to run it)**:

@@ -65,10 +65,10 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 ### User Management (4) — detail file: [`masters/user_management.md`](masters/user_management.md)
 | Screen | Feature Code | Route | Status | Open Bugs |
 |---|---|---|---|---|
-| User Management | AD-USR | /setup/users | Not Started | |
-| User Permissions | AD-PRM | /setup/permissions | Not Started | |
-| User Location Setup | AD-ULS | /setup/user-location-access | Not Started | |
-| Master Menu | AD-MST | /setup/master-menu | Not Started | |
+| User Management | AD-USR | /setup/users | Passed (backend) | Has a dedicated fn_create_user RPC (server-side crypt() password hashing), unlike plain-CRUD masters |
+| User Permissions | AD-PRM | /setup/permissions | Passed (backend) | |
+| User Location Setup | AD-ULS | /setup/user-location-access | Passed (backend) | |
+| Master Menu | AD-MST | /setup/master-menu | Passed (backend) | |
 
 ### Sales Masters (3) — detail file: [`masters/sales_masters.md`](masters/sales_masters.md)
 | Screen | Feature Code | Route | Status | Open Bugs |
