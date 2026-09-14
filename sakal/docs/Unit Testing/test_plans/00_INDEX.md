@@ -127,14 +127,14 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 ### Transactions (8) — each has its own detail file in [`sales/`](sales/)
 | Screen | Feature Code | Route | Detail File | Status | Open Bugs |
 |---|---|---|---|---|---|
-| Sales Quotation | SL-QUO | /sales/quotations | [sales_quotation.md](sales/sales_quotation.md) | Not Started | |
-| Sales Order | SL-SO | /sales/orders | [sales_order.md](sales/sales_order.md) | Not Started | |
-| Sales Invoice | SL-INV | /sales/invoices | [sales_invoice.md](sales/sales_invoice.md) | Not Started | |
-| Pending Approvals | SL-INR | /sales/pending-approvals | [pending_approvals.md](sales/pending_approvals.md) | Not Started | |
-| Sales Return | SL-RET | /sales/returns | [sales_return.md](sales/sales_return.md) | Not Started | |
-| Sales Delivery | SL-DEL | /sales/deliveries | [sales_delivery.md](sales/sales_delivery.md) | Not Started | Buttons-stay-enabled bug fixed `a172574`, pending redeploy verification |
-| Cash Receipt | SL-RCP | /sales/receipts | [cash_receipt.md](sales/cash_receipt.md) | Not Started | |
-| Credit Sales Invoice | SL-CINV | /sales/credit-invoices | [credit_sales_invoice.md](sales/credit_sales_invoice.md) | Not Started | |
+| Sales Quotation | SL-QUO | /sales/quotations | [sales_quotation.md](sales/sales_quotation.md) | Passed (backend) | Create/Approve/no-stock-effect/immutability verified via `test/backend/sales_quotation_backend_test.dart`, 2026-09-14. CCC #4/#7 not yet UI-verified. |
+| Sales Order | SL-SO | /sales/orders | [sales_order.md](sales/sales_order.md) | Passed (backend) | DIRECT mode + manual price override/Approve/Cancel-requires-reason verified via `test/backend/sales_order_backend_test.dart`, 2026-09-14. CCC #4/#7 not yet UI-verified. |
+| Sales Invoice | SL-INV | /sales/invoices | [sales_invoice.md](sales/sales_invoice.md) | Passed (backend) | DIRECT/CREDIT sale, Approve, stock dispatch + SI/COS GL posting, cancel-blocked-once-approved verified via `test/backend/sales_invoice_backend_test.dart`, 2026-09-14. CCC #4/#7 not yet UI-verified. |
+| Pending Approvals | SL-INR | /sales/pending-approvals | [pending_approvals.md](sales/pending_approvals.md) | N/A (backend) | Pure aggregation/list view, no own fn_save/fn_approve — underlying approve logic already covered by each source screen's own test. Needs UI-only verification (does it correctly list DRAFT docs across modules). |
+| Sales Return | SL-RET | /sales/returns | [sales_return.md](sales/sales_return.md) | Passed (backend) | Return against an APPROVED invoice, stock genuinely comes back verified via `test/backend/sales_return_backend_test.dart`, 2026-09-14. Found+fixed missing SALES_RETURNS_ACCOUNT link. CCC #4/#7 not yet UI-verified. |
+| Sales Delivery | SL-DEL | /sales/deliveries | [sales_delivery.md](sales/sales_delivery.md) | Passed (backend) | Buttons-stay-enabled bug fixed `a172574` (UI-only). Backend logic (deferred-dispatch Credit Invoice → Delivery → stock leaves only at delivery, not invoice) verified via `test/backend/sales_delivery_backend_test.dart`, 2026-09-14. CCC #4 button-state itself still needs UI verification. |
+| Cash Receipt | SL-RCP | /sales/receipts | [cash_receipt.md](sales/cash_receipt.md) | Passed (backend) | Settle a real pending bill from a Credit Sales Invoice verified via `test/backend/cash_receipt_backend_test.dart`, 2026-09-14. Found+fixed FOUR real QA-tenant fixture gaps (approve permission, Quick Invoice Setup, Exchange Gain/Loss link — see AUTOMATED_RUN_LOG.md). CCC #4/#7 not yet UI-verified. |
+| Credit Sales Invoice | SL-CINV | /sales/credit-invoices | [credit_sales_invoice.md](sales/credit_sales_invoice.md) | Passed (backend) | Hard future-date block + date-locked-after-first-save (both migration 146's own distinguishing rules) verified via `test/backend/credit_sales_invoice_backend_test.dart`, 2026-09-14. CCC #4/#7 not yet UI-verified. |
 
 ### Reports (13) — detail file: [`reports/sales_reports.md`](reports/sales_reports.md)
 | Screen | Feature Code | Route | Status | Open Bugs |
@@ -198,8 +198,8 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 | Stock Transfer Request | IN-STR | /inventory/stock-transfer-requests | [stock_transfer_request.md](inventory/stock_transfer_request.md) | Passed (backend) | Create/Approve/immutability verified via `test/backend/stock_transfer_request_backend_test.dart`, 2026-09-14. CCC #4/#7 not yet UI-verified. |
 | Stock Receipt | IN-SRC | /inventory/stock-receipts | [stock_receipt.md](inventory/stock_receipt.md) | Passed (backend) | Completes a Stock Transfer — stock arrives correctly at TO location. Verified via `test/backend/stock_receipt_backend_test.dart`, 2026-09-14. CCC #4/#7 not yet UI-verified. |
 | Opening Stock | IN-OPN | /inventory/opening-stock | [opening_stock.md](inventory/opening_stock.md) | Passed (backend) | Establish/Approve/OPENING_STOCK_ALREADY_ESTABLISHED-on-duplicate/immutability verified via `test/backend/opening_stock_backend_test.dart`, 2026-09-14. CCC #4/#7 not yet UI-verified. |
-| Stock Count | IN-CNT | /inventory/stock-count | [stock_count.md](inventory/stock_count.md) | Not Started | |
-| Stock Count Review | IN-CNR | /inventory/stock-count-review | [stock_count_review.md](inventory/stock_count_review.md) | Not Started | |
+| Stock Count | IN-CNT | /inventory/stock-count | [stock_count.md](inventory/stock_count.md) | Passed (backend) | Blind count DRAFT→SUBMITTED lifecycle verified, plus confirms a count alone never moves stock. Via `test/backend/stock_count_backend_test.dart`, 2026-09-14. CCC #4/#7 not yet UI-verified. |
+| Stock Count Review | IN-CNR | /inventory/stock-count-review | [stock_count_review.md](inventory/stock_count_review.md) | Passed (backend) | Approve correctly composes the Stock Adjustment engine — a real 5-unit shortage (50 system vs 45 counted) posts an auto-adjustment traced back via source_doc_type='STOCK_COUNT_REVIEW'. Via `test/backend/stock_count_review_backend_test.dart`, 2026-09-14. CCC #4/#7 not yet UI-verified. |
 
 ### Reports (15) — detail file: [`reports/inventory_reports.md`](reports/inventory_reports.md)
 | Screen | Feature Code | Route | Status | Open Bugs |
@@ -227,11 +227,11 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 ### Transactions (5) — each has its own detail file in [`finance/`](finance/)
 | Screen | Feature Code | Route | Detail File | Status | Open Bugs |
 |---|---|---|---|---|---|
-| Journal Entry | FN-JRN | /finance/journal | [journal_entry.md](finance/journal_entry.md) | Not Started | |
-| Contra Voucher | FN-CTR | /finance/contra | [contra_voucher.md](finance/contra_voucher.md) | Not Started | |
-| Expense Voucher | FN-EXP | /finance/expense-vouchers | [expense_voucher.md](finance/expense_voucher.md) | Not Started | |
+| Journal Entry | FN-JRN | /finance/journal | [journal_entry.md](finance/journal_entry.md) | Passed (backend) | Balanced Dr/Cr entry posts + unbalanced entry rejected + immutability verified via `test/backend/journal_voucher_backend_test.dart`, 2026-09-14 — doubles as a smoke test of the shared voucher engine. CCC #4/#7 not yet UI-verified. |
+| Contra Voucher | FN-CTR | /finance/contra | [contra_voucher.md](finance/contra_voucher.md) | Passed (backend) | Confirms CLAUDE.md's claim that Contra reuses the generic engine unchanged, under voucher_type_code='CTR'. Via `test/backend/contra_voucher_backend_test.dart`, 2026-09-14. CCC #4/#7 not yet UI-verified. |
+| Expense Voucher | FN-EXP | /finance/expense-vouchers | [expense_voucher.md](finance/expense_voucher.md) | Passed (backend) | No-tax service bill/Approve/mandatory bill-linkage/immutability verified via `test/backend/expense_voucher_backend_test.dart`, 2026-09-14. Automatic-tax-expansion scenario not yet covered — follow-up. CCC #4/#7 not yet UI-verified. |
 | Cash Book | FN-CBK | /finance/cashbook | — | **N/A — Not Built** | Route is still a placeholder |
-| Payment/Receipt Voucher | FN-PRV | /finance/voucher-list | [payment_receipt_voucher.md](finance/payment_receipt_voucher.md) | Not Started | Party-Amount bug fixed `a172574`, pending redeploy verification |
+| Payment/Receipt Voucher | FN-PRV | /finance/voucher-list | [payment_receipt_voucher.md](finance/payment_receipt_voucher.md) | Passed (backend) | Party-Amount bug fixed `a172574` (UI-only). On Account payment's party_amount confirmed round-tripping correctly via `test/backend/payment_receipt_voucher_backend_test.dart`, 2026-09-14. **Real cross-module inconsistency found** (not fixed): Against-Bill settlement's inv_bill_no matching convention differs between Sales Invoice/Cash Receipt (uses the posting voucher's own trans_no) and Expense Voucher/Purchase Bill (uses the user's own paper bill number) — see that test file's own doc comment. CCC #4/#7 not yet UI-verified. |
 
 ### Reports incl. Bank Reconciliation (21 + 4 = 25) — detail file: [`reports/finance_reports.md`](reports/finance_reports.md)
 | Screen | Feature Code | Route | Status | Open Bugs |

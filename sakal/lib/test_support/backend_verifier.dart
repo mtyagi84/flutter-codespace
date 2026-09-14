@@ -64,13 +64,31 @@ class BackendVerifier {
     String select = '*',
   }) async {
     if (_accessToken == null) throw StateError('Call login() first');
-    final res = await _dio.get('/$table', queryParameters: {
-      'select':     select,
-      'client_id':  'eq.$_clientId',
-      'company_id': 'eq.$_companyId',
-      ...filters,
-    });
-    return (res.data as List).cast<Map<String, dynamic>>();
+    try {
+      final res = await _dio.get('/$table', queryParameters: {
+        'select':     select,
+        'client_id':  'eq.$_clientId',
+        'company_id': 'eq.$_companyId',
+        ...filters,
+      });
+      return (res.data as List).cast<Map<String, dynamic>>();
+    } on DioException catch (e) {
+      throw StateError('get($table, $filters) failed: ${e.response?.statusCode} ${e.response?.data}');
+    }
+  }
+
+  /// Plain PostgREST PATCH (update). `filters` are applied exactly like
+  /// `get()`'s (client_id/company_id NOT auto-injected here, unlike get() —
+  /// callers pass whatever filter uniquely identifies the row, e.g. `{'id':
+  /// 'eq.<uuid>'}`, since a PATCH's own row is already known to belong to
+  /// this tenant from a prior read).
+  Future<void> patch(
+    String table,
+    Map<String, String> filters,
+    Map<String, dynamic> data,
+  ) async {
+    if (_accessToken == null) throw StateError('Call login() first');
+    await _dio.patch('/$table', queryParameters: filters, data: data);
   }
 
   /// Plain PostgREST GET with NO automatic client_id/company_id filters —
@@ -113,8 +131,18 @@ class BackendVerifier {
   /// report output the same way the app's own report screen does.
   Future<dynamic> rpc(String functionName, Map<String, dynamic> params) async {
     if (_accessToken == null) throw StateError('Call login() first');
-    final res = await _dio.post('/rpc/$functionName', data: params);
-    return res.data;
+    try {
+      final res = await _dio.post('/rpc/$functionName', data: params);
+      return res.data;
+    } on DioException catch (e) {
+      // Dio's own exception message never includes the response body — the
+      // PostgREST error (code/message/details) that actually explains WHY,
+      // which is the whole point of a RAISE EXCEPTION on the backend. Every
+      // test file's own diagnosis session this far had to fall back to a
+      // manual curl/Invoke-RestMethod call to see it. Surface it here once,
+      // for every future caller.
+      throw StateError('rpc($functionName) failed: ${e.response?.statusCode} ${e.response?.data}');
+    }
   }
 
   /// Plain PostgREST POST (insert) for master/setup tables that have no

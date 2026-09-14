@@ -128,6 +128,92 @@ class CommonRefs {
   static Future<void> ensureStockAdjustmentAccountLink(BackendVerifier verifier) =>
       _ensureCompanyAccountLink(verifier, 'STOCK_ADJUSTMENT_ACCOUNT', TestTenantConfig.stockAccountId);
 
+  /// Ensure the QA admin user has `approve_allowed=true` for a given
+  /// `feature_code` in `ric_user_menus` — found live 2026-09-14 that
+  /// SL-RCP (Cash Receipt) had `approve_allowed=false` despite every other
+  /// `SL-*` feature being granted, with `updated_at`/`updated_by` showing
+  /// it was explicitly toggled off by the QA admin user themselves at some
+  /// point (not a seeding gap — a deliberate change, likely from earlier
+  /// manual CCC #6 permission-gating testing). Since this backend-RPC
+  /// suite exists to test business logic (not re-verify permission
+  /// gating, which is its own separate CCC item), this PATCHes it back to
+  /// `true` rather than silently working around a 403 — call it in any
+  /// test whose Approve step unexpectedly raises `APPROVE_NOT_PERMITTED`.
+  static Future<void> ensureApprovePermission(BackendVerifier verifier, String featureCode) async {
+    final row = await verifier.getOne(
+      'ric_user_menus',
+      {'feature_code': 'eq.$featureCode', 'user_id': 'eq.${verifier.userId}'},
+      select: 'id,approve_allowed',
+    );
+    if (row['approve_allowed'] == true) return;
+    await verifier.patch('ric_user_menus', {'id': 'eq.${row['id']}'}, {'approve_allowed': true});
+  }
+
+  /// Get-or-create a COMPANY-granularity EXCHANGE_GAIN_LOSS_ACCOUNT link —
+  /// needed whenever a voucher posts a currency revaluation (Cash
+  /// Receipt's own local/base split, Purchase Bill's EXC voucher, Stock
+  /// Transfer's INTER_ENTITY mode). Raised `ACCOUNT_LINK_NOT_CONFIGURED`
+  /// live 2026-09-14 — a fourth occurrence of this same QA-tenant fixture
+  /// gap class. Reuses the same postable "Administrative Expenses" account
+  /// as `loadOrCreateDepartmentArea()` — pragmatic stand-in, no dedicated
+  /// account of this name existed in the seeded COA.
+  static Future<void> ensureExchangeGainLossAccountLink(BackendVerifier verifier) async {
+    final account = await verifier.getOne(
+      'rim_accounts',
+      {'account_code': 'eq.5210'},
+      select: 'id',
+    );
+    await _ensureCompanyAccountLink(verifier, 'EXCHANGE_GAIN_LOSS_ACCOUNT', account['id'] as String);
+  }
+
+  /// Get-or-create a COMPANY-granularity SALES_RETURNS_ACCOUNT link —
+  /// needed by Sales Return's Approve (`fn_approve_sales_return` raised
+  /// `ACCOUNT_LINK_NOT_CONFIGURED`, "No Sales Returns Account resolved",
+  /// confirmed live 2026-09-14 — a fifth occurrence of this QA-tenant
+  /// fixture-gap class). Reuses the existing "Product Sales" (4110)
+  /// revenue account, a real-world-plausible convention (returns netted
+  /// against the same account sales were recognized in).
+  static Future<void> ensureSalesReturnsAccountLink(BackendVerifier verifier) async {
+    final account = await verifier.getOne(
+      'rim_accounts',
+      {'account_code': 'eq.4110'},
+      select: 'id',
+    );
+    await _ensureCompanyAccountLink(verifier, 'SALES_RETURNS_ACCOUNT', account['id'] as String);
+  }
+
+  /// Get-or-create the QA admin user's own `ric_user_quick_invoice_setup`
+  /// row — needed by anything that collects cash (Cash Receipt raised
+  /// `QUICK_INVOICE_NOT_CONFIGURED`, "The user who created this receipt
+  /// has no Quick Invoice Setup (Local Cash Account)", confirmed live
+  /// 2026-09-14: the QA tenant had zero rows in this table at all). Uses
+  /// the QA tenant's existing "Cash In Had CDF"/"Cash In Had USD" accounts
+  /// (local/base respectively) and the QA Test Customer as the walk-in
+  /// cash-sale customer.
+  static Future<void> ensureQuickInvoiceSetup(BackendVerifier verifier) async {
+    final existing = await verifier.get('ric_user_quick_invoice_setup', {'user_id': 'eq.${verifier.userId}'});
+    if (existing.isNotEmpty) return;
+
+    final localCash = await verifier.getOne(
+      'rim_accounts',
+      {'account_code': 'eq.1110001002'}, // "Cash In Had CDF"
+      select: 'id',
+    );
+    final baseCash = await verifier.getOne(
+      'rim_accounts',
+      {'account_code': 'eq.1110001001'}, // "Cash In Had USD"
+      select: 'id',
+    );
+
+    await verifier.insert('ric_user_quick_invoice_setup', {
+      'user_id': verifier.userId,
+      'location_id': TestTenantConfig.locationId,
+      'cash_customer_id': TestTenantConfig.customerId,
+      'local_cash_account_id': localCash['id'],
+      'base_cash_account_id': baseCash['id'],
+    });
+  }
+
   /// Shared get-or-create for any COMPANY-granularity `rim_account_link_*`
   /// pair — the generic mechanism CLAUDE.md's "Account Link Setup
   /// Framework" describes, used identically by Stock Transfer's
