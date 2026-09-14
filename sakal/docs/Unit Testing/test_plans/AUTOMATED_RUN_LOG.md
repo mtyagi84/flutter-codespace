@@ -45,6 +45,8 @@ automation" per screen until that track is revisited.
 |---|---|---|---|---|
 | PR-GRN (GRN entry) | Backend RPC (`test/backend/grn_backend_test.dart`) | PASS | None (business logic) | Create DRAFT → Approve → stock/cost verified (100 units @ $10) → immutability (edit-after-approve) blocked correctly. CCC #4/#7 not covered (needs UI). |
 | PR-PO (Purchase Order) | Backend RPC (`test/backend/purchase_order_backend_test.dart`) | PASS | None (business logic) | Create DRAFT → Approve → immutability blocked → zero-line DRAFT save succeeds but Approve correctly rejects (PO_NO_LINES, enforced only at Approve per migration 040's own comment). CCC #4/#7 not covered. |
+| PR-INV (Purchase Invoice/Bill) | Backend RPC (`test/backend/purchase_invoice_backend_test.dart`) | PASS | None (business logic) | Fresh GRN → Approve → bill it → GRN reserved at DRAFT save (billed_invoice_no set immediately) → double-claim by a second bill rejected → Approve posts PUR voucher → pending-bills line findable by supplier's own invoice number → immutability blocked. Confirms QA tenant's account-link config (Purchase Accrual, Input VAT) is correctly set up. CCC #4/#7 not covered. |
+| PR-RET (Purchase Return) | Backend RPC (`test/backend/purchase_return_backend_test.dart`) | PASS | None (business logic) | Partial return (30 of 100 units) against a fresh unbilled GRN → stock rolls back to exactly 70 → immutability blocked. Billed/SDN branch (return against an already-billed GRN) not yet covered — follow-up. CCC #4/#7 not covered. |
 
 **Note on running this suite**: always `flutter test test/backend/ --concurrency=1` — files race resetQaTenant() against each other in parallel (see `test/backend/README.md`).
 

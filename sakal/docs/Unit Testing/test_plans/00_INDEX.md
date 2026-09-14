@@ -162,8 +162,8 @@ one-time pass, they are how the ordinary test cases below need to be *written*:
 |---|---|---|---|---|---|
 | Purchase Order | PR-PO | /purchase/orders | [purchase_order.md](purchase/purchase_order.md) | Passed (backend) | Create/Approve/immutability/PO_NO_LINES verified via `test/backend/purchase_order_backend_test.dart`, 2026-09-14. CCC #4/#7 not yet UI-verified. |
 | Goods Receipt (GRN) | PR-GRN | /purchase/grn | [grn.md](purchase/grn.md) | Passed (backend) | Create/Approve/stock-cost/immutability verified via `test/backend/grn_backend_test.dart`, 2026-09-14. CCC #4/#7 (button state, responsive) not yet UI-verified — see `AUTOMATED_RUN_LOG.md`. |
-| Purchase Invoice | PR-INV | /purchase/invoices | [purchase_invoice.md](purchase/purchase_invoice.md) | Not Started | |
-| Purchase Return | PR-RET | /purchase/returns | [purchase_return.md](purchase/purchase_return.md) | Not Started | |
+| Purchase Invoice | PR-INV | /purchase/invoices | [purchase_invoice.md](purchase/purchase_invoice.md) | Passed (backend) | Bill-a-GRN/Approve/GR-IR clearing/pending-bills-linkage/double-claim-block/immutability verified via `test/backend/purchase_invoice_backend_test.dart`, 2026-09-14. CCC #4/#7 not yet UI-verified. |
+| Purchase Return | PR-RET | /purchase/returns | [purchase_return.md](purchase/purchase_return.md) | Passed (backend) | Partial return (30/100) against unbilled GRN → stock rolls back correctly → immutability blocked. Verified via `test/backend/purchase_return_backend_test.dart`, 2026-09-14. Billed/SDN branch not yet covered. CCC #4/#7 not yet UI-verified. |
 | Supplier Payment | PR-PAY | /purchase/payments | — | **N/A — Not Built** | Route is still a placeholder |
 
 ### Reports (13) — detail file: [`reports/purchase_reports.md`](reports/purchase_reports.md)
