@@ -222,6 +222,24 @@ The screen-by-screen backend-RPC suite above tests every document type IN ISOLAT
 - **Ageing's `total_outstanding` vs `net_closing`** (scenario 8): `total_outstanding` sums only bill-tagged lines and stays stale after an on-account settlement (same reasoning as above); `net_closing = total_outstanding - unsettled_advance` is the field that correctly nets it, since an on-account payment lands in the separate "unsettled advance" bucket instead. Both fields are working as designed — a test/report reader just needs to know which one answers "what do they still owe."
 - **Cash Receipt's local_amount convention + partial-settlement-after-return interacts with real FX** (scenario 10): settling a partial residual balance (after a Sales Return reduced the original bill) via Cash Receipt triggers a real `EXC` (Exchange Gain/Loss) voucher when the receipt's own nominal (non-real-FX) `local_amount`, per this whole suite's existing convention, doesn't reconcile against the bill's own recorded amounts through a real exchange rate. This is a test-fixture-convention artifact (documented already in `cash_receipt_backend_test.dart`), not a fresh app bug — flagged in `trial_balance_pnl_scenario_test.dart`'s own doc comment so it isn't mistaken for one later.
 
+## Phase A — Edge-case business scenarios (2026-09-14, production-readiness roadmap)
+
+Per the production-readiness roadmap (see memory), the original 10 scenarios were all "happy path": single currency, untracked product, SIMPLE location model. Four new scenario files close the specific gaps a manual user would also never stumble onto by accident:
+
+| File | Result | Proves |
+|---|---|---|
+| `batch_tracked_lifecycle_scenario_test.dart` | PASS | GRN with a real batch number → Sales Invoice allocating that batch → Sales Return re-allocating it, plus the "batch can never go negative regardless of allow_negative_stock flags" rule fires live (`BATCH_INSUFFICIENT_STOCK`) |
+| `multi_currency_chain_scenario_test.dart` | PASS | A full Purchase-to-Pay chain (PO→GRN→Invoice→Payment) raised entirely in the tenant's real LOCAL currency (CDF, rate 2825) — every base_amount conversion reconciles, Trial Balance still balances |
+| `enforcement_rules_scenario_test.dart` | PASS (4 tests) | Permission denial (a user with zero `ric_user_menus` rows is rejected by `fn_approve_purchase_order` itself, not just hidden by the UI), Period Close (`PERIOD_LOCKED`), Backdated Entry Control (`BACKDATE_NOT_ALLOWED`), Negative Stock (`NEGATIVE_STOCK_NOT_ALLOWED`) all fire live, not just exist in the codebase |
+
+**New shared infra**: `BackendVerifier.loginAs(username, password)` — the first test needing to authenticate as a SECOND, non-admin user (every prior test file only ever logged in as `qa_admin`). `ScenarioHelpers.ensureBatchTrackedProduct()` and `.batchBalance()` — get-or-create a dedicated batch-tracked test product (separate from `TestTenantConfig.productId`, which is untracked) and read `v_batch_stock_balance`.
+
+**Real gotcha found**: the same non-partial `uq_users_client_username` UNIQUE-index issue found earlier this session (`user_management_backend_test.dart`) recurred in `enforcement_rules_scenario_test.dart`'s own restricted-user fixture — fixed with the same rename-not-just-soft-delete cleanup pattern.
+
+Full backend suite is now **70 tests** (52 per-screen + 10 original scenarios + 4 new edge-case scenarios), all passing together under `--concurrency=1`.
+
+**Not done** (deliberately, per the roadmap's own scoping): an INTER_ENTITY location-group scenario — skipped since the business doesn't yet know whether it will ever need more than one location group; add if that becomes real.
+
 **Note on running this suite**: always `flutter test test/backend/ --concurrency=1` — files race resetQaTenant() against each other in parallel (see `test/backend/README.md`).
 
 **Real bugs found and fixed this session (not test-plan execution, but surfaced while setting up the local toolchain to run it)**:

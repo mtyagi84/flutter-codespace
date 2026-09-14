@@ -42,10 +42,20 @@ class BackendVerifier {
   /// invoked straight from test code instead of by driving the UI.
   Future<void> login() async {
     TestTenantConfig.assertConfigured();
+    await loginAs(TestTenantConfig.username, TestTenantConfig.password);
+  }
+
+  /// Same fn_login call, but as an arbitrary username/password — for tests
+  /// that need to act as a SECOND, non-admin user (e.g. proving a
+  /// permission-denial rule actually rejects an RPC for a user who lacks
+  /// the right, not just that the admin who has every right can call it).
+  /// Still the QA tenant's own client_no (TestTenantConfig.clientNo) —
+  /// only the username/password vary.
+  Future<void> loginAs(String username, String password) async {
     final res = await _dio.post('/rpc/fn_login', data: {
       'p_client_no': TestTenantConfig.clientNo,
-      'p_username':  TestTenantConfig.username,
-      'p_password':  TestTenantConfig.password,
+      'p_username':  username,
+      'p_password':  password,
     });
     final d = res.data as Map<String, dynamic>;
     _accessToken = d['access_token'] as String;

@@ -11,6 +11,43 @@ String todayStr() => DateTime.now().toIso8601String().split('T').first;
 /// calls that ARE the point of a given scenario are always made directly
 /// in that scenario's own file, never hidden in here.
 class ScenarioHelpers {
+  /// Get-or-create a dedicated BATCH-tracked test product (separate from
+  /// TestTenantConfig.productId, which is untracked — `tracking_type='NONE'`
+  /// per `seed_qa_master_data.sql`). Idempotent: `resetQaTenant()` never
+  /// touches master data, so a prior run's product is found and reused.
+  static Future<String> ensureBatchTrackedProduct(BackendVerifier verifier, CommonRefs refs) async {
+    final existing = await verifier.get('rim_products', {'product_code': 'eq.QA-CRUD-BATCH'}, select: 'id');
+    if (existing.isNotEmpty) return existing.first['id'] as String;
+    final created = await verifier.insert('rim_products', {
+      'product_code': 'QA-CRUD-BATCH',
+      'product_name': 'QA CRUD Batch-Tracked Product',
+      'base_uom_id': refs.uomId,
+      'tracking_type': 'BATCH',
+      'is_active': true,
+      'flags': {'is_saleable': true, 'is_purchasable': true},
+    });
+    return created['id'] as String;
+  }
+
+  /// Reads `v_batch_stock_balance` for one batch — returns 0 if the batch
+  /// has no ledger rows at all yet (rather than throwing, since "not
+  /// created yet" and "confirmed zero" are both legitimate states to
+  /// assert against in a scenario).
+  static Future<double> batchBalance(
+    BackendVerifier verifier, {
+    required String productId,
+    required String locationId,
+    required String batchNo,
+  }) async {
+    final rows = await verifier.get(
+      'v_batch_stock_balance',
+      {'product_id': 'eq.$productId', 'location_id': 'eq.$locationId', 'batch_no': 'eq.$batchNo'},
+      select: 'balance',
+    );
+    if (rows.isEmpty) return 0;
+    return (rows.first['balance'] as num).toDouble();
+  }
+
   /// Creates + approves a DIRECT-receipt GRN (no PO) for [qty] units of
   /// TestTenantConfig.productId at [rate] — the "establish stock at a
   /// known cost" step nearly every scenario needs before it can sell,
