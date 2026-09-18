@@ -164,7 +164,7 @@ begin
          serial_no, group_code, group_name, group_serial_no,
          approve_allowed, copy_allowed, excel_upload_allowed)
     values
-        (p_client_id, p_company_id, v_ad, 'MST-PRD', 'Product Master',                '/master/products',                         0, 'IN-MST', 'Inventory Masters', 4, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-PRD', 'Product Master',                '/master/products',                         0, 'IN-MST', 'Inventory Masters', 4, false, false, true),
         (p_client_id, p_company_id, v_ad, 'MST-ITC', 'Item Categories',               '/master/item-categories',                  1, 'IN-MST', 'Inventory Masters', 4, false, false, false),
         (p_client_id, p_company_id, v_ad, 'AD-PCS',  'Product Category Level Setup',  '/setup/category-levels',                   2, 'IN-MST', 'Inventory Masters', 4, false, false, false),
         (p_client_id, p_company_id, v_ad, 'AD-PGS',  'Product Flag Types',            '/setup/product-flag-types',                3, 'IN-MST', 'Inventory Masters', 4, false, false, false),
@@ -186,7 +186,7 @@ begin
          serial_no, group_code, group_name, group_serial_no,
          approve_allowed, copy_allowed, excel_upload_allowed)
     values
-        (p_client_id, p_company_id, v_ad, 'MST-COA', 'Chart of Accounts',   '/master/accounts',            0, 'FN-MST', 'Finance Masters', 5, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-COA', 'Chart of Accounts',   '/master/accounts',            0, 'FN-MST', 'Finance Masters', 5, false, false, true),
         (p_client_id, p_company_id, v_ad, 'MST-TAX', 'Tax Master',          '/master/tax-master',          1, 'FN-MST', 'Finance Masters', 5, false, false, false),
         (p_client_id, p_company_id, v_ad, 'MST-TXG', 'Tax Groups',          '/master/tax-groups',          2, 'FN-MST', 'Finance Masters', 5, false, false, false),
         (p_client_id, p_company_id, v_ad, 'MST-ALS', 'Account Link Setup',  '/master/account-link-setup',  3, 'FN-MST', 'Finance Masters', 5, false, false, false),

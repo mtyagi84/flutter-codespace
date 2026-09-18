@@ -1,17 +1,27 @@
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
+import 'package:excel/excel.dart' as xls;
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
+import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/layout/screen_header.dart';
 import '../../../../core/providers/session_provider.dart';
+import '../../../../core/reporting/web_download.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
 import '../../../../core/widgets/sakal_adaptive_list.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
+import '../../data/models/common_master_model.dart';
+import '../../data/models/item_category_model.dart';
 import '../../data/models/product_model.dart';
 import '../providers/products_providers.dart';
 
@@ -33,18 +43,37 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen>
     return ScreenHeaderInfo(
       title: 'Products',
       subtitle: 'Product and item master',
-      actions: (!offline && canAdd)
-          ? [
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: FilledButton.icon(
-                  onPressed: () => _openEntry(),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('New Product'),
-                ),
-              ),
-            ]
-          : const [],
+      actions: [
+        if (!offline && canAdd && canExcelUpload) ...[
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: IconButton(
+              icon: const Icon(Icons.download_outlined, size: 20),
+              tooltip: 'Download Template',
+              onPressed: _downloadProductsTemplate,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: IconButton(
+              icon: _uploadingExcel
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.upload_file_outlined, size: 20),
+              tooltip: 'Upload Excel',
+              onPressed: _uploadingExcel ? null : _uploadProductsExcel,
+            ),
+          ),
+        ],
+        if (!offline && canAdd)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilledButton.icon(
+              onPressed: () => _openEntry(),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('New Product'),
+            ),
+          ),
+      ],
     );
   }
 
@@ -61,6 +90,7 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen>
 
   static const _pageSize = 50;
   int _offset = 0;
+  bool _uploadingExcel = false;
 
   @override
   void initState() {
@@ -136,6 +166,203 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen>
     await context.push(RouteNames.productEntry,
         extra: productId != null ? {'productId': productId} : null);
     if (mounted) _reload();
+  }
+
+  // ── Bulk Excel upload — new products only, one product code per row ───────
+  // Category/Sub Category/Unit/Brand are all resolved by NAME against
+  // already-existing masters (created one-by-one first via their own
+  // screens) — an unresolved name skips the row with an error, same
+  // deferred-validation convention as every other upload in this app.
+  // Every lookup is normalized (trim + uppercase) on both sides, since a
+  // real duplicate-category bug (stray whitespace/case differences) was
+  // found in the first real tenant's own source data.
+  static const _uploadHeaders = [
+    'Product Name', 'Category', 'Sub Category', 'Unit', 'Initial Cost', 'Brand',
+  ];
+
+  String _norm(String s) => s.trim().toUpperCase();
+
+  Future<void> _downloadProductsTemplate() async {
+    final workbook = xls.Excel.createExcel();
+    final sheetName = workbook.getDefaultSheet()!;
+    final sheet = workbook[sheetName];
+    sheet.appendRow(_uploadHeaders.map((h) => xls.TextCellValue(h)).toList());
+    final bytes = workbook.encode();
+    if (bytes == null) return;
+    await _saveWorkbookBytes(bytes, 'product_master_template.xlsx', 'Save Product Master template');
+  }
+
+  Future<void> _saveWorkbookBytes(List<int> bytes, String filename, String dialogTitle) async {
+    if (kIsWeb) {
+      downloadBytesOnWeb(bytes, filename);
+      return;
+    }
+    await FilePicker.platform.saveFile(
+      dialogTitle: dialogTitle,
+      fileName: filename,
+      bytes: Uint8List.fromList(bytes),
+      type: FileType.custom, allowedExtensions: ['xlsx'],
+    );
+  }
+
+  Future<void> _uploadProductsExcel() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom, allowedExtensions: ['xlsx'], withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final bytes = result.files.first.bytes;
+    if (bytes == null) {
+      if (mounted) _showUploadSnack('Could not read the selected file.', AppColors.negative);
+      return;
+    }
+
+    setState(() => _uploadingExcel = true);
+    try {
+      final workbook = xls.Excel.decodeBytes(bytes);
+      if (workbook.tables.isEmpty) { _showUploadSnack('The file has no sheets.', AppColors.negative); return; }
+      final sheet = workbook.tables[workbook.tables.keys.first]!;
+      if (sheet.maxRows < 2) { _showUploadSnack('No data rows found below the header.', AppColors.negative); return; }
+
+      final session = ref.read(sessionProvider)!;
+      final repo = ref.read(productsRepositoryProvider);
+
+      final categories = await repo.getCategories(clientId: session.clientId, companyId: session.companyId);
+      final masterSets = await repo.loadMasterSets(clientId: session.clientId, companyId: session.companyId);
+      final brands = masterSets['BRAND'] ?? const [];
+      final units  = masterSets['UNIT']  ?? const [];
+
+      // Level-1 categories by normalized name; level-2 (sub) categories by
+      // normalized name SCOPED to their level-1 parent (two products in
+      // different top-level groups can legitimately share a sub-category
+      // name, e.g. "Angles" under two different steel-shape groups).
+      final level1ByName = <String, ItemCategoryModel>{
+        for (final c in categories) if (c.levelNo == 1) _norm(c.categoryName): c,
+      };
+      final level2ByParentAndName = <String, ItemCategoryModel>{
+        for (final c in categories) if (c.levelNo == 2) '${c.parentId}|${_norm(c.categoryName)}': c,
+      };
+      final brandByName = <String, CommonMasterModel>{ for (final b in brands) _norm(b.description): b };
+      final unitByName  = <String, CommonMasterModel>{ for (final u in units)  _norm(u.description): u };
+
+      final startingCode = await repo.generateProductCode(clientId: session.clientId, companyId: session.companyId);
+      final startingNum = int.tryParse(startingCode.replaceAll('PRD-', '')) ?? 1;
+
+      final headerCells = sheet.row(0);
+      final headerNames = headerCells.map((c) => c?.value?.toString().trim().toLowerCase() ?? '').toList();
+      int col(String name) => headerNames.indexOf(name);
+      final idxName    = col('product name');
+      final idxCat     = col('category');
+      final idxSubCat  = col('sub category');
+      final idxUnit    = col('unit');
+      final idxCost    = col('initial cost');
+      final idxBrand   = col('brand');
+
+      if (idxName == -1 || idxUnit == -1) {
+        _showUploadSnack('Missing required column(s): Product Name, Unit.', AppColors.negative);
+        return;
+      }
+
+      String cellStr(List<xls.Data?> row, int idx) =>
+          (idx == -1 || idx >= row.length) ? '' : (row[idx]?.value?.toString().trim() ?? '');
+
+      var nextNum = startingNum;
+      var created = 0;
+      final errors = <String>[];
+
+      for (var r = 1; r < sheet.maxRows; r++) {
+        final row = sheet.row(r);
+        final name = cellStr(row, idxName);
+        if (name.isEmpty) continue;
+
+        final unitName = cellStr(row, idxUnit);
+        final unit = unitByName[_norm(unitName)];
+        if (unit == null) { errors.add('Row ${r + 1}: unit "$unitName" not found.'); continue; }
+
+        String? categoryId;
+        final catName = cellStr(row, idxCat);
+        if (catName.isNotEmpty) {
+          final level1 = level1ByName[_norm(catName)];
+          if (level1 == null) { errors.add('Row ${r + 1}: category "$catName" not found.'); continue; }
+          categoryId = level1.id;
+          final subCatName = cellStr(row, idxSubCat);
+          if (subCatName.isNotEmpty) {
+            final level2 = level2ByParentAndName['${level1.id}|${_norm(subCatName)}'];
+            if (level2 == null) { errors.add('Row ${r + 1}: sub category "$subCatName" not found under "$catName".'); continue; }
+            categoryId = level2.id;
+          }
+        }
+
+        final brandName = cellStr(row, idxBrand);
+        final brand = brandName.isEmpty ? null : brandByName[_norm(brandName)];
+        if (brandName.isNotEmpty && brand == null) { errors.add('Row ${r + 1}: brand "$brandName" not found.'); continue; }
+
+        final costStr = idxCost == -1 ? '' : cellStr(row, idxCost);
+        final cost = double.tryParse(costStr) ?? 0;
+
+        final productId = const Uuid().v4();
+        final code = 'PRD-${nextNum.toString().padLeft(5, '0')}';
+        nextNum++;
+
+        try {
+          await repo.saveProduct({
+            'id':             productId,
+            'client_id':      session.clientId,
+            'company_id':     session.companyId,
+            'product_code':   code,
+            'product_name':   name,
+            'product_nature': 'TRADING',
+            if (categoryId != null) 'category_id': categoryId,
+            if (brand != null)      'brand_id':    brand.id,
+            'base_uom_id':    unit.id,
+            'standard_cost':  cost,
+            'tracking_type':  'NONE',
+            'is_active':      true,
+            'created_by':     session.userId,
+          }, isNew: true);
+          await repo.saveProductUom({
+            'client_id':  session.clientId,
+            'company_id': session.companyId,
+            'product_id': productId,
+            'uom_id':     unit.id,
+            'conversion_factor': 1,
+            'is_base_uom': true,
+            'is_purchase_uom': true,
+            'is_sales_uom': true,
+            'sort_order': 0,
+          });
+          created++;
+        } catch (e) {
+          errors.add('Row ${r + 1} ("$name"): ${ErrorPresenter.format(e, action: "create this product")}');
+        }
+      }
+
+      if (created > 0) await _reload();
+
+      if (!mounted) return;
+      if (errors.isNotEmpty) {
+        _showUploadSnack('$created product(s) created, ${errors.length} row(s) skipped.', Colors.orange);
+        await showDialog<void>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Rows skipped'),
+            content: SizedBox(width: 420, height: 320, child: SingleChildScrollView(child: Text(errors.join('\n')))),
+            actions: [TextButton(onPressed: () => Navigator.of(context, rootNavigator: true).pop(), child: const Text('OK'))],
+          ),
+        );
+      } else {
+        _showUploadSnack('$created product(s) created.', AppColors.positive);
+      }
+    } catch (e, st) {
+      AppLogger.error('ProductMasterExcelUpload', e, st);
+      if (mounted) _showUploadSnack(ErrorPresenter.format(e, action: 'upload this Excel file'), AppColors.negative);
+    } finally {
+      if (mounted) setState(() => _uploadingExcel = false);
+    }
+  }
+
+  void _showUploadSnack(String msg, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
   }
 
   @override
