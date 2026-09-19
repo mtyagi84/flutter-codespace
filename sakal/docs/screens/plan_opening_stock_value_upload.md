@@ -1,4 +1,4 @@
-Status: Approved, not yet implemented (2026-09-19)
+Status: Implemented 2026-09-19 (migration 193 deployed; layout bug fixed same day — see commit c9aeb47)
 
 # Opening Stock — Value Upload (Excel, qty + cost, with GL posting)
 
