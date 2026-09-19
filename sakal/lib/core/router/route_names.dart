@@ -107,6 +107,7 @@ class RouteNames {
   static const String paymentTerms      = '/master/payment-terms';
   static const String productMaster    = '/master/products';
   static const String productEntry     = '/master/product-entry';
+  static const String bulkUploadProducts = '/master/bulk-upload-products';
   static const String accountLinkSetup     = '/master/account-link-setup';
   static const String accountLinkConfigure = '/master/account-link-configure';
   static const String itemAccountLinks     = '/master/item-account-links';

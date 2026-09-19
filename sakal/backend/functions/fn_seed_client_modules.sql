@@ -164,11 +164,12 @@ begin
          serial_no, group_code, group_name, group_serial_no,
          approve_allowed, copy_allowed, excel_upload_allowed)
     values
-        (p_client_id, p_company_id, v_ad, 'MST-PRD', 'Product Master',                '/master/products',                         0, 'IN-MST', 'Inventory Masters', 4, false, false, true),
+        (p_client_id, p_company_id, v_ad, 'MST-PRD', 'Product Master',                '/master/products',                         0, 'IN-MST', 'Inventory Masters', 4, false, false, false),
         (p_client_id, p_company_id, v_ad, 'MST-ITC', 'Item Categories',               '/master/item-categories',                  1, 'IN-MST', 'Inventory Masters', 4, false, false, false),
         (p_client_id, p_company_id, v_ad, 'AD-PCS',  'Product Category Level Setup',  '/setup/category-levels',                   2, 'IN-MST', 'Inventory Masters', 4, false, false, false),
         (p_client_id, p_company_id, v_ad, 'AD-PGS',  'Product Flag Types',            '/setup/product-flag-types',                3, 'IN-MST', 'Inventory Masters', 4, false, false, false),
-        (p_client_id, p_company_id, v_ad, 'IN-DCA',  'Consumption Area Setup',        '/inventory/department-consumption-areas',  4, 'IN-MST', 'Inventory Masters', 4, false, false, false)
+        (p_client_id, p_company_id, v_ad, 'IN-DCA',  'Consumption Area Setup',        '/inventory/department-consumption-areas',  4, 'IN-MST', 'Inventory Masters', 4, false, false, false),
+        (p_client_id, p_company_id, v_ad, 'MST-BUP', 'Bulk Upload Products',          '/master/bulk-upload-products',             5, 'IN-MST', 'Inventory Masters', 4, false, false, true)
     on conflict (client_id, company_id, feature_code) do update
         set module_id       = excluded.module_id,
             feature_name    = excluded.feature_name,

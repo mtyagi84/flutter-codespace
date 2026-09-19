@@ -39,6 +39,7 @@ import '../../features/master/presentation/screens/account_link_setup_screen.dar
 import '../../features/master/presentation/screens/account_link_configure_screen.dart';
 import '../../features/master/presentation/screens/item_account_links_screen.dart';
 import '../../features/master/presentation/screens/opening_balance_entry_screen.dart';
+import '../../features/master/presentation/screens/bulk_upload_products_screen.dart';
 import '../../features/inventory/presentation/screens/department_consumption_area_screen.dart';
 import '../../features/inventory/presentation/screens/material_requisition_list_screen.dart';
 import '../../features/inventory/presentation/screens/material_requisition_entry_screen.dart';
@@ -259,6 +260,7 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.itemAccountLinks, builder: (c, s) => const ItemAccountLinksScreen()),
         GoRoute(path: RouteNames.openingBalances, builder: (c, s) => const OpeningBalanceEntryScreen()),
         GoRoute(path: RouteNames.productMaster,  builder: (c, s) => const ProductListScreen()),
+        GoRoute(path: RouteNames.bulkUploadProducts, builder: (c, s) => const BulkUploadProductsScreen()),
         GoRoute(
           path: RouteNames.productEntry,
           builder: (c, s) {
