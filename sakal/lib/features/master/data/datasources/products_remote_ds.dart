@@ -261,6 +261,28 @@ class ProductsRemoteDs {
     return res.data as String?;
   }
 
+  Future<String?> canResetAllProducts({
+    required String clientId,
+    required String companyId,
+  }) async {
+    final res = await _dio.post('/rpc/fn_can_reset_all_products', data: {
+      'p_client_id':  clientId,
+      'p_company_id': companyId,
+    });
+    return res.data as String?;
+  }
+
+  Future<int> resetAllProducts({
+    required String clientId,
+    required String companyId,
+  }) async {
+    final res = await _dio.post('/rpc/fn_reset_all_products', data: {
+      'p_client_id':  clientId,
+      'p_company_id': companyId,
+    });
+    return res.data as int;
+  }
+
   Future<List<ProductFlagTypeModel>> getFlagTypes({
     required String clientId,
     required String companyId,

@@ -103,6 +103,14 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
   bool _saving = false;
   String? _progressText;
 
+  // Reset-and-reupload — see fn_can_reset_all_products/fn_reset_all_products
+  // (migration 192). Company-wide gate: only offered when NO product in the
+  // company has ANY transaction yet (checked live when the checkbox is
+  // ticked, then re-checked authoritatively server-side at Save — never
+  // trust the client-side check still holds by the time Save actually runs).
+  bool _resetFirst = false;
+  bool _checkingReset = false;
+
   static const _uploadHeaders = [
     'Product Name', 'Description', 'Product Nature', 'HSN/SAC Code',
     'Category L1', 'Category L2', 'Category L3', 'Category L4',
@@ -130,6 +138,30 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
     if (_saving || _uploadingExcel) return;
     setState(() => _lines.remove(row));
     deferRowDisposal(row);
+  }
+
+  Future<void> _onResetToggleChanged(bool? checked) async {
+    if (checked != true) { setState(() => _resetFirst = false); return; }
+    setState(() => _checkingReset = true);
+    try {
+      final session = ref.read(sessionProvider)!;
+      final productsRepo = ref.read(productsRepositoryProvider);
+      final reason = await productsRepo.canResetAllProducts(
+        clientId: session.clientId, companyId: session.companyId,
+      );
+      if (reason != null) {
+        _showSnack(reason, AppColors.negative);
+        if (mounted) setState(() => _resetFirst = false);
+        return;
+      }
+      if (mounted) setState(() => _resetFirst = true);
+    } catch (e, st) {
+      AppLogger.error('BulkUploadProductsResetCheck', e, st);
+      if (mounted) _showSnack(ErrorPresenter.format(e, action: 'check whether products can be reset'), AppColors.negative);
+      if (mounted) setState(() => _resetFirst = false);
+    } finally {
+      if (mounted) setState(() => _checkingReset = false);
+    }
   }
 
   // ── Template / Upload ──────────────────────────────────────────────────
@@ -274,13 +306,49 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
       _showSnack('Upload a file or add at least one row first.', AppColors.negative);
       return;
     }
+    if (_resetFirst) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          title: const Text('Delete existing products?'),
+          content: const Text(
+            'This will permanently delete EVERY existing product in this company before '
+            'uploading this file. This cannot be undone. Continue?',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context, rootNavigator: true).pop(false), child: const Text('Cancel')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.negative),
+              onPressed: () => Navigator.of(context, rootNavigator: true).pop(true),
+              child: const Text('Delete & Continue'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
     final rowSnapshots = _lines.map((l) => l.snapshot()).toList();
     setState(() { _saving = true; _progressText = 'Preparing…'; });
     final session = ref.read(sessionProvider)!;
     final productsRepo  = ref.read(productsRepositoryProvider);
     final categoriesRepo = ref.read(itemCategoriesRepositoryProvider);
+    var resetDeletedCount = 0;
 
     try {
+      // ── 0. Reset (optional) — re-checked authoritatively server-side by
+      // fn_reset_all_products itself, never trusting that the earlier
+      // checkbox-time check still holds. Runs BEFORE the existing-products
+      // fetch below so that fetch correctly sees an empty table afterward.
+      if (_resetFirst) {
+        setState(() => _progressText = 'Deleting existing products…');
+        resetDeletedCount = await productsRepo.resetAllProducts(
+          clientId: session.clientId, companyId: session.companyId,
+        );
+        if (mounted) setState(() => _resetFirst = false); // one-shot, doesn't reapply on a later Save
+      }
+
       // ── 1. Fetch once, up front ─────────────────────────────────────────
       final existingProducts = await DioClient.instance.get('/rim_products', queryParameters: {
         'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
@@ -589,7 +657,9 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
       }
       setState(() { _lines = []; _saving = false; _progressText = null; });
 
-      final summary = StringBuffer('$created product(s) created.');
+      final summary = StringBuffer();
+      if (resetDeletedCount > 0) summary.write('$resetDeletedCount existing product(s) deleted. ');
+      summary.write('$created product(s) created.');
       if (createdCategoryIds.isNotEmpty || createdMasterIds.isNotEmpty) {
         summary.write(' ${createdCategoryIds.length + createdMasterIds.length} master(s) auto-created.');
       }
@@ -776,6 +846,32 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
                     onPressed: (busy || _lines.isEmpty) ? null : _save,
                     icon: _saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.save_outlined),
                     label: const Text('Save'),
+                  ),
+                ]),
+              ),
+            if (canExcelUpload)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 16, 4),
+                child: Row(children: [
+                  Checkbox(
+                    value: _resetFirst,
+                    onChanged: (busy || _checkingReset) ? null : _onResetToggleChanged,
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: (busy || _checkingReset) ? null : () => _onResetToggleChanged(!_resetFirst),
+                      child: Text(
+                        _checkingReset
+                            ? 'Checking existing products…'
+                            : 'Delete ALL existing products first, then upload this file '
+                                '(only allowed if no product has any transaction yet)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _resetFirst ? AppColors.negative : AppColors.textSecondary,
+                          fontWeight: _resetFirst ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                      ),
+                    ),
                   ),
                 ]),
               ),

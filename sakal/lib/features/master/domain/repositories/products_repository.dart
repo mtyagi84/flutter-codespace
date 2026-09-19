@@ -41,4 +41,14 @@ abstract class ProductsRepository {
     required String companyId,
     required String productId,
   });
+
+  Future<String?> canResetAllProducts({
+    required String clientId,
+    required String companyId,
+  });
+
+  Future<int> resetAllProducts({
+    required String clientId,
+    required String companyId,
+  });
 }

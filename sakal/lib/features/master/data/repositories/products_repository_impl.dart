@@ -136,4 +136,18 @@ class ProductsRepositoryImpl implements ProductsRepository {
     required String productId,
   }) =>
       _remote.canChangeBaseUom(clientId: clientId, companyId: companyId, productId: productId);
+
+  @override
+  Future<String?> canResetAllProducts({
+    required String clientId,
+    required String companyId,
+  }) =>
+      _remote.canResetAllProducts(clientId: clientId, companyId: companyId);
+
+  @override
+  Future<int> resetAllProducts({
+    required String clientId,
+    required String companyId,
+  }) =>
+      _remote.resetAllProducts(clientId: clientId, companyId: companyId);
 }
