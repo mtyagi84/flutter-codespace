@@ -118,6 +118,9 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
       l.dispose();
     }
     disposeDeferredRows();
+    _vController.dispose();
+    _hHeaderController.dispose();
+    _hBodyController.dispose();
     super.dispose();
   }
 
@@ -367,7 +370,12 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
         rowIdx++;
         final name = row['name'] as String;
         if (name.isEmpty) continue;
-        if (mounted) setState(() => _progressText = 'Resolving row $rowIdx of ${rowSnapshots.length}: $name');
+        // Throttled to every 5th row — updating on every single row adds
+        // up to ~500 extra rebuilds across a large file for no visible
+        // benefit (a human can't read text changing that fast anyway).
+        if (mounted && (rowIdx % 5 == 0 || rowIdx == 1)) {
+          setState(() => _progressText = 'Resolving row $rowIdx of ${rowSnapshots.length}: $name');
+        }
 
         final normName = _norm(name);
         if (existingNames.contains(normName) || !committedNamesThisRun.add(normName)) {
@@ -509,7 +517,9 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
       var commitIdx = 0;
       for (final r in toCommit) {
         commitIdx++;
-        if (mounted) setState(() => _progressText = 'Creating product $commitIdx of ${toCommit.length}: ${r['name']}');
+        if (mounted && (commitIdx % 5 == 0 || commitIdx == 1)) {
+          setState(() => _progressText = 'Creating product $commitIdx of ${toCommit.length}: ${r['name']}');
+        }
         final productId = const Uuid().v4();
         final code = 'PRD-${nextProductNum.toString().padLeft(5, '0')}';
         nextProductNum++;
@@ -837,44 +847,89 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
       );
 
   // Vertical scroll (with a persistent visible thumb) wraps the whole
-  // grid; SakalScrollableTable itself only ever provided horizontal
-  // scroll for a wide multi-column table — the missing vertical scrollbar
-  // was a real gap found live (the grid could technically be scrolled with
-  // a mouse wheel, but nothing showed there was more content below, or
-  // where the user was within it).
+  // Vertical scroll (ListView.builder — lazily builds only visible rows,
+  // see the fix note below) has a persistent visible thumb; horizontal
+  // scroll is split into a HEADER controller and a BODY controller kept
+  // in sync via listeners, so the header stays pinned at the top (never
+  // scrolls away vertically) while columns still stay aligned when
+  // scrolling sideways. SakalScrollableTable itself only ever provided a
+  // single combined header+body horizontal scroll with no sticky-header
+  // behavior, which is what caused the header to scroll out of view.
   final _vController = ScrollController();
+  final _hHeaderController = ScrollController();
+  final _hBodyController = ScrollController();
+  bool _syncingHScroll = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _hHeaderController.addListener(() => _syncHScroll(_hHeaderController, _hBodyController));
+    _hBodyController.addListener(() => _syncHScroll(_hBodyController, _hHeaderController));
+  }
+
+  void _syncHScroll(ScrollController source, ScrollController target) {
+    if (_syncingHScroll || !target.hasClients) return;
+    _syncingHScroll = true;
+    target.jumpTo(source.offset);
+    _syncingHScroll = false;
+  }
+
+  static const _colWidths = <double>[
+    44, 190, 150, 170, 90, 120, 120, 100, 100, 90, 90, 100, 80, 90, 100, 90, 130, 130, 36,
+  ];
+  static final _gridTotalWidth = _colWidths.fold<double>(0, (a, b) => a + b);
+
+  // Real perf bug found live: building all ~487 rows × 17 fields (8000+
+  // live TextEditingController-backed widgets) eagerly in one Column made
+  // the page hang well before reaching the end of a large file, and made
+  // Tab-key focus traversal slow (Flutter has to walk the whole built
+  // tree to find the next focus node). ListView.builder only builds rows
+  // actually visible (plus a small cache extent) at any moment, exactly
+  // like every other long list in this app already does.
   Widget _buildDesktopGrid() {
-    const colWidths = <double>[
-      44, 190, 150, 120, 90, 120, 120, 100, 100, 90, 90, 100, 80, 90, 100, 90, 130, 130, 36,
-    ];
-    final totalWidth = colWidths.fold<double>(0, (a, b) => a + b) + (colWidths.length - 1) * 1;
-
-    return Scrollbar(
-      controller: _vController,
-      thumbVisibility: true,
-      child: SingleChildScrollView(
-        controller: _vController,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: totalWidth),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              _buildHeaderRow(colWidths),
-              for (var i = 0; i < _lines.length; i++) _buildLine(_lines[i], i, false, colWidths: colWidths),
-              const SizedBox(height: 12),
-            ]),
+    // Each Scrollbar is given the SAME controller as the scrollable it
+    // sits directly on top of — matching sakal_scrollable_table.dart's own
+    // proven pattern exactly — rather than relying on ScrollNotification
+    // depth-matching, which gets genuinely ambiguous once a horizontal and
+    // a vertical scrollable are nested inside each other.
+    return Column(children: [
+      SingleChildScrollView(
+        controller: _hHeaderController,
+        scrollDirection: Axis.horizontal,
+        physics: const NeverScrollableScrollPhysics(), // dragging the header itself would fight the sync; drag the body instead
+        child: SizedBox(width: _gridTotalWidth, child: _buildHeaderRow(_colWidths)),
+      ),
+      Expanded(
+        child: Scrollbar(
+          controller: _hBodyController,
+          thumbVisibility: true,
+          child: SingleChildScrollView(
+            controller: _hBodyController,
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: _gridTotalWidth,
+              child: Scrollbar(
+                controller: _vController,
+                thumbVisibility: true,
+                child: ListView.builder(
+                  controller: _vController,
+                  itemCount: _lines.length,
+                  itemExtent: 34,
+                  itemBuilder: (_, i) => _buildLine(_lines[i], i, false, colWidths: _colWidths),
+                ),
+              ),
+            ),
           ),
         ),
       ),
-    );
+    ]);
   }
 
   Widget _headerCell(String label, double width) => Container(
         width: width,
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: _gridRowVPad),
         decoration: BoxDecoration(color: AppColors.primary, border: Border.all(color: AppColors.primary)),
-        child: Text(label, style: const TextStyle(color: Colors.white, fontSize: _gridFontSize, fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis),
+        child: Text(label, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: _gridFontSize, fontWeight: FontWeight.w700)),
       );
 
   Widget _buildHeaderRow(List<double> w) => Row(children: [
@@ -926,6 +981,17 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
       isExpanded: true, isDense: true, itemHeight: null,
       style: const TextStyle(fontSize: _gridFontSize, color: AppColors.textPrimary),
       decoration: _cellInputDecoration,
+      // selectedItemBuilder controls what's shown when COLLAPSED — the
+      // plain `items` Text alone only governs the open dropdown menu.
+      // Without this, a long label like "Trading / Resale" wraps onto a
+      // second line in the collapsed field and silently makes the whole
+      // grid row taller than its neighbors (a real bug found live).
+      selectedItemBuilder: (_) => _natureOptions
+          .map((n) => Align(
+                alignment: Alignment.centerLeft,
+                child: Text(ProductModel.natureLabels[n] ?? n, maxLines: 1, overflow: TextOverflow.ellipsis, softWrap: false, style: const TextStyle(fontSize: _gridFontSize)),
+              ))
+          .toList(),
       items: _natureOptions.map((n) => DropdownMenuItem(value: n, child: Text(ProductModel.natureLabels[n] ?? n, style: const TextStyle(fontSize: _gridFontSize)))).toList(),
       onChanged: (_saving || _uploadingExcel) ? null : (v) => setState(() => row.nature = v ?? 'TRADING'),
     );
@@ -952,7 +1018,7 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
     }
 
     final w = colWidths!;
-    return Row(children: [
+    return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Container(
         width: w[0], alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(vertical: _gridRowVPad),
