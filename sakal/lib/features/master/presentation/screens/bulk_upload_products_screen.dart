@@ -13,16 +13,12 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/reporting/web_download.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/deferred_row_disposal.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
-import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_header_action_button.dart';
 import '../../../../core/widgets/sakal_line_item_card.dart';
-import '../../../../core/widgets/sakal_scrollable_table.dart';
-import '../../../../core/widgets/sakal_table_header_bar.dart';
 import '../../data/models/common_master_model.dart';
 import '../../data/models/item_category_model.dart';
 import '../../data/models/product_model.dart';
@@ -37,8 +33,8 @@ import '../providers/products_providers.dart';
 /// whatever Category/Sub-Category/Item Size/Item Color/Brand/Unit master
 /// data a row needs — a Data Operator never has to stop mid-upload to go
 /// set up a master by hand first. Tax Groups are the one deliberate
-/// exception (see _resolveTaxGroups' own comment): they can't be
-/// meaningfully synthesized from a bare name.
+/// exception (see _save's own comment on the batch-confirmation step):
+/// they can't be meaningfully synthesized from a bare name.
 class BulkUploadProductsScreen extends ConsumerStatefulWidget {
   const BulkUploadProductsScreen({super.key});
 
@@ -47,6 +43,13 @@ class BulkUploadProductsScreen extends ConsumerStatefulWidget {
 }
 
 const _natureOptions = ['TRADING', 'FINISHED_GOOD', 'RAW_MATERIAL', 'PACKAGING', 'CONSUMABLE', 'SERVICE'];
+
+// Compact grid metrics — ~20% smaller than this app's usual field-card
+// defaults, per direct user feedback that the original row height/font
+// felt too large for a dense data-entry grid like this one.
+const _gridFontSize = 11.0;
+const _gridRowVPad = 5.0;
+final _gridCellDecoration = BoxDecoration(border: Border.all(color: AppColors.border, width: 0.6));
 
 class _BulkRow implements DisposableRow {
   final nameCtrl = TextEditingController();
@@ -66,6 +69,16 @@ class _BulkRow implements DisposableRow {
   final varianceCtrl = TextEditingController(text: '0');
   final salesTaxCtrl = TextEditingController();
   final purchTaxCtrl = TextEditingController();
+
+  Map<String, dynamic> snapshot() => {
+        'name': nameCtrl.text.trim(), 'description': descCtrl.text.trim(),
+        'nature': nature, 'hsn': hsnCtrl.text.trim(),
+        'cat1': cat1Ctrl.text.trim(), 'cat2': cat2Ctrl.text.trim(),
+        'cat3': cat3Ctrl.text.trim(), 'cat4': cat4Ctrl.text.trim(),
+        'size': sizeCtrl.text.trim(), 'color': colorCtrl.text.trim(), 'brand': brandCtrl.text.trim(),
+        'unit': unitCtrl.text.trim(), 'cost': costCtrl.text.trim(), 'currency': currencyCtrl.text.trim(),
+        'variance': varianceCtrl.text.trim(), 'salesTax': salesTaxCtrl.text.trim(), 'purchTax': purchTaxCtrl.text.trim(),
+      };
 
   @override
   void dispose() {
@@ -88,6 +101,7 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
   List<_BulkRow> _lines = [];
   bool _uploadingExcel = false;
   bool _saving = false;
+  String? _progressText;
 
   static const _uploadHeaders = [
     'Product Name', 'Description', 'Product Nature', 'HSN/SAC Code',
@@ -110,6 +124,7 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
   void _addLine() => setState(() => _lines.add(_BulkRow()));
 
   void _removeLine(_BulkRow row) {
+    if (_saving || _uploadingExcel) return;
     setState(() => _lines.remove(row));
     deferRowDisposal(row);
   }
@@ -150,7 +165,7 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
       return;
     }
 
-    setState(() => _uploadingExcel = true);
+    setState(() { _uploadingExcel = true; _progressText = 'Reading file…'; });
     try {
       final workbook = xls.Excel.decodeBytes(bytes);
       if (workbook.tables.isEmpty) { _showSnack('The file has no sheets.', AppColors.negative); return; }
@@ -231,18 +246,33 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
       AppLogger.error('BulkUploadProductsExcelUpload', e, st);
       if (mounted) _showSnack(ErrorPresenter.format(e, action: 'upload this Excel file'), AppColors.negative);
     } finally {
-      if (mounted) setState(() => _uploadingExcel = false);
+      if (mounted) setState(() { _uploadingExcel = false; _progressText = null; });
     }
   }
 
   // ── Save — the full per-row pipeline ────────────────────────────────────
-
+  //
+  // Every row's field VALUES are read into a plain snapshot map up front,
+  // before any `await` — the whole rest of this method (and everything it
+  // calls) only ever touches those plain maps, never `_BulkRow`/its
+  // TextEditingControllers again. This matters because Save can take
+  // several minutes for a large file; if the user navigates away from this
+  // screen mid-save, Flutter disposes this State's controllers immediately
+  // (see `dispose()` above) while the in-flight async pipeline keeps
+  // running in the background — touching a disposed TextEditingController
+  // at that point would throw. Working from a snapshot instead means a
+  // navigate-away mid-save can't crash the save itself (network calls
+  // already in flight complete normally); what it CANNOT protect against
+  // is the risk of leaving this screen while Save is still writing to the
+  // database — see the blocking overlay + PopScope below, which is this
+  // screen's actual defense against that.
   Future<void> _save() async {
     if (_lines.isEmpty) {
       _showSnack('Upload a file or add at least one row first.', AppColors.negative);
       return;
     }
-    setState(() => _saving = true);
+    final rowSnapshots = _lines.map((l) => l.snapshot()).toList();
+    setState(() { _saving = true; _progressText = 'Preparing…'; });
     final session = ref.read(sessionProvider)!;
     final productsRepo  = ref.read(productsRepositoryProvider);
     final categoriesRepo = ref.read(itemCategoriesRepositoryProvider);
@@ -303,6 +333,14 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
         (c) => c['currency_id'] == baseCurrencyCode, orElse: () => const {});
       final baseCurrencyId = baseCurrencyRow['id'] as String?;
 
+      // Starting product-code number, fetched ONCE — every subsequent code
+      // is computed locally (nextNum++) rather than re-querying the count
+      // per row. Calling generateProductCode() inside the per-row loop was
+      // a real performance bug found live (a ~500-row file took 5-6
+      // minutes, dominated by this one avoidable extra round-trip per row).
+      final startingCode = await productsRepo.generateProductCode(clientId: session.clientId, companyId: session.companyId);
+      var nextProductNum = int.tryParse(startingCode.replaceAll('PRD-', '')) ?? 1;
+
       // Mutable, in-memory caches — updated as this run creates/reuses
       // masters, so row 2 sees what row 1 just created without a re-fetch.
       final categoriesByKey = <String, ItemCategoryModel>{
@@ -320,21 +358,24 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
       final createdMasterIds = <String>{};
       final committedNamesThisRun = <String>{};
       final rowErrors = <String>[];
-      final unmatchedTaxRows = <_BulkRow>[]; // rows with >=1 unmatched tax group name
-      final readyRows = <_BulkRow>[];
-      final resolvedByRow = <_BulkRow, Map<String, dynamic>>{};
+      final unmatchedTaxRows = <Map<String, dynamic>>[];
+      final readyRows = <Map<String, dynamic>>[];
 
       // ── 2. Per-row resolution (no commits yet) ──────────────────────────
-      for (final row in _lines) {
-        final name = row.nameCtrl.text.trim();
+      var rowIdx = 0;
+      for (final row in rowSnapshots) {
+        rowIdx++;
+        final name = row['name'] as String;
         if (name.isEmpty) continue;
+        if (mounted) setState(() => _progressText = 'Resolving row $rowIdx of ${rowSnapshots.length}: $name');
+
         final normName = _norm(name);
         if (existingNames.contains(normName) || !committedNamesThisRun.add(normName)) {
           rowErrors.add('"$name": a product with this name already exists (or is duplicated in this file).');
           continue;
         }
 
-        final unitName = row.unitCtrl.text.trim();
+        final unitName = row['unit'] as String;
         if (unitName.isEmpty) { rowErrors.add('"$name": Unit of Measure is required.'); continue; }
         final unit = await _resolveOrCreateMaster(
           typeIdByKey[MasterTypeKey.unit]!, unitName, mastersByKey, createdMasterIds, session,
@@ -343,17 +384,17 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
         // Category chain L1..L4 — L1 required if ANY level given; a gap
         // (L3 given but L2 blank) is a row error, not a silent skip-ahead.
         String? categoryId;
-        final catNames = [row.cat1Ctrl.text.trim(), row.cat2Ctrl.text.trim(), row.cat3Ctrl.text.trim(), row.cat4Ctrl.text.trim()];
+        final catNames = [row['cat1'] as String, row['cat2'] as String, row['cat3'] as String, row['cat4'] as String];
+        var skipRow = false;
         if (catNames.any((c) => c.isNotEmpty)) {
           if (catNames[0].isEmpty) { rowErrors.add('"$name": Category L1 is required when any category level is given.'); continue; }
           String? parentId;
-          var gapFound = false;
           for (var lvl = 0; lvl < 4; lvl++) {
             final cName = catNames[lvl];
             if (cName.isEmpty) {
               if (catNames.sublist(lvl + 1).any((c) => c.isNotEmpty)) {
                 rowErrors.add('"$name": Category L${lvl + 1} is blank but a deeper level is given.');
-                gapFound = true;
+                skipRow = true;
               }
               break;
             }
@@ -363,27 +404,27 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
             categoryId = cat.id;
             parentId = cat.id;
           }
-          if (gapFound) continue;
+          if (skipRow) continue;
         }
 
         final size = await _resolveOrCreateMaster(
           typeIdByKey[MasterTypeKey.itemSize]!,
-          row.sizeCtrl.text.trim().isEmpty ? 'N/A' : row.sizeCtrl.text.trim(),
+          (row['size'] as String).isEmpty ? 'N/A' : row['size'] as String,
           mastersByKey, createdMasterIds, session,
         );
         final color = await _resolveOrCreateMaster(
           typeIdByKey[MasterTypeKey.color]!,
-          row.colorCtrl.text.trim().isEmpty ? 'N/A' : row.colorCtrl.text.trim(),
+          (row['color'] as String).isEmpty ? 'N/A' : row['color'] as String,
           mastersByKey, createdMasterIds, session,
         );
         final brand = await _resolveOrCreateMaster(
           typeIdByKey[MasterTypeKey.brand]!,
-          row.brandCtrl.text.trim().isEmpty ? 'N/A' : row.brandCtrl.text.trim(),
+          (row['brand'] as String).isEmpty ? 'N/A' : row['brand'] as String,
           mastersByKey, createdMasterIds, session,
         );
 
         String? costCurrencyId = baseCurrencyId;
-        final currencyName = row.currencyCtrl.text.trim();
+        final currencyName = row['currency'] as String;
         if (currencyName.isNotEmpty) {
           final match = baseCurrencies.firstWhere(
             (c) => _norm(c['currency_id'] as String? ?? '') == _norm(currencyName), orElse: () => const {});
@@ -392,33 +433,33 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
         }
 
         String? salesTaxId;
-        final salesTaxName = row.salesTaxCtrl.text.trim();
+        final salesTaxName = row['salesTax'] as String;
         var hasUnmatchedTax = false;
         if (salesTaxName.isNotEmpty) {
           final g = taxGroupByKey['${_norm(salesTaxName)}|SALES'] ?? taxGroupByKey['${_norm(salesTaxName)}|BOTH'];
           if (g == null) { hasUnmatchedTax = true; } else { salesTaxId = g.id; }
         }
         String? purchTaxId;
-        final purchTaxName = row.purchTaxCtrl.text.trim();
+        final purchTaxName = row['purchTax'] as String;
         if (purchTaxName.isNotEmpty) {
           final g = taxGroupByKey['${_norm(purchTaxName)}|PURCHASE'] ?? taxGroupByKey['${_norm(purchTaxName)}|BOTH'];
           if (g == null) { hasUnmatchedTax = true; } else { purchTaxId = g.id; }
         }
 
-        resolvedByRow[row] = {
-          'name': name, 'description': row.descCtrl.text.trim().nullIfEmptyB,
-          'nature': row.nature, 'hsn': row.hsnCtrl.text.trim().nullIfEmptyB,
+        final resolved = {
+          'name': name, 'description': (row['description'] as String).nullIfEmptyB,
+          'nature': row['nature'], 'hsn': (row['hsn'] as String).nullIfEmptyB,
           'category_id': categoryId, 'size_id': size.id, 'color_id': color.id, 'brand_id': brand.id,
-          'unit_id': unit.id, 'cost': double.tryParse(row.costCtrl.text.trim()) ?? 0,
+          'unit_id': unit.id, 'cost': double.tryParse(row['cost'] as String) ?? 0,
           'cost_currency_id': costCurrencyId,
-          'variance': double.tryParse(row.varianceCtrl.text.trim()) ?? 0,
+          'variance': double.tryParse(row['variance'] as String) ?? 0,
           'sales_tax_id': salesTaxId, 'purch_tax_id': purchTaxId,
           'sales_tax_name': salesTaxName, 'purch_tax_name': purchTaxName,
         };
         if (hasUnmatchedTax) {
-          unmatchedTaxRows.add(row);
+          unmatchedTaxRows.add(resolved);
         } else {
-          readyRows.add(row);
+          readyRows.add(resolved);
         }
       }
 
@@ -426,8 +467,7 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
       var dropUnmatchedTaxRows = true;
       if (unmatchedTaxRows.isNotEmpty && mounted) {
         final missingNames = <String>{};
-        for (final row in unmatchedTaxRows) {
-          final r = resolvedByRow[row]!;
+        for (final r in unmatchedTaxRows) {
           if (r['sales_tax_id'] == null && (r['sales_tax_name'] as String).isNotEmpty) missingNames.add(r['sales_tax_name'] as String);
           if (r['purch_tax_id'] == null && (r['purch_tax_name'] as String).isNotEmpty) missingNames.add(r['purch_tax_name'] as String);
         }
@@ -459,18 +499,20 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
       if (!dropUnmatchedTaxRows) {
         toCommit.addAll(unmatchedTaxRows);
       } else {
-        for (final row in unmatchedTaxRows) {
-          final r = resolvedByRow[row]!;
+        for (final r in unmatchedTaxRows) {
           rowErrors.add('"${r['name']}": skipped — unmatched Tax Group ("${r['sales_tax_name']}"/"${r['purch_tax_name']}").');
         }
       }
 
       // ── 4. Commit ────────────────────────────────────────────────────────
       var created = 0;
-      for (final row in toCommit) {
-        final r = resolvedByRow[row]!;
+      var commitIdx = 0;
+      for (final r in toCommit) {
+        commitIdx++;
+        if (mounted) setState(() => _progressText = 'Creating product $commitIdx of ${toCommit.length}: ${r['name']}');
         final productId = const Uuid().v4();
-        final code = await productsRepo.generateProductCode(clientId: session.clientId, companyId: session.companyId);
+        final code = 'PRD-${nextProductNum.toString().padLeft(5, '0')}';
+        nextProductNum++;
         try {
           await productsRepo.saveProduct({
             'id': productId, 'client_id': session.clientId, 'company_id': session.companyId,
@@ -503,6 +545,7 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
       // completely unreferenced (e.g. its own row later errored out) ──────
       var cleanedUp = 0;
       if (createdCategoryIds.isNotEmpty || createdMasterIds.isNotEmpty) {
+        if (mounted) setState(() => _progressText = 'Cleaning up unused auto-created masters…');
         final refsRes = await DioClient.instance.get('/rim_products', queryParameters: {
           'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
           'select': 'category_id,item_size_id,item_color_id,brand_id', 'limit': '20000',
@@ -534,7 +577,7 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
       for (final l in _lines) {
         deferRowDisposal(l);
       }
-      setState(() { _lines = []; _saving = false; });
+      setState(() { _lines = []; _saving = false; _progressText = null; });
 
       final summary = StringBuffer('$created product(s) created.');
       if (createdCategoryIds.isNotEmpty || createdMasterIds.isNotEmpty) {
@@ -559,7 +602,7 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
       AppLogger.error('BulkUploadProductsSave', e, st);
       if (mounted) _showSnack(ErrorPresenter.format(e, action: 'save these products'), AppColors.negative);
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) setState(() { _saving = false; _progressText = null; });
     }
   }
 
@@ -570,6 +613,18 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
   /// is_deleted. Also ensures a `rim_category_levels` row exists for this
   /// level (generic "Level N" label) so the ordinary Item Categories
   /// screen stays usable for what this screen creates.
+  ///
+  /// IMPORTANT: new-category creation goes through a PLAIN PostgREST POST
+  /// (`DioClient.instance.post`), never `ItemCategoriesRepository.
+  /// saveCategory()` — a real bug found live: that repo method branches
+  /// purely on "does the payload contain an 'id' key" to decide POST vs
+  /// PATCH, so passing a client-generated id for a NEW row silently turned
+  /// into a PATCH against a row that didn't exist yet (PostgREST returns
+  /// 200 with zero rows affected, not an error) — the category was never
+  /// actually created, and every product referencing it then failed a
+  /// foreign-key check at insert time. `saveCategory()` is still correct
+  /// (and still used below) for the genuine UPDATE case — reusing an
+  /// already-existing soft-deleted row.
   Future<ItemCategoryModel> _resolveOrCreateCategory(
     String? parentId, int levelNo, String name,
     Map<String, ItemCategoryModel> cache, Set<String> createdIds,
@@ -597,7 +652,7 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
       return existing;
     }
     final id = const Uuid().v4();
-    await categoriesRepo.saveCategory({
+    await DioClient.instance.post('/rim_item_categories', data: {
       'id': id, 'client_id': session.clientId, 'company_id': session.companyId,
       if (parentId != null) 'parent_id': parentId, 'level_no': levelNo, 'category_name': name,
       'flags': const {}, 'sort_order': 0, 'is_active': true, 'is_deleted': false,
@@ -613,7 +668,8 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
   }
 
   /// Same reuse-soft-deleted-first pattern for Unit/Brand/Item Size/Color
-  /// (all `rim_common_masters` type rows).
+  /// (all `rim_common_masters` type rows) — already a plain POST, not
+  /// affected by the saveCategory bug above.
   Future<CommonMasterModel> _resolveOrCreateMaster(
     String typeId, String description,
     Map<String, CommonMasterModel> cache, Set<String> createdIds, dynamic session,
@@ -652,6 +708,7 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
   @override
   ScreenHeaderInfo buildScreenHeader() {
     final showDesktopActions = !Responsive.isMobile(context);
+    final busy = _saving || _uploadingExcel;
     return ScreenHeaderInfo(
       title: 'Bulk Upload Products',
       helpText: 'Upload an Excel file of new products — Category/Sub-Category/Item Size/Item '
@@ -662,16 +719,16 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
               if (canExcelUpload)
                 SakalHeaderActionButton(
                   label: 'Template', icon: Icons.download_outlined, kind: SakalActionKind.neutral,
-                  onPressed: _downloadTemplate,
+                  onPressed: busy ? null : _downloadTemplate,
                 ),
               if (canExcelUpload)
                 SakalHeaderActionButton(
                   label: 'Upload Excel', icon: Icons.upload_file_outlined, kind: SakalActionKind.neutral,
-                  loading: _uploadingExcel, onPressed: _uploadingExcel ? null : _uploadExcel,
+                  loading: _uploadingExcel, onPressed: busy ? null : _uploadExcel,
                 ),
               SakalHeaderActionButton(
                 label: 'Save', icon: Icons.save_outlined, kind: SakalActionKind.save,
-                loading: _saving, onPressed: (_saving || _lines.isEmpty) ? null : _save,
+                loading: _saving, onPressed: (busy || _lines.isEmpty) ? null : _save,
               ),
             ]
           : const [],
@@ -682,138 +739,210 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
   Widget build(BuildContext context) {
     refreshScreenHeader();
     final isMobile = Responsive.isMobile(context);
-    final isCompact = ref.watch(isCompactDensityProvider);
-    const bare = SakalFieldCard.bareDecoration;
-    final style = SakalFieldCard.valueTextStyle(isCompact);
+    final busy = _saving || _uploadingExcel;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (isMobile)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-            child: Wrap(spacing: 8, runSpacing: 8, children: [
-              if (canExcelUpload) OutlinedButton.icon(onPressed: _downloadTemplate, icon: const Icon(Icons.download_outlined, size: 16), label: const Text('Template')),
-              if (canExcelUpload) OutlinedButton.icon(onPressed: _uploadingExcel ? null : _uploadExcel, icon: const Icon(Icons.upload_file_outlined, size: 16), label: const Text('Upload Excel')),
-              FilledButton.icon(
-                onPressed: (_saving || _lines.isEmpty) ? null : _save,
-                icon: _saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.save_outlined),
-                label: const Text('Save'),
+    // Blocks the Flutter back gesture/route pop while a save or upload is
+    // in flight — the strongest guard this single screen can offer against
+    // navigating away mid-write. It cannot lock the shared TopBar/sidebar
+    // chrome (those live outside this screen's own widget tree), so the
+    // full-screen overlay below is the other half of this mitigation:
+    // together they make leaving mid-save deliberately hard, not
+    // impossible — see the long comment on _save() for what IS and isn't
+    // protected either way.
+    return PopScope(
+      canPop: !busy,
+      child: Stack(children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 10),
+            if (isMobile)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                child: Wrap(spacing: 8, runSpacing: 8, children: [
+                  if (canExcelUpload) OutlinedButton.icon(onPressed: busy ? null : _downloadTemplate, icon: const Icon(Icons.download_outlined, size: 16), label: const Text('Template')),
+                  if (canExcelUpload) OutlinedButton.icon(onPressed: busy ? null : _uploadExcel, icon: const Icon(Icons.upload_file_outlined, size: 16), label: const Text('Upload Excel')),
+                  FilledButton.icon(
+                    onPressed: (busy || _lines.isEmpty) ? null : _save,
+                    icon: _saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.save_outlined),
+                    label: const Text('Save'),
+                  ),
+                ]),
               ),
-            ]),
-          ),
-        Expanded(
-          child: _lines.isEmpty
-              ? Center(
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.upload_file_outlined, size: 48, color: AppColors.textSecondary),
-                    const SizedBox(height: 12),
-                    const Text('Upload an Excel file to get started.', style: TextStyle(color: AppColors.textSecondary)),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(onPressed: _addLine, icon: const Icon(Icons.add), label: const Text('Or add a row manually')),
-                  ]),
-                )
-              : Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: isMobile
-                      ? ListView.separated(
-                          itemCount: _lines.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
-                          itemBuilder: (_, i) => _buildLine(_lines[i], true, bare, style),
-                        )
-                      : SakalScrollableTable(
-                          header: _buildHeader(),
-                          rows: _lines.map((l) => _buildLine(l, false, bare, style)).toList(),
-                        ),
-                ),
-        ),
-        if (_lines.isNotEmpty && !isMobile)
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(onPressed: _addLine, icon: const Icon(Icons.add, size: 16), label: const Text('Add Row')),
+            if (_lines.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                child: Text('${_lines.length} product(s) loaded', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+              ),
+            Expanded(
+              child: _lines.isEmpty
+                  ? Center(
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.upload_file_outlined, size: 48, color: AppColors.textSecondary),
+                        const SizedBox(height: 12),
+                        const Text('Upload an Excel file to get started.', style: TextStyle(color: AppColors.textSecondary)),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(onPressed: _addLine, icon: const Icon(Icons.add), label: const Text('Or add a row manually')),
+                      ]),
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: isMobile
+                          ? ListView.separated(
+                              itemCount: _lines.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 8),
+                              itemBuilder: (_, i) => _buildLine(_lines[i], i, true),
+                            )
+                          : _buildDesktopGrid(),
+                    ),
             ),
-          ),
-      ],
+            if (_lines.isNotEmpty && !isMobile)
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(onPressed: busy ? null : _addLine, icon: const Icon(Icons.add, size: 16), label: const Text('Add Row')),
+                ),
+              ),
+          ],
+        ),
+        if (busy) _buildBusyOverlay(),
+      ]),
     );
   }
 
-  Widget _buildHeader() => SakalTableHeaderBar(cells: [
-        SizedBox(width: 200, child: SakalTableHeaderBar.label('Product Name')),
-        const SizedBox(width: 8),
-        SizedBox(width: 160, child: SakalTableHeaderBar.label('Description')),
-        const SizedBox(width: 8),
-        SizedBox(width: 130, child: SakalTableHeaderBar.label('Nature')),
-        const SizedBox(width: 8),
-        SizedBox(width: 100, child: SakalTableHeaderBar.label('HSN/SAC')),
-        const SizedBox(width: 8),
-        SizedBox(width: 130, child: SakalTableHeaderBar.label('Category L1')),
-        const SizedBox(width: 8),
-        SizedBox(width: 130, child: SakalTableHeaderBar.label('Category L2')),
-        const SizedBox(width: 8),
-        SizedBox(width: 110, child: SakalTableHeaderBar.label('Category L3')),
-        const SizedBox(width: 8),
-        SizedBox(width: 110, child: SakalTableHeaderBar.label('Category L4')),
-        const SizedBox(width: 8),
-        SizedBox(width: 100, child: SakalTableHeaderBar.label('Item Size')),
-        const SizedBox(width: 8),
-        SizedBox(width: 100, child: SakalTableHeaderBar.label('Item Color')),
-        const SizedBox(width: 8),
-        SizedBox(width: 110, child: SakalTableHeaderBar.label('Brand')),
-        const SizedBox(width: 8),
-        SizedBox(width: 90, child: SakalTableHeaderBar.label('Unit')),
-        const SizedBox(width: 8),
-        SizedBox(width: 100, child: SakalTableHeaderBar.label('Unit Cost')),
-        const SizedBox(width: 8),
-        SizedBox(width: 110, child: SakalTableHeaderBar.label('Price In')),
-        const SizedBox(width: 8),
-        SizedBox(width: 100, child: SakalTableHeaderBar.label('Variance %')),
-        const SizedBox(width: 8),
-        SizedBox(width: 140, child: SakalTableHeaderBar.label('Sales Tax Group')),
-        const SizedBox(width: 8),
-        SizedBox(width: 140, child: SakalTableHeaderBar.label('Purchase Tax Group')),
-        const SizedBox(width: 40),
-      ]);
-
-  Widget _textField(TextEditingController ctrl, InputDecoration bare, {TextInputType? keyboardType}) => TextFormField(
-        controller: ctrl,
-        keyboardType: keyboardType,
-        decoration: bare,
+  Widget _buildBusyOverlay() => Positioned.fill(
+        child: Container(
+          color: Colors.black.withValues(alpha: 0.35),
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
+              decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(10)),
+              constraints: const BoxConstraints(maxWidth: 380),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const SizedBox(width: 32, height: 32, child: CircularProgressIndicator(strokeWidth: 3)),
+                const SizedBox(height: 14),
+                Text(
+                  _progressText ?? (_uploadingExcel ? 'Reading Excel file…' : 'Saving…'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 6),
+                const Text('Please don\'t close or navigate away from this screen.',
+                    textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+              ]),
+            ),
+          ),
+        ),
       );
 
-  Widget _buildLine(_BulkRow row, bool isMobile, InputDecoration bare, TextStyle style) {
+  // Vertical scroll (with a persistent visible thumb) wraps the whole
+  // grid; SakalScrollableTable itself only ever provided horizontal
+  // scroll for a wide multi-column table — the missing vertical scrollbar
+  // was a real gap found live (the grid could technically be scrolled with
+  // a mouse wheel, but nothing showed there was more content below, or
+  // where the user was within it).
+  final _vController = ScrollController();
+
+  Widget _buildDesktopGrid() {
+    const colWidths = <double>[
+      44, 190, 150, 120, 90, 120, 120, 100, 100, 90, 90, 100, 80, 90, 100, 90, 130, 130, 36,
+    ];
+    final totalWidth = colWidths.fold<double>(0, (a, b) => a + b) + (colWidths.length - 1) * 1;
+
+    return Scrollbar(
+      controller: _vController,
+      thumbVisibility: true,
+      child: SingleChildScrollView(
+        controller: _vController,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: totalWidth),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              _buildHeaderRow(colWidths),
+              for (var i = 0; i < _lines.length; i++) _buildLine(_lines[i], i, false, colWidths: colWidths),
+              const SizedBox(height: 12),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _headerCell(String label, double width) => Container(
+        width: width,
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: _gridRowVPad),
+        decoration: BoxDecoration(color: AppColors.primary, border: Border.all(color: AppColors.primary)),
+        child: Text(label, style: const TextStyle(color: Colors.white, fontSize: _gridFontSize, fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis),
+      );
+
+  Widget _buildHeaderRow(List<double> w) => Row(children: [
+        _headerCell('#', w[0]),
+        _headerCell('Product Name', w[1]),
+        _headerCell('Description', w[2]),
+        _headerCell('Nature', w[3]),
+        _headerCell('HSN/SAC', w[4]),
+        _headerCell('Category L1', w[5]),
+        _headerCell('Category L2', w[6]),
+        _headerCell('Category L3', w[7]),
+        _headerCell('Category L4', w[8]),
+        _headerCell('Item Size', w[9]),
+        _headerCell('Item Color', w[10]),
+        _headerCell('Brand', w[11]),
+        _headerCell('Unit', w[12]),
+        _headerCell('Unit Cost', w[13]),
+        _headerCell('Price In', w[14]),
+        _headerCell('Variance %', w[15]),
+        _headerCell('Sales Tax', w[16]),
+        _headerCell('Purch. Tax', w[17]),
+        _headerCell('', w[18]),
+      ]);
+
+  InputDecoration get _cellInputDecoration => const InputDecoration(
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        border: InputBorder.none,
+      );
+
+  Widget _cell(Widget child, double width) => Container(
+        width: width,
+        decoration: _gridCellDecoration,
+        child: child,
+      );
+
+  Widget _textField(TextEditingController ctrl, {TextInputType? keyboardType, TextAlign align = TextAlign.left}) => TextFormField(
+        controller: ctrl,
+        enabled: !_saving && !_uploadingExcel,
+        keyboardType: keyboardType,
+        textAlign: align,
+        style: const TextStyle(fontSize: _gridFontSize),
+        decoration: _cellInputDecoration,
+      );
+
+  Widget _buildLine(_BulkRow row, int index, bool isMobile, {List<double>? colWidths}) {
     final natureField = DropdownButtonFormField<String>(
       initialValue: row.nature,
       isExpanded: true, isDense: true, itemHeight: null,
-      decoration: bare,
-      items: _natureOptions.map((n) => DropdownMenuItem(value: n, child: Text(ProductModel.natureLabels[n] ?? n, style: const TextStyle(fontSize: 12)))).toList(),
-      onChanged: (v) => setState(() => row.nature = v ?? 'TRADING'),
+      style: const TextStyle(fontSize: _gridFontSize, color: AppColors.textPrimary),
+      decoration: _cellInputDecoration,
+      items: _natureOptions.map((n) => DropdownMenuItem(value: n, child: Text(ProductModel.natureLabels[n] ?? n, style: const TextStyle(fontSize: _gridFontSize)))).toList(),
+      onChanged: (_saving || _uploadingExcel) ? null : (v) => setState(() => row.nature = v ?? 'TRADING'),
     );
-    final fields = <Widget>[
-      SizedBox(width: 200, child: _textField(row.nameCtrl, bare)),
-      SizedBox(width: 160, child: _textField(row.descCtrl, bare)),
-      SizedBox(width: 130, child: natureField),
-      SizedBox(width: 100, child: _textField(row.hsnCtrl, bare)),
-      SizedBox(width: 130, child: _textField(row.cat1Ctrl, bare)),
-      SizedBox(width: 130, child: _textField(row.cat2Ctrl, bare)),
-      SizedBox(width: 110, child: _textField(row.cat3Ctrl, bare)),
-      SizedBox(width: 110, child: _textField(row.cat4Ctrl, bare)),
-      SizedBox(width: 100, child: _textField(row.sizeCtrl, bare)),
-      SizedBox(width: 100, child: _textField(row.colorCtrl, bare)),
-      SizedBox(width: 110, child: _textField(row.brandCtrl, bare)),
-      SizedBox(width: 90, child: _textField(row.unitCtrl, bare)),
-      SizedBox(width: 100, child: _textField(row.costCtrl, bare, keyboardType: const TextInputType.numberWithOptions(decimal: true))),
-      SizedBox(width: 110, child: _textField(row.currencyCtrl, bare)),
-      SizedBox(width: 100, child: _textField(row.varianceCtrl, bare, keyboardType: const TextInputType.numberWithOptions(decimal: true))),
-      SizedBox(width: 140, child: _textField(row.salesTaxCtrl, bare)),
-      SizedBox(width: 140, child: _textField(row.purchTaxCtrl, bare)),
-    ];
 
     if (isMobile) {
+      final fields = <Widget>[
+        _textField(row.nameCtrl), _textField(row.descCtrl), natureField, _textField(row.hsnCtrl),
+        _textField(row.cat1Ctrl), _textField(row.cat2Ctrl), _textField(row.cat3Ctrl), _textField(row.cat4Ctrl),
+        _textField(row.sizeCtrl), _textField(row.colorCtrl), _textField(row.brandCtrl), _textField(row.unitCtrl),
+        _textField(row.costCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), align: TextAlign.right),
+        _textField(row.currencyCtrl),
+        _textField(row.varianceCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), align: TextAlign.right),
+        _textField(row.salesTaxCtrl), _textField(row.purchTaxCtrl),
+      ];
       return SakalLineItemCard(
-        title: row.nameCtrl.text.isEmpty ? 'New Product' : row.nameCtrl.text,
-        onDelete: () => _removeLine(row),
+        title: row.nameCtrl.text.isEmpty ? 'New Product (#${index + 1})' : row.nameCtrl.text,
+        onDelete: (_saving || _uploadingExcel) ? null : () => _removeLine(row),
         fields: const [],
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -822,14 +951,43 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        for (final f in fields) ...[f, const SizedBox(width: 8)],
-        SizedBox(width: 40, child: IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _removeLine(row), tooltip: 'Remove row')),
-      ]),
-    );
+    final w = colWidths!;
+    return Row(children: [
+      Container(
+        width: w[0], alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(vertical: _gridRowVPad),
+        decoration: _gridCellDecoration,
+        child: Text('${index + 1}', style: const TextStyle(fontSize: _gridFontSize, color: AppColors.textSecondary)),
+      ),
+      _cell(_textField(row.nameCtrl), w[1]),
+      _cell(_textField(row.descCtrl), w[2]),
+      _cell(natureField, w[3]),
+      _cell(_textField(row.hsnCtrl), w[4]),
+      _cell(_textField(row.cat1Ctrl), w[5]),
+      _cell(_textField(row.cat2Ctrl), w[6]),
+      _cell(_textField(row.cat3Ctrl), w[7]),
+      _cell(_textField(row.cat4Ctrl), w[8]),
+      _cell(_textField(row.sizeCtrl), w[9]),
+      _cell(_textField(row.colorCtrl), w[10]),
+      _cell(_textField(row.brandCtrl), w[11]),
+      _cell(_textField(row.unitCtrl), w[12]),
+      _cell(_textField(row.costCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), align: TextAlign.right), w[13]),
+      _cell(_textField(row.currencyCtrl), w[14]),
+      _cell(_textField(row.varianceCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), align: TextAlign.right), w[15]),
+      _cell(_textField(row.salesTaxCtrl), w[16]),
+      _cell(_textField(row.purchTaxCtrl), w[17]),
+      Container(
+        width: w[18], decoration: _gridCellDecoration,
+        child: (_saving || _uploadingExcel)
+            ? null
+            : IconButton(
+                padding: EdgeInsets.zero, iconSize: 14,
+                icon: const Icon(Icons.close),
+                onPressed: () => _removeLine(row),
+                tooltip: 'Remove row',
+              ),
+      ),
+    ]);
   }
 }
 
