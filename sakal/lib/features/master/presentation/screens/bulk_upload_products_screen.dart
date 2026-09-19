@@ -417,6 +417,13 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
       final categoriesByKey = <String, ItemCategoryModel>{
         for (final c in categories) '${c.parentId}|${c.levelNo}|${_norm(c.categoryName)}': c,
       };
+      // id -> model, kept in sync with categoriesByKey (including newly
+      // created rows) — used at cleanup time to walk a leaf category's
+      // ancestor chain, so a parent like "Trading Products" is correctly
+      // recognized as still in use when any of its children are.
+      final categoriesById = <String, ItemCategoryModel>{
+        for (final c in categories) if (c.id != null) c.id!: c,
+      };
       final mastersByKey = <String, CommonMasterModel>{
         for (final m in allMasters) '${m.typeId}|${_norm(m.description)}': m,
       };
@@ -475,7 +482,7 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
               break;
             }
             final cat = await _resolveOrCreateCategory(
-              parentId, lvl + 1, cName, categoriesByKey, createdCategoryIds, levelLabelSet, session,
+              parentId, lvl + 1, cName, categoriesByKey, categoriesById, createdCategoryIds, levelLabelSet, session,
             );
             categoryId = cat.id;
             parentId = cat.id;
@@ -619,30 +626,59 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
         }
       }
 
-      // ── 5. Cleanup — soft-delete any auto-created master this run left
-      // completely unreferenced (e.g. its own row later errored out) ──────
+      // ── 5. Cleanup ───────────────────────────────────────────────────────
+      // Sweep candidates: always includes whatever THIS run itself created
+      // (e.g. a row later errored out, leaving its new category orphaned).
+      // After a reset, ALSO includes every category/master that already
+      // existed before this run started — a reset just deleted every
+      // product, so anything from a prior upload not reused by this new
+      // file is now genuinely orphaned too. Without this, a category left
+      // over from an earlier run (e.g. an old top-level group the new file
+      // re-nests one level deeper) never gets swept, since this pass used
+      // to only ever look at what THIS run itself created — a real gap
+      // found live after a reset+reupload left old top-level categories
+      // behind with zero products under them.
+      final cleanupCategoryIds = <String>{...createdCategoryIds};
+      final cleanupMasterIds = <String>{...createdMasterIds};
+      if (resetDeletedCount > 0) {
+        cleanupCategoryIds.addAll(categories.where((c) => !c.isDeleted).map((c) => c.id!));
+        cleanupMasterIds.addAll(allMasters.where((m) => !m.isDeleted).map((m) => m.id));
+      }
       var cleanedUp = 0;
-      if (createdCategoryIds.isNotEmpty || createdMasterIds.isNotEmpty) {
-        if (mounted) setState(() => _progressText = 'Cleaning up unused auto-created masters…');
+      if (cleanupCategoryIds.isNotEmpty || cleanupMasterIds.isNotEmpty) {
+        if (mounted) setState(() => _progressText = 'Cleaning up unused masters…');
         final refsRes = await DioClient.instance.get('/rim_products', queryParameters: {
           'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
           'select': 'category_id,item_size_id,item_color_id,brand_id', 'limit': '20000',
         });
+        // "referenced" must include a leaf category's FULL ancestor chain,
+        // not just the leaf id itself — a product's category_id always
+        // points at the deepest level actually assigned (e.g. L2), so an
+        // ancestor like a genuine L1 ("Trading Products") is never directly
+        // referenced by any product row even while it's very much still in
+        // use as a parent. Without walking the chain, any multi-level
+        // category is at risk of its own ancestor being wrongly swept as
+        // "unreferenced" — a real latent bug, not just a reset-specific one.
         final referenced = <String>{};
         for (final p in (refsRes.data as List)) {
           final m = p as Map<String, dynamic>;
-          for (final k in ['category_id', 'item_size_id', 'item_color_id', 'brand_id']) {
+          var cur = m['category_id'] as String?;
+          while (cur != null) {
+            referenced.add(cur);
+            cur = categoriesById[cur]?.parentId;
+          }
+          for (final k in ['item_size_id', 'item_color_id', 'brand_id']) {
             final v = m[k] as String?;
             if (v != null) referenced.add(v);
           }
         }
-        for (final id in createdCategoryIds) {
+        for (final id in cleanupCategoryIds) {
           if (!referenced.contains(id)) {
             await categoriesRepo.softDeleteCategory(id: id, userId: session.userId);
             cleanedUp++;
           }
         }
-        for (final id in createdMasterIds) {
+        for (final id in cleanupMasterIds) {
           if (!referenced.contains(id)) {
             await DioClient.instance.patch('/rim_common_masters', queryParameters: {'id': 'eq.$id'},
                 data: {'is_deleted': true, 'is_active': false, 'updated_by': session.userId});
@@ -707,7 +743,7 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
   /// already-existing soft-deleted row.
   Future<ItemCategoryModel> _resolveOrCreateCategory(
     String? parentId, int levelNo, String name,
-    Map<String, ItemCategoryModel> cache, Set<String> createdIds,
+    Map<String, ItemCategoryModel> cache, Map<String, ItemCategoryModel> idIndex, Set<String> createdIds,
     Set<int> levelLabelSet, dynamic session,
   ) async {
     final key = '$parentId|$levelNo|${_norm(name)}';
@@ -743,6 +779,7 @@ class _BulkUploadProductsScreenState extends ConsumerState<BulkUploadProductsScr
       levelNo: levelNo, categoryName: name, sortOrder: 0, isActive: true, isDeleted: false, flags: const {},
     );
     cache[key] = created;
+    idIndex[id] = created;
     createdIds.add(id);
     return created;
   }
