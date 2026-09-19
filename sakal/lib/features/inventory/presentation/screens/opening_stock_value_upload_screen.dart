@@ -530,6 +530,7 @@ class _OpeningStockValueUploadScreenState extends ConsumerState<OpeningStockValu
 
   Widget _buildHeaderRow(bool isMobile, bool busy) {
     final locationField = DropdownButtonFormField<String>(
+      key: ValueKey(_locationId),
       decoration: const InputDecoration(labelText: 'Store / Location', isDense: true, border: OutlineInputBorder()),
       isExpanded: true, itemHeight: null,
       initialValue: _locationId,
@@ -550,11 +551,22 @@ class _OpeningStockValueUploadScreenState extends ConsumerState<OpeningStockValu
         locationField, const SizedBox(height: 8), dateField,
       ]);
     }
-    return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Expanded(flex: 2, child: locationField),
-      const SizedBox(width: 12),
-      Expanded(flex: 3, child: dateField),
-    ]);
+    // NOT crossAxisAlignment.stretch here — on a Row that governs the
+    // VERTICAL cross-axis, and this Row sits directly in a Column with no
+    // Expanded wrapping it (a loose, not tight, height constraint). Stretch
+    // in that situation makes the Row balloon to fill all remaining
+    // vertical space in the Column, which in turn made the dropdown
+    // button's own RenderBox nearly full-screen tall — a real bug found
+    // live: it pushed the grid below off-screen entirely and made the
+    // Location dropdown's popup menu anchor near the bottom of the screen
+    // instead of right under the field.
+    return IntrinsicHeight(
+      child: Row(children: [
+        Expanded(flex: 2, child: locationField),
+        const SizedBox(width: 12),
+        Expanded(flex: 3, child: dateField),
+      ]),
+    );
   }
 
   Widget _buildBusyOverlay() => Positioned.fill(
