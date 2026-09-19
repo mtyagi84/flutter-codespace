@@ -65,6 +65,7 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
 
   // Tree state
   final Set<String> _expanded = {};
+  final ScrollController _treeScrollController = ScrollController();
 
   // Panel state: 'none' | 'add' | 'edit'
   String              _panelMode = 'none';
@@ -96,6 +97,7 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
     _nameCtrl.dispose();
     _shortCtrl.dispose();
     _sortCtrl.dispose();
+    _treeScrollController.dispose();
     super.dispose();
   }
 
@@ -476,9 +478,14 @@ class _ItemCategoriesScreenState extends ConsumerState<ItemCategoriesScreen>
                           textAlign: TextAlign.center),
                     ),
                   )
-                : ListView.builder(
-                    itemCount: _roots.length,
-                    itemBuilder: (_, i) => _buildNode(_roots[i], 0),
+                : Scrollbar(
+                    controller: _treeScrollController,
+                    thumbVisibility: true,
+                    child: ListView.builder(
+                      controller: _treeScrollController,
+                      itemCount: _roots.length,
+                      itemBuilder: (_, i) => _buildNode(_roots[i], 0),
+                    ),
                   ),
           ),
         ],
