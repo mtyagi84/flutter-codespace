@@ -668,6 +668,22 @@ class _CoaImportScreenState extends ConsumerState<CoaImportScreen>
                   ],
                 ]),
               ),
+            if (_lines.isNotEmpty && !_matching)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(6)),
+                  child: const Text(
+                    'Green rows are ready to import as-is — nothing to do. Amber rows still need a '
+                    'choice: pick a Suggested Match if this account already exists in SAKAL, or a '
+                    'Parent Group if it\'s brand new. Suggested Match only applies when Action is '
+                    '"Map to Existing" — it\'s greyed out and shown as "— not needed —" on every '
+                    '"Create New" row.',
+                    style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                  ),
+                ),
+              ),
             Expanded(
               child: _lines.isEmpty
                   ? Center(
@@ -884,6 +900,40 @@ class _CoaImportScreenState extends ConsumerState<CoaImportScreen>
     );
   }
 
+  // Suggested Match only means anything when Action is "Map to Existing" —
+  // showing it as an active, empty-looking search box on a "Create New"
+  // row is exactly what confused a real user during first use (it looks
+  // like something's missing when nothing is). For any other action, show
+  // plain muted text instead: a possible-duplicate hint (tap to switch to
+  // Map) if the fuzzy matcher found one, otherwise a plain dash.
+  Widget _matchCellContent(_CoaRow row) {
+    if (row.action == 'MAP') return _suggestedMatchField(row);
+    if (row.suggestedAccount != null) {
+      return InkWell(
+        onTap: _busy ? null : () => setState(() => row.action = 'MAP'),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4),
+          child: Text(
+            'Possible duplicate — tap to map instead',
+            maxLines: 2, overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: _gridFontSize - 1, color: Colors.orange, fontStyle: FontStyle.italic),
+          ),
+        ),
+      );
+    }
+    return const Center(child: Text('— not needed —', style: TextStyle(fontSize: _gridFontSize, color: AppColors.textSecondary, fontStyle: FontStyle.italic)));
+  }
+
+  // Same reasoning in reverse: Parent Group / New Code only mean anything
+  // for a "Create New" row.
+  Widget _parentCellContent(_CoaRow row) => row.action == 'CREATE'
+      ? _parentGroupField(row)
+      : const Center(child: Text('— not needed —', style: TextStyle(fontSize: _gridFontSize, color: AppColors.textSecondary, fontStyle: FontStyle.italic)));
+
+  Widget _newCodeCellContent(_CoaRow row) => row.action == 'CREATE'
+      ? _textField(row.newCodeCtrl)
+      : const Center(child: Text('—', style: TextStyle(fontSize: _gridFontSize, color: AppColors.textSecondary)));
+
   Widget _actionField(_CoaRow row) => DropdownButtonFormField<String>(
         initialValue: row.action,
         isExpanded: true, isDense: true, itemHeight: null,
@@ -903,13 +953,13 @@ class _CoaImportScreenState extends ConsumerState<CoaImportScreen>
       );
 
   Widget _buildLine(_CoaRow row, int index, bool isMobile, {List<double>? colWidths}) {
-    final scoreText = row.suggestedScore != null ? '${(row.suggestedScore! * 100).round()}%' : '';
+    final scoreText = row.action == 'MAP' && row.suggestedScore != null ? '${(row.suggestedScore! * 100).round()}%' : '';
 
     if (isMobile) {
       final fields = <Widget>[
         _textField(row.clientCodeCtrl), _textField(row.clientNameCtrl), _natureField(row),
         _textField(row.clientGroupCtrl), _textField(row.currencyCtrl),
-        _suggestedMatchField(row), _actionField(row), _parentGroupField(row), _textField(row.newCodeCtrl, enabled: row.action == 'CREATE'),
+        _actionField(row), _matchCellContent(row), _parentCellContent(row), _newCodeCellContent(row),
         if (row.isParty)
           OutlinedButton.icon(onPressed: _busy ? null : () => _openPartyDetails(row), icon: const Icon(Icons.badge_outlined, size: 14), label: const Text('Party Details')),
       ];
@@ -933,7 +983,7 @@ class _CoaImportScreenState extends ConsumerState<CoaImportScreen>
       _cell(_textField(row.clientNameCtrl), w[2]),
       _cell(_natureField(row), w[3]),
       _cell(_textField(row.currencyCtrl), w[4]),
-      _cell(_suggestedMatchField(row), w[5], tint: _matchCellTint(row)),
+      _cell(_matchCellContent(row), w[5], tint: _matchCellTint(row)),
       Container(
         width: w[6], alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(vertical: _gridRowVPad),
@@ -941,8 +991,8 @@ class _CoaImportScreenState extends ConsumerState<CoaImportScreen>
         child: Text(scoreText, style: const TextStyle(fontSize: _gridFontSize, color: AppColors.textSecondary)),
       ),
       _cell(_actionField(row), w[7]),
-      _cell(_parentGroupField(row), w[8], tint: _parentCellTint(row)),
-      _cell(_textField(row.newCodeCtrl, enabled: row.action == 'CREATE'), w[9]),
+      _cell(_parentCellContent(row), w[8], tint: _parentCellTint(row)),
+      _cell(_newCodeCellContent(row), w[9]),
       Container(
         width: w[10], decoration: _gridCellDecoration,
         child: row.isParty
