@@ -75,6 +75,15 @@ class _CoaRow implements DisposableRow {
   String action = 'CREATE'; // 'MAP' | 'CREATE' | 'SKIP'
   Map<String, dynamic>? parentGroup; // {id, account_code, account_name, accounting_std}
 
+  // True when Parent Group (and usually New Code) came pre-resolved from
+  // the upload's own optional "Parent Account Code"/"New Account Code"
+  // columns — i.e. the user already knows exactly where this account
+  // belongs (a hand-mapped onboarding file) and doesn't need the fuzzy
+  // suggestion engine to guess. A preset row's action is never silently
+  // flipped to MAP by a later suggestion match (see _fetchSuggestions) —
+  // the suggestion still shows for visibility, but doesn't override intent.
+  bool hasPresetParent = false;
+
   bool get isParty => nature == 'Customer' || nature == 'Supplier';
 
   @override
@@ -107,8 +116,16 @@ class _CoaImportScreenState extends ConsumerState<CoaImportScreen>
   bool _saving = false;
   String? _progressText;
 
+  // "Parent Account Code" / "New Account Code" are both OPTIONAL — for the
+  // common case (you don't yet know what overlaps with SAKAL's own
+  // accounts), leave them blank and use the Suggested Match / Parent Group
+  // pickers on screen instead. When you already know exactly where an
+  // account belongs (e.g. a hand-mapped onboarding file), fill these two
+  // in and that row arrives pre-set to Create New with its parent already
+  // chosen — no picking required, just review and Import.
   static const _uploadHeaders = [
-    'Client Account Code', 'Client Account Name', 'Nature', 'Client Group/Category',
+    'Client Account Code', 'Client Account Name', 'Nature',
+    'Parent Account Code', 'New Account Code', 'Client Group/Category',
     'Currency', 'Party Type', 'Contact Person', 'Phone', 'Email',
     'Address Line 1', 'Address Line 2', 'Tax ID', 'Credit Days', 'Credit Limit',
   ];
@@ -207,6 +224,8 @@ class _CoaImportScreenState extends ConsumerState<CoaImportScreen>
       final idxCode     = col('client account code');
       final idxName     = col('client account name');
       final idxNature   = col('nature');
+      final idxParentCode = col('parent account code');
+      final idxNewCode  = col('new account code');
       final idxGroup    = col('client group/category');
       final idxCurrency = col('currency');
       final idxPartyType = col('party type');
@@ -228,6 +247,8 @@ class _CoaImportScreenState extends ConsumerState<CoaImportScreen>
           (idx == -1 || idx >= row.length) ? '' : (row[idx]?.value?.toString().trim() ?? '');
 
       final parsed = <_CoaRow>[];
+      var presetCount = 0;
+      var unresolvedParentCount = 0;
       for (var r = 1; r < sheet.maxRows; r++) {
         final row = sheet.row(r);
         final name = cellStr(row, idxName);
@@ -252,6 +273,30 @@ class _CoaImportScreenState extends ConsumerState<CoaImportScreen>
           line.creditDaysCtrl.text = days.isEmpty ? '30' : days;
           line.creditLimitCtrl.text = idxCreditLimit == -1 ? '' : cellStr(row, idxCreditLimit);
         }
+
+        // Optional pre-mapping — a hand-mapped onboarding file already
+        // knows exactly where each account belongs, so skip the fuzzy
+        // suggestion engine for that row entirely: resolve Parent Group
+        // right now by code, pre-fill New Account Code if given, and lock
+        // the action to Create New (never silently flipped to Map later —
+        // see hasPresetParent's own doc comment on _CoaRow).
+        final parentCodeStr = idxParentCode == -1 ? '' : cellStr(row, idxParentCode);
+        if (parentCodeStr.isNotEmpty) {
+          final normParentCode = _norm(parentCodeStr);
+          Map<String, dynamic>? match;
+          for (final g in _groupAccounts) {
+            if (_norm(g['account_code'] as String? ?? '') == normParentCode) { match = g; break; }
+          }
+          if (match != null) {
+            line.parentGroup = match;
+            line.hasPresetParent = true;
+            line.action = 'CREATE';
+            line.newCodeCtrl.text = idxNewCode == -1 ? '' : cellStr(row, idxNewCode);
+            presetCount++;
+          } else {
+            unresolvedParentCount++;
+          }
+        }
         parsed.add(line);
       }
 
@@ -260,7 +305,33 @@ class _CoaImportScreenState extends ConsumerState<CoaImportScreen>
         deferRowDisposal(l);
       }
       setState(() => _lines = parsed);
-      _showSnack('${parsed.length} row(s) loaded. Finding suggested matches…', AppColors.positive);
+
+      // Any preset row missing an explicit New Account Code still needs
+      // one before Import — fetch it now (same fn_next_account_code every
+      // manual parent-pick already uses) so the grid opens fully ready to
+      // review rather than showing a blank code the user has to notice
+      // and fix themselves.
+      final needsCodeLookup = parsed.where((r) => r.hasPresetParent && r.newCodeCtrl.text.trim().isEmpty).toList();
+      if (needsCodeLookup.isNotEmpty) {
+        setState(() => _progressText = 'Generating account codes…');
+        final session = ref.read(sessionProvider)!;
+        for (final r in needsCodeLookup) {
+          try {
+            final codeRes = await DioClient.instance.post('/rpc/fn_next_account_code', data: {
+              'p_client_id': session.clientId, 'p_company_id': session.companyId, 'p_parent_id': r.parentGroup!['id'],
+            });
+            r.newCodeCtrl.text = codeRes.data as String? ?? '';
+          } on DioException { /* leave blank — user can type it in */ }
+        }
+        if (mounted) setState(() {});
+      }
+
+      final summary = StringBuffer('${parsed.length} row(s) loaded.');
+      if (presetCount > 0) summary.write(' $presetCount pre-mapped to their parent group — ready to review.');
+      if (unresolvedParentCount > 0) {
+        summary.write(' $unresolvedParentCount row(s) had a Parent Account Code that wasn\'t found — pick Parent Group manually for those.');
+      }
+      _showSnack(summary.toString(), unresolvedParentCount > 0 ? Colors.orange : AppColors.positive);
       await _fetchSuggestions();
     } catch (e, st) {
       AppLogger.error('CoaImportExcelUpload', e, st);
@@ -302,7 +373,12 @@ class _CoaImportScreenState extends ConsumerState<CoaImportScreen>
             'id': accountId, 'account_code': s['account_code'], 'account_name': s['account_name'],
           };
           row.suggestedScore = (s['score'] as num?)?.toDouble();
-          row.action = 'MAP';
+          // A preset row (Parent Account Code already resolved from the
+          // upload) already had its intent decided — the suggestion still
+          // shows for visibility (in case it flags a genuine accidental
+          // duplicate worth a manual look), but never silently overrides
+          // Create New back to Map.
+          if (!row.hasPresetParent) row.action = 'MAP';
         }
       });
     } on DioException catch (e, st) {
@@ -458,6 +534,12 @@ class _CoaImportScreenState extends ConsumerState<CoaImportScreen>
     }
   }
 
+  Widget _legendDot(Color color, String label) => Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 9, height: 9, decoration: BoxDecoration(color: color.withValues(alpha: 0.7), shape: BoxShape.circle)),
+        const SizedBox(width: 5),
+        Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+      ]);
+
   void _showSnack(String msg, Color color) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
@@ -518,7 +600,12 @@ class _CoaImportScreenState extends ConsumerState<CoaImportScreen>
       title: 'Chart of Accounts Import',
       helpText: 'Upload your own Chart of Accounts and reconcile it against SAKAL\'s existing '
           'accounts — a row either maps onto an existing account or becomes a new leaf under an '
-          'existing group. SAKAL never replaces or restructures its own group hierarchy.',
+          'existing group. SAKAL never replaces or restructures its own group hierarchy. '
+          'Don\'t know what already exists in SAKAL? Leave Parent Account Code/New Account Code '
+          'blank in the template and use the on-screen pickers instead — every row gets a '
+          'suggested match automatically. Already know exactly where an account belongs (a '
+          'hand-mapped file)? Fill those two columns in and that row arrives ready to Import, '
+          'no picking needed.',
       actions: showDesktopActions
           ? [
               if (canExcelUpload)
@@ -569,11 +656,17 @@ class _CoaImportScreenState extends ConsumerState<CoaImportScreen>
             if (_lines.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-                child: Text(
-                  '${_lines.length} row(s) loaded'
-                  '${_matching ? " — finding suggested matches…" : ""}',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
-                ),
+                child: Wrap(spacing: 14, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                  Text(
+                    '${_lines.length} row(s) loaded'
+                    '${_matching ? " — finding suggested matches…" : ""}',
+                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+                  ),
+                  if (!_matching) ...[
+                    _legendDot(AppColors.positive, 'Ready'),
+                    _legendDot(Colors.orange, 'Needs a choice'),
+                  ],
+                ]),
               ),
             Expanded(
               child: _lines.isEmpty
@@ -718,7 +811,28 @@ class _CoaImportScreenState extends ConsumerState<CoaImportScreen>
         border: InputBorder.none,
       );
 
-  Widget _cell(Widget child, double width) => Container(width: width, decoration: _gridCellDecoration, child: child);
+  Widget _cell(Widget child, double width, {Color? tint}) => Container(
+        width: width,
+        decoration: tint == null
+            ? _gridCellDecoration
+            : BoxDecoration(border: Border.all(color: AppColors.border, width: 0.6), color: tint),
+        child: child,
+      );
+
+  // A quiet visual cue, not a blocking validation error — a row that's
+  // genuinely ready to Import (a chosen match, or a pre-mapped/manually
+  // picked parent) tints faintly green; a row still needing a decision
+  // before it can be imported tints faintly amber. Skip rows never tint,
+  // since there's nothing to decide.
+  Color? _matchCellTint(_CoaRow row) {
+    if (row.action != 'MAP') return null;
+    return row.suggestedAccount == null ? Colors.orange.withValues(alpha: 0.12) : AppColors.positive.withValues(alpha: 0.10);
+  }
+
+  Color? _parentCellTint(_CoaRow row) {
+    if (row.action != 'CREATE') return null;
+    return row.parentGroup == null ? Colors.orange.withValues(alpha: 0.12) : AppColors.positive.withValues(alpha: 0.10);
+  }
 
   Widget _textField(TextEditingController ctrl, {bool enabled = true, TextAlign align = TextAlign.left}) => TextFormField(
         controller: ctrl,
@@ -819,7 +933,7 @@ class _CoaImportScreenState extends ConsumerState<CoaImportScreen>
       _cell(_textField(row.clientNameCtrl), w[2]),
       _cell(_natureField(row), w[3]),
       _cell(_textField(row.currencyCtrl), w[4]),
-      _cell(_suggestedMatchField(row), w[5]),
+      _cell(_suggestedMatchField(row), w[5], tint: _matchCellTint(row)),
       Container(
         width: w[6], alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(vertical: _gridRowVPad),
@@ -827,7 +941,7 @@ class _CoaImportScreenState extends ConsumerState<CoaImportScreen>
         child: Text(scoreText, style: const TextStyle(fontSize: _gridFontSize, color: AppColors.textSecondary)),
       ),
       _cell(_actionField(row), w[7]),
-      _cell(_parentGroupField(row), w[8]),
+      _cell(_parentGroupField(row), w[8], tint: _parentCellTint(row)),
       _cell(_textField(row.newCodeCtrl, enabled: row.action == 'CREATE'), w[9]),
       Container(
         width: w[10], decoration: _gridCellDecoration,
