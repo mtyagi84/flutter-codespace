@@ -221,7 +221,6 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.offlineSettings, builder: (c, s) => const OfflineSettingsScreen()),
         GoRoute(path: RouteNames.appLogs, builder: (c, s) => const LogViewerScreen()),
         GoRoute(path: RouteNames.accountingSetup,builder: (c, s) => const AccountingSetupScreen()),
-        GoRoute(path: RouteNames.financialYears, builder: (c, s) => const _Placeholder('Financial Years')),
         GoRoute(path: RouteNames.periodClose,    builder: (c, s) => const PeriodCloseScreen()),
         GoRoute(path: RouteNames.backdatedEntryControl, builder: (c, s) => const BackdatedEntryControlScreen()),
         GoRoute(path: RouteNames.printTemplates, builder: (c, s) => const PrintTemplateListScreen()),
@@ -423,10 +422,8 @@ final appRouter = GoRouter(
             );
           },
         ),
-        GoRoute(path: RouteNames.supplierPayment,  builder: (c, s) => const _Placeholder('Supplier Payment')),
 
         // Inventory
-        GoRoute(path: RouteNames.stockList,        builder: (c, s) => const _Placeholder('Stock List')),
         GoRoute(path: RouteNames.stockTransfers,   builder: (c, s) => const StockTransferListScreen()),
         GoRoute(
           path: RouteNames.stockTransferEntry,
@@ -589,10 +586,6 @@ final appRouter = GoRouter(
             );
           },
         ),
-        GoRoute(path: RouteNames.cashBook,     builder: (c, s) => const _Placeholder('Cash Book')),
-        GoRoute(path: RouteNames.trialBalance, builder: (c, s) => const _Placeholder('Trial Balance')),
-        GoRoute(path: RouteNames.profitLoss,   builder: (c, s) => const _Placeholder('Profit & Loss')),
-        GoRoute(path: RouteNames.balanceSheet, builder: (c, s) => const _Placeholder('Balance Sheet')),
         GoRoute(
           path: RouteNames.report,
           // key: ValueKey(reportKey) — every report shares this ONE route
@@ -615,30 +608,3 @@ final appRouter = GoRouter(
       ]), // outer SelectionArea ShellRoute
   ],
 );
-
-class _Placeholder extends StatelessWidget {
-  final String title;
-  const _Placeholder(this.title);
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.construction_outlined,
-              size: 48, color: Color(0xFFADB5BD)),
-          const SizedBox(height: 16),
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1D23))),
-          const SizedBox(height: 8),
-          const Text('Coming soon',
-              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
-        ],
-      ),
-    );
-  }
-}

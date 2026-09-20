@@ -270,7 +270,6 @@ begin
         (p_client_id, p_company_id, v_pr, 'PR-GRN', 'Goods Receipt',    '/purchase/grn',      1, 'PR-TXN', 'Transactions', 0, true,  false, false),
         (p_client_id, p_company_id, v_pr, 'PR-INV', 'Purchase Invoice', '/purchase/invoices', 2, 'PR-TXN', 'Transactions', 0, true,  false, false),
         (p_client_id, p_company_id, v_pr, 'PR-RET', 'Purchase Return',  '/purchase/returns',  3, 'PR-TXN', 'Transactions', 0, true,  false, false),
-        (p_client_id, p_company_id, v_pr, 'PR-PAY', 'Supplier Payment', '/purchase/payments', 4, 'PR-TXN', 'Transactions', 0, false, false, false),
         (p_client_id, p_company_id, v_pr, 'PR-RPT-POR', 'Purchase Order Register', '/reports/PURCHASE_ORDER_REGISTER', 1, 'PR-RPT', 'Reports', 1, false, false, false),
         (p_client_id, p_company_id, v_pr, 'PR-RPT-PPO', 'Pending Purchase Orders', '/reports/PENDING_PURCHASE_ORDERS', 2, 'PR-RPT', 'Reports', 1, false, false, false),
         (p_client_id, p_company_id, v_pr, 'PR-RPT-GRN', 'GRN Register', '/reports/GRN_REGISTER', 3, 'PR-RPT', 'Reports', 1, false, false, false),
@@ -303,7 +302,6 @@ begin
          serial_no, group_code, group_name, group_serial_no,
          approve_allowed, copy_allowed, excel_upload_allowed)
     values
-        (p_client_id, p_company_id, v_in, 'IN-STK', 'Stock List',             '/inventory/stock',                    0, 'IN-OPS', 'Transactions', 0, false, false, false),
         (p_client_id, p_company_id, v_in, 'IN-TRF', 'Stock Transfer',         '/inventory/transfers',                1, 'IN-OPS', 'Transactions', 0, true,  false, false),
         (p_client_id, p_company_id, v_in, 'IN-ADJ', 'Stock Adjustment',       '/inventory/adjustments',              2, 'IN-OPS', 'Transactions', 0, true,  false, false),
         (p_client_id, p_company_id, v_in, 'IN-MRQ', 'Material Requisition',   '/inventory/requisitions',             3, 'IN-OPS', 'Transactions', 0, true,  false, false),
@@ -349,7 +347,6 @@ begin
         (p_client_id, p_company_id, v_fn, 'FN-JRN', 'Journal Entry',            '/finance/journal',            0, 'FN-TXN', 'Transactions', 0, true,  false, false),
         (p_client_id, p_company_id, v_fn, 'FN-CTR', 'Contra Voucher',           '/finance/contra',             1, 'FN-TXN', 'Transactions', 0, true,  false, false),
         (p_client_id, p_company_id, v_fn, 'FN-EXP', 'Expense Voucher',          '/finance/expense-vouchers',   2, 'FN-TXN', 'Transactions', 0, true,  false, false),
-        (p_client_id, p_company_id, v_fn, 'FN-CBK', 'Cash Book',                '/finance/cashbook',           3, 'FN-TXN', 'Transactions', 0, false, false, false),
         (p_client_id, p_company_id, v_fn, 'FN-PRV', 'Payment/Receipt Voucher',  '/finance/voucher-list',       4, 'FN-TXN', 'Transactions', 0, true,  false, false),
         -- Real bug found live 2026-09-13: migration 135 repointed FN-TRB's
         -- screen_name from the dead '/finance/trial-balance' route to the

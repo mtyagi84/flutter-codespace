@@ -65,10 +65,8 @@ class RouteNames {
   static const String purchaseInvoiceEntry = '/purchase/invoice-entry';
   static const String purchaseReturns = '/purchase/returns';
   static const String purchaseReturnEntry = '/purchase/return-entry';
-  static const String supplierPayment  = '/purchase/payments';
 
   // Inventory
-  static const String stockList       = '/inventory/stock';
   static const String stockTransfers  = '/inventory/transfers';
   static const String stockTransferEntry = '/inventory/transfer-entry';
   static const String stockAdjustments = '/inventory/adjustments';
@@ -92,7 +90,6 @@ class RouteNames {
 
   // Accounting admin (Setup group)
   static const String accountingSetup  = '/setup/accounting';
-  static const String financialYears   = '/setup/financial-years';
 
   // Master data
   static const String chartOfAccounts  = '/master/accounts';
@@ -124,10 +121,6 @@ class RouteNames {
   static const String contraVoucherEntry = '/finance/contra-entry';
   static const String expenseVoucherList  = '/finance/expense-vouchers';
   static const String expenseVoucherEntry = '/finance/expense-voucher-entry';
-  static const String cashBook       = '/finance/cashbook';
-  static const String trialBalance   = '/finance/trial-balance';
-  static const String profitLoss     = '/finance/profit-loss';
-  static const String balanceSheet   = '/finance/balance-sheet';
   static const String bankStatementFormats = '/finance/bank-statement-formats';
   static const String bankAccounts         = '/finance/bank-accounts';
   static const String bankStatements       = '/finance/bank-statements';
