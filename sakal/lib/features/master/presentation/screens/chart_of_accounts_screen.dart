@@ -1,17 +1,13 @@
-import 'dart:typed_data';
 import 'package:dio/dio.dart';
-import 'package:excel/excel.dart' as xls;
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/config/master_type_keys.dart';
 import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/layout/screen_header.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
-import '../../../../core/reporting/web_download.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
@@ -110,7 +106,6 @@ class _ChartOfAccountsScreenState
   String? _autoCode;
   bool    _saving         = false;
   String? _saveError;
-  bool    _uploadingExcel = false;
 
   // Resizable panel
   double _leftWidth = 310.0;
@@ -491,212 +486,36 @@ class _ChartOfAccountsScreenState
     }
   }
 
-  // ── Bulk Excel upload — new LEAF (posting) accounts only ──────────────────
-  // Deliberately different shape from Opening Balance/Opening Stock's own
-  // upload: those screens hold a line-item grid that an upload REPLACES/
-  // APPENDS into for review before Save. Chart of Accounts has no such
-  // staging grid (it's a tree + one-record-at-a-time form) — so this upload
-  // validates then inserts directly in one bulk POST, and shows the same
-  // "N inserted, M skipped" summary those screens use, just without a
-  // pre-save review step. Every row becomes a posting_allowed=true leaf
-  // under an EXISTING parent group — creating new non-posting group nodes
-  // in bulk is out of scope (there are only a handful of those, created
-  // one at a time via the ordinary Add Root Group / Add Child flow).
-  static const _uploadHeaders = [
-    'Parent Account Code', 'Account Code', 'Account Name', 'Nature', 'Currency',
-    'Party Type', 'Contact Person', 'Phone', 'Email', 'Address Line 1', 'Address Line 2',
-    'Tax ID', 'Credit Days', 'Credit Limit',
-  ];
-
-  Future<void> _downloadAccountsTemplate() async {
-    final workbook = xls.Excel.createExcel();
-    final sheetName = workbook.getDefaultSheet()!;
-    final sheet = workbook[sheetName];
-    sheet.appendRow(_uploadHeaders.map((h) => xls.TextCellValue(h)).toList());
-    final bytes = workbook.encode();
-    if (bytes == null) return;
-    await _saveWorkbookBytes(bytes, 'chart_of_accounts_template.xlsx', 'Save Chart of Accounts template');
-  }
-
-  Future<void> _saveWorkbookBytes(List<int> bytes, String filename, String dialogTitle) async {
-    if (kIsWeb) {
-      downloadBytesOnWeb(bytes, filename);
-      return;
-    }
-    await FilePicker.platform.saveFile(
-      dialogTitle: dialogTitle,
-      fileName: filename,
-      bytes: Uint8List.fromList(bytes),
-      type: FileType.custom, allowedExtensions: ['xlsx'],
-    );
-  }
-
-  Future<void> _uploadAccountsExcel() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom, allowedExtensions: ['xlsx'], withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final bytes = result.files.first.bytes;
-    if (bytes == null) {
-      if (mounted) _showUploadSnack('Could not read the selected file.', AppColors.negative);
-      return;
-    }
-
-    setState(() => _uploadingExcel = true);
+  Future<void> _delete(String id) async {
+    final session = ref.read(sessionProvider)!;
+    // Server-side guard first — fn_can_delete_account (migration 200)
+    // checks is_system_fixed / posted GL lines / GL account-determination
+    // links before anything is destroyed; a non-null reason blocks the
+    // delete outright, same pattern as every other fn_can_delete_* call
+    // site in this app.
     try {
-      final workbook = xls.Excel.decodeBytes(bytes);
-      if (workbook.tables.isEmpty) { _showUploadSnack('The file has no sheets.', AppColors.negative); return; }
-      final sheet = workbook.tables[workbook.tables.keys.first]!;
-      if (sheet.maxRows < 2) { _showUploadSnack('No data rows found below the header.', AppColors.negative); return; }
-
-      // Every lookup is normalized (trim + uppercase) on both sides before
-      // comparing — a real duplicate-category bug found in the Shanju
-      // onboarding data (stray whitespace/case differences between
-      // otherwise-identical names) should never silently fail a bulk
-      // upload for every future user of this feature, not just this
-      // one-time data-cleaning pass.
-      String norm(String s) => s.trim().toUpperCase();
-
-      final parentByCode = {
-        for (final a in _accounts) norm(a['account_code'] as String): a,
-      };
-      final existingCodes = {
-        for (final a in _accounts) norm(a['account_code'] as String),
-      };
-      final currencyByCode = {
-        for (final c in _currencies) norm(c['currency_id'] as String): c,
-      };
-
-      final headerCells = sheet.row(0);
-      final headerNames = headerCells.map((c) => c?.value?.toString().trim().toLowerCase() ?? '').toList();
-      int col(String name) => headerNames.indexOf(name);
-      final idxParentCode = col('parent account code');
-      final idxCode       = col('account code');
-      final idxName       = col('account name');
-      final idxNature     = col('nature');
-      final idxCurrency   = col('currency');
-      final idxPartyType  = col('party type');
-      final idxContact    = col('contact person');
-      final idxPhone      = col('phone');
-      final idxEmail      = col('email');
-      final idxAddr1      = col('address line 1');
-      final idxAddr2      = col('address line 2');
-      final idxTaxId      = col('tax id');
-      final idxCreditDays = col('credit days');
-      final idxCreditLimit = col('credit limit');
-
-      if (idxParentCode == -1 || idxCode == -1 || idxName == -1) {
-        _showUploadSnack('Missing required column(s): Parent Account Code, Account Code, Account Name.', AppColors.negative);
+      final guardRes = await DioClient.instance.post('/rpc/fn_can_delete_account', data: {
+        'p_client_id': session.clientId, 'p_company_id': session.companyId, 'p_account_id': id,
+      });
+      final reason = guardRes.data as String?;
+      if (reason != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(reason), backgroundColor: AppColors.negative));
+        }
         return;
       }
-
-      String cellStr(List<xls.Data?> row, int idx) =>
-          (idx == -1 || idx >= row.length) ? '' : (row[idx]?.value?.toString().trim() ?? '');
-
-      final session = ref.read(sessionProvider)!;
-      final toInsert = <Map<String, dynamic>>[];
-      final errors = <String>[];
-      final seenCodesThisUpload = <String>{};
-
-      for (var r = 1; r < sheet.maxRows; r++) {
-        final row = sheet.row(r);
-        final code = cellStr(row, idxCode);
-        if (code.isEmpty) continue;
-        final normCode = norm(code);
-
-        final name = cellStr(row, idxName);
-        if (name.isEmpty) { errors.add('Row ${r + 1}: Account Name is required.'); continue; }
-
-        final parentCode = cellStr(row, idxParentCode);
-        final parent = parentCode.isEmpty ? null : parentByCode[norm(parentCode)];
-        if (parent == null) { errors.add('Row ${r + 1}: parent account code "$parentCode" not found.'); continue; }
-
-        if (existingCodes.contains(normCode) || !seenCodesThisUpload.add(normCode)) {
-          errors.add('Row ${r + 1}: account code "$code" already exists (or is duplicated in this file).');
-          continue;
-        }
-
-        final rawNature = cellStr(row, idxNature);
-        final nature = rawNature.isEmpty ? 'General' : rawNature;
-        if (!_natures.contains(nature)) {
-          errors.add('Row ${r + 1}: Nature "$rawNature" is not one of ${_natures.join(', ')}.');
-          continue;
-        }
-
-        final currencyCode = cellStr(row, idxCurrency);
-        final currency = currencyCode.isEmpty ? null : currencyByCode[norm(currencyCode)];
-        if (currencyCode.isNotEmpty && currency == null) {
-          errors.add('Row ${r + 1}: currency "$currencyCode" not found.');
-          continue;
-        }
-        if (currency == null) {
-          errors.add('Row ${r + 1}: Currency is required for a posting account.');
-          continue;
-        }
-
-        final isParty = nature == 'Customer' || nature == 'Supplier';
-        toInsert.add({
-          'client_id':           session.clientId,
-          'company_id':          session.companyId,
-          'account_code':        code,
-          'account_name':        name,
-          'parent_id':           parent['id'],
-          'accounting_std':      parent['accounting_std'],
-          'posting_allowed':     true,
-          'account_nature':      nature,
-          'account_currency_id': currency['id'],
-          'is_active':           true,
-          'is_system_fixed':     false,
-          'created_by':          session.userId,
-          'updated_by':          session.userId,
-          if (isParty) ...{
-            'party_type':        cellStr(row, idxPartyType).nullIfEmpty,
-            'contact_person':    cellStr(row, idxContact).nullIfEmpty,
-            'phone':             cellStr(row, idxPhone).nullIfEmpty,
-            'email':             cellStr(row, idxEmail).nullIfEmpty,
-            'address_line1':     cellStr(row, idxAddr1).nullIfEmpty,
-            'address_line2':     cellStr(row, idxAddr2).nullIfEmpty,
-            'tax_id':            cellStr(row, idxTaxId).nullIfEmpty,
-            'credit_days':       int.tryParse(cellStr(row, idxCreditDays)) ?? 30,
-            'credit_limit':      double.tryParse(cellStr(row, idxCreditLimit)),
-          },
-        });
-      }
-
-      if (toInsert.isNotEmpty) {
-        await DioClient.instance.post('/rim_accounts', data: toInsert);
-        ref.invalidate(accountsProvider);
-        await _load();
-      }
-
-      if (!mounted) return;
-      if (errors.isNotEmpty) {
-        _showUploadSnack('${toInsert.length} account(s) created, ${errors.length} row(s) skipped.', Colors.orange);
-        await showDialog<void>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('Rows skipped'),
-            content: SizedBox(width: 420, child: SingleChildScrollView(child: Text(errors.join('\n')))),
-            actions: [TextButton(onPressed: () => Navigator.of(context, rootNavigator: true).pop(), child: const Text('OK'))],
-          ),
-        );
-      } else {
-        _showUploadSnack('${toInsert.length} account(s) created.', AppColors.positive);
-      }
     } catch (e, st) {
-      AppLogger.error('ChartOfAccountsExcelUpload', e, st);
-      if (mounted) _showUploadSnack(ErrorPresenter.format(e, action: 'upload this Excel file'), AppColors.negative);
-    } finally {
-      if (mounted) setState(() => _uploadingExcel = false);
+      AppLogger.error('ChartOfAccountsDeleteGuard', e, st);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(ErrorPresenter.format(e, action: 'check whether this account can be deleted')),
+          backgroundColor: AppColors.negative,
+        ));
+      }
+      return;
     }
-  }
 
-  void _showUploadSnack(String msg, Color color) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
-  }
-
-  Future<void> _delete(String id) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -716,7 +535,6 @@ class _ChartOfAccountsScreenState
       ),
     );
     if (ok != true) return;
-    final session = ref.read(sessionProvider)!;
     await DioClient.instance.patch(
       '/rim_accounts',
       queryParameters: {'id': 'eq.$id'},
@@ -791,20 +609,12 @@ class _ChartOfAccountsScreenState
           ),
           IconButton(icon: const Icon(Icons.refresh, size: 18),
               tooltip: 'Refresh', onPressed: _load),
-          if (!offline && canAdd && canExcelUpload) ...[
+          if (!offline && canAdd)
             IconButton(
-              icon: const Icon(Icons.download_outlined, size: 18),
-              tooltip: 'Download Template',
-              onPressed: _downloadAccountsTemplate,
+              icon: const Icon(Icons.file_upload_outlined, size: 18),
+              tooltip: 'Import from Excel',
+              onPressed: () => context.push(RouteNames.coaImport),
             ),
-            IconButton(
-              icon: _uploadingExcel
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.upload_file_outlined, size: 18),
-              tooltip: 'Upload Excel',
-              onPressed: _uploadingExcel ? null : _uploadAccountsExcel,
-            ),
-          ],
         ]),
       ),
       const Divider(height: 1, color: AppColors.border),

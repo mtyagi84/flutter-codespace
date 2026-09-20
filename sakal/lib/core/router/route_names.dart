@@ -92,6 +92,7 @@ class RouteNames {
 
   // Master data
   static const String chartOfAccounts  = '/master/accounts';
+  static const String coaImport        = '/master/coa-import';
   static const String customerMaster   = '/master/customers';
   static const String supplierMaster   = '/master/suppliers';
   static const String commonMasters    = '/master/common-masters';

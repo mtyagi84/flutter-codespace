@@ -27,6 +27,7 @@ import '../../features/setup/presentation/screens/backdated_entry_control_screen
 import '../../features/setup/presentation/screens/print_template_list_screen.dart';
 import '../../features/setup/presentation/screens/print_template_designer_screen.dart';
 import '../../features/master/presentation/screens/chart_of_accounts_screen.dart';
+import '../../features/master/presentation/screens/coa_import_screen.dart';
 import '../../features/master/presentation/screens/common_masters_screen.dart';
 import '../../features/master/presentation/screens/customer_master_screen.dart';
 import '../../features/master/presentation/screens/item_categories_screen.dart';
@@ -236,6 +237,7 @@ final appRouter = GoRouter(
 
         // Master data
         GoRoute(path: RouteNames.chartOfAccounts,builder: (c, s) => const ChartOfAccountsScreen()),
+        GoRoute(path: RouteNames.coaImport,      builder: (c, s) => const CoaImportScreen()),
         GoRoute(path: RouteNames.customerMaster, builder: (c, s) => const CustomerMasterScreen()),
         GoRoute(path: RouteNames.supplierMaster, builder: (c, s) => const SupplierMasterScreen()),
         GoRoute(path: RouteNames.commonMasters,  builder: (c, s) => const CommonMastersScreen()),

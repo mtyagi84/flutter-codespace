@@ -187,7 +187,7 @@ begin
          serial_no, group_code, group_name, group_serial_no,
          approve_allowed, copy_allowed, excel_upload_allowed)
     values
-        (p_client_id, p_company_id, v_ad, 'MST-COA', 'Chart of Accounts',   '/master/accounts',            0, 'FN-MST', 'Finance Masters', 5, false, false, true),
+        (p_client_id, p_company_id, v_ad, 'MST-COA', 'Chart of Accounts',   '/master/accounts',            0, 'FN-MST', 'Finance Masters', 5, false, false, false),
         (p_client_id, p_company_id, v_ad, 'MST-TAX', 'Tax Master',          '/master/tax-master',          1, 'FN-MST', 'Finance Masters', 5, false, false, false),
         (p_client_id, p_company_id, v_ad, 'MST-TXG', 'Tax Groups',          '/master/tax-groups',          2, 'FN-MST', 'Finance Masters', 5, false, false, false),
         (p_client_id, p_company_id, v_ad, 'MST-ALS', 'Account Link Setup',  '/master/account-link-setup',  3, 'FN-MST', 'Finance Masters', 5, false, false, false),
@@ -195,6 +195,7 @@ begin
         (p_client_id, p_company_id, v_ad, 'MST-CHG', 'Additional Charges',  '/master/additional-charges',  5, 'FN-MST', 'Finance Masters', 5, false, false, false),
         (p_client_id, p_company_id, v_ad, 'FN-EX',   'Exchange Rates',      '/finance/exchange-rates',     6, 'FN-MST', 'Finance Masters', 5, false, false, false),
         (p_client_id, p_company_id, v_ad, 'MST-OB',  'Opening Balance',     '/master/opening-balances',    7, 'FN-MST', 'Finance Masters', 5, false, false, true),
+        (p_client_id, p_company_id, v_ad, 'MST-COAI','Chart of Accounts Import', '/master/coa-import',     8, 'FN-MST', 'Finance Masters', 5, false, false, true),
         (p_client_id, p_company_id, v_ad, 'MST-RPT-PRD', 'Item / Product Master Report',       '/reports/PRODUCT_MASTER_REPORT',          1,  'MST-RPT', 'Master Reports', 6, false, false, false),
         (p_client_id, p_company_id, v_ad, 'MST-RPT-CUS', 'Customer Master Report',             '/reports/CUSTOMER_MASTER_REPORT',         2,  'MST-RPT', 'Master Reports', 6, false, false, false),
         (p_client_id, p_company_id, v_ad, 'MST-RPT-SUP', 'Supplier Master Report',             '/reports/SUPPLIER_MASTER_REPORT',         3,  'MST-RPT', 'Master Reports', 6, false, false, false),
