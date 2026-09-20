@@ -55,7 +55,6 @@ import '../../features/inventory/presentation/screens/stock_receipt_list_screen.
 import '../../features/inventory/presentation/screens/stock_receipt_entry_screen.dart';
 import '../../features/inventory/presentation/screens/opening_stock_list_screen.dart';
 import '../../features/inventory/presentation/screens/opening_stock_entry_screen.dart';
-import '../../features/inventory/presentation/screens/opening_stock_value_upload_screen.dart';
 import '../../features/inventory/presentation/screens/stock_count_list_screen.dart';
 import '../../features/inventory/presentation/screens/stock_count_entry_screen.dart';
 import '../../features/inventory/presentation/screens/stock_count_review_list_screen.dart';
@@ -502,7 +501,6 @@ final appRouter = GoRouter(
             );
           },
         ),
-        GoRoute(path: RouteNames.openingStockValueUpload, builder: (c, s) => const OpeningStockValueUploadScreen()),
         GoRoute(path: RouteNames.stockCount, builder: (c, s) => const StockCountListScreen()),
         GoRoute(
           path: RouteNames.stockCountEntry,

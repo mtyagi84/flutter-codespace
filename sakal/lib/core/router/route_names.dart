@@ -80,7 +80,6 @@ class RouteNames {
   static const String stockTransferRequestEntry = '/inventory/stock-transfer-request-entry';
   static const String openingStock              = '/inventory/opening-stock';
   static const String openingStockEntry         = '/inventory/opening-stock-entry';
-  static const String openingStockValueUpload   = '/inventory/opening-stock-value-upload';
   static const String stockCount                = '/inventory/stock-count';
   static const String stockCountEntry           = '/inventory/stock-count-entry';
   static const String stockCountReview          = '/inventory/stock-count-review';

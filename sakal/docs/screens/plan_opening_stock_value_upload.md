@@ -1,4 +1,9 @@
-Status: Implemented 2026-09-19 (migration 193 deployed; layout bug fixed same day — see commit c9aeb47)
+Status: Superseded 2026-09-20 — retired and merged into the Opening Stock
+screen after the user correctly flagged this screen as functionally
+duplicating it. See `plan_merge_opening_stock_screens.md` for the merge
+plan; do not implement anything in this file independently.
+
+Implemented 2026-09-19 (migration 193 deployed; layout bug fixed same day — see commit c9aeb47)
 
 # Opening Stock — Value Upload (Excel, qty + cost, with GL posting)
 
