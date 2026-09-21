@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/menu_models.dart';
+import '../network/dio_client.dart';
 
 class UserSession {
   final String userId;
@@ -81,3 +82,47 @@ final sidebarCollapsedProvider = StateProvider<bool>((ref) => false);
 // active route/menu tree which aren't available at provider-construction
 // time.
 final sidebarExpandedModulesProvider = StateProvider<Set<String>>((ref) => {});
+
+// Same shape/lifetime as sidebarExpandedModulesProvider, one level down —
+// which GROUPS (within an already-expanded module) currently have their
+// own feature list open. Added so a group's accordion can actually be
+// collapsed (see Sidebar._buildGroup) instead of always rendering every
+// feature the moment its parent module opens.
+final sidebarExpandedGroupsProvider = StateProvider<Set<String>>((ref) => {});
+
+// Toggles a single menu item's favorite/starred state — writes straight to
+// ric_user_menu_favorites (a real DELETE/INSERT, not a soft-delete — this
+// is a pure per-user UI preference row, not a business transaction record)
+// then updates menuProvider's already-loaded tree in place so the star
+// reflects instantly everywhere it's shown (sidebar, module/group landing
+// pages, the Dashboard's Favorites strip) without a full menu re-fetch.
+Future<void> toggleMenuFavorite(
+  WidgetRef ref,
+  UserSession session,
+  String featureCode,
+  bool newValue,
+) async {
+  if (newValue) {
+    await DioClient.instance.post('/ric_user_menu_favorites', data: {
+      'client_id': session.clientId, 'company_id': session.companyId,
+      'user_id': session.userId, 'feature_code': featureCode,
+    });
+  } else {
+    await DioClient.instance.delete('/ric_user_menu_favorites', queryParameters: {
+      'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
+      'user_id': 'eq.${session.userId}', 'feature_code': 'eq.$featureCode',
+    });
+  }
+
+  final updated = ref.read(menuProvider).map((m) => MenuModule(
+        moduleCode: m.moduleCode, moduleName: m.moduleName, serialNo: m.serialNo,
+        groups: m.groups.map((g) => MenuGroup(
+              groupCode: g.groupCode, groupName: g.groupName, serialNo: g.serialNo,
+              features: g.features.map((f) => f.featureCode == featureCode
+                      ? f.copyWith(isFavorite: newValue)
+                      : f)
+                  .toList(),
+            )).toList(),
+      )).toList();
+  ref.read(menuProvider.notifier).state = updated;
+}

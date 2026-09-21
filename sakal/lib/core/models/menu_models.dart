@@ -8,6 +8,7 @@ class MenuFeature {
   final bool approveAllowed;
   final bool copyAllowed;
   final bool excelUploadAllowed;
+  final bool isFavorite;
 
   const MenuFeature({
     required this.featureCode,
@@ -19,6 +20,7 @@ class MenuFeature {
     required this.approveAllowed,
     required this.copyAllowed,
     required this.excelUploadAllowed,
+    this.isFavorite = false,
   });
 
   factory MenuFeature.fromJson(Map<String, dynamic> j) => MenuFeature(
@@ -31,6 +33,7 @@ class MenuFeature {
         approveAllowed:     j['approve_allowed'] as bool? ?? false,
         copyAllowed:        j['copy_allowed'] as bool? ?? false,
         excelUploadAllowed: j['excel_upload_allowed'] as bool? ?? false,
+        isFavorite:         j['is_favorite'] as bool? ?? false,
       );
 
   Map<String, dynamic> toJson() => {
@@ -43,7 +46,16 @@ class MenuFeature {
     'approve_allowed':      approveAllowed,
     'copy_allowed':         copyAllowed,
     'excel_upload_allowed': excelUploadAllowed,
+    'is_favorite':          isFavorite,
   };
+
+  MenuFeature copyWith({bool? isFavorite}) => MenuFeature(
+        featureCode: featureCode, featureName: featureName, screenName: screenName,
+        serialNo: serialNo, addAllowed: addAllowed, editAllowed: editAllowed,
+        approveAllowed: approveAllowed, copyAllowed: copyAllowed,
+        excelUploadAllowed: excelUploadAllowed,
+        isFavorite: isFavorite ?? this.isFavorite,
+      );
 }
 
 class MenuGroup {

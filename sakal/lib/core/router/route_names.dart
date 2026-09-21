@@ -8,6 +8,10 @@ class RouteNames {
   static const String group = '/group/:groupCode';
   static String groupPath(String groupCode) => '/group/$groupCode';
 
+  // Module landing — dynamic, pass moduleCode to modulePath()
+  static const String module = '/module/:moduleCode';
+  static String modulePath(String moduleCode) => '/module/$moduleCode';
+
   // Auth (inside shell)
   static const String changePassword = '/auth/change-password';
 

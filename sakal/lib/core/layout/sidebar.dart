@@ -48,11 +48,27 @@ class _SidebarState extends ConsumerState<Sidebar> {
         g.features.any((f) => path.startsWith(f.screenName)) ||
         path == RouteNames.groupPath(g.groupCode)));
     if (active.isEmpty) return;
+    // One level down from the module seed above — also open the specific
+    // GROUP containing the active route, now that a group's own feature
+    // list can be collapsed independently (see _buildGroup). Without this,
+    // landing directly on a feature (deep link, refresh) would show its
+    // module expanded but the group hiding it still closed.
+    final activeGroupCodes = <String>{
+      for (final m in active)
+        for (final g in m.groups)
+          if (g.features.any((f) => path.startsWith(f.screenName))) g.groupCode,
+    };
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(sidebarExpandedModulesProvider.notifier).state = {
         ...ref.read(sidebarExpandedModulesProvider),
         for (final m in active) m.moduleCode,
       };
+      if (activeGroupCodes.isNotEmpty) {
+        ref.read(sidebarExpandedGroupsProvider.notifier).state = {
+          ...ref.read(sidebarExpandedGroupsProvider),
+          ...activeGroupCodes,
+        };
+      }
     });
   }
 
@@ -195,10 +211,11 @@ class _SidebarState extends ConsumerState<Sidebar> {
   // sized for the desktop case and never had a mobile-specific pass.
   Widget _buildExpandedList(List<MenuModule> menu, String path, bool mobile) {
     final expandedModules = ref.watch(sidebarExpandedModulesProvider);
+    final expandedGroups = ref.watch(sidebarExpandedGroupsProvider);
     return ListView(
       controller: _scrollController,
       padding: const EdgeInsets.symmetric(vertical: 8),
-      children: menu.map((m) => _buildModule(m, path, mobile, expandedModules.contains(m.moduleCode))).toList(),
+      children: menu.map((m) => _buildModule(m, path, mobile, expandedModules.contains(m.moduleCode), expandedGroups)).toList(),
     );
   }
 
@@ -209,7 +226,14 @@ class _SidebarState extends ConsumerState<Sidebar> {
         : ({...current}..add(moduleCode));
   }
 
-  Widget _buildModule(MenuModule module, String path, bool mobile, bool isExpanded) {
+  void _toggleGroup(String groupCode, bool isExpanded) {
+    final current = ref.read(sidebarExpandedGroupsProvider);
+    ref.read(sidebarExpandedGroupsProvider.notifier).state = isExpanded
+        ? ({...current}..remove(groupCode))
+        : ({...current}..add(groupCode));
+  }
+
+  Widget _buildModule(MenuModule module, String path, bool mobile, bool isExpanded, Set<String> expandedGroups) {
     final icon = moduleIconFor(module.moduleCode);
     final hasActive = module.groups.any((g) =>
         g.features.any((f) => path.startsWith(f.screenName)) ||
@@ -276,7 +300,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
                 ? Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      ...module.groups.map((g) => _buildGroup(g, path, mobile)),
+                      ...module.groups.map((g) => _buildGroup(g, path, mobile, expandedGroups.contains(g.groupCode))),
                       const SizedBox(height: 4),
                     ],
                   )
@@ -287,37 +311,35 @@ class _SidebarState extends ConsumerState<Sidebar> {
     );
   }
 
-  Widget _buildGroup(MenuGroup group, String path, bool mobile) {
-    final groupPath   = RouteNames.groupPath(group.groupCode);
-    final isGroupActive = path == groupPath;
+  Widget _buildGroup(MenuGroup group, String path, bool mobile, bool isExpanded) {
     final hasFeatureActive =
         group.features.any((f) => path.startsWith(f.screenName));
-    final active = isGroupActive || hasFeatureActive;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Group header — clickable → group landing page
+        // Group header — toggles this group's own feature list open/closed,
+        // same accordion behavior as the module header above it. Used to
+        // navigate straight to GroupLandingScreen instead, which meant a
+        // group could never be collapsed once its module was expanded (a
+        // real, reported UX bug) — that landing page is still reachable
+        // from the collapsed icon-only rail's flyout and from the new
+        // Module Landing page, just not from this row anymore.
         InkWell(
-          onTap: () {
-            Scaffold.of(context).closeDrawer();
-            context.go(groupPath);
-          },
+          onTap: () => _toggleGroup(group.groupCode, isExpanded),
           child: Container(
             height: mobile ? 48 : 34,
             padding: const EdgeInsets.only(left: 28, right: 12),
             decoration: BoxDecoration(
-              color: active ? _activePreset.accent.withValues(alpha: 0.6) : Colors.transparent,
-              border: isGroupActive
-                  ? Border(
-                      left: BorderSide(color: _activePreset.secondary, width: 3))
-                  : null,
+              color: hasFeatureActive && !isExpanded
+                  ? _activePreset.accent.withValues(alpha: 0.6)
+                  : Colors.transparent,
             ),
             child: Row(
               children: [
                 Icon(Icons.folder_outlined,
                     size: mobile ? 18 : 13,
-                    color: active
+                    color: hasFeatureActive
                         ? Colors.white70
                         : AppColors.sidebarText.withValues(alpha: 0.5)),
                 const SizedBox(width: 8),
@@ -327,25 +349,62 @@ class _SidebarState extends ConsumerState<Sidebar> {
                     style: TextStyle(
                       fontSize: mobile ? 13 : 11,
                       fontWeight: FontWeight.w600,
-                      color: active
+                      color: hasFeatureActive
                           ? Colors.white
                           : AppColors.sidebarText.withValues(alpha: 0.6),
                       letterSpacing: 0.4,
                     ),
                   ),
                 ),
-                Icon(Icons.arrow_forward_ios,
-                    size: mobile ? 12 : 10,
-                    color: AppColors.sidebarText.withValues(alpha: 0.4)),
+                AnimatedRotation(
+                  turns: isExpanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 150),
+                  curve: Curves.easeInOut,
+                  child: Icon(
+                    Icons.keyboard_arrow_down,
+                    size: mobile ? 16 : 13,
+                    color: AppColors.sidebarText.withValues(alpha: 0.4),
+                  ),
+                ),
               ],
             ),
           ),
         ),
 
-        // Feature items
-        ...group.features.map((f) => _buildFeature(f, path, mobile)),
-        const SizedBox(height: 2),
+        // Feature items — only when this group is actually expanded, same
+        // AnimatedSize/ClipRect slide as the module level.
+        ClipRect(
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            child: isExpanded
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ...group.features.map((f) => _buildFeature(f, path, mobile)),
+                      const SizedBox(height: 2),
+                    ],
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _favoriteButton(MenuFeature feature, bool isActive, bool mobile) {
+    final session = ref.watch(sessionProvider);
+    if (session == null) return const SizedBox.shrink();
+    final color = isActive
+        ? Colors.white
+        : AppColors.sidebarText.withValues(alpha: feature.isFavorite ? 0.9 : 0.35);
+    return IconButton(
+      padding: EdgeInsets.zero,
+      constraints: BoxConstraints.tightFor(width: mobile ? 36 : 28, height: mobile ? 36 : 28),
+      iconSize: mobile ? 18 : 14,
+      icon: Icon(feature.isFavorite ? Icons.star : Icons.star_border, color: color),
+      tooltip: feature.isFavorite ? 'Remove from favorites' : 'Add to favorites',
+      onPressed: () => toggleMenuFavorite(ref, session, feature.featureCode, !feature.isFavorite),
     );
   }
 
@@ -360,7 +419,7 @@ class _SidebarState extends ConsumerState<Sidebar> {
       },
       child: Container(
         height: mobile ? 48 : 32,
-        padding: const EdgeInsets.only(left: 48, right: 16),
+        padding: const EdgeInsets.only(left: 48, right: 8),
         decoration: BoxDecoration(
           color: isActive ? _activePreset.accent : Colors.transparent,
           border: isActive
@@ -369,13 +428,21 @@ class _SidebarState extends ConsumerState<Sidebar> {
               : null,
         ),
         alignment: Alignment.centerLeft,
-        child: Text(
-          feature.featureName,
-          style: TextStyle(
-            fontSize: mobile ? 14 : 12,
-            color: isActive ? Colors.white : AppColors.sidebarText,
-            fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-          ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                feature.featureName,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: mobile ? 14 : 12,
+                  color: isActive ? Colors.white : AppColors.sidebarText,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ),
+            _favoriteButton(feature, isActive, mobile),
+          ],
         ),
       ),
     );

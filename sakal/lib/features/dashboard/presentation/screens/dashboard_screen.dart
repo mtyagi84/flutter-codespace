@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/layout/menu_feature_card.dart';
 import '../../../../core/models/menu_models.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/notification_provider.dart';
@@ -83,11 +84,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final menu = ref.watch(menuProvider);
     final notifications = ref.watch(notificationProvider);
 
+    final favorites = [
+      for (final m in menu)
+        for (final g in m.groups)
+          for (final f in g.features)
+            if (f.isFavorite) f,
+    ];
+
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
         _buildHero(session),
         const SizedBox(height: 24),
+        if (favorites.isNotEmpty) ...[
+          _sectionTitle('Favorites'),
+          _buildFavoritesStrip(favorites),
+          const SizedBox(height: 24),
+        ],
         _sectionTitle('Quick Access'),
         _buildQuickAccess(menu),
         const SizedBox(height: 24),
@@ -148,6 +161,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ]),
       );
 
+  // ---- Favorites (user-starred menu items, hidden entirely when empty) --
+
+  Widget _buildFavoritesStrip(List<MenuFeature> favorites) => Wrap(
+        spacing: 16, runSpacing: 16,
+        children: favorites.map((f) => MenuFeatureCard(feature: f)).toList(),
+      );
+
   // ---- Quick Access (one card per accessible module) ------------------
 
   Widget _buildQuickAccess(List<MenuModule> menu) {
@@ -155,12 +175,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Wrap(
       spacing: 12, runSpacing: 12,
       children: menu.map((m) {
-        final firstFeature = m.groups.expand((g) => g.features).firstOrNull;
+        final hasAnyFeature = m.groups.any((g) => g.features.isNotEmpty);
         return SizedBox(
           width: 160,
           child: InkWell(
             borderRadius: BorderRadius.circular(14),
-            onTap: firstFeature == null ? null : () => context.go(firstFeature.screenName),
+            // Opens the module's own landing page (every real group +
+            // feature, drilldown-style) instead of jumping straight into
+            // an arbitrary first screen — user-requested, since the old
+            // behavior gave no sense of what else lives in that module.
+            onTap: hasAnyFeature ? () => context.go(RouteNames.modulePath(m.moduleCode)) : null,
             child: _card(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Icon(moduleIconFor(m.moduleCode), color: AppColors.primary, size: 24),

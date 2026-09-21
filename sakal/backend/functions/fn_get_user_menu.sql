@@ -35,7 +35,8 @@ begin
                                     'edit_allowed',         um.edit_allowed,
                                     'approve_allowed',      um.approve_allowed,
                                     'copy_allowed',         um.copy_allowed,
-                                    'excel_upload_allowed', um.excel_upload_allowed
+                                    'excel_upload_allowed', um.excel_upload_allowed,
+                                    'is_favorite',          (fav.id is not null)
                                 ) order by mm.serial_no
                             )
                             from ric_user_menus um
@@ -43,6 +44,11 @@ begin
                                 on  mm.feature_code = um.feature_code
                                 and mm.client_id    = um.client_id
                                 and mm.company_id   = um.company_id
+                            left join ric_user_menu_favorites fav
+                                on  fav.feature_code = mm.feature_code
+                                and fav.user_id       = p_user_id
+                                and fav.client_id     = p_client_id
+                                and fav.company_id    = p_company_id
                             where um.user_id      = p_user_id
                               and um.client_id    = p_client_id
                               and um.company_id   = p_company_id

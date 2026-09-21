@@ -46,20 +46,22 @@ declare
     v_ad uuid; v_sl uuid; v_pr uuid; v_in uuid; v_fn uuid;
 begin
     -- --------------------------------------------------------
-    -- Modules (AD=0, SL=1, PR=2, IN=3, FN=4)
-    -- AD's display name is now 'Settings' — it still holds true
-    -- system-wide config (System Setup, User Management) but is also
-    -- now home to every OTHER module's own Masters group.
+    -- Modules (SL=0, PR=1, IN=2, FN=3, AD=4) — work modules first, Settings
+    -- last (2026-09-21 reorder, user-requested: "Sales Purchase Inventory
+    -- Finance and Settings" for every tenant). AD's display name is
+    -- 'Settings' — it still holds true system-wide config (System Setup,
+    -- User Management) but is also home to every OTHER module's own
+    -- Masters group.
     -- --------------------------------------------------------
     insert into ric_system_modules (client_id, company_id, module_code, module_name, serial_no)
     values
-        (p_client_id, p_company_id, 'AD', 'Settings',   0),
-        (p_client_id, p_company_id, 'SL', 'Sales',      1),
-        (p_client_id, p_company_id, 'PR', 'Purchase',   2),
-        (p_client_id, p_company_id, 'IN', 'Inventory',  3),
-        (p_client_id, p_company_id, 'FN', 'Finance',    4)
+        (p_client_id, p_company_id, 'SL', 'Sales',      0),
+        (p_client_id, p_company_id, 'PR', 'Purchase',   1),
+        (p_client_id, p_company_id, 'IN', 'Inventory',  2),
+        (p_client_id, p_company_id, 'FN', 'Finance',    3),
+        (p_client_id, p_company_id, 'AD', 'Settings',   4)
     on conflict (client_id, company_id, module_code) do update
-        set module_name = excluded.module_name;
+        set module_name = excluded.module_name, serial_no = excluded.serial_no;
 
     select id into v_ad from ric_system_modules where client_id = p_client_id and company_id = p_company_id and module_code = 'AD';
     select id into v_sl from ric_system_modules where client_id = p_client_id and company_id = p_company_id and module_code = 'SL';

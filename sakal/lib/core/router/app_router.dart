@@ -106,6 +106,7 @@ import '../../features/finance/presentation/screens/bank_statement_entry_screen.
 import '../../features/finance/presentation/screens/bank_reconciliation_matching_screen.dart';
 import '../layout/app_shell.dart';
 import '../layout/group_landing_screen.dart';
+import '../layout/module_landing_screen.dart';
 import '../providers/session_provider.dart';
 import '../layout/screen_header.dart' show routeObserver;
 import '../services/local_storage.dart';
@@ -195,11 +196,18 @@ final appRouter = GoRouter(
           builder: (c, s) => const DashboardScreen(),
         ),
 
-        // Group landing — dynamic, used by sidebar group headers
+        // Group landing — dynamic, used by the collapsed icon-only rail's flyout
         GoRoute(
           path: RouteNames.group,
           builder: (c, s) => GroupLandingScreen(
               groupCode: s.pathParameters['groupCode']!),
+        ),
+
+        // Module landing — dynamic, used by the Dashboard's module tiles
+        GoRoute(
+          path: RouteNames.module,
+          builder: (c, s) => ModuleLandingScreen(
+              moduleCode: s.pathParameters['moduleCode']!),
         ),
 
         // Auth (inside shell)
