@@ -17,7 +17,12 @@ class SakalApp extends ConsumerWidget {
     });
     final activePreset = ref.watch(themePresetProvider);
     return MaterialApp.router(
-      title: 'SAKAL ERP',
+      // Browser tab / OS window title only — a temporary, cosmetic rename
+      // (2026-09-22, user-requested: "hide the word SAKAL from visible UI"
+      // for now). The product itself is still SAKAL everywhere else
+      // (AppConfig.appName, docs, code) — this is deliberately the ONLY
+      // place the display title is overridden.
+      title: 'LiteLink ERP',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.forPreset(ThemePresetConfig.all[activePreset]!),
       routerConfig: appRouter,
