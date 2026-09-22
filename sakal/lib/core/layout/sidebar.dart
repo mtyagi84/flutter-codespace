@@ -242,50 +242,73 @@ class _SidebarState extends ConsumerState<Sidebar> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Module header
-        InkWell(
-          onTap: () => _toggleModule(module.moduleCode, isExpanded),
-          child: Container(
-            height: mobile ? 52 : 40,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: hasActive && !isExpanded
-                  ? _activePreset.accent
-                  : Colors.transparent,
-            ),
-            child: Row(
-              children: [
-                Icon(icon,
-                    size: mobile ? 20 : 16,
-                    color: hasActive
-                        ? Colors.white70
-                        : AppColors.sidebarText.withValues(alpha: 0.6)),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    module.moduleName.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: mobile ? 13 : 11,
-                      fontWeight: FontWeight.w700,
-                      color: hasActive
-                          ? Colors.white
-                          : AppColors.sidebarText.withValues(alpha: 0.7),
-                      letterSpacing: 0.8,
+        // Module header — two independent tap targets sharing one row, per
+        // direct user feedback: the label itself navigates to the Module
+        // Landing page (every real group + feature, drilldown-style — see
+        // ModuleLandingScreen), while a separate chevron button toggles
+        // this module's own sidebar tree open/closed. Clicking the name no
+        // longer doubles as the expand/collapse control.
+        Container(
+          height: mobile ? 52 : 40,
+          decoration: BoxDecoration(
+            color: hasActive && !isExpanded
+                ? _activePreset.accent
+                : Colors.transparent,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: () {
+                    Scaffold.of(context).closeDrawer();
+                    context.go(RouteNames.modulePath(module.moduleCode));
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: Row(
+                      children: [
+                        Icon(icon,
+                            size: mobile ? 20 : 16,
+                            color: hasActive
+                                ? Colors.white70
+                                : AppColors.sidebarText.withValues(alpha: 0.6)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            module.moduleName.toUpperCase(),
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: mobile ? 13 : 11,
+                              fontWeight: FontWeight.w700,
+                              color: hasActive
+                                  ? Colors.white
+                                  : AppColors.sidebarText.withValues(alpha: 0.7),
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                AnimatedRotation(
-                  turns: isExpanded ? 0.5 : 0,
-                  duration: const Duration(milliseconds: 150),
-                  curve: Curves.easeInOut,
-                  child: Icon(
-                    Icons.keyboard_arrow_down,
-                    size: mobile ? 20 : 16,
-                    color: AppColors.sidebarText.withValues(alpha: 0.5),
+              ),
+              InkWell(
+                onTap: () => _toggleModule(module.moduleCode, isExpanded),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: AnimatedRotation(
+                    turns: isExpanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 150),
+                    curve: Curves.easeInOut,
+                    child: Icon(
+                      Icons.keyboard_arrow_down,
+                      size: mobile ? 20 : 16,
+                      color: AppColors.sidebarText.withValues(alpha: 0.5),
+                    ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
 
@@ -318,56 +341,73 @@ class _SidebarState extends ConsumerState<Sidebar> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Group header — toggles this group's own feature list open/closed,
-        // same accordion behavior as the module header above it. Used to
-        // navigate straight to GroupLandingScreen instead, which meant a
-        // group could never be collapsed once its module was expanded (a
-        // real, reported UX bug) — that landing page is still reachable
-        // from the collapsed icon-only rail's flyout and from the new
-        // Module Landing page, just not from this row anymore.
-        InkWell(
-          onTap: () => _toggleGroup(group.groupCode, isExpanded),
-          child: Container(
-            height: mobile ? 48 : 34,
-            padding: const EdgeInsets.only(left: 28, right: 12),
-            decoration: BoxDecoration(
-              color: hasFeatureActive && !isExpanded
-                  ? _activePreset.accent.withValues(alpha: 0.6)
-                  : Colors.transparent,
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.folder_outlined,
-                    size: mobile ? 18 : 13,
-                    color: hasFeatureActive
-                        ? Colors.white70
-                        : AppColors.sidebarText.withValues(alpha: 0.5)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    group.groupName,
-                    style: TextStyle(
-                      fontSize: mobile ? 13 : 11,
-                      fontWeight: FontWeight.w600,
-                      color: hasFeatureActive
-                          ? Colors.white
-                          : AppColors.sidebarText.withValues(alpha: 0.6),
-                      letterSpacing: 0.4,
+        // Group header — same split-tap-target pattern as the module header
+        // above: the label navigates to GroupLandingScreen (restored, per
+        // direct user feedback — this used to be the row's only behavior
+        // before a since-reverted change made the whole row a pure
+        // expand/collapse toggle), a separate chevron button toggles this
+        // group's own feature list open/closed in the sidebar tree.
+        Container(
+          height: mobile ? 48 : 34,
+          decoration: BoxDecoration(
+            color: hasFeatureActive && !isExpanded
+                ? _activePreset.accent.withValues(alpha: 0.6)
+                : Colors.transparent,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: () {
+                    Scaffold.of(context).closeDrawer();
+                    context.go(RouteNames.groupPath(group.groupCode));
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 28),
+                    child: Row(
+                      children: [
+                        Icon(Icons.folder_outlined,
+                            size: mobile ? 18 : 13,
+                            color: hasFeatureActive
+                                ? Colors.white70
+                                : AppColors.sidebarText.withValues(alpha: 0.5)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            group.groupName,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: mobile ? 13 : 11,
+                              fontWeight: FontWeight.w600,
+                              color: hasFeatureActive
+                                  ? Colors.white
+                                  : AppColors.sidebarText.withValues(alpha: 0.6),
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                AnimatedRotation(
-                  turns: isExpanded ? 0.5 : 0,
-                  duration: const Duration(milliseconds: 150),
-                  curve: Curves.easeInOut,
-                  child: Icon(
-                    Icons.keyboard_arrow_down,
-                    size: mobile ? 16 : 13,
-                    color: AppColors.sidebarText.withValues(alpha: 0.4),
+              ),
+              InkWell(
+                onTap: () => _toggleGroup(group.groupCode, isExpanded),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: AnimatedRotation(
+                    turns: isExpanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 150),
+                    curve: Curves.easeInOut,
+                    child: Icon(
+                      Icons.keyboard_arrow_down,
+                      size: mobile ? 16 : 13,
+                      color: AppColors.sidebarText.withValues(alpha: 0.4),
+                    ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
 

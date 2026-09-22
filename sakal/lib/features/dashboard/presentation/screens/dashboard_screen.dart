@@ -45,11 +45,20 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   List<_PendingAction> _pendingActions = [];
   bool _loadingPending = true;
+  final _favoriteSearchCtrl = TextEditingController();
+  String _favoriteSearch = '';
 
   @override
   void initState() {
     super.initState();
     _loadPendingActions();
+    _favoriteSearchCtrl.addListener(() => setState(() => _favoriteSearch = _favoriteSearchCtrl.text.trim().toLowerCase()));
+  }
+
+  @override
+  void dispose() {
+    _favoriteSearchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPendingActions() async {
@@ -162,11 +171,49 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       );
 
   // ---- Favorites (user-starred menu items, hidden entirely when empty) --
+  // Deliberately a smaller, compact tile than Quick Access's own module
+  // tile (160 wide) — per direct user feedback, a favorite is meant to be
+  // a dense, glanceable shortcut strip, not another full drilldown card
+  // (that's what MenuFeatureCard, used on the Module/Group landing pages,
+  // is for). A search box filters by name once the list gets long enough
+  // that scanning it visually stops being fast — the whole strip still
+  // only shows/hides as a section, never an empty-state message, since
+  // it's already hidden entirely when there are zero favorites at all.
 
-  Widget _buildFavoritesStrip(List<MenuFeature> favorites) => Wrap(
-        spacing: 16, runSpacing: 16,
-        children: favorites.map((f) => MenuFeatureCard(feature: f)).toList(),
-      );
+  Widget _buildFavoritesStrip(List<MenuFeature> favorites) {
+    final filtered = _favoriteSearch.isEmpty
+        ? favorites
+        : favorites.where((f) => f.featureName.toLowerCase().contains(_favoriteSearch)).toList();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      if (favorites.length > 4)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: SizedBox(
+            width: 260,
+            child: TextField(
+              controller: _favoriteSearchCtrl,
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Search favorites…',
+                prefixIcon: const Icon(Icons.search, size: 18),
+                suffixIcon: _favoriteSearch.isEmpty
+                    ? null
+                    : IconButton(icon: const Icon(Icons.clear, size: 16), onPressed: _favoriteSearchCtrl.clear),
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
+        ),
+      if (filtered.isEmpty)
+        const Text('No favorites match your search.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary))
+      else
+        Wrap(
+          spacing: 10, runSpacing: 10,
+          children: filtered.map((f) => _FavoriteTile(feature: f)).toList(),
+        ),
+    ]);
+  }
 
   // ---- Quick Access (one card per accessible module) ------------------
 
@@ -332,4 +379,53 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ]),
         ),
       );
+}
+
+/// Compact Favorites-strip tile — deliberately smaller than Quick Access's
+/// own 160-wide module tile (per direct user feedback) and simpler than
+/// the full MenuFeatureCard used on the Module/Group landing pages: just
+/// an icon, the name, and a filled star that un-favorites on tap.
+class _FavoriteTile extends ConsumerWidget {
+  final MenuFeature feature;
+  const _FavoriteTile({required this.feature});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final session = ref.watch(sessionProvider);
+    final icon = menuFeatureIcons[feature.featureCode] ?? Icons.grid_view_outlined;
+    return SizedBox(
+      width: 130,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => context.go(feature.screenName),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Icon(icon, color: AppColors.primary, size: 20),
+              const Spacer(),
+              if (session != null)
+                InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => toggleMenuFavorite(ref, session, feature.featureCode, false),
+                  child: const Padding(
+                    padding: EdgeInsets.all(2),
+                    child: Icon(Icons.star, size: 16, color: AppColors.secondary),
+                  ),
+                ),
+            ]),
+            const SizedBox(height: 6),
+            Text(feature.featureName,
+                maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          ]),
+        ),
+      ),
+    );
+  }
 }
