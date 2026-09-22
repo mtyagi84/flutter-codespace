@@ -25,6 +25,11 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
+  // Hidden for now, per direct user request — the "S" mark + "SAKAL ERP" +
+  // tagline block will come back once the real logo/branding is ready.
+  // Flip to `true` to restore it; the widget itself (_Logo) is untouched.
+  static const bool _showBranding = false;
+
   final _formKey      = GlobalKey<FormState>();
   final _clientNoCtrl = TextEditingController();
   final _usernameCtrl = TextEditingController();
@@ -238,8 +243,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const _Logo(),
-                const SizedBox(height: 40),
+                // Hidden for now (2026-09-22, user-requested) — not removed,
+                // will come back once the real logo/branding is ready.
+                // Flip back to `true` to restore it.
+                if (_showBranding) ...[
+                  const _Logo(),
+                  const SizedBox(height: 40),
+                ],
                 _buildCard(),
                 const SizedBox(height: 24),
                 Text(
