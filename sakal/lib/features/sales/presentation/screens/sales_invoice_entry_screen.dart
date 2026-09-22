@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/layout/screen_header.dart';
@@ -209,7 +210,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                 SakalHeaderActionButton(
                   key: const Key('btn_save'),
                   label: 'Save Invoice', icon: Icons.save_outlined, kind: SakalActionKind.save,
-                  loading: _saving, onPressed: _saving ? null : _saveAndApprove,
+                  loading: _saving, onPressed: _saving ? null : _handleSaveTap,
                 ),
               if (showCancelNow)
                 SakalHeaderActionButton(
@@ -246,6 +247,15 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
   final _partyAddressCtrl = TextEditingController();
   String? _salesPersonId;
   String  _salesPersonDisplay = '';
+
+  // Keyboard-first entry (2026-09-22): auto-focus on open + reset, and a
+  // Walk-in Name -> Mobile -> Address -> first line's Product Enter-chain,
+  // mirroring the line grid's own existing FocusNode-chaining idiom
+  // (_InvoiceLineRow.productFocusNode/addButtonFocusNode).
+  final _customerFocusNode = FocusNode();
+  final _partyNameFocusNode = FocusNode();
+  final _partyPhoneFocusNode = FocusNode();
+  final _partyAddressFocusNode = FocusNode();
 
   // Resolved once in _loadExisting (against _users, already loaded by
   // _init before it) — print's "Prepared By"/"Authorised By" data supply.
@@ -350,6 +360,10 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
 
   @override
   void dispose() {
+    _customerFocusNode.dispose();
+    _partyNameFocusNode.dispose();
+    _partyPhoneFocusNode.dispose();
+    _partyAddressFocusNode.dispose();
     _partyNameCtrl.dispose();
     _partyPhoneCtrl.dispose();
     _partyAddressCtrl.dispose();
@@ -393,6 +407,40 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
   void _showSnack(String msg, {required Color color}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
+  }
+
+  // Cursor lands on whatever the real first entry point is for the current
+  // mode the instant a fresh invoice is ready — Walk-in Customer Name for
+  // Cash+Direct, the Customer picker for Credit+Direct (neither has a free-
+  // typed/pickable customer field in Against-Quotation/Order mode, so the
+  // first line's own Product field is the real starting point there).
+  void _focusPrimaryEntryField() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_isAgainstSource) {
+        if (_lines.isNotEmpty) _lines.first.productFocusNode.requestFocus();
+      } else if (_saleType == 'CASH') {
+        _partyNameFocusNode.requestFocus();
+      } else {
+        _customerFocusNode.requestFocus();
+      }
+    });
+  }
+
+  // Alt+S saves from anywhere on the screen, regardless of which field
+  // currently has focus — no known browser/OS reservation for Alt+S
+  // (unlike Ctrl+S/Ctrl+A), confirmed with the user. Same low-level
+  // Focus.onKeyEvent technique sakal_autocomplete.dart already uses for
+  // its own arrow-key handling, not Shortcuts/Actions — this is the first
+  // app-wide keyboard shortcut in this codebase, kept scoped to this one
+  // screen rather than building a shared framework nothing else needs yet.
+  KeyEventResult _handleSaveShortcut(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (HardwareKeyboard.instance.isAltPressed && event.logicalKey == LogicalKeyboardKey.keyS) {
+      if (!_saving) _handleSaveTap();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   // ── Init ─────────────────────────────────────────────────────────────────
@@ -444,6 +492,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
         if (_saleType == 'CASH') await _applyCashCustomer(ds);
         _addLine();
         if (mounted) setState(() => _loading = false);
+        _focusPrimaryEntryField();
       }
     } catch (e, st) {
       AppLogger.error('SalesInvoiceLoad', e, st);
@@ -1606,6 +1655,102 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     }
   }
 
+  // Wraps _saveAndApprove() with the "print now? -> reset for next
+  // invoice" flow the Save button (and Alt+S) both call, instead of
+  // calling _saveAndApprove() directly. Only chains into print+reset when
+  // this really was the primary "create a brand-new invoice" flow that
+  // went straight to APPROVED online — never for an offline-queued DRAFT
+  // (still needs Pending Approvals/Manager Review before anything can
+  // print), and never when this screen was opened specifically to review/
+  // approve an ALREADY-EXISTING invoice (widget.editInvoiceNo != null) —
+  // that caller expects to stay on the document it asked for, not get
+  // reset to a blank form out from under it.
+  Future<void> _handleSaveTap() async {
+    final wasPrimaryCreateFlow = widget.editInvoiceNo == null;
+    final ok = await _saveAndApprove();
+    if (!ok || !mounted || !wasPrimaryCreateFlow || _status != 'APPROVED') return;
+
+    final wantsPrint = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: const Text('Print this invoice now?'),
+        content: Text('Invoice $_invoiceNo has been saved and approved.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context, rootNavigator: true).pop(false), child: const Text('No')),
+          FilledButton(onPressed: () => Navigator.of(context, rootNavigator: true).pop(true), child: const Text('Yes, Print')),
+        ],
+      ),
+    ) ?? false;
+    if (wantsPrint && mounted) await _printInvoice();
+    if (mounted) _resetForNextInvoice();
+  }
+
+  // Clears the just-saved document and gets the screen ready for the next
+  // customer without navigating away and back. Deliberately reuses every
+  // bit of master data _init() already fetched once (_taxGroups, _users,
+  // _quickSetup, _additionalCharges, _currencyDecimalPlaces, the price/
+  // discount governance flags) — no re-fetch, this has to feel instant
+  // between invoices, not repeat a network round trip every time.
+  void _resetForNextInvoice() {
+    // Lines use this screen's own _pendingRowDisposal list (never the
+    // shared DeferredRowDisposal mixin — see its doc comment: a removed
+    // line's FocusNode can still be attached for the rest of THIS frame,
+    // so disposal is deferred all the way to this screen's own dispose()).
+    // Charges DO use the shared mixin (_InvoiceChargeRow implements
+    // DisposableRow).
+    _pendingRowDisposal.addAll(_lines);
+    for (final c in _charges) {
+      deferRowDisposal(c);
+    }
+    final ds = ref.read(salesInvoiceRepositoryProvider);
+    setState(() {
+      _invoiceNo = null;
+      _status = 'DRAFT';
+      _invoiceDate = DateTime.now();
+      // Against-Quotation/Order consumed a specific source document
+      // already — the next invoice starts fresh, same as a brand-new
+      // "New Quick Invoice" navigation would.
+      _invoiceMode = 'DIRECT';
+      _sourceQuotationNo = null; _sourceQuotationDate = null;
+      _sourceOrderNo = null; _sourceOrderDate = null;
+      _lines = [];
+      _charges.clear();
+      _partyNameCtrl.clear();
+      _partyPhoneCtrl.clear();
+      _partyAddressCtrl.clear();
+      _headerDiscountPctCtrl.text = '0';
+      _remarksCtrl.text = '';
+      _collectedLocalCtrl.clear();
+      _collectedBaseCtrl.clear();
+      _preparedByName = null;
+      _authorisedByName = null;
+      _deliveryStatus = null;
+      _voucherLines.clear();
+      _voucherNumbersByLabel.clear();
+      _salesVoucherNo = null; _salesVoucherDate = null;
+      _cosVoucherNo = null; _cosVoucherDate = null;
+      _localReceiptVoucherNo = null; _localReceiptVoucherDate = null;
+      _baseReceiptVoucherNo = null; _baseReceiptVoucherDate = null;
+      // _saleType is deliberately preserved — a cashier doing several
+      // Cash (or several Credit) sales in a row shouldn't have to reselect
+      // it every time.
+    });
+    if (_saleType == 'CASH') {
+      unawaited(_applyCashCustomer(ds).then((_) {
+        if (!mounted) return;
+        setState(() {});
+        _addLine();
+        _focusPrimaryEntryField();
+      }));
+    } else {
+      _customerId = null;
+      _customerDisplay = '';
+      _addLine();
+      _focusPrimaryEntryField();
+    }
+  }
+
   Future<void> _cancel() async {
     if (_invoiceNo == null || _cancelling) return;
     final reasonCtrl = TextEditingController();
@@ -1717,12 +1862,22 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
       final template = await ref.read(printTemplateProvider('SALES_INVOICE').future);
       final document = _buildPrintDocument(company);
       final session = ref.read(sessionProvider);
+      if (!mounted) return;
+      // Direct Print (open the PDF and immediately trigger the browser's
+      // own print dialog on it) is a per-user preference — see
+      // ric_user_preferences/userPreferencesProvider. Never on a narrow/
+      // mobile-width window regardless of the saved preference: that mode
+      // reuses Printing.layoutPdf's in-page overlay, which has no back
+      // button on a phone-sized viewport (a real bug this app already hit
+      // once — see print_engine.dart's own comment).
+      final directPrint = ref.read(userPreferencesProvider) == 'DIRECT' && !Responsive.isMobile(context);
       await PrintEngine.printDocument(
         template: template,
         document: document,
         filename: '$_invoiceNo.pdf',
         printedByName: session?.fullName,
         printedOn: DateTime.now(),
+        directPrint: directPrint,
       );
     } catch (e, st) {
       AppLogger.error('SalesInvoicePrint', e, st);
@@ -1817,7 +1972,15 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     final canSave = _status == 'DRAFT' && (_isNew ? canAdd : canEdit);
     final showCancel = !isOffline && _status == 'DRAFT' && canApprove && !_isNew;
 
-    return Column(
+    return Focus(
+      // Alt+S saves from anywhere on the screen — see _handleSaveShortcut's
+      // own doc comment. autofocus:false + skipTraversal:true so this
+      // wrapper never steals Tab-order focus from the real fields inside
+      // it; it exists purely to catch the key event as it bubbles up.
+      autofocus: false,
+      skipTraversal: true,
+      onKeyEvent: _handleSaveShortcut,
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isOffline) const OfflineBanner(),
@@ -1908,12 +2071,13 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                 ),
         ),
       ],
+      ),
     );
   }
 
   Widget _buildActionButtons({required bool canSave, required bool showCancel}) => Wrap(spacing: 12, runSpacing: 8, children: [
         if (canSave) FilledButton(
-          onPressed: _saving ? null : _saveAndApprove,
+          onPressed: _saving ? null : _handleSaveTap,
           child: _saving
               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
               : const Text('Save Invoice'),
@@ -2003,6 +2167,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                       child: SakalAutocomplete<Map<String, dynamic>>(
                         initialValue: TextEditingValue(text: _customerDisplay),
                         enabled: !locked,
+                        focusNode: _customerFocusNode,
                         displayStringForOption: (a) => '[${a['account_code']}] ${a['account_name']}',
                         optionsBuilder: (v) async {
                           final accounts = await ref.read(accountsProvider.future);
@@ -2038,6 +2203,11 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
                             if (mounted) _showSnack(ErrorPresenter.format(e, action: 'resolve currency/price for this customer'), color: AppColors.negative);
                           }
                           if (mounted) setState(() {});
+                          // Keyboard-first chaining, Credit+Direct mode's
+                          // own equivalent of Cash's Walk-in Name -> ... ->
+                          // first line's Product: picking a customer moves
+                          // straight into line entry with no mouse needed.
+                          if (_lines.isNotEmpty) _lines.first.productFocusNode.requestFocus();
                         },
                         decoration: SakalFieldCard.bareDecoration,
                         style: fieldTextStyle,
@@ -2072,11 +2242,28 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
             const SizedBox(height: 12),
             SakalFieldRow(isMobile: isMobile, children: [
               SakalFieldCard(label: 'Walk-in Customer Name (optional)', editable: !locked,
-                  child: TextFormField(controller: _partyNameCtrl, enabled: !locked, decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle)),
+                  child: TextFormField(
+                    controller: _partyNameCtrl, focusNode: _partyNameFocusNode, enabled: !locked,
+                    decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle,
+                    textInputAction: TextInputAction.next,
+                    onFieldSubmitted: (_) => _partyPhoneFocusNode.requestFocus(),
+                  )),
               SakalFieldCard(label: 'Mobile (optional)', editable: !locked,
-                  child: TextFormField(controller: _partyPhoneCtrl, enabled: !locked, decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle)),
+                  child: TextFormField(
+                    controller: _partyPhoneCtrl, focusNode: _partyPhoneFocusNode, enabled: !locked,
+                    decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle,
+                    textInputAction: TextInputAction.next,
+                    onFieldSubmitted: (_) => _partyAddressFocusNode.requestFocus(),
+                  )),
               SakalFieldCard(label: 'Address (optional)', editable: !locked,
-                  child: TextFormField(controller: _partyAddressCtrl, enabled: !locked, decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle)),
+                  child: TextFormField(
+                    controller: _partyAddressCtrl, focusNode: _partyAddressFocusNode, enabled: !locked,
+                    decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle,
+                    textInputAction: TextInputAction.next,
+                    onFieldSubmitted: (_) {
+                      if (_lines.isNotEmpty) _lines.first.productFocusNode.requestFocus();
+                    },
+                  )),
             ]),
           ],
           const SizedBox(height: 16),

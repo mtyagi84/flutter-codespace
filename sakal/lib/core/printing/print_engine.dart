@@ -16,6 +16,16 @@ class PrintEngine {
     required String filename,
     String? printedByName,
     DateTime? printedOn,
+    // Opt-in, defaults false so every other existing call site is
+    // unaffected. When true (a user's own "Direct Print" preference,
+    // ric_user_preferences.print_mode='DIRECT') and running on Web, opens
+    // the PDF and immediately triggers the browser's own print dialog on
+    // it (Printing.layoutPdf) instead of the plain download every other
+    // caller still gets (Printing.sharePdf) -- the closest real equivalent
+    // to "direct" printing a browser allows (no browser permits a truly
+    // silent, zero-click print). Native desktop already uses layoutPdf
+    // unconditionally below, so this flag is a no-op there.
+    bool directPrint = false,
   }) async {
     final doc = template.paperProfile.isReceipt
         ? PdfFlowRenderer.render(template, document)
@@ -38,7 +48,7 @@ class PrintEngine {
     // where there's an actual print dialog to open.
     final isNativeDesktop = !kIsWeb &&
         defaultTargetPlatform != TargetPlatform.android && defaultTargetPlatform != TargetPlatform.iOS;
-    if (isNativeDesktop) {
+    if (isNativeDesktop || (directPrint && kIsWeb)) {
       await Printing.layoutPdf(onLayout: (_) async => bytes, name: filename);
     } else {
       await Printing.sharePdf(bytes: bytes, filename: filename);

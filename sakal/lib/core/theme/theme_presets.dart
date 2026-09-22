@@ -68,7 +68,10 @@ final themePresetProvider = StateProvider<ThemePreset>((ref) => ThemePreset.navy
 
 /// Row-density toggle — Dense (40px rows / 12px margins) vs Comfortable
 /// (54px rows / 18px margins). Same StateProvider idiom as themePresetProvider.
-final isCompactDensityProvider = StateProvider<bool>((ref) => false);
+/// Defaults to Dense (user-requested, 2026-09-22) — not persisted per-user
+/// yet, so this default applies fresh on every reload regardless of any
+/// earlier toggle in the same session.
+final isCompactDensityProvider = StateProvider<bool>((ref) => true);
 
 /// Row height / margin pair for the active density setting.
 class DensityMetrics {

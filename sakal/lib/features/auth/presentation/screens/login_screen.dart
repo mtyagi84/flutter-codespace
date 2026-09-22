@@ -137,6 +137,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       ref.read(sessionProvider.notifier).state = session;
       ref.read(menuProvider.notifier).state    = menuList;
+      ref.read(userPreferencesProvider.notifier).state = await fetchPrintMode(session);
 
       // Background master-data refresh for devices with offline mode
       // enabled — non-blocking (never gates reaching Dashboard/Sync), per

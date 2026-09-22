@@ -111,6 +111,9 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
                 await _showSwitchCompanyDialog(context, ref, session!);
               } else if (val == 'density') {
                 ref.read(isCompactDensityProvider.notifier).state = !ref.read(isCompactDensityProvider);
+              } else if (val == 'print_mode') {
+                final next = ref.read(userPreferencesProvider) == 'DIRECT' ? 'ON_SCREEN' : 'DIRECT';
+                await setPrintMode(ref, session!, next);
               } else if (val == 'open_theme') {
                 await _showThemePicker(context, ref);
               } else if (val == 'logout') {
@@ -221,6 +224,23 @@ class TopBar extends ConsumerWidget implements PreferredSizeWidget {
                   ),
                   const SizedBox(width: 10),
                   Text(ref.read(isCompactDensityProvider) ? 'Comfortable Rows' : 'Dense Rows'),
+                ]),
+              ),
+              // Controls what happens on "Print this now?" -> Yes (Quick
+              // Invoice and, in future, other transaction screens): Direct
+              // Print opens the PDF and immediately triggers the browser's
+              // own print dialog on it; On Screen just downloads it as
+              // today. Never a silent/zero-click print -- no browser allows
+              // that -- this is the closest real equivalent.
+              PopupMenuItem(
+                value: 'print_mode',
+                child: Row(children: [
+                  Icon(
+                    ref.read(userPreferencesProvider) == 'DIRECT' ? Icons.print_outlined : Icons.picture_as_pdf_outlined,
+                    size: 16, color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(ref.read(userPreferencesProvider) == 'DIRECT' ? 'Direct Print' : 'On Screen (PDF)'),
                 ]),
               ),
               PopupMenuItem(
@@ -570,6 +590,8 @@ class _SwitchCompanyDialogState extends State<_SwitchCompanyDialog> {
             quickInvoiceCollectCash:   settings['quick_invoice_collect_cash']   as bool? ?? true,
           );
       widget.ref.read(menuProvider.notifier).state = menuList;
+      widget.ref.read(userPreferencesProvider.notifier).state =
+          await fetchPrintMode(widget.ref.read(sessionProvider)!);
 
       if (mounted) {
         Navigator.of(context).pop();

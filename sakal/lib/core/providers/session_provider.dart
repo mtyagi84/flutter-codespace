@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/menu_models.dart';
 import '../network/dio_client.dart';
@@ -82,6 +83,43 @@ final sidebarCollapsedProvider = StateProvider<bool>((ref) => false);
 // active route/menu tree which aren't available at provider-construction
 // time.
 final sidebarExpandedModulesProvider = StateProvider<Set<String>>((ref) => {});
+
+// A user's own print-mode preference for the post-save "print now?" flow
+// (Quick Invoice and, in future, other transaction screens) — 'DIRECT'
+// (open the PDF and immediately trigger the browser's print dialog) or
+// 'ON_SCREEN' (today's plain download), backed by ric_user_preferences
+// (migration 203). Fetched once at login/company-switch alongside the
+// menu fetch; defaults to 'ON_SCREEN' (matching the table's own DEFAULT)
+// until the user explicitly picks Direct Print, at which point the row
+// is created lazily — no write on every login for a user who never
+// touches this setting.
+final userPreferencesProvider = StateProvider<String>((ref) => 'ON_SCREEN');
+
+Future<String> fetchPrintMode(UserSession session) async {
+  try {
+    final res = await DioClient.instance.get('/ric_user_preferences', queryParameters: {
+      'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
+      'user_id': 'eq.${session.userId}', 'select': 'print_mode', 'limit': '1',
+    });
+    final list = res.data as List;
+    return list.isNotEmpty ? (list.first as Map<String, dynamic>)['print_mode'] as String? ?? 'ON_SCREEN' : 'ON_SCREEN';
+  } catch (_) {
+    return 'ON_SCREEN';
+  }
+}
+
+Future<void> setPrintMode(WidgetRef ref, UserSession session, String mode) async {
+  await DioClient.instance.post(
+    '/ric_user_preferences',
+    data: {
+      'client_id': session.clientId, 'company_id': session.companyId,
+      'user_id': session.userId, 'print_mode': mode,
+    },
+    queryParameters: {'on_conflict': 'client_id,company_id,user_id'},
+    options: Options(headers: {'Prefer': 'resolution=merge-duplicates'}),
+  );
+  ref.read(userPreferencesProvider.notifier).state = mode;
+}
 
 // Same shape/lifetime as sidebarExpandedModulesProvider, one level down —
 // which GROUPS (within an already-expanded module) currently have their
