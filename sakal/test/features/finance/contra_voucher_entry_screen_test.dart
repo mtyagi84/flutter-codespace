@@ -120,9 +120,11 @@ void main() {
 
       expect(_findFieldLabel('REMARKS'), findsOneWidget); // footer only, no line grid on this screen
 
-      // No gap yet (no accounts/amounts entered) — charge section collapsed
-      // to its "Add" prompt.
-      expect(find.text('Add Transfer Charge (bank fee, courier charge, etc.)'), findsOneWidget);
+      // No gap yet (no accounts/amounts entered) — no difference section;
+      // the manual "Add Transfer Charge" prompt no longer exists at all (the
+      // difference is computed, never typed).
+      expect(find.text('Add Transfer Charge (bank fee, courier charge, etc.)'), findsNothing);
+      expect(find.text('Exchange Loss / Transfer Charge  (Debit)'), findsNothing);
 
       // Default test surface (~800 logical width) is >= Responsive's own
       // 600px mobile breakpoint (a NARROWER threshold than
@@ -141,21 +143,9 @@ void main() {
       await pumpApp(tester, const ContraVoucherEntryScreen(), overrides: overrides(), session: testSession());
       await tester.pumpAndSettle();
 
-      // A brand-new voucher auto-focuses the FROM Account field on load
-      // (initState -> _fromAccountFocusNode.requestFocus()), and
-      // FinanceAccountPicker runs in desktopDialogMode — it opens a picker
-      // DIALOG on focus, on desktop too, not just mobile. That dialog's
-      // ModalBarrier covers the whole screen, so every tap on Save Draft
-      // silently landed on the barrier instead of the button. This is why
-      // targeting the ElevatedButton (rather than its text label) didn't
-      // help, and why warnIfMissed:false made it worse — that flag only
-      // silences the "would not hit test" warning, it does NOT make the
-      // tap land. Dismiss the dialog first, then the button is reachable.
-      // Same fix as expense_voucher_entry_screen_test.dart's own blank-form
-      // tests, which hit the identical auto-open behaviour.
-      await tester.tap(find.byIcon(Icons.close));
-      await tester.pumpAndSettle();
-
+      // A brand-new voucher now auto-focuses Reference No (not the From
+      // account picker, which opens a modal dialog on focus), so nothing
+      // covers the screen and Save Draft is directly reachable.
       await tester.tap(find.widgetWithText(ElevatedButton, 'Save Draft'));
       await _pumpBriefly(tester);
 
@@ -272,8 +262,9 @@ void main() {
 
       expect(find.text('Original remarks'), findsOneWidget);
       // No gap between From (1000) and To (1000) at a 1:1 same-currency
-      // rate — charge section stays collapsed even on a resumed draft.
-      expect(find.text('Add Transfer Charge (bank fee, courier charge, etc.)'), findsOneWidget);
+      // rate — no difference section even on a resumed draft.
+      expect(find.text('Add Transfer Charge (bank fee, courier charge, etc.)'), findsNothing);
+      expect(find.text('Book to Account'.toUpperCase()), findsNothing);
 
       expect(find.text('Save Draft'), findsOneWidget);
       expect(find.text('Approve'), findsNothing); // canApprove defaults false from the harness's empty menuProvider

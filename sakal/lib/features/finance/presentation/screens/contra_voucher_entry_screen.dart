@@ -17,9 +17,9 @@ import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/sakal_field_card.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 import '../../../../core/widgets/sakal_header_action_button.dart';
-import '../../../../core/widgets/sakal_reciprocal_rate_field.dart';
 import '../../../../core/printing/print_engine.dart';
 import '../../../../core/printing/print_template_provider.dart';
+import '../../domain/contra_voucher_math.dart';
 import '../../domain/repositories/finance_voucher_repository.dart';
 import '../providers/finance_voucher_providers.dart';
 import '../widgets/finance_account_picker.dart';
@@ -121,22 +121,31 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
   String _toNature = '';
   String _toCurrency = '';
   final _toAmountCtrl = TextEditingController();
-  double? _fromToRate; // rate(Ccy_F -> Ccy_T), fetched once, used only to SUGGEST the To Amount
+  double? _fromToRate; // system rate(Ccy_F -> Ccy_T) from the Exchange Rates master; null = none found
   bool _toAmountManuallyEdited = false;
 
-  // ── Transfer Charge (optional — only when From/To amounts don't reconcile) ──
-  bool _showCharge = false;
+  // Currency pairs the Exchange Rates master has no rate for on the voucher
+  // date. A missing rate must block Save — silently falling back to 1 would
+  // post e.g. 1 USD = 1 CDF.
+  final Set<String> _missingRatePairs = {};
+
+  // ── Exchange difference / transfer charge ────────────────────────────
+  // The AMOUNT is never typed: it is always what's left between the From
+  // amount and the To amount at the system rate (see _gap). Only the
+  // account it is booked to is the user's choice.
   String? _chargeAccountId;
   String _chargeAccountDisplay = '';
   String _chargeAccountCurrency = '';
   double _chargePartyRateFetched = 1;
-  final _chargeAmountCtrl = TextEditingController();
-  bool _chargeAmountManuallyEdited = false;
+  bool _resolvingChargeDefault = false;
+  bool _chargeDefaultTried = false;
 
   final _refNoCtrl = TextEditingController();
   DateTime? _refDate;
   final _remarksCtrl = TextEditingController();
 
+  final _referenceNoFocusNode = FocusNode();
+  final _refDateFocusNode = FocusNode();
   final _fromAccountFocusNode = FocusNode();
   final _fromAmountFocusNode = FocusNode();
   final _toAccountFocusNode = FocusNode();
@@ -177,6 +186,16 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
   double get _gap => _fromAmount - _toTransAmount;
   bool get _gapExists => _fromAccountId != null && _toAccountId != null && _fromAmount > 0 && _gap.abs() > 0.01;
 
+  String? get _rateError => _missingRatePairs.isEmpty
+      ? null
+      : 'No exchange rate for ${_missingRatePairs.join(', ')} on ${_displayDate(_transDate)}. '
+          'Add it under Finance → Exchange Rates, then Retry.';
+
+  String get _differenceTitle {
+    if (_fromCurrency == _toCurrency) return _gap > 0 ? 'Transfer Charge' : 'Excess Received';
+    return _gap > 0 ? 'Exchange Loss / Transfer Charge' : 'Exchange Gain';
+  }
+
   double get _chargePartyRate {
     if (_chargeAccountCurrency.isEmpty || _chargeAccountCurrency == _fromCurrency) return 1;
     if (_chargeAccountCurrency == _baseCcy) return _baseRate;
@@ -208,7 +227,7 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
       // the account picker just pop open on load" bug, caught by the
       // resume-flow test finding the account's display text rendered
       // twice (its own field value + the spurious overlay option).
-      if (widget.editTransNo == null) _fromAccountFocusNode.requestFocus();
+      if (widget.editTransNo == null) _referenceNoFocusNode.requestFocus();
     });
   }
 
@@ -218,9 +237,10 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
     _baseRateCtrl.dispose();
     _localRateCtrl.dispose();
     _toAmountCtrl.dispose();
-    _chargeAmountCtrl.dispose();
     _refNoCtrl.dispose();
     _remarksCtrl.dispose();
+    _referenceNoFocusNode.dispose();
+    _refDateFocusNode.dispose();
     _fromAccountFocusNode.dispose();
     _fromAmountFocusNode.dispose();
     _toAccountFocusNode.dispose();
@@ -290,12 +310,9 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
                 _fromToRate = l.partyAmount / l.transAmount;
               }
             } else {
-              _showCharge = true;
               _chargeAccountId = l.accountId;
               _chargeAccountDisplay = account.isNotEmpty ? FinanceAccountPicker.displayString(account) : '';
               _chargeAccountCurrency = accCcy;
-              _chargeAmountCtrl.text = _fmtNum(l.transAmount);
-              _chargeAmountManuallyEdited = true;
               _chargePartyRateFetched = l.partyRate;
             }
           }
@@ -325,38 +342,48 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
       _fromNature = account['account_nature'] as String? ?? '';
       _fromCurrency = (account['rim_currencies'] as Map<String, dynamic>?)?['currency_id'] as String? ?? '';
     });
-    await _refreshBaseLocalRates();
-    await _refreshFromToRate();
+    _chargeDefaultTried = false;
+    await _refreshRates();
     _recomputeSuggestedToAmount();
-    // Only matters when the user already typed a manual To Amount before
-    // (re)picking From — the suggestion above is a no-op in that case, so
-    // a genuine gap against the NEW From currency/amount must be re-checked.
-    _recomputeSuggestedCharge();
+    _syncDifferenceAccount();
     if (mounted) setState(() {});
     _fromAmountFocusNode.requestFocus();
   }
 
-  /// Re-fetches the From-currency's rate to Base/Local. Pulled out of
-  /// _onFromSelected so both a real account pick AND a voucher-date change
-  /// (_pickDate) or a swap (_swapFromTo) can refresh rates without faking
-  /// up an account map — passing one with blank account_code/account_name
-  /// into _onFromSelected would silently corrupt _fromAccountDisplay to
-  /// "[] ", a real bug caught in this screen's own review pass.
-  Future<void> _refreshBaseLocalRates() async {
-    if (_locationId == null || _fromCurrency.isEmpty) return;
+  /// Looks up one rate from the Exchange Rates master. Never defaults to 1:
+  /// a missing rate is recorded in [_missingRatePairs] and blocks Save.
+  Future<double?> _lookupRate(String from, String to) async {
+    if (from == to) return 1;
     final session = ref.read(sessionProvider)!;
-    if (_fromCurrency == _baseCcy) {
-      _baseRateCtrl.text = '1';
-    } else {
-      final r = await _ds.fetchExchangeRate(companyId: session.companyId, locationId: _locationId!, fromCurrency: _fromCurrency, toCurrency: _baseCcy, rateDate: _fmtDate(_transDate));
-      _baseRateCtrl.text = _fmtRate(r ?? 1);
+    final r = await _ds.fetchExchangeRate(companyId: session.companyId, locationId: _locationId!, fromCurrency: from, toCurrency: to, rateDate: _fmtDate(_transDate));
+    if (r == null || r <= 0) {
+      _missingRatePairs.add('$from → $to');
+      return null;
     }
-    if (_fromCurrency == _localCcy) {
-      _localRateCtrl.text = '1';
+    return r;
+  }
+
+  /// Re-fetches every rate the voucher needs: From→Base and From→Local
+  /// (silent — they only stamp base_amount/local_amount on the lines) and,
+  /// once both accounts are picked, the From→To system rate the difference
+  /// is measured against. Run on From/To pick, swap and voucher-date change.
+  /// Pulled out of the account handlers so a date change or swap can refresh
+  /// without faking up an account map — passing one with blank
+  /// account_code/account_name into _onFromSelected once silently corrupted
+  /// _fromAccountDisplay to "[] ".
+  Future<void> _refreshRates() async {
+    _missingRatePairs.clear();
+    if (_locationId == null || _fromCurrency.isEmpty) return;
+    final base = await _lookupRate(_fromCurrency, _baseCcy);
+    if (base != null) _baseRateCtrl.text = _fmtRate(base);
+    final local = await _lookupRate(_fromCurrency, _localCcy);
+    if (local != null) _localRateCtrl.text = _fmtRate(local);
+    if (_toAccountId != null && _toCurrency.isNotEmpty) {
+      _fromToRate = await _lookupRate(_fromCurrency, _toCurrency);
     } else {
-      final r = await _ds.fetchExchangeRate(companyId: session.companyId, locationId: _locationId!, fromCurrency: _fromCurrency, toCurrency: _localCcy, rateDate: _fmtDate(_transDate));
-      _localRateCtrl.text = _fmtRate(r ?? 1);
+      _fromToRate = null;
     }
+    if (mounted) setState(() {});
   }
 
   Future<void> _onToSelected(Map<String, dynamic> account) async {
@@ -367,23 +394,12 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
       _toCurrency = (account['rim_currencies'] as Map<String, dynamic>?)?['currency_id'] as String? ?? '';
       _toAmountManuallyEdited = false;
     });
-    await _refreshFromToRate();
+    _chargeDefaultTried = false;
+    await _refreshRates();
     _recomputeSuggestedToAmount();
+    _syncDifferenceAccount();
     if (mounted) setState(() {});
     _toAmountFocusNode.requestFocus();
-  }
-
-  Future<void> _refreshFromToRate() async {
-    if (_fromAccountId == null || _toAccountId == null || _fromCurrency.isEmpty || _toCurrency.isEmpty || _locationId == null) {
-      return;
-    }
-    if (_fromCurrency == _toCurrency) {
-      _fromToRate = 1;
-      return;
-    }
-    final session = ref.read(sessionProvider)!;
-    final r = await _ds.fetchExchangeRate(companyId: session.companyId, locationId: _locationId!, fromCurrency: _fromCurrency, toCurrency: _toCurrency, rateDate: _fmtDate(_transDate));
-    _fromToRate = r ?? 1;
   }
 
   /// Pre-fills To Amount from From Amount x the fetched rate — a pure
@@ -392,19 +408,27 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
   /// "editable, not locked" idea this screen is built around.
   void _recomputeSuggestedToAmount() {
     if (_toAmountManuallyEdited || _fromAccountId == null || _toAccountId == null) return;
-    final rate = _fromCurrency == _toCurrency ? 1.0 : (_fromToRate ?? 1.0);
+    if (_fromCurrency != _toCurrency && _fromToRate == null) return;
+    final rate = _fromCurrency == _toCurrency ? 1.0 : _fromToRate!;
     _toAmountCtrl.text = _fmtNum(_fromAmount * rate);
   }
 
   void _onFromAmountChanged(String _) {
     _recomputeSuggestedToAmount();
-    _recomputeSuggestedCharge();
+    _syncDifferenceAccount();
     setState(() {});
   }
 
   void _onToAmountChanged(String _) {
     _toAmountManuallyEdited = true;
-    _recomputeSuggestedCharge();
+    _syncDifferenceAccount();
+    setState(() {});
+  }
+
+  void _resetToSystemRate() {
+    _toAmountManuallyEdited = false;
+    _recomputeSuggestedToAmount();
+    _syncDifferenceAccount();
     setState(() {});
   }
 
@@ -426,21 +450,20 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
     if (mounted) setState(() {});
   }
 
-  /// Auto-suggests the charge amount from the live-computed gap, unless
-  /// the user has already typed their own number into that field.
-  void _recomputeSuggestedCharge() {
-    if (_chargeAmountManuallyEdited) return;
-    if (_gapExists) {
-      _chargeAmountCtrl.text = _fmtNum(_gap.abs());
-      if (!_showCharge) _showCharge = true;
-      _resolveChargeAccountDefault();
-    } else if (_showCharge && _chargeAccountId == null) {
-      _chargeAmountCtrl.clear();
+  /// Once a real exchange difference appears on a cross-currency transfer,
+  /// pre-fills the account it is booked to with the company's Exchange
+  /// Gain/Loss account. A same-currency difference is a plain fee (bank
+  /// charge, courier, ...) with no sensible default — the user picks.
+  void _syncDifferenceAccount() {
+    if (_gapExists && _fromCurrency != _toCurrency && _chargeAccountId == null && !_chargeDefaultTried) {
+      _chargeDefaultTried = true;
+      unawaited(_resolveChargeAccountDefault());
     }
   }
 
   Future<void> _resolveChargeAccountDefault() async {
-    if (_chargeAccountId != null) return; // never override a real pick
+    if (_chargeAccountId != null || _resolvingChargeDefault) return; // never override a real pick
+    _resolvingChargeDefault = true;
     final session = ref.read(sessionProvider)!;
     try {
       final id = await _ds.resolveCompanyAccountLink(clientId: session.clientId, companyId: session.companyId, linkKey: 'EXCHANGE_GAIN_LOSS_ACCOUNT');
@@ -456,25 +479,9 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
       // No default configured — the user picks manually, same convention
       // as every other "callers must treat NULL as a hard requirement to
       // ask the user" account-link consumer in this app.
+    } finally {
+      _resolvingChargeDefault = false;
     }
-  }
-
-  void _addChargeManually() {
-    setState(() {
-      _showCharge = true;
-      _chargeAmountManuallyEdited = true;
-    });
-  }
-
-  void _removeCharge() {
-    setState(() {
-      _showCharge = false;
-      _chargeAccountId = null;
-      _chargeAccountDisplay = '';
-      _chargeAccountCurrency = '';
-      _chargeAmountCtrl.clear();
-      _chargeAmountManuallyEdited = false;
-    });
   }
 
   Future<void> _swapFromTo() async {
@@ -486,10 +493,9 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
       _toAccountId = fId; _toAccountDisplay = fDisp; _toNature = fNat; _toCurrency = fCcy;
       _toAmountCtrl.text = fAmt;
       _toAmountManuallyEdited = true;
-      if (_fromToRate != null && _fromToRate != 0) _fromToRate = 1 / _fromToRate!;
     });
-    await _refreshBaseLocalRates();
-    _recomputeSuggestedCharge();
+    await _refreshRates();
+    _syncDifferenceAccount();
     if (mounted) setState(() {});
   }
 
@@ -512,9 +518,13 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
       _showSnack('Enter both amounts.', color: AppColors.negative);
       return false;
     }
+    if (_rateError != null) {
+      _showSnack(_rateError!, color: AppColors.negative);
+      return false;
+    }
     final needsCharge = _gapExists;
     if (needsCharge && _chargeAccountId == null) {
-      _showSnack('The From and To amounts don\'t reconcile — pick an account for the ${_gap > 0 ? "Transfer Charge" : "Exchange Gain"} to continue.', color: AppColors.negative);
+      _showSnack('The From and To amounts don\'t reconcile — pick an account for the $_differenceTitle to continue.', color: AppColors.negative);
       return false;
     }
 
@@ -585,7 +595,7 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
           'party_amount': chargeAmt * _chargePartyRate,
           'party_currency': _chargeAccountCurrency.isEmpty ? _fromCurrency : _chargeAccountCurrency,
           'party_rate': _chargePartyRate,
-          'line_remarks': 'Transfer charge / adjustment',
+          'line_remarks': _differenceTitle,
         });
       }
 
@@ -737,8 +747,8 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
       {'particulars': _fromAccountDisplay, 'amount': _fromAmount, 'party_amount': _fromAmount, 'remarks': 'From'},
       {'particulars': _toAccountDisplay, 'amount': _toTransAmount, 'party_amount': _toAmountEntered, 'remarks': 'To'},
     ];
-    if (_showCharge && _chargeAccountId != null) {
-      lines.add({'particulars': _chargeAccountDisplay, 'amount': _gap.abs(), 'party_amount': _gap.abs() * _chargePartyRate, 'remarks': 'Transfer Charge'});
+    if (_gapExists && _chargeAccountId != null) {
+      lines.add({'particulars': _chargeAccountDisplay, 'amount': _gap.abs(), 'party_amount': _gap.abs() * _chargePartyRate, 'remarks': _differenceTitle});
     }
     return {
       'company': company,
@@ -813,8 +823,9 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
     final d = await showDatePicker(context: context, initialDate: _transDate, firstDate: DateTime(2020), lastDate: DateTime.now());
     if (d != null) {
       setState(() => _transDate = d);
-      await _refreshBaseLocalRates();
-      await _refreshFromToRate();
+      await _refreshRates();
+      _recomputeSuggestedToAmount();
+      _syncDifferenceAccount();
       if (mounted) setState(() {});
     }
   }
@@ -847,15 +858,15 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_error!, style: const TextStyle(color: AppColors.negative))),
                     if (_actionError != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_actionError!, style: const TextStyle(color: AppColors.negative))),
                     _buildHeaderMeta(isMobile),
                     const SizedBox(height: 16),
                     _buildTransferRow(isMobile),
-                    const SizedBox(height: 12),
-                    _buildChargeSection(),
+                    _buildResetLink(),
+                    _buildDifferenceSection(isMobile),
                     const SizedBox(height: 16),
                     _buildFooterFields(),
                   ]),
@@ -889,16 +900,30 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
 
   Widget _buildHeaderMeta(bool isMobile) {
     final voucherNoField = SakalFieldCard.readOnly(label: 'Voucher No', value: _transNo ?? '—');
-    final voucherDateField = InkWell(onTap: !_locked ? _pickDate : null, child: SakalFieldCard.readOnly(label: 'Voucher Date', value: _displayDate(_transDate)));
-    final refNoField = SakalFieldCard(label: 'Reference No', editable: !_locked, child: TextFormField(controller: _refNoCtrl, enabled: !_locked, decoration: SakalFieldCard.bareDecoration));
-    final refDateField = InkWell(
+    final voucherDateField = SakalFieldCard.readOnly(label: 'Voucher Date', value: _displayDate(_transDate), onTap: !_locked ? _pickDate : null);
+    final refNoField = SakalFieldCard(
+      label: 'Reference No',
+      editable: !_locked,
+      child: TextFormField(
+        controller: _refNoCtrl,
+        focusNode: _referenceNoFocusNode,
+        enabled: !_locked,
+        decoration: SakalFieldCard.bareDecoration,
+        textInputAction: TextInputAction.next,
+        onFieldSubmitted: (_) => _refDateFocusNode.requestFocus(),
+      ),
+    );
+    final refDateField = SakalFieldCard.readOnly(
+      label: 'Reference Date',
+      value: _refDate != null ? _displayDate(_refDate) : '—',
+      focusNode: _refDateFocusNode,
       onTap: !_locked
           ? () async {
               final d = await showDatePicker(context: context, initialDate: _refDate ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
               if (d != null) setState(() => _refDate = d);
+              if (mounted && _fromAccountId == null) _fromAccountFocusNode.requestFocus();
             }
           : null,
-      child: SakalFieldCard.readOnly(label: 'Reference Date', value: _refDate != null ? _displayDate(_refDate) : '—'),
     );
 
     // Guard the dropdown's initialValue separately from _locationId itself —
@@ -923,29 +948,65 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
       ),
     );
 
-    // Rate fields only appear once a cross-currency FROM account is picked
-    // — 0, 1, or 2 of them depending on how base/local/from currencies
-    // relate, so this row is built dynamically and skipped entirely when
-    // empty rather than reserving fixed slots for it.
-    final rateFields = <Widget>[
-      if (_fromCurrency.isNotEmpty && _fromCurrency != _baseCcy)
-        SakalFieldCard(label: '1 $_fromCurrency = ? $_baseCcy', editable: !_locked, numeric: true, child: SakalReciprocalRateField(controller: _baseRateCtrl, enabled: !_locked, onChanged: (_) => setState(() {}))),
-      if (_fromCurrency.isNotEmpty && _fromCurrency != _localCcy && _localCcy != _baseCcy)
-        SakalFieldCard(label: '1 $_fromCurrency = ? $_localCcy', editable: !_locked, numeric: true, child: SakalReciprocalRateField(controller: _localRateCtrl, enabled: !_locked, onChanged: (_) => setState(() {}))),
-    ];
-
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SakalFieldRow(isMobile: isMobile, children: [
         voucherNoField, voucherDateField,
         if (_interLocationModel == 'INTER_ENTITY') locationField,
       ]),
-      if (rateFields.isNotEmpty) ...[
-        const SizedBox(height: 12),
-        SakalFieldRow(isMobile: isMobile, children: rateFields),
-      ],
       const SizedBox(height: 12),
       SakalFieldRow(isMobile: isMobile, children: [refNoField, refDateField]),
+      _buildRateStrip(isMobile),
     ]);
+  }
+
+  /// Read-only, informational: the system rate the difference is measured
+  /// against (from the Exchange Rates master — never typed here), the rate
+  /// the entered amounts actually imply, and how far apart they are.
+  Widget _buildRateStrip(bool isMobile) {
+    final bothPicked = _fromAccountId != null && _toAccountId != null;
+    if (!bothPicked || _fromCurrency == _toCurrency) return const SizedBox.shrink();
+    final err = _locked ? null : _rateError;
+    if (err != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Wrap(spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          Text(err, style: const TextStyle(color: AppColors.negative, fontSize: 12)),
+          TextButton(onPressed: _refreshRates, child: const Text('Retry')),
+        ]),
+      );
+    }
+    final rate = _fromToRate;
+    if (rate == null) return const SizedBox.shrink();
+    final disp = ContraMath.displayRate(fromCcy: _fromCurrency, toCcy: _toCurrency, rate: rate);
+    final systemText = '1 ${disp.base} = ${AppNumberFormat.amount(disp.value, 'INTERNATIONAL')} ${disp.quote}';
+
+    final hasAmounts = _fromAmount > 0 && _toAmountEntered > 0;
+    String actualText = '—';
+    double deviation = 0;
+    if (hasAmounts) {
+      final actual = ContraMath.actualRate(from: _fromAmount, to: _toAmountEntered);
+      final shown = disp.base == _fromCurrency ? actual : 1 / actual;
+      actualText = '1 ${disp.base} = ${AppNumberFormat.amount(shown, 'INTERNATIONAL')} ${disp.quote}';
+      deviation = ContraMath.deviationPercent(from: _fromAmount, to: _toAmountEntered, rate: rate);
+    }
+    final warn = hasAmounts && deviation.abs() > 5;
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SakalFieldRow(isMobile: isMobile, children: [
+          SakalFieldCard.readOnly(label: 'Exchange Rate (system)', value: systemText),
+          SakalFieldCard.readOnly(label: 'Actual Rate (from amounts)', value: actualText),
+        ]),
+        if (warn)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'The amounts differ from the system rate by ${deviation.abs().toStringAsFixed(1)}% — check for a typing mistake.',
+              style: const TextStyle(color: AppColors.secondary, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
+      ]),
+    );
   }
 
   Widget _buildTransferRow(bool isMobile) {
@@ -1065,34 +1126,57 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
     );
   }
 
-  Widget _buildChargeSection() {
-    if (!_showCharge) {
-      return _locked
-          ? const SizedBox.shrink()
-          : TextButton.icon(
-              onPressed: _addChargeManually,
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Add Transfer Charge (bank fee, courier charge, etc.)'),
-            );
+  Widget _buildResetLink() {
+    if (_locked || !_toAmountManuallyEdited || _fromAccountId == null || _toAccountId == null || _fromAmount <= 0) {
+      return const SizedBox.shrink();
     }
-    final gapLabel = _gapExists ? (_gap > 0 ? 'Transfer Charge' : 'Exchange Gain') : 'Transfer Charge';
-    return Card(
-      elevation: 0,
-      color: AppColors.background,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Expanded(child: Text(gapLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary))),
-            if (!_locked) IconButton(icon: const Icon(Icons.close, size: 16, color: AppColors.negative), onPressed: _removeCharge, tooltip: 'Remove', padding: EdgeInsets.zero, constraints: const BoxConstraints()),
-          ]),
-          const SizedBox(height: 8),
-          Wrap(spacing: 12, runSpacing: 8, children: [
-            SizedBox(
-              width: 320,
-              child: SakalFieldCard(
-                label: 'Charge Account',
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        onPressed: _resetToSystemRate,
+        icon: const Icon(Icons.restart_alt, size: 16),
+        label: Text(_fromCurrency == _toCurrency ? 'Reset to From amount' : 'Reset to system rate'),
+      ),
+    );
+  }
+
+  String _differenceAmountText() {
+    final gapFrom = _gap.abs();
+    String f(double v) => AppNumberFormat.amount(v, 'INTERNATIONAL');
+    if (_fromCurrency == _toCurrency) return '${f(gapFrom)} $_fromCurrency';
+    final rate = _fromToRate ?? 0;
+    final parts = <String>[
+      '${f(ContraMath.gapInToCurrency(gapFrom, rate))} $_toCurrency',
+      '${f(gapFrom)} $_fromCurrency',
+    ];
+    if (_baseCcy.isNotEmpty && _baseCcy != _fromCurrency && _baseCcy != _toCurrency) {
+      parts.add('${f(gapFrom * _baseRate)} $_baseCcy');
+    }
+    return parts.join('  ·  ');
+  }
+
+  /// Shown only when the From and To amounts don't reconcile at the system
+  /// rate. The amount is computed and read-only — typing one here used to be
+  /// silently ignored at save; only the account it is booked to is editable.
+  Widget _buildDifferenceSection(bool isMobile) {
+    if (!_gapExists) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Card(
+        elevation: 0,
+        color: AppColors.background,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: AppColors.border)),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text(
+              '$_differenceTitle  (${_gap > 0 ? 'Debit' : 'Credit'})',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            SakalFieldRow(isMobile: isMobile, children: [
+              SakalFieldCard(
+                label: 'Book to Account',
                 required: true,
                 editable: !_locked,
                 child: FinanceAccountPicker(
@@ -1104,24 +1188,10 @@ class _ContraVoucherEntryScreenState extends ConsumerState<ContraVoucherEntryScr
                   onSelected: _onChargeSelected,
                 ),
               ),
-            ),
-            SizedBox(
-              width: 150,
-              child: SakalFieldCard(
-                label: 'Amount', editable: !_locked, numeric: true,
-                child: TextFormField(
-                  controller: _chargeAmountCtrl,
-                  enabled: !_locked,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,4}'))],
-                  decoration: SakalFieldCard.bareDecoration,
-                  textAlign: TextAlign.right,
-                  onChanged: (_) { _chargeAmountManuallyEdited = true; setState(() {}); },
-                ),
-              ),
-            ),
+              SakalFieldCard.readOnly(label: 'Amount', value: _differenceAmountText(), numeric: true),
+            ]),
           ]),
-        ]),
+        ),
       ),
     );
   }

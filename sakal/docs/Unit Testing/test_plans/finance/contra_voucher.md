@@ -11,6 +11,16 @@ Cash↔Cash / Bank↔Bank / deposit / withdrawal. Modeled on Tally's F4. See
 | CTR-C02 | From/To amounts don't reconcile — real gap | Enter different From/To amounts at the current rate | Gap auto-computed live, offered as an optional 3rd line (default `EXCHANGE_GAIN_LOSS_ACCOUNT`) | High | Not Started | |
 | CTR-C03 | From/To swap, FormField key: bug regression | Swap From and To accounts | Both fields correctly update their displayed value (a documented `key: ValueKey(...)` gotcha on `SakalAutocomplete`) | Med | Not Started | |
 | CTR-C04 | trans_currency = FROM account's currency | Transfer between two different-currency accounts | Voucher's `trans_currency` = the FROM account's own currency | Med | Not Started | |
+| CTR-C05 | System rate is read-only and labelled | Pick CDF From, USD To | "Exchange Rate (system)" card under Reference No/Date shows "1 USD = 2,825.00 CDF"; no editable rate field anywhere | High | Not Started | |
+| CTR-C06 | Exchange loss | 282,500 CDF → 95 USD | Difference row "Exchange Loss / Transfer Charge (Debit)" showing `5.00 USD · 14,125.00 CDF`; Exchange Gain/Loss account defaulted; Save posts 3 lines balanced on base_amount | High | Not Started | |
+| CTR-C07 | Exchange gain | 282,500 CDF → 102 USD | "Exchange Gain (Credit)" `2.00 USD · 5,650.00 CDF`; 3rd line is CR | High | Not Started | |
+| CTR-C08 | Exact system rate | 282,500 CDF → 100 USD | No difference row; 2 lines posted | High | Not Started | |
+| CTR-C09 | Same-currency fee | 100 USD → 98 USD | "Transfer Charge" 2.00 USD, no default account; Save blocked until an account is picked | High | Not Started | |
+| CTR-C10 | Missing rate blocks Save | Pick a voucher date with no USD/CDF rate | Red message pointing to Finance → Exchange Rates + Retry; Save shows it and does not post at rate 1 | High | Not Started | |
+| CTR-C11 | Typo warning | 282,500 CDF → 950 USD | Amber ">5% off system rate" warning | Low | Not Started | |
+| CTR-C12 | Reset to system rate | Edit Amount Received, click Reset | Amount Received returns to From × system rate | Med | Not Started | |
+| CTR-U01 | Initial focus & tab order | Open a new voucher | Cursor in Reference No; Tab shows a visible ring on Reference Date; Enter opens picker; after picking, focus moves to From account | High | Not Started | |
+| CTR-U02 | Top margin | Open a new voucher | Voucher No/Date do not touch the top bar | Low | Not Started | |
 
 ## Edit / View / List / Print
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |

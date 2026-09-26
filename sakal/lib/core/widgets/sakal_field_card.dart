@@ -59,6 +59,18 @@ class SakalFieldCard extends ConsumerStatefulWidget {
   /// regardless.
   final bool showLabel;
 
+  /// Makes the whole card a keyboard-reachable tap target (a date/option
+  /// picker). The card owns the InkWell, so it can draw the same focus
+  /// ring an [editable] card gets when Tab lands on it — with the InkWell
+  /// wrapped OUTSIDE the card (the old idiom) the card never saw focus, so
+  /// tabbing onto Contra Voucher's Reference Date looked like focus was
+  /// lost (2026-09-26). Enter/Space activate it like a button.
+  final VoidCallback? onTap;
+
+  /// Optional external node for the [onTap] target, so a screen can request
+  /// focus on it programmatically.
+  final FocusNode? focusNode;
+
   const SakalFieldCard({
     super.key,
     required this.label,
@@ -68,6 +80,8 @@ class SakalFieldCard extends ConsumerStatefulWidget {
     this.height,
     this.numeric = false,
     this.showLabel = true,
+    this.onTap,
+    this.focusNode,
   }) : value = null;
 
   /// Convenience constructor for a plain read-only text value — Location,
@@ -88,6 +102,8 @@ class SakalFieldCard extends ConsumerStatefulWidget {
     this.height,
     this.numeric = false,
     this.showLabel = true,
+    this.onTap,
+    this.focusNode,
   })  : editable = false,
         child = null;
 
@@ -129,10 +145,15 @@ class SakalFieldCard extends ConsumerStatefulWidget {
 
 class _SakalFieldCardState extends ConsumerState<SakalFieldCard> {
   late final FocusNode _focusWithinNode;
+  late final FocusNode _tapNode;
+  late final bool _ownsTapNode;
 
   @override
   void initState() {
     super.initState();
+    _ownsTapNode = widget.focusNode == null;
+    _tapNode = widget.focusNode ?? FocusNode(debugLabel: 'SakalFieldCardTap(${widget.label})');
+    _tapNode.addListener(_onFocusChange);
     // canRequestFocus: false / skipTraversal: true — this node never
     // becomes the primary focus itself; it exists purely as an ancestor
     // marker so hasFocus reflects whatever descendant field currently has
@@ -145,6 +166,8 @@ class _SakalFieldCardState extends ConsumerState<SakalFieldCard> {
   void dispose() {
     _focusWithinNode.removeListener(_onFocusChange);
     _focusWithinNode.dispose();
+    _tapNode.removeListener(_onFocusChange);
+    if (_ownsTapNode) _tapNode.dispose();
     super.dispose();
   }
 
@@ -161,7 +184,7 @@ class _SakalFieldCardState extends ConsumerState<SakalFieldCard> {
     // space as dead whitespace instead of actually shrinking the row.
     final defaultHeight = widget.showLabel ? DensityMetrics.of(isCompact).rowHeight : (isCompact ? 32.0 : 40.0);
     final resolvedHeight = widget.height ?? defaultHeight;
-    final isFocused = widget.editable && _focusWithinNode.hasFocus;
+    final isFocused = (widget.editable && _focusWithinNode.hasFocus) || (widget.onTap != null && _tapNode.hasFocus);
     final labelFontSize = isCompact ? 8.5 : 10.0;
     final gap = isCompact ? 1.0 : 2.0;
     final vPad = isCompact ? 3.0 : 6.0;
@@ -187,7 +210,7 @@ class _SakalFieldCardState extends ConsumerState<SakalFieldCard> {
           style: SakalFieldCard.valueTextStyle(isCompact),
         );
 
-    return Focus(
+    final card = Focus(
       focusNode: _focusWithinNode,
       child: Container(
         height: resolvedHeight,
@@ -223,6 +246,13 @@ class _SakalFieldCardState extends ConsumerState<SakalFieldCard> {
           ],
         ),
       ),
+    );
+    if (widget.onTap == null) return card;
+    return InkWell(
+      focusNode: _tapNode,
+      onTap: widget.onTap,
+      borderRadius: BorderRadius.circular(9),
+      child: card,
     );
   }
 }

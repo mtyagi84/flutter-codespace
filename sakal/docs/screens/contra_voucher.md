@@ -56,3 +56,16 @@ Let `Ccy_F`/`Ccy_T` = FROM/TO account currencies, `A_F` = Amount entered (FROM),
 7. The pgTAP fixture's own `INSERT INTO rim_currencies` for EUR failed `23502: null value in column "currency_notation"` — and turned out to be unnecessary in the first place: `fn_seed_company_currencies` (007) already auto-seeds all ~155 ISO currencies, EUR included with the correct notation, the moment the fixture's own `ric_companies` row is created. Removed the explicit insert entirely rather than patching it to include the missing column.
 
 **Verification status: backend (migration 106 + all 11 pgTAP assertions) and Flutter (`flutter analyze` in Codespace) both confirmed clean/passing.** Still outstanding: `fn_grant_admin_access` for whichever users should see the new menu item (adding the `FN-CTR` row doesn't grant access by itself), and the manual click-through — same-currency deposit end-to-end via keyboard only, a cross-currency transfer where the charge line auto-appears and balances, Reverse on a posted CTR, Reverse on an existing posted JV (regression check), and the FROM/TO swap button specifically (the bug class most likely to still have a rough edge, given points 1-2 above — analyze-clean confirms no compile-time issue, not that the runtime remount behavior is correct).
+
+
+---
+
+## Revision 2026-09-26 — read-only system rate, computed difference (see `plan_contra_voucher_exchange_redesign.md`)
+
+Front-end only; posting model (Q1/Q2 above) is unchanged.
+
+- **Exchange rate is read-only.** The old editable base/local rate fields on top are gone (they only stamped `base_amount`/`local_amount`, so editing them visibly changed nothing). Base/Local rates are fetched silently. A labelled, read-only **Exchange Rate (system)** card sits under Reference No/Date for cross-currency transfers, next to an **Actual Rate (from amounts)** card; a >5% deviation shows an amber typo warning.
+- **A missing rate blocks Save** (never defaults to 1): a red message points to Finance → Exchange Rates, with a Retry button.
+- **Difference is computed, never typed.** The old "Add Transfer Charge" button and its typed Amount (which Save silently ignored) are removed. When From and To don't reconcile at the system rate, a **Book to Account** picker + read-only Amount appear. Titles: Exchange Loss / Transfer Charge (Dr), Exchange Gain (Cr); same currency: Transfer Charge / Excess Received. The amount shows in both transfer currencies (`5.00 USD · 14,125.00 CDF`), plus base only when base is a third currency. Default account = `EXCHANGE_GAIN_LOSS_ACCOUNT` for cross-currency, none for same-currency. **Reset to system rate** re-derives Amount Received after a manual edit.
+- **Worked example** (CDF → USD, system 1 USD = 2,825 CDF): 282,500 → 100 no difference; → 95 loss 14,125 CDF = 5.00 USD; → 102 gain 2.00 USD. Pure math in `lib/features/finance/domain/contra_voucher_math.dart`.
+- **UX:** focus opens on Reference No; Tab/Enter → Reference Date (visible focus ring via `SakalFieldCard.onTap`), then From account; 16px top padding.
