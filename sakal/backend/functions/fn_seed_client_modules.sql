@@ -43,7 +43,7 @@ create or replace function fn_seed_client_modules(
     p_admin_user_id  uuid default null
 ) returns void language plpgsql security definer as $$
 declare
-    v_ad uuid; v_sl uuid; v_pr uuid; v_in uuid; v_fn uuid;
+    v_ad uuid; v_sl uuid; v_pr uuid; v_in uuid; v_fn uuid; v_pos uuid;
 begin
     -- --------------------------------------------------------
     -- Modules (SL=0, PR=1, IN=2, FN=3, AD=4) — work modules first, Settings
@@ -59,7 +59,12 @@ begin
         (p_client_id, p_company_id, 'PR', 'Purchase',   1),
         (p_client_id, p_company_id, 'IN', 'Inventory',  2),
         (p_client_id, p_company_id, 'FN', 'Finance',    3),
-        (p_client_id, p_company_id, 'AD', 'Settings',   4)
+        (p_client_id, p_company_id, 'AD', 'Settings',   4),
+        -- Point of Sale (added 2026-10-02, migration 205) — appended after
+        -- Settings rather than renumbering the four work modules above,
+        -- since those positions are already relied on by every existing
+        -- tenant's own sidebar ordering.
+        (p_client_id, p_company_id, 'POS', 'Point of Sale', 5)
     on conflict (client_id, company_id, module_code) do update
         set module_name = excluded.module_name, serial_no = excluded.serial_no;
 
@@ -68,6 +73,7 @@ begin
     select id into v_pr from ric_system_modules where client_id = p_client_id and company_id = p_company_id and module_code = 'PR';
     select id into v_in from ric_system_modules where client_id = p_client_id and company_id = p_company_id and module_code = 'IN';
     select id into v_fn from ric_system_modules where client_id = p_client_id and company_id = p_company_id and module_code = 'FN';
+    select id into v_pos from ric_system_modules where client_id = p_client_id and company_id = p_company_id and module_code = 'POS';
 
     -- --------------------------------------------------------
     -- AD / Settings — System Setup
@@ -382,6 +388,39 @@ begin
         (p_client_id, p_company_id, v_fn, 'FN-BST', 'Bank Statement Upload & Review',    '/finance/bank-statements',              2, 'FN-BRC', 'Bank Reconciliation', 9, true,  false, false),
         (p_client_id, p_company_id, v_fn, 'FN-BRM', 'Bank Reconciliation Matching',      '/finance/bank-reconciliation',          3, 'FN-BRC', 'Bank Reconciliation', 9, true,  false, false),
         (p_client_id, p_company_id, v_fn, 'FN-RPT-BRS', 'Bank Reconciliation Statement', '/reports/BANK_RECONCILIATION_STATEMENT', 21, 'FN-RPT', 'Reports', 1, false, false, false)
+    on conflict (client_id, company_id, feature_code) do update
+        set module_id       = excluded.module_id,
+            feature_name    = excluded.feature_name,
+            screen_name     = excluded.screen_name,
+            serial_no       = excluded.serial_no,
+            group_code      = excluded.group_code,
+            group_name      = excluded.group_name,
+            group_serial_no = excluded.group_serial_no;
+
+    -- --------------------------------------------------------
+    -- POS — Point of Sale (added 2026-10-02, migration 205). Mirrors that
+    -- migration's own seed exactly (same feature_codes/screen_names/
+    -- group layout) so a tenant registered today gets the identical menu
+    -- an existing tenant was backfilled with — see docs/pos/ for the
+    -- full design.
+    -- --------------------------------------------------------
+    insert into ric_master_menus
+        (client_id, company_id, module_id, feature_code, feature_name, screen_name,
+         serial_no, group_code, group_name, group_serial_no,
+         approve_allowed, copy_allowed, excel_upload_allowed)
+    values
+        (p_client_id, p_company_id, v_pos, 'POS-SALE',      'New Sale',               '/pos/sale',        1, 'POS-OPS',   'Point of Sale', 1, false, false, false),
+        (p_client_id, p_company_id, v_pos, 'POS-HOLD',      'Held Sales',             '/pos/hold',        2, 'POS-OPS',   'Point of Sale', 1, false, false, false),
+        (p_client_id, p_company_id, v_pos, 'POS-RETURN',    'POS Return',             '/pos/return',      3, 'POS-OPS',   'Point of Sale', 1, true,  false, false),
+        (p_client_id, p_company_id, v_pos, 'POS-PRICECHK',  'Price Check',            '/pos/price-check', 4, 'POS-OPS',   'Point of Sale', 1, false, false, false),
+        (p_client_id, p_company_id, v_pos, 'POS-SHIFT',     'Shift & Cash',           '/pos/shift',       5, 'POS-OPS',   'Point of Sale', 1, true,  false, false),
+        (p_client_id, p_company_id, v_pos, 'POS-PAYOUT',    'Cash In/Out/Payout',     '/pos/payout',      6, 'POS-OPS',   'Point of Sale', 1, true,  false, false),
+        (p_client_id, p_company_id, v_pos, 'POS-APPROVALS', 'Manager Review',         '/pos/approvals',   7, 'POS-OPS',   'Point of Sale', 1, false, false, false),
+        -- Not a separate screen — a sub-permission checked within
+        -- POS-RETURN itself (screen_name is NOT NULL on ric_master_menus).
+        (p_client_id, p_company_id, v_pos, 'SL-RET-NOREF',  'Return Without Receipt', '/pos/return',      8, 'POS-OPS',   'Point of Sale', 1, true,  false, false),
+        (p_client_id, p_company_id, v_pos, 'POS-SETUP',     'POS Setup',              '/pos/admin',       1, 'POS-SETUP', 'POS Setup',     2, false, false, false),
+        (p_client_id, p_company_id, v_pos, 'POS-REPORTS',   'POS Reports',            '/pos/reports',     2, 'POS-SETUP', 'POS Setup',     2, false, false, false)
     on conflict (client_id, company_id, feature_code) do update
         set module_id       = excluded.module_id,
             feature_name    = excluded.feature_name,
