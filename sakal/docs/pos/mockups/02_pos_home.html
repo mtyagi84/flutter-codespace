@@ -1,0 +1,79 @@
+<!-- layout: top status strip (shift/terminal/cashier) + responsive grid of big action tiles -->
+<title>POS Home</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+:root{
+  --navy:#1B3A6B; --navy-2:#122A50; --gold:#D4860B; --gold-2:#F0A838;
+  --positive:#2E7D32; --negative:#C62828;
+  --bg:#F5F7FA; --surface:#FFFFFF; --border:#E1E6ED; --text:#16213A; --text-dim:#5B6472;
+  --font-d:'Manrope',system-ui,sans-serif; --font-b:'Inter',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#0E1526; --surface:#162038; --border:#263352; --text:#EAF0FC; --text-dim:#97A4C2; color-scheme:dark; }
+}
+:root[data-theme="dark"]{ --bg:#0E1526; --surface:#162038; --border:#263352; --text:#EAF0FC; --text-dim:#97A4C2; color-scheme:dark; }
+*{box-sizing:border-box;}
+body{margin:0;font-family:var(--font-b);background:var(--bg);color:var(--text);}
+.topbar{background:var(--navy);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.brand{font-family:var(--font-d);font-weight:800;font-size:17px;display:flex;align-items:center;gap:8px;}
+.brand .mark{width:30px;height:30px;border-radius:8px;background:var(--gold);display:flex;align-items:center;justify-content:center;color:var(--navy-2);font-weight:800;}
+.status{display:flex;gap:18px;margin-left:auto;flex-wrap:wrap;font-size:13px;color:#C9D4EE;}
+.status b{color:#fff;}
+.status .pill{background:rgba(255,255,255,.1);padding:5px 12px;border-radius:999px;display:flex;align-items:center;gap:6px;}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--positive);}
+main{max-width:1100px;margin:0 auto;padding:24px 20px 40px;}
+h1{font-family:var(--font-d);font-size:20px;margin:4px 0 2px;}
+.sub{color:var(--text-dim);font-size:14px;margin:0 0 22px;}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:16px;}
+.tile{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px 18px;min-height:150px;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;transition:transform .12s;}
+.tile:active{transform:scale(.98);}
+.tile .icon{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;}
+.tile .icon.navy{background:rgba(27,58,107,.1);color:var(--navy);}
+.tile .icon.gold{background:rgba(212,134,11,.14);color:var(--gold);}
+.tile .icon.red{background:rgba(198,40,40,.12);color:var(--negative);}
+.tile .label{font-family:var(--font-d);font-weight:700;font-size:16px;margin-top:14px;}
+.tile .meta{font-size:12.5px;color:var(--text-dim);margin-top:2px;}
+.badge{position:absolute;}
+.tile-wrap{position:relative;}
+.count{background:var(--gold);color:#2B1C00;font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:999px;position:absolute;top:14px;right:14px;}
+footer.bar{max-width:1100px;margin:0 auto;padding:0 20px 20px;display:flex;gap:10px;justify-content:flex-end;}
+.lnk{font-size:13px;color:var(--text-dim);background:none;border:none;cursor:pointer;}
+</style>
+
+<div class="topbar">
+  <div class="brand"><div class="mark">S</div> SAKAL POS</div>
+  <div class="status">
+    <div class="pill"><span class="dot"></span> Shift Open — 2h 14m</div>
+    <div class="pill">Till 1 · Front Counter</div>
+    <div class="pill">Anjali K. — Cashier</div>
+  </div>
+</div>
+
+<main>
+  <h1>Good afternoon, Anjali</h1>
+  <p class="sub">Steel-Lumumba · Shift SFT/T1/2026/00042 opened at 11:02</p>
+  <p class="sub" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:12.5px;">ℹ️ You land on <b>New Sale</b> directly after signing in — this Home screen is an optional menu, reachable anytime from the rail shown on every other screen. Most shifts never need to come back here.</p>
+
+  <div class="grid">
+    <div class="tile" onclick="location.hash='#new-sale'"><div class="icon navy">🛒</div><div><div class="label">New Sale</div><div class="meta">Scan, search, and check out</div></div></div>
+
+    <div class="tile-wrap"><div class="tile" onclick="location.hash='#hold'"><div class="icon gold">⏸</div><div><div class="label">Held Sales</div><div class="meta">Resume a parked basket</div></div></div><div class="count">3</div></div>
+
+    <div class="tile" onclick="location.hash='#return'"><div class="icon red">↩</div><div><div class="label">Return</div><div class="meta">Refund against a receipt</div></div></div>
+
+    <div class="tile" onclick="location.hash='#price-check'"><div class="icon navy">🔎</div><div><div class="label">Price Check</div><div class="meta">Scan to see price &amp; stock</div></div></div>
+
+    <div class="tile" onclick="location.hash='#sales-history'"><div class="icon navy">🧾</div><div><div class="label">Sales History</div><div class="meta">Search &amp; reprint receipts</div></div></div>
+
+    <div class="tile" onclick="location.hash='#shift-cash'"><div class="icon gold">💰</div><div><div class="label">Shift &amp; Cash</div><div class="meta">Cash in/out, payout, drop</div></div></div>
+
+    <div class="tile-wrap"><div class="tile" onclick="location.hash='#approvals'"><div class="icon red">✅</div><div><div class="label">Approvals</div><div class="meta">Supervisor queue</div></div></div><div class="count">2</div></div>
+
+    <div class="tile" onclick="location.hash='#reports'"><div class="icon navy">📊</div><div><div class="label">Reports</div><div class="meta">Z-report &amp; daily totals</div></div></div>
+  </div>
+</main>
+
+<footer class="bar">
+  <button class="lnk">Switch terminal</button>
+  <button class="lnk">Log out</button>
+</footer>

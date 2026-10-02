@@ -1,0 +1,61 @@
+<!-- layout: back-office density (denser than cashier screens), left config nav + right detail list -->
+<title>POS Admin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+:root{
+  --navy:#1B3A6B; --gold:#D4860B; --positive:#2E7D32; --negative:#C62828;
+  --bg:#F5F7FA; --surface:#FFFFFF; --border:#E1E6ED; --text:#16213A; --text-dim:#5B6472;
+  --font-d:'Manrope',system-ui,sans-serif; --font-b:'Inter',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#0E1526; --surface:#162038; --border:#263352; --text:#EAF0FC; --text-dim:#97A4C2; color-scheme:dark; } }
+:root[data-theme="dark"]{ --bg:#0E1526; --surface:#162038; --border:#263352; --text:#EAF0FC; --text-dim:#97A4C2; color-scheme:dark; }
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{margin:0;font-family:var(--font-b);background:var(--bg);color:var(--text);display:flex;flex-direction:column;}
+.topbar{background:var(--navy);color:#fff;padding:10px 16px;font-family:var(--font-d);font-weight:800;font-size:14px;}
+.shell{flex:1;display:flex;min-height:0;}
+nav{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);padding:10px;overflow:auto;}
+nav .item{padding:9px 12px;border-radius:9px;font-size:13px;font-weight:600;color:var(--text-dim);cursor:pointer;margin-bottom:2px;}
+nav .item.active{background:rgba(27,58,107,.08);color:var(--navy);font-weight:700;}
+.content{flex:1;min-width:0;overflow:auto;padding:18px 20px;}
+h2{font-family:var(--font-d);font-size:16px;margin:0 0 4px;}
+.sub{font-size:12.5px;color:var(--text-dim);margin:0 0 14px;}
+.toolbar{display:flex;gap:8px;margin-bottom:12px;}
+.toolbar input{flex:1;height:38px;border-radius:9px;border:1.5px solid var(--border);background:var(--bg);padding:0 10px;font-size:13px;}
+.btn-add{height:38px;padding:0 14px;border-radius:9px;border:none;background:var(--gold);color:#2B1C00;font-weight:700;font-size:13px;cursor:pointer;}
+table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;font-size:13px;}
+th{text-align:left;background:var(--bg);color:var(--text-dim);font-weight:700;font-size:11px;text-transform:uppercase;padding:9px 12px;}
+td{padding:9px 12px;border-top:1px solid var(--border);}
+.badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;}
+.badge.on{background:rgba(46,125,50,.12);color:var(--positive);}
+.badge.off{background:rgba(198,40,40,.1);color:var(--negative);}
+@media (max-width:760px){ nav{display:none;} }
+</style>
+
+<div class="topbar">SAKAL POS · Admin Configuration</div>
+<div class="shell">
+  <nav>
+    <div class="item">Terminals</div>
+    <div class="item active">Devices</div>
+    <div class="item">Terminal Access</div>
+    <div class="item">Schemes &amp; Promotions</div>
+    <div class="item">Bundles</div>
+    <div class="item">Loyalty Program</div>
+    <div class="item">Cash Movement Reasons</div>
+    <div class="item">Return Reasons</div>
+    <div class="item">Approval Thresholds</div>
+    <div class="item">Receipt Template</div>
+  </nav>
+  <div class="content">
+    <h2>Devices</h2>
+    <p class="sub">Register, bind, and block the physical terminals running SAKAL POS.</p>
+    <div class="toolbar"><input placeholder="Search device name or ID…" /><button class="btn-add">+ Register Device</button></div>
+    <table>
+      <tr><th>Device</th><th>Platform</th><th>Bound Terminal</th><th>Last Sync</th><th>Status</th><th></th></tr>
+      <tr><td>Front-Counter-iPad-02</td><td>iOS</td><td>Till 1 — Front Counter</td><td>2 min ago</td><td><span class="badge on">Active</span></td><td>⋮</td></tr>
+      <tr><td>Till2-Windows-PC</td><td>Windows</td><td>Till 2 — Front Counter</td><td>Just now</td><td><span class="badge on">Active</span></td><td>⋮</td></tr>
+      <tr><td>Express-Tablet-01</td><td>Android</td><td>Till 3 — Express Lane</td><td>19 min ago</td><td><span class="badge on">Active</span></td><td>⋮</td></tr>
+      <tr><td>Old-Counter-Laptop</td><td>Windows</td><td>— (unbound)</td><td>12 days ago</td><td><span class="badge off">Blocked</span></td><td>⋮</td></tr>
+    </table>
+  </div>
+</div>

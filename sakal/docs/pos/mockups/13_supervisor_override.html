@@ -1,0 +1,86 @@
+<!-- layout: the New Sale screen, dimmed, with a blocking PIN-keypad modal overlay — real-time, at-the-same-counter override, distinct from 10_approvals.html's async Manager Review. No password field anywhere, matching the till's PIN-only login. -->
+<title>Supervisor Override</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+:root{
+  --navy:#1B3A6B; --gold:#D4860B; --positive:#2E7D32; --negative:#C62828;
+  --bg:#F5F7FA; --surface:#FFFFFF; --border:#E1E6ED; --text:#16213A; --text-dim:#5B6472;
+  --font-d:'Manrope',system-ui,sans-serif; --font-b:'Inter',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#0E1526; --surface:#162038; --border:#263352; --text:#EAF0FC; --text-dim:#97A4C2; color-scheme:dark; } }
+:root[data-theme="dark"]{ --bg:#0E1526; --surface:#162038; --border:#263352; --text:#EAF0FC; --text-dim:#97A4C2; color-scheme:dark; }
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{margin:0;font-family:var(--font-b);background:var(--bg);color:var(--text);position:relative;}
+.bg{filter:blur(2px) brightness(.75);pointer-events:none;}
+.topbar{background:var(--navy);color:#fff;padding:10px 16px;display:flex;gap:12px;align-items:center;}
+.brand{font-family:var(--font-d);font-weight:800;font-size:15px;}
+.pill{background:rgba(255,255,255,.1);color:#C9D4EE;font-size:12px;padding:4px 10px;border-radius:999px;}
+.fakecart{max-width:760px;margin:16px auto;padding:0 16px;}
+.line{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:10px;display:flex;justify-content:space-between;}
+.overlay{position:fixed;inset:0;background:rgba(10,16,30,.55);display:flex;align-items:center;justify-content:center;padding:16px;}
+.modal{width:100%;max-width:400px;background:var(--surface);border-radius:22px;padding:24px 22px;box-shadow:0 30px 80px rgba(0,0,0,.4);}
+.modal .icon{width:52px;height:52px;border-radius:14px;background:rgba(212,134,11,.14);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:14px;}
+.modal h2{font-family:var(--font-d);font-size:17px;margin:0 0 6px;}
+.modal p{font-size:13.5px;color:var(--text-dim);margin:0 0 16px;line-height:1.5;}
+.compare{display:flex;gap:14px;background:var(--bg);border-radius:12px;padding:12px 14px;margin-bottom:18px;}
+.compare .c{flex:1;text-align:center;}
+.compare .l{font-size:10.5px;text-transform:uppercase;color:var(--text-dim);}
+.compare .v{font-family:var(--font-d);font-weight:800;font-size:17px;margin-top:2px;}
+.compare .v.hi{color:var(--negative);}
+.pintitle{text-align:center;font-size:12.5px;font-weight:700;color:var(--text-dim);margin-bottom:10px;}
+.dots{display:flex;justify-content:center;gap:12px;margin-bottom:16px;}
+.pdot{width:15px;height:15px;border-radius:50%;border:2px solid var(--border);}
+.pdot.on{background:var(--navy);border-color:var(--navy);}
+.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:16px;}
+.key{height:52px;border-radius:13px;border:1px solid var(--border);background:var(--bg);font-size:18px;font-weight:700;color:var(--text);cursor:pointer;}
+.key.wide{font-size:12px;color:var(--text-dim);font-weight:600;}
+.who{font-size:12px;color:var(--text-dim);text-align:center;margin-bottom:14px;line-height:1.4;}
+.who b{color:var(--text);}
+.badge-alt{width:100%;height:42px;border-radius:10px;border:1px dashed var(--border);background:none;color:var(--text-dim);font-size:12.5px;font-weight:600;cursor:pointer;margin-bottom:10px;}
+.acts{display:flex;gap:10px;}
+.btn{flex:1;height:48px;border-radius:12px;border:none;font-weight:800;font-family:var(--font-d);font-size:13.5px;cursor:pointer;}
+.btn.approve{background:var(--positive);color:#fff;}
+.btn.cancel{background:var(--bg);border:1px solid var(--border);color:var(--text-dim);}
+</style>
+
+<div class="bg">
+  <div class="topbar"><div class="brand">SAKAL POS — New Sale</div><div class="pill">Till 1</div><div class="pill">Anjali K.</div></div>
+  <div class="fakecart">
+    <div class="line"><span>Farm Eggs — Tray of 30</span><span>7.20</span></div>
+    <div class="line"><span>Supreme Bread 700g × 2</span><span>2.40</span></div>
+  </div>
+</div>
+
+<div class="overlay">
+  <div class="modal">
+    <div class="icon">🔒</div>
+    <h2>Supervisor approval needed</h2>
+    <p>Anjali is requesting a discount above her own limit on <b>Farm Eggs — Tray of 30</b>. Enter your manager PIN on this till to authorize it — nothing is sent elsewhere.</p>
+
+    <div class="compare">
+      <div class="c"><div class="l">Cashier Limit</div><div class="v">10%</div></div>
+      <div class="c"><div class="l">Requested</div><div class="v hi">15%</div></div>
+      <div class="c"><div class="l">Invoice</div><div class="v" style="font-size:12px;">00419</div></div>
+    </div>
+
+    <p class="pintitle">ENTER MANAGER PIN</p>
+    <div class="dots"><div class="pdot on"></div><div class="pdot on"></div><div class="pdot"></div><div class="pdot"></div></div>
+
+    <div class="keys">
+      <button class="key">1</button><button class="key">2</button><button class="key">3</button>
+      <button class="key">4</button><button class="key">5</button><button class="key">6</button>
+      <button class="key">7</button><button class="key">8</button><button class="key">9</button>
+      <button class="key wide">Clear</button><button class="key">0</button><button class="key wide">⌫</button>
+    </div>
+
+    <button class="badge-alt">📷 Scan manager badge instead</button>
+
+    <div class="who">Matched against <b>whoever's PIN this is</b>, scoped to supervisors with override rights at this terminal — verified instantly, nothing queued.</div>
+
+    <div class="acts">
+      <button class="btn cancel">Cancel</button>
+      <button class="btn approve">Authorize 15%</button>
+    </div>
+  </div>
+</div>

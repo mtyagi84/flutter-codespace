@@ -1,0 +1,82 @@
+<!-- layout: tabbed shift screen (Operate / Cash Movements / Close & Cash-up); denomination grid for close -->
+<title>Shift &amp; Cash</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+:root{
+  --navy:#1B3A6B; --gold:#D4860B; --positive:#2E7D32; --negative:#C62828;
+  --bg:#F5F7FA; --surface:#FFFFFF; --border:#E1E6ED; --text:#16213A; --text-dim:#5B6472;
+  --font-d:'Manrope',system-ui,sans-serif; --font-b:'Inter',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#0E1526; --surface:#162038; --border:#263352; --text:#EAF0FC; --text-dim:#97A4C2; color-scheme:dark; } }
+:root[data-theme="dark"]{ --bg:#0E1526; --surface:#162038; --border:#263352; --text:#EAF0FC; --text-dim:#97A4C2; color-scheme:dark; }
+*{box-sizing:border-box;}
+body{margin:0;font-family:var(--font-b);background:var(--bg);color:var(--text);}
+.topbar{background:var(--navy);color:#fff;padding:12px 16px;}
+.brand{font-family:var(--font-d);font-weight:800;font-size:15px;}
+main{max-width:900px;margin:0 auto;padding:18px 16px 40px;}
+.tabs{display:flex;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:4px;margin-bottom:16px;}
+.tab{flex:1;text-align:center;padding:10px;border-radius:9px;font-size:13.5px;font-weight:700;cursor:pointer;color:var(--text-dim);}
+.tab.active{background:var(--navy);color:#fff;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:14px;}
+.kv{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13.5px;}
+.kv:last-child{border-bottom:none;}
+.kv b{font-variant-numeric:tabular-nums;}
+h2{font-family:var(--font-d);font-size:15px;margin:0 0 12px;}
+.movegrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
+.movebtn{height:70px;border-radius:14px;border:1px solid var(--border);background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:12px;font-weight:700;cursor:pointer;}
+.movebtn .ic{font-size:20px;}
+.denomtable{width:100%;border-collapse:collapse;font-size:13.5px;}
+.denomtable th{text-align:left;color:var(--text-dim);font-size:11px;text-transform:uppercase;padding:6px 4px;border-bottom:1px solid var(--border);}
+.denomtable td{padding:7px 4px;border-bottom:1px solid var(--border);}
+.denomtable input{width:70px;height:32px;border-radius:8px;border:1.5px solid var(--border);text-align:center;}
+.denomtable td.num{text-align:right;font-variant-numeric:tabular-nums;}
+.variance{display:flex;justify-content:space-between;align-items:center;background:#FFF4E2;border:1px solid var(--gold);border-radius:12px;padding:12px 16px;margin-top:4px;}
+.variance b{font-family:var(--font-d);font-size:18px;}
+.closebtn{width:100%;height:56px;border-radius:14px;border:none;background:var(--negative);color:#fff;font-family:var(--font-d);font-weight:800;font-size:16px;margin-top:14px;cursor:pointer;}
+</style>
+
+<div class="topbar"><div class="brand">Shift &amp; Cash — Till 1</div></div>
+
+<main>
+  <div class="tabs">
+    <div class="tab">Operate</div>
+    <div class="tab">Cash Movements</div>
+    <div class="tab active">Close &amp; Cash-Up</div>
+  </div>
+
+  <div class="card">
+    <h2>Shift Summary</h2>
+    <div class="kv"><span>Opened</span><b>Today 11:02 by Anjali K.</b></div>
+    <div class="kv"><span>Opening float</span><b>100.00 USD + 50,000 CDF</b></div>
+    <div class="kv"><span>Cash sales</span><b>+312.40 USD equiv.</b></div>
+    <div class="kv"><span>Cash-in / payouts / drops</span><b>−45.00 USD equiv.</b></div>
+    <div class="kv"><span>Expected closing cash</span><b>367.40 USD equiv.</b></div>
+  </div>
+
+  <div class="movegrid">
+    <div class="movebtn"><span class="ic">⬇</span>Cash In</div>
+    <div class="movebtn"><span class="ic">⬆</span>Cash Out</div>
+    <div class="movebtn"><span class="ic">🧾</span>Payout</div>
+    <div class="movebtn"><span class="ic">🏦</span>Cash Drop</div>
+  </div>
+
+  <div class="card">
+    <h2>Denomination Count — USD</h2>
+    <table class="denomtable">
+      <tr><th>Note</th><th>Count</th><th class="num">Subtotal</th></tr>
+      <tr><td>100</td><td><input value="2" /></td><td class="num">200.00</td></tr>
+      <tr><td>50</td><td><input value="2" /></td><td class="num">100.00</td></tr>
+      <tr><td>20</td><td><input value="3" /></td><td class="num">60.00</td></tr>
+      <tr><td>10</td><td><input value="0" /></td><td class="num">0.00</td></tr>
+      <tr><td>5</td><td><input value="1" /></td><td class="num">5.00</td></tr>
+      <tr><td>1</td><td><input value="0" /></td><td class="num">0.00</td></tr>
+    </table>
+
+    <div class="variance" style="margin-top:14px;">
+      <span>Counted 365.00 vs. Expected 367.40 USD</span>
+      <b style="color:var(--negative);">−2.40 USD</b>
+    </div>
+  </div>
+
+  <button class="closebtn">Enter Variance Reason &amp; Close Shift</button>
+</main>

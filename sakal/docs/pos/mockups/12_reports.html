@@ -1,0 +1,74 @@
+<!-- layout: report picker rail + one rendered report (Z-Report) with KPI tiles + data table -->
+<title>POS Reports</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+:root{
+  --navy:#1B3A6B; --gold:#D4860B; --positive:#2E7D32; --negative:#C62828;
+  --bg:#F5F7FA; --surface:#FFFFFF; --border:#E1E6ED; --text:#16213A; --text-dim:#5B6472;
+  --font-d:'Manrope',system-ui,sans-serif; --font-b:'Inter',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#0E1526; --surface:#162038; --border:#263352; --text:#EAF0FC; --text-dim:#97A4C2; color-scheme:dark; } }
+:root[data-theme="dark"]{ --bg:#0E1526; --surface:#162038; --border:#263352; --text:#EAF0FC; --text-dim:#97A4C2; color-scheme:dark; }
+*{box-sizing:border-box;}
+body{margin:0;font-family:var(--font-b);background:var(--bg);color:var(--text);}
+.topbar{background:var(--navy);color:#fff;padding:12px 16px;font-family:var(--font-d);font-weight:800;font-size:15px;}
+main{max-width:1080px;margin:0 auto;padding:18px 16px 40px;}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;}
+.chip{padding:8px 14px;border-radius:999px;border:1.5px solid var(--border);background:var(--surface);font-size:12.5px;font-weight:600;color:var(--text-dim);cursor:pointer;}
+.chip.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+.filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
+.filters select,.filters input{height:40px;border-radius:9px;border:1.5px solid var(--border);background:var(--surface);padding:0 10px;font-size:13px;}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;}
+.kpi .l{font-size:11px;text-transform:uppercase;color:var(--text-dim);letter-spacing:.4px;}
+.kpi .v{font-family:var(--font-d);font-weight:800;font-size:21px;margin-top:4px;}
+.kpi .v.neg{color:var(--negative);}
+.kpi .v.pos{color:var(--positive);}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:560px;}
+th{text-align:left;color:var(--text-dim);font-size:11px;text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--border);}
+td{padding:9px 10px;border-bottom:1px solid var(--border);}
+td.num{text-align:right;font-variant-numeric:tabular-nums;}
+tr.total td{font-weight:800;border-top:2px solid var(--border);border-bottom:none;}
+</style>
+
+<div class="topbar">SAKAL POS · Reports</div>
+
+<main>
+  <div class="chips">
+    <div class="chip active">Z-Report / Shift Summary</div>
+    <div class="chip">Sales by Cashier</div>
+    <div class="chip">Payment Totals</div>
+    <div class="chip">Returns</div>
+    <div class="chip">Promotions</div>
+    <div class="chip">Loyalty</div>
+    <div class="chip">Cash Variance</div>
+  </div>
+
+  <div class="filters">
+    <select><option>Shift SFT/T1/2026/00042 — Anjali K.</option></select>
+    <select><option>Till 1 — Front Counter</option></select>
+    <input type="date" value="2026-10-01" />
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="l">Gross Sales</div><div class="v">478.60 USD</div></div>
+    <div class="kpi"><div class="l">Returns</div><div class="v neg">−5.00 USD</div></div>
+    <div class="kpi"><div class="l">Net Sales</div><div class="v">473.60 USD</div></div>
+    <div class="kpi"><div class="l">Expected Cash</div><div class="v">367.40 USD</div></div>
+    <div class="kpi"><div class="l">Counted Cash</div><div class="v">365.00 USD</div></div>
+    <div class="kpi"><div class="l">Variance</div><div class="v neg">−2.40 USD</div></div>
+  </div>
+
+  <div class="card">
+    <table>
+      <tr><th>Tender Method</th><th class="num">Transactions</th><th class="num">USD</th><th class="num">CDF</th></tr>
+      <tr><td>💵 Cash</td><td class="num">18</td><td class="num">212.40</td><td class="num">138,000</td></tr>
+      <tr><td>💳 Card</td><td class="num">6</td><td class="num">165.00</td><td class="num">—</td></tr>
+      <tr><td>📱 Mobile Money</td><td class="num">4</td><td class="num">89.20</td><td class="num">—</td></tr>
+      <tr><td>🎟 Voucher</td><td class="num">1</td><td class="num">7.00</td><td class="num">—</td></tr>
+      <tr><td>⭐ Loyalty Points</td><td class="num">2</td><td class="num">5.00</td><td class="num">—</td></tr>
+      <tr class="total"><td>Total</td><td class="num">31</td><td class="num">478.60</td><td class="num">138,000</td></tr>
+    </table>
+  </div>
+</main>

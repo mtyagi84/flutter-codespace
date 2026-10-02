@@ -111,6 +111,9 @@ import '../providers/session_provider.dart';
 import '../layout/screen_header.dart' show routeObserver;
 import '../services/local_storage.dart';
 import 'route_names.dart';
+import '../../features/pos/presentation/screens/pos_device_setup_screen.dart';
+import '../../features/pos/presentation/screens/pos_pin_login_screen.dart';
+import '../../features/pos/presentation/screens/pos_sale_placeholder_screen.dart';
 
 // Mirrors sessionProvider state so GoRouter can listen and re-evaluate redirects
 // whenever the user logs in, logs out, or the session is restored on page refresh.
@@ -152,6 +155,16 @@ final appRouter = GoRouter(
     if (loc == RouteNames.register) return null;
     if (loc == RouteNames.sync)     return null;
 
+    // POS is a separate, chrome-less surface with its own PIN-based sign-in
+    // (see docs/pos/06_access_security.md §4) — it must never be pulled into
+    // the regular username/password redirect below. A POS session (set by
+    // PosPinLoginScreen) is still a real `session`, so once signed in, POS
+    // routes fall through to the normal "logged in" handling further down
+    // like any other route.
+    if (loc == RouteNames.posDeviceSetup || loc == RouteNames.posLogin) {
+      return null; // always reachable, with or without a session — see note above
+    }
+
     // No cached client → allow landing and login (login screen shows Client ID field).
     // Blocks everything else until the user either registers or signs in.
     if (!hasClient) {
@@ -185,6 +198,14 @@ final appRouter = GoRouter(
     GoRoute(path: RouteNames.login,    builder: (c, s) => const LoginScreen()),
     GoRoute(path: RouteNames.register, builder: (c, s) => const RegisterScreen()),
     GoRoute(path: RouteNames.sync,     builder: (c, s) => const SyncScreen()),
+
+    // Point of Sale — deliberately OUTSIDE the AppShell ShellRoute below:
+    // a till has no sidebar/topbar, only its own full-screen Scaffolds. See
+    // sakal/docs/pos/ for the design; screens are added one phase at a time
+    // per docs/pos/10_phase_plan.md's recommended build order.
+    GoRoute(path: RouteNames.posDeviceSetup, builder: (c, s) => const PosDeviceSetupScreen()),
+    GoRoute(path: RouteNames.posLogin,       builder: (c, s) => const PosPinLoginScreen()),
+    GoRoute(path: RouteNames.posSale,        builder: (c, s) => const PosSalePlaceholderScreen()),
 
     // Authenticated routes — all wrapped in AppShell (sidebar + topbar)
     ShellRoute(

@@ -140,4 +140,21 @@ class RouteNames {
 
   // Offline sync — shown once after online login when pending docs exist
   static const String sync = '/sync';
+
+  // Point of Sale — a separate, kiosk-style surface from the rest of the app
+  // (PIN login, no sidebar shell). screen_names must match ric_master_menus
+  // seeds in backend/migrations/205_pos_foundation.sql. See
+  // sakal/docs/pos/ for the full design.
+  static const String posDeviceSetup = '/pos/device-setup';
+  static const String posLogin       = '/pos/login';
+  static const String posHome        = '/pos/home';
+  static const String posSale        = '/pos/sale';
+  static const String posHold        = '/pos/hold';
+  static const String posReturn      = '/pos/return';
+  static const String posPriceCheck  = '/pos/price-check';
+  static const String posShift       = '/pos/shift';
+  static const String posPayout      = '/pos/payout';
+  static const String posApprovals   = '/pos/approvals';
+  static const String posAdmin       = '/pos/admin';
+  static const String posReports     = '/pos/reports';
 }

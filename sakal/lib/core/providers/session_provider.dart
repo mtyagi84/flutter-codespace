@@ -19,6 +19,13 @@ class UserSession {
   final bool   quickInvoiceDispatchStock;
   final bool   quickInvoiceCollectCash;
   final String numberFormat;
+  // Set only when this session came from a POS PIN login
+  // (fn_pos_pin_login) rather than the regular username/password fn_login —
+  // null for every non-POS session. See lib/features/pos/ and
+  // docs/pos/06_access_security.md.
+  final String? posTerminalId;
+  final String? posTerminalName;
+  final String? posDeviceId;
 
   const UserSession({
     required this.userId,
@@ -36,6 +43,9 @@ class UserSession {
     this.quickInvoiceDispatchStock = true,
     this.quickInvoiceCollectCash   = true,
     this.numberFormat = 'INTERNATIONAL',
+    this.posTerminalId,
+    this.posTerminalName,
+    this.posDeviceId,
   });
 
   UserSession copyWith({
@@ -64,6 +74,9 @@ class UserSession {
         quickInvoiceDispatchStock: quickInvoiceDispatchStock ?? this.quickInvoiceDispatchStock,
         quickInvoiceCollectCash:   quickInvoiceCollectCash   ?? this.quickInvoiceCollectCash,
         numberFormat:     numberFormat     ?? this.numberFormat,
+        posTerminalId:    posTerminalId,
+        posTerminalName:  posTerminalName,
+        posDeviceId:      posDeviceId,
       );
 }
 

@@ -1,0 +1,68 @@
+<!-- layout: list of held tickets as cards, responsive to 1/2/3 columns -->
+<title>Held Sales</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+:root{
+  --navy:#1B3A6B; --navy-2:#122A50; --gold:#D4860B;
+  --positive:#2E7D32; --negative:#C62828;
+  --bg:#F5F7FA; --surface:#FFFFFF; --border:#E1E6ED; --text:#16213A; --text-dim:#5B6472;
+  --font-d:'Manrope',system-ui,sans-serif; --font-b:'Inter',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#0E1526; --surface:#162038; --border:#263352; --text:#EAF0FC; --text-dim:#97A4C2; color-scheme:dark; } }
+:root[data-theme="dark"]{ --bg:#0E1526; --surface:#162038; --border:#263352; --text:#EAF0FC; --text-dim:#97A4C2; color-scheme:dark; }
+*{box-sizing:border-box;}
+body{margin:0;font-family:var(--font-b);background:var(--bg);color:var(--text);}
+.topbar{background:var(--navy);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:12px;}
+.brand{font-family:var(--font-d);font-weight:800;font-size:15px;}
+.pill{background:rgba(255,255,255,.1);color:#C9D4EE;font-size:12px;padding:4px 10px;border-radius:999px;margin-left:auto;}
+main{max-width:980px;margin:0 auto;padding:20px 16px 40px;}
+h1{font-family:var(--font-d);font-size:19px;margin:4px 0 2px;}
+.sub{color:var(--text-dim);font-size:13.5px;margin:0 0 18px;}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;}
+.row1{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.ticket{font-family:var(--font-d);font-weight:800;font-size:14.5px;}
+.time{font-size:12px;color:var(--text-dim);background:var(--bg);padding:2px 8px;border-radius:999px;}
+.items{font-size:13px;color:var(--text-dim);margin-bottom:10px;}
+.cust{font-size:13px;font-weight:600;margin-bottom:10px;}
+.total{font-family:var(--font-d);font-weight:800;font-size:20px;margin-bottom:12px;}
+.actions{display:flex;gap:8px;}
+.btn{flex:1;height:42px;border-radius:10px;border:none;font-weight:700;font-size:13px;cursor:pointer;}
+.btn.resume{background:var(--gold);color:#2B1C00;}
+.btn.del{background:var(--bg);border:1px solid var(--border);color:var(--negative);}
+.expiring{font-size:11.5px;color:var(--negative);margin-top:8px;}
+</style>
+
+<div class="topbar"><div class="brand">Held Sales</div><div class="pill">Till 1 — Anjali K.</div></div>
+
+<main>
+  <h1>3 baskets on hold</h1>
+  <p class="sub">A held sale does not affect stock or GL until it's resumed and charged.</p>
+
+  <div class="grid">
+    <div class="card">
+      <div class="row1"><span class="ticket">HOLD-0417</span><span class="time">12 min ago</span></div>
+      <div class="cust">👤 Walk-in customer</div>
+      <div class="items">4 items · Bread, Eggs, Milk, Fanta ×2</div>
+      <div class="total">16.40 USD</div>
+      <div class="actions"><button class="btn resume">Resume</button><button class="btn del">Delete</button></div>
+    </div>
+
+    <div class="card">
+      <div class="row1"><span class="ticket">HOLD-0415</span><span class="time">38 min ago</span></div>
+      <div class="cust">👤 +243 821 554 09 — Jeanne M.</div>
+      <div class="items">9 items · Family Bouquet Pack, Rice, Oil…</div>
+      <div class="total">47.08 USD</div>
+      <div class="actions"><button class="btn resume">Resume</button><button class="btn del">Delete</button></div>
+      <div class="expiring">Expires in 22 min — auto-cancel policy</div>
+    </div>
+
+    <div class="card">
+      <div class="row1"><span class="ticket">HOLD-0411</span><span class="time">1h 05m ago</span></div>
+      <div class="cust">👤 Walk-in customer</div>
+      <div class="items">2 items · Sunlight Dish Soap, Measuring Tape</div>
+      <div class="total">6.75 USD</div>
+      <div class="actions"><button class="btn resume">Resume</button><button class="btn del">Delete</button></div>
+    </div>
+  </div>
+</main>

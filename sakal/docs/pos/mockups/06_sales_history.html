@@ -1,0 +1,54 @@
+<!-- layout: filter bar + list of receipt rows; tap row expands actions -->
+<title>Sales History</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+:root{
+  --navy:#1B3A6B; --gold:#D4860B; --positive:#2E7D32; --negative:#C62828;
+  --bg:#F5F7FA; --surface:#FFFFFF; --border:#E1E6ED; --text:#16213A; --text-dim:#5B6472;
+  --font-d:'Manrope',system-ui,sans-serif; --font-b:'Inter',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#0E1526; --surface:#162038; --border:#263352; --text:#EAF0FC; --text-dim:#97A4C2; color-scheme:dark; } }
+:root[data-theme="dark"]{ --bg:#0E1526; --surface:#162038; --border:#263352; --text:#EAF0FC; --text-dim:#97A4C2; color-scheme:dark; }
+*{box-sizing:border-box;}
+body{margin:0;font-family:var(--font-b);background:var(--bg);color:var(--text);}
+.topbar{background:var(--navy);color:#fff;padding:12px 16px;}
+.brand{font-family:var(--font-d);font-weight:800;font-size:15px;}
+main{max-width:900px;margin:0 auto;padding:18px 16px 40px;}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+.filters input,.filters select{height:42px;border-radius:10px;border:1.5px solid var(--border);background:var(--surface);padding:0 12px;font-size:13.5px;color:var(--text);}
+.filters input[type=search]{flex:1;min-width:180px;}
+.list{display:flex;flex-direction:column;gap:8px;}
+.row{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px;}
+.row .ic{width:38px;height:38px;border-radius:10px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
+.row .main{flex:1;min-width:0;}
+.row .inv{font-weight:700;font-size:13.5px;}
+.row .meta{font-size:12px;color:var(--text-dim);}
+.row .amt{text-align:right;font-family:var(--font-d);font-weight:800;}
+.row .status{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;margin-top:3px;display:inline-block;}
+.status.paid{background:rgba(46,125,50,.12);color:var(--positive);}
+.status.ret{background:rgba(198,40,40,.1);color:var(--negative);}
+.row .acts{display:flex;gap:6px;}
+.ib{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px;}
+</style>
+
+<div class="topbar"><div class="brand">Sales History</div></div>
+
+<main>
+  <div class="filters">
+    <input type="search" placeholder="Search invoice no, customer, mobile…" />
+    <select><option>Today</option><option>Last 7 days</option><option>This month</option></select>
+    <select><option>All cashiers</option><option>Anjali K.</option><option>Jay P.</option></select>
+  </div>
+
+  <div class="list">
+    <div class="row"><div class="ic">🧾</div><div class="main"><div class="inv">SI/T1/2026/00418</div><div class="meta">Today 14:22 · Anjali K. · Cash</div><span class="status paid">Completed</span></div><div class="amt">47.08 USD</div><div class="acts"><button class="ib">🖨</button><button class="ib">↩</button></div></div>
+
+    <div class="row"><div class="ic">🧾</div><div class="main"><div class="inv">SI/T1/2026/00417</div><div class="meta">Today 13:58 · Anjali K. · Card + Cash</div><span class="status paid">Completed</span></div><div class="amt">16.40 USD</div><div class="acts"><button class="ib">🖨</button><button class="ib">↩</button></div></div>
+
+    <div class="row"><div class="ic">↩</div><div class="main"><div class="inv">SRET/T1/2026/00031</div><div class="meta">Today 12:40 · Anjali K. · Refund to Card</div><span class="status ret">Return</span></div><div class="amt">−5.00 USD</div><div class="acts"><button class="ib">🖨</button></div></div>
+
+    <div class="row"><div class="ic">🧾</div><div class="main"><div class="inv">SI/T1/2026/00416</div><div class="meta">Today 12:05 · Jay P. · Mobile Money</div><span class="status paid">Completed</span></div><div class="amt">89.20 USD</div><div class="acts"><button class="ib">🖨</button><button class="ib">↩</button></div></div>
+
+    <div class="row"><div class="ic">🧾</div><div class="main"><div class="inv">SI/T1/2026/00415</div><div class="meta">Today 11:48 · Anjali K. · Cash</div><span class="status paid">Completed</span></div><div class="amt">6.75 USD</div><div class="acts"><button class="ib">🖨</button><button class="ib">↩</button></div></div>
+  </div>
+</main>

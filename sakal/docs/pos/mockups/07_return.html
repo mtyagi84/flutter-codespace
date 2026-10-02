@@ -1,0 +1,65 @@
+<!-- layout: invoice lookup + line-level return qty picker + refund summary -->
+<title>POS Return</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+:root{
+  --navy:#1B3A6B; --gold:#D4860B; --positive:#2E7D32; --negative:#C62828;
+  --bg:#F5F7FA; --surface:#FFFFFF; --border:#E1E6ED; --text:#16213A; --text-dim:#5B6472;
+  --font-d:'Manrope',system-ui,sans-serif; --font-b:'Inter',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#0E1526; --surface:#162038; --border:#263352; --text:#EAF0FC; --text-dim:#97A4C2; color-scheme:dark; } }
+:root[data-theme="dark"]{ --bg:#0E1526; --surface:#162038; --border:#263352; --text:#EAF0FC; --text-dim:#97A4C2; color-scheme:dark; }
+*{box-sizing:border-box;}
+body{margin:0;font-family:var(--font-b);background:var(--bg);color:var(--text);}
+.topbar{background:var(--navy);color:#fff;padding:12px 16px;}
+.brand{font-family:var(--font-d);font-weight:800;font-size:15px;}
+main{max-width:900px;margin:0 auto;padding:18px 16px 40px;}
+.lookup{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+.lookup input{flex:1;min-width:220px;height:48px;border-radius:12px;border:1.5px solid var(--border);background:var(--surface);padding:0 14px;font-size:14.5px;}
+.btn{height:48px;padding:0 18px;border-radius:12px;border:none;background:var(--navy);color:#fff;font-weight:700;cursor:pointer;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px;}
+.invhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.invhead b{font-family:var(--font-d);font-size:15px;}
+.invhead span{font-size:12.5px;color:var(--text-dim);}
+table{width:100%;border-collapse:collapse;font-size:13.5px;}
+th{text-align:left;color:var(--text-dim);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;padding:6px 4px;border-bottom:1px solid var(--border);}
+td{padding:9px 4px;border-bottom:1px solid var(--border);vertical-align:middle;}
+td.num{text-align:right;font-variant-numeric:tabular-nums;}
+.qtybox{width:54px;height:34px;border-radius:8px;border:1.5px solid var(--border);text-align:center;font-weight:700;}
+select.reason{height:34px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg);font-size:12.5px;padding:0 6px;}
+.flag{font-size:11px;color:var(--negative);background:rgba(198,40,40,.08);padding:1px 7px;border-radius:999px;}
+.summary{display:flex;justify-content:flex-end;gap:24px;margin-top:14px;}
+.sfield{text-align:right;}
+.sfield .l{font-size:11.5px;color:var(--text-dim);text-transform:uppercase;}
+.sfield .v{font-family:var(--font-d);font-weight:800;font-size:18px;}
+.approve-banner{background:#FFF4E2;border:1px solid var(--gold);color:#7A4A00;border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:12px;}
+.confirm{width:100%;height:56px;border-radius:14px;border:none;background:var(--negative);color:#fff;font-family:var(--font-d);font-weight:800;font-size:16px;cursor:pointer;}
+</style>
+
+<div class="topbar"><div class="brand">Return / Refund</div></div>
+
+<main>
+  <div class="lookup">
+    <input placeholder="Invoice no., receipt barcode, or customer mobile…" value="SI/T1/2026/00410" />
+    <button class="btn">Find</button>
+  </div>
+
+  <div class="card">
+    <div class="invhead"><b>SI/T1/2026/00410</b><span>29 Sep 2026 · Anjali K. · Cash · 32.40 USD</span></div>
+    <table>
+      <tr><th>Product</th><th class="num">Sold</th><th class="num">Returned</th><th class="num">Return Qty</th><th>Reason</th><th class="num">Refund</th></tr>
+      <tr><td>Fresh Milk 1L</td><td class="num">4</td><td class="num">0</td><td class="num"><input class="qtybox" value="2" /></td><td><select class="reason"><option>Quality issue</option></select></td><td class="num">1.80</td></tr>
+      <tr><td>Fanta Orange 500ml</td><td class="num">6</td><td class="num">2</td><td class="num"><input class="qtybox" value="0" /></td><td><select class="reason"><option>—</option></select></td><td class="num">0.00</td></tr>
+      <tr><td>Supreme Bread 700g <span class="flag">cap: 2 left</span></td><td class="num">2</td><td class="num">0</td><td class="num"><input class="qtybox" value="1" /></td><td><select class="reason"><option>Changed mind</option></select></td><td class="num">1.20</td></tr>
+    </table>
+
+    <div class="summary">
+      <div class="sfield"><div class="l">Refund Value</div><div class="v">3.00 USD</div></div>
+      <div class="sfield"><div class="l">Loyalty Reversed</div><div class="v">−12 pts</div></div>
+    </div>
+  </div>
+
+  <div class="approve-banner">⚠ Refund exceeds this cashier's limit — supervisor approval required before completing.</div>
+
+  <button class="confirm">Request Approval &amp; Refund 3.00 USD to Cash</button>
+</main>
