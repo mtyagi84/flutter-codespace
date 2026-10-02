@@ -671,6 +671,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
             onSelectionChanged: (s) => _onSaleTypeChanged(s.first),
           ),
           const SizedBox(width: 8),
+          IconButton(onPressed: () => context.go(RouteNames.posReturn), icon: const Icon(Icons.undo, color: Colors.white), tooltip: 'Return'),
           IconButton(onPressed: () => context.go(RouteNames.posPriceCheck), icon: const Icon(Icons.search, color: Colors.white), tooltip: 'Price Check'),
           IconButton(onPressed: () => context.go(RouteNames.posHold), icon: const Icon(Icons.pause_circle_outline, color: Colors.white), tooltip: 'Held Sales'),
           IconButton(onPressed: () => context.go(RouteNames.posShift), icon: const Icon(Icons.point_of_sale_outlined, color: Colors.white), tooltip: 'Shift & Cash'),
