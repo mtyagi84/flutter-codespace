@@ -114,6 +114,7 @@ import 'route_names.dart';
 import '../../features/pos/presentation/screens/pos_device_setup_screen.dart';
 import '../../features/pos/presentation/screens/pos_pin_login_screen.dart';
 import '../../features/pos/presentation/screens/pos_sale_placeholder_screen.dart';
+import '../../features/pos/presentation/screens/pos_setup_screen.dart';
 
 // Mirrors sessionProvider state so GoRouter can listen and re-evaluate redirects
 // whenever the user logs in, logs out, or the session is restored on page refresh.
@@ -207,6 +208,12 @@ final appRouter = GoRouter(
     GoRoute(path: RouteNames.posLogin,       builder: (c, s) => const PosPinLoginScreen()),
     GoRoute(path: RouteNames.posSale,        builder: (c, s) => const PosSalePlaceholderScreen()),
 
+    // POS Setup is an admin screen (back-office density) and so DOES live
+    // inside the normal AppShell/sidebar below, unlike the till screens
+    // above — see pos_setup_screen.dart's own doc comment. Its own route
+    // entry is added inside the AppShell ShellRoute's routes list further
+    // down (search for RouteNames.posAdmin).
+
     // Authenticated routes — all wrapped in AppShell (sidebar + topbar)
     ShellRoute(
       navigatorKey: _appShellNavigatorKey,
@@ -245,6 +252,7 @@ final appRouter = GoRouter(
         GoRoute(path: RouteNames.cities,      builder: (c, s) => const CitiesScreen()),
         GoRoute(path: RouteNames.users,          builder: (c, s) => const UsersScreen()),
         GoRoute(path: RouteNames.userLocationAccess, builder: (c, s) => const UserLocationAccessScreen()),
+        GoRoute(path: RouteNames.posAdmin, builder: (c, s) => const PosSetupScreen()),
         GoRoute(path: RouteNames.permissions,    builder: (c, s) => const PermissionsScreen()),
         GoRoute(path: RouteNames.quickInvoiceSetup, builder: (c, s) => const QuickInvoiceSetupScreen()),
         GoRoute(path: RouteNames.offlineSettings, builder: (c, s) => const OfflineSettingsScreen()),
