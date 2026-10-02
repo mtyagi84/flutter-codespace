@@ -36,7 +36,12 @@ import '../../../sales/presentation/providers/sales_invoice_providers.dart';
 ///   path needs `_isAgainstSource`-style branching this screen hasn't
 ///   built) — a POS sale here requires connectivity for now.
 class PosNewSaleScreen extends ConsumerStatefulWidget {
-  const PosNewSaleScreen({super.key});
+  /// Set only when resuming a held sale from the Hold Sales screen —
+  /// identical shape to how SalesInvoiceEntryScreen/CreditSalesInvoiceEntryScreen
+  /// already receive an edit target via GoRouter's `extra`.
+  final String? editInvoiceNo;
+  final String? editInvoiceDate;
+  const PosNewSaleScreen({super.key, this.editInvoiceNo, this.editInvoiceDate});
 
   @override
   ConsumerState<PosNewSaleScreen> createState() => _PosNewSaleScreenState();
@@ -96,6 +101,12 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   String _saleType = 'CASH';
   String? _customerId;
   String _customerDisplay = '';
+  // Set once a DRAFT has been held/resumed — null means "a brand-new sale,
+  // never saved yet" and _charge() takes the INSERT path; non-null means
+  // "update this existing DRAFT" (fn_save_sales_invoice's own UPDATE path).
+  String? _invoiceNo;
+  String? _invoiceDate;
+  bool _holding = false;
 
   final List<_PosLineRow> _lines = [];
   List<Map<String, dynamic>> _taxGroups = [];
@@ -174,7 +185,11 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
         for (final e in memberMap.entries) e.key: e.value.fold<double>(0, (s, id) => s + (_taxRatePct[id] ?? 0)),
       };
 
-      await _applyCashCustomerCurrency(session);
+      if (widget.editInvoiceNo != null) {
+        await _loadExisting(session, widget.editInvoiceNo!, widget.editInvoiceDate);
+      } else {
+        await _applyCashCustomerCurrency(session);
+      }
 
       if (mounted) setState(() => _loading = false);
       WidgetsBinding.instance.addPostFrameCallback((_) => _searchFocus.requestFocus());
@@ -182,6 +197,61 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       AppLogger.error('PosNewSaleInit', e, st);
       if (mounted) setState(() { _loading = false; _error = ErrorPresenter.format(e, action: 'load the till'); });
     }
+  }
+
+  /// Resumes a held (DRAFT) sale — loads header + lines back into the cart
+  /// so Charge() takes the UPDATE path instead of creating a second invoice.
+  /// Batch/serial allocations on a resumed DRAFT are a known, documented gap
+  /// (New Sale never creates a tracked-product line in the first place, so
+  /// there is nothing to restore here — consistent with this screen's own
+  /// scope cut, not an oversight specific to resume).
+  Future<void> _loadExisting(UserSession session, String invoiceNo, String? invoiceDate) async {
+    final ds = ref.read(salesInvoiceRepositoryProvider);
+    final header = await ds.getHeader(clientId: session.clientId, companyId: session.companyId, invoiceNo: invoiceNo, invoiceDate: invoiceDate);
+    if (header == null) {
+      _error = 'Held sale $invoiceNo was not found.';
+      return;
+    }
+    _invoiceNo = header['invoice_no'] as String;
+    _invoiceDate = header['invoice_date'] as String;
+    _saleType = header['sale_type'] as String? ?? 'CASH';
+    _customerId = header['customer_id'] as String?;
+    _invoiceCurrencyId = header['invoice_currency_id'] as String?;
+    _rateToBase = (header['rate_to_base'] as num?)?.toDouble() ?? 1;
+    _rateToLocal = (header['rate_to_local'] as num?)?.toDouble() ?? 1;
+
+    if (_saleType == 'CASH') {
+      final cashCustomer = _quickSetup?['cash_customer'] as Map<String, dynamic>?;
+      _customerDisplay = cashCustomer != null ? '[${cashCustomer['account_code']}] ${cashCustomer['account_name']}' : 'Cash Customer';
+    } else if (_customerId != null) {
+      final acctRes = await DioClient.instance.get('/rim_accounts', queryParameters: {'id': 'eq.$_customerId', 'select': 'account_code,account_name'});
+      final rows = acctRes.data as List;
+      if (rows.isNotEmpty) {
+        final a = rows.first as Map<String, dynamic>;
+        _customerDisplay = '[${a['account_code']}] ${a['account_name']}';
+      }
+    }
+
+    final lines = await ds.getLines(clientId: session.clientId, companyId: session.companyId, invoiceNo: _invoiceNo!, invoiceDate: _invoiceDate!);
+    for (final l in lines) {
+      final product = l['product'] as Map<String, dynamic>?;
+      final uom = l['uom'] as Map<String, dynamic>?;
+      final row = _PosLineRow(
+        productId: l['product_id'] as String,
+        productCode: product?['product_code'] as String? ?? '',
+        productName: (l['item_description'] as String?) ?? product?['product_name'] as String? ?? '',
+        uomId: l['uom_id'] as String,
+        uomLabel: uom?['description'] as String? ?? '',
+        uomConversionFactor: (l['uom_conversion_factor'] as num?)?.toDouble() ?? 1,
+        taxGroupId: l['tax_group_id'] as String?,
+        rate: (l['rate'] as num?)?.toDouble() ?? 0,
+      );
+      row.qtyCtrl.text = ((l['qty_pack'] as num?)?.toDouble() ?? 0).toString();
+      row.discountPctCtrl.text = ((l['discount_percent'] as num?)?.toDouble() ?? 0).toString();
+      row.discountGivenBy = l['discount_given_by'] as String?;
+      _lines.add(row);
+    }
+    _recompute();
   }
 
   Future<void> _applyCashCustomerCurrency(UserSession session) async {
@@ -436,30 +506,52 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     final session = ref.read(sessionProvider)!;
     setState(() { _saving = true; _actionError = null; });
     try {
-      final header = {
-        'client_id': session.clientId,
-        'company_id': session.companyId,
-        'location_id': session.locationId,
-        'invoice_no': null,
-        'invoice_date': _fmtDate(DateTime.now()),
-        'invoice_mode': 'DIRECT',
-        'sale_type': _saleType,
-        'customer_id': _customerId,
-        'invoice_currency_id': _invoiceCurrencyId,
-        'rate_to_base': _rateToBase,
-        'rate_to_local': _rateToLocal,
-        'discount_percent': 0,
-        'gross_amount': _subtotal + _discountTotal,
-        'discount_amount': _discountTotal,
-        'charges_amount': 0,
-        'tax_amount': _taxTotal,
-        'grand_total': _grandTotal,
-        'collected_amount_local': _saleType == 'CASH' ? (double.tryParse(_collectedCtrl.text) ?? _grandTotal) : null,
-        'collected_amount_base': null,
-        'remarks': '',
-        'pos_shift_id': _shift?['id'],
-      };
-      final lines = _lines.asMap().entries.map((e) => {
+      final header = _buildHeader(session);
+      final lines = _buildLines();
+      final ds = ref.read(salesInvoiceRepositoryProvider);
+      final invoiceNo = await ds.save(header: header, lines: lines, charges: const [], batches: const [], serials: const [], userId: session.userId);
+      await ds.approve(clientId: session.clientId, companyId: session.companyId, invoiceNo: invoiceNo, invoiceDate: _fmtDate(DateTime.now()), approvedBy: session.userId);
+
+      if (mounted) {
+        _showMsg('$invoiceNo completed.', color: AppColors.positive);
+        _resetForNextSale();
+      }
+    } catch (e, st) {
+      AppLogger.error('PosNewSaleCharge', e, st);
+      if (mounted) setState(() => _actionError = ErrorPresenter.format(e, action: 'complete this sale'));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Map<String, dynamic> _buildHeader(UserSession session) {
+    return {
+      'client_id': session.clientId,
+      'company_id': session.companyId,
+      'location_id': session.locationId,
+      'invoice_no': _invoiceNo,
+      'invoice_date': _invoiceDate ?? _fmtDate(DateTime.now()),
+      'invoice_mode': 'DIRECT',
+      'sale_type': _saleType,
+      'customer_id': _customerId,
+      'invoice_currency_id': _invoiceCurrencyId,
+      'rate_to_base': _rateToBase,
+      'rate_to_local': _rateToLocal,
+      'discount_percent': 0,
+      'gross_amount': _subtotal + _discountTotal,
+      'discount_amount': _discountTotal,
+      'charges_amount': 0,
+      'tax_amount': _taxTotal,
+      'grand_total': _grandTotal,
+      'collected_amount_local': _saleType == 'CASH' ? (double.tryParse(_collectedCtrl.text) ?? _grandTotal) : null,
+      'collected_amount_base': null,
+      'remarks': '',
+      'pos_shift_id': _shift?['id'],
+    };
+  }
+
+  List<Map<String, dynamic>> _buildLines() {
+    return _lines.asMap().entries.map((e) => {
             'serial_no': e.key + 1,
             'product_id': e.value.productId,
             'item_description': e.value.productName,
@@ -484,20 +576,36 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
             'landed_amount': e.value.finalAmount,
             'remarks': '',
           }).toList();
+  }
 
+  /// Saves the current cart as a DRAFT (no approve) and resets for the next
+  /// customer — "Hold Sale". Resuming it later (via the Hold Sales list,
+  /// RouteNames.posSale with editInvoiceNo set) calls Charge() again, which
+  /// now takes the UPDATE path since `_invoiceNo` round-trips through
+  /// `_buildHeader`.
+  Future<void> _hold() async {
+    if (_lines.isEmpty) {
+      _showMsg('Nothing to hold.', color: AppColors.negative);
+      return;
+    }
+    if (_customerId == null) {
+      _showMsg(_saleType == 'CASH' ? 'Quick Invoice Setup is missing for this user — ask an admin.' : 'Pick a customer before holding this sale.', color: AppColors.negative);
+      return;
+    }
+    final session = ref.read(sessionProvider)!;
+    setState(() { _holding = true; _actionError = null; });
+    try {
       final ds = ref.read(salesInvoiceRepositoryProvider);
-      final invoiceNo = await ds.save(header: header, lines: lines, charges: const [], batches: const [], serials: const [], userId: session.userId);
-      await ds.approve(clientId: session.clientId, companyId: session.companyId, invoiceNo: invoiceNo, invoiceDate: _fmtDate(DateTime.now()), approvedBy: session.userId);
-
+      final invoiceNo = await ds.save(header: _buildHeader(session), lines: _buildLines(), charges: const [], batches: const [], serials: const [], userId: session.userId);
       if (mounted) {
-        _showMsg('$invoiceNo completed.', color: AppColors.positive);
+        _showMsg('Held as $invoiceNo.', color: AppColors.secondary);
         _resetForNextSale();
       }
     } catch (e, st) {
-      AppLogger.error('PosNewSaleCharge', e, st);
-      if (mounted) setState(() => _actionError = ErrorPresenter.format(e, action: 'complete this sale'));
+      AppLogger.error('PosNewSaleHold', e, st);
+      if (mounted) setState(() => _actionError = ErrorPresenter.format(e, action: 'hold this sale'));
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) setState(() => _holding = false);
     }
   }
 
@@ -507,7 +615,11 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     }
     _lines.clear();
     _collectedCtrl.clear();
+    _invoiceNo = null;
+    _invoiceDate = null;
     setState(() {});
+    final session = ref.read(sessionProvider);
+    if (session != null) _applyCashCustomerCurrency(session);
     _searchFocus.requestFocus();
   }
 
@@ -559,6 +671,8 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
             onSelectionChanged: (s) => _onSaleTypeChanged(s.first),
           ),
           const SizedBox(width: 8),
+          IconButton(onPressed: () => context.go(RouteNames.posPriceCheck), icon: const Icon(Icons.search, color: Colors.white), tooltip: 'Price Check'),
+          IconButton(onPressed: () => context.go(RouteNames.posHold), icon: const Icon(Icons.pause_circle_outline, color: Colors.white), tooltip: 'Held Sales'),
           IconButton(onPressed: () => context.go(RouteNames.posShift), icon: const Icon(Icons.point_of_sale_outlined, color: Colors.white), tooltip: 'Shift & Cash'),
         ]),
       ),
@@ -662,7 +776,13 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
             decoration: InputDecoration(labelText: 'Collected ($_localCcy, blank = full amount)', border: const OutlineInputBorder(), isDense: true),
           ),
         ],
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: _holding ? null : _hold,
+          icon: _holding ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.pause_circle_outline, size: 18),
+          label: const Text('Hold Sale'),
+        ),
+        const SizedBox(height: 8),
         FilledButton(
           onPressed: _saving ? null : _charge,
           style: FilledButton.styleFrom(backgroundColor: AppColors.secondary, minimumSize: const Size.fromHeight(54)),
