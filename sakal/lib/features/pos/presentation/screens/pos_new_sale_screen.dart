@@ -675,6 +675,8 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
           IconButton(onPressed: () => context.go(RouteNames.posPriceCheck), icon: const Icon(Icons.search, color: Colors.white), tooltip: 'Price Check'),
           IconButton(onPressed: () => context.go(RouteNames.posHold), icon: const Icon(Icons.pause_circle_outline, color: Colors.white), tooltip: 'Held Sales'),
           IconButton(onPressed: () => context.go(RouteNames.posShift), icon: const Icon(Icons.point_of_sale_outlined, color: Colors.white), tooltip: 'Shift & Cash'),
+          IconButton(onPressed: () => context.go(RouteNames.posReports), icon: const Icon(Icons.bar_chart_outlined, color: Colors.white), tooltip: 'Reports'),
+          IconButton(onPressed: () => context.go(RouteNames.posApprovals), icon: const Icon(Icons.fact_check_outlined, color: Colors.white), tooltip: 'Manager Review'),
         ]),
       ),
       if (_cashSetupMissing)
