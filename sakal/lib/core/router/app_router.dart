@@ -113,7 +113,7 @@ import '../services/local_storage.dart';
 import 'route_names.dart';
 import '../../features/pos/presentation/screens/pos_device_setup_screen.dart';
 import '../../features/pos/presentation/screens/pos_pin_login_screen.dart';
-import '../../features/pos/presentation/screens/pos_sale_placeholder_screen.dart';
+import '../../features/pos/presentation/screens/pos_new_sale_screen.dart';
 import '../../features/pos/presentation/screens/pos_setup_screen.dart';
 import '../../features/pos/presentation/screens/pos_shift_screen.dart';
 
@@ -207,7 +207,7 @@ final appRouter = GoRouter(
     // per docs/pos/10_phase_plan.md's recommended build order.
     GoRoute(path: RouteNames.posDeviceSetup, builder: (c, s) => const PosDeviceSetupScreen()),
     GoRoute(path: RouteNames.posLogin,       builder: (c, s) => const PosPinLoginScreen()),
-    GoRoute(path: RouteNames.posSale,        builder: (c, s) => const PosSalePlaceholderScreen()),
+    GoRoute(path: RouteNames.posSale,        builder: (c, s) => const PosNewSaleScreen()),
     GoRoute(path: RouteNames.posShift,       builder: (c, s) => const PosShiftScreen()),
 
     // POS Setup is an admin screen (back-office density) and so DOES live
