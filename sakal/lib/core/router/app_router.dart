@@ -115,6 +115,7 @@ import '../../features/pos/presentation/screens/pos_device_setup_screen.dart';
 import '../../features/pos/presentation/screens/pos_pin_login_screen.dart';
 import '../../features/pos/presentation/screens/pos_sale_placeholder_screen.dart';
 import '../../features/pos/presentation/screens/pos_setup_screen.dart';
+import '../../features/pos/presentation/screens/pos_shift_screen.dart';
 
 // Mirrors sessionProvider state so GoRouter can listen and re-evaluate redirects
 // whenever the user logs in, logs out, or the session is restored on page refresh.
@@ -207,6 +208,7 @@ final appRouter = GoRouter(
     GoRoute(path: RouteNames.posDeviceSetup, builder: (c, s) => const PosDeviceSetupScreen()),
     GoRoute(path: RouteNames.posLogin,       builder: (c, s) => const PosPinLoginScreen()),
     GoRoute(path: RouteNames.posSale,        builder: (c, s) => const PosSalePlaceholderScreen()),
+    GoRoute(path: RouteNames.posShift,       builder: (c, s) => const PosShiftScreen()),
 
     // POS Setup is an admin screen (back-office density) and so DOES live
     // inside the normal AppShell/sidebar below, unlike the till screens
