@@ -9,8 +9,11 @@ import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
+import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../../../../core/utils/local_id.dart';
+import '../../../../core/widgets/offline_banner.dart';
 import '../../../sales/presentation/providers/sales_invoice_providers.dart';
 import '../../data/pos_auth_remote_ds.dart';
 import '../../data/pos_device_storage.dart';
@@ -1102,12 +1105,46 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     }
     if (_saleType == 'CASH' && _splitTender) _collectedAmount = _tenderTotalLocal;
     final session = ref.read(sessionProvider)!;
+
+    // A tracked product's batch/serial candidates come from a live
+    // v_batch_stock_balance/v_serial_stock_status query — there is no
+    // offline candidate source, so a tracked line can never be sold
+    // offline in this build. Caught here, before attempting the queue,
+    // with a clear message rather than a confusing failure deeper down.
+    if (session.offlineMode && _lines.any((l) => l.isBatchTracked || l.isSerialTracked)) {
+      _showMsg('This sale has a batch/serial-tracked item — those cannot be sold while offline. Remove it or reconnect.', color: AppColors.negative);
+      return;
+    }
+
     setState(() { _saving = true; _actionError = null; });
     try {
       final header = _buildHeader(session);
       final lines = _buildLines();
       final (batches, serials) = _buildBatchesAndSerials();
       final ds = ref.read(salesInvoiceRepositoryProvider);
+
+      if (session.offlineMode) {
+        // Mirrors Quick Invoice's own offline-save shape exactly (see
+        // sales_invoice_entry_screen.dart): queue fn_save_sales_invoice
+        // ONLY via SyncEngine, never auto-chain approve (that needs a real
+        // server-assigned invoice number and live stock/cost checks). The
+        // queued invoice lands as a real DRAFT once synced and is picked up
+        // by the existing Manager Review screen — no new review path needed.
+        final localId = generateLocalId();
+        await ref.read(syncEngineProvider).enqueue(
+          documentType: 'SALES_INVOICE',
+          documentId: localId,
+          endpoint: '/rpc/fn_save_sales_invoice',
+          payload: {'p_header': header, 'p_lines': lines, 'p_charges': const [], 'p_batches': batches, 'p_serials': serials, 'p_user_id': session.userId, 'p_enforce_cost_check': false},
+        );
+        await ds.cacheInvoiceLocally(effectiveInvoiceNo: localId, header: header, lines: lines);
+        if (mounted) {
+          _showMsg('Saved offline as $localId — will sync and post once this till is back online.', color: AppColors.secondary);
+          _resetForNextSale();
+        }
+        return;
+      }
+
       final invoiceNo = await ds.save(header: header, lines: lines, charges: const [], batches: batches, serials: serials, userId: session.userId);
       final invoiceDate = header['invoice_date'] as String;
 
@@ -1328,6 +1365,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
         onPointerDown: (_) => _recordInteraction(),
         child: Stack(children: [
           bodyContent,
+          if (session?.offlineMode ?? false) const Positioned(top: 0, left: 0, right: 0, child: OfflineBanner()),
           if (_locked) _buildIdleLockOverlay(),
         ]),
       ),

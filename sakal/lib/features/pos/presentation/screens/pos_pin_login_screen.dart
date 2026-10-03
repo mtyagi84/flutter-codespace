@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +16,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../../data/pos_auth_remote_ds.dart';
 import '../../data/pos_device_storage.dart';
+import '../../data/pos_offline_auth_cache.dart';
 import '../widgets/pos_pin_pad.dart';
 
 /// The till's everyday sign-in — PIN only, no username/password field
@@ -64,8 +67,9 @@ class _PosPinLoginScreenState extends ConsumerState<PosPinLoginScreen> {
     if (_submitting) return;
     setState(() { _submitting = true; _error = null; });
 
+    final deviceUid = await PosDeviceStorage.deviceUid();
+
     try {
-      final deviceUid = await PosDeviceStorage.deviceUid();
       final d = await _ds.pinLogin(deviceUid: deviceUid, pin: pin);
 
       final token = d['access_token'] as String?;
@@ -111,6 +115,18 @@ class _PosPinLoginScreenState extends ConsumerState<PosPinLoginScreen> {
         posDeviceId: d['pos_device_id'] as String?,
       );
 
+      // Cache enough to authenticate this same user offline next time —
+      // never on web (no local secure-storage persistence model for this
+      // across sessions the same way, and POS offline mode is native-only
+      // app-wide per CLAUDE.md's existing Drift/kIsWeb convention).
+      if (!kIsWeb) {
+        try {
+          await PosOfflineAuthCache.save(deviceUid: deviceUid, userId: session.userId, pin: pin, session: session, menu: menuList);
+        } catch (_) {
+          // Caching failure must never block an otherwise-successful login.
+        }
+      }
+
       ref.read(sessionProvider.notifier).state = session;
       ref.read(menuProvider.notifier).state = menuList;
 
@@ -118,6 +134,20 @@ class _PosPinLoginScreenState extends ConsumerState<PosPinLoginScreen> {
       context.go(RouteNames.posSale);
     } catch (e, st) {
       AppLogger.error('PosPinLogin', e, st);
+
+      if (!kIsWeb && _isConnectivityError(e)) {
+        final offline = await PosOfflineAuthCache.tryLogin(deviceUid: deviceUid, pin: pin);
+        if (offline != null) {
+          ref.read(sessionProvider.notifier).state = offline.session;
+          ref.read(menuProvider.notifier).state = offline.menu;
+          if (mounted) context.go(RouteNames.posSale);
+          return;
+        }
+        _pinPadKey.currentState?.clear();
+        if (mounted) setState(() => _error = 'No connection, and no cached offline login for this PIN on this device. Sign in online at least once first.');
+        return;
+      }
+
       _pinPadKey.currentState?.clear();
       if (mounted) {
         setState(() => _error = _friendlyError(e));
@@ -125,6 +155,21 @@ class _PosPinLoginScreenState extends ConsumerState<PosPinLoginScreen> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  /// A DioException with no server response at all (connection refused/
+  /// timed out/no network) — as opposed to one WITH a response (wrong PIN,
+  /// device blocked, etc.), which is a real answer from a reachable server
+  /// and must never trigger the offline fallback.
+  bool _isConnectivityError(Object e) {
+    if (e is SocketException) return true;
+    if (e is! DioException) return false;
+    return e.response == null &&
+        (e.type == DioExceptionType.connectionError ||
+         e.type == DioExceptionType.connectionTimeout ||
+         e.type == DioExceptionType.receiveTimeout ||
+         e.type == DioExceptionType.sendTimeout ||
+         e.type == DioExceptionType.unknown);
   }
 
   String _friendlyError(Object e) {
