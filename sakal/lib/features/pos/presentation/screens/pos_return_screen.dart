@@ -7,6 +7,8 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../../../sales/presentation/providers/sales_return_providers.dart';
+import '../widgets/pos_keyboard.dart';
+import '../widgets/pos_qty_stepper.dart';
 
 const _posReturnReasons = ['Damaged', 'Wrong product', 'Customer changed mind', 'Quality issue', 'Expired', 'Duplicate purchase', 'Pricing issue', 'Other'];
 
@@ -21,7 +23,7 @@ class _ReturnableLine {
   final double soldQty;
   final double alreadyReturned;
   final bool isTracked;
-  final TextEditingController returnQtyCtrl = TextEditingController(text: '0');
+  double returnQty = 0;
 
   double get remaining => soldQty - alreadyReturned;
 
@@ -37,8 +39,6 @@ class _ReturnableLine {
     required this.alreadyReturned,
     required this.isTracked,
   });
-
-  void dispose() => returnQtyCtrl.dispose();
 }
 
 /// Return at the till — reuses the EXISTING Sales Return engine
@@ -72,22 +72,46 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
   final List<_ReturnableLine> _lines = [];
   String _reason = _posReturnReasons.first;
 
+  DateTime _selectedDate = DateTime.now();
+  bool _loadingRecent = false;
+  List<Map<String, dynamic>> _recentInvoices = [];
+
   bool get _showRefund => _invoice != null && _invoice!['sale_type'] == 'CASH' && _invoice!['cash_collection_mode'] == 'IMMEDIATE';
 
-  double get _taxableTotal => _lines.fold(0, (s, l) {
-        final qty = double.tryParse(l.returnQtyCtrl.text) ?? 0;
-        return s + qty * l.rate;
-      });
+  double get _taxableTotal => _lines.fold(0, (s, l) => s + l.returnQty * l.rate);
   double get _taxTotal => 0; // simplified v1 — see header note on tax below
   double get _returnTotal => _taxableTotal + _taxTotal;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadRecentInvoices());
+  }
+
+  @override
   void dispose() {
     _searchCtrl.dispose();
-    for (final l in _lines) {
-      l.dispose();
-    }
     super.dispose();
+  }
+
+  Future<void> _loadRecentInvoices() async {
+    final session = ref.read(sessionProvider)!;
+    final ds = ref.read(salesReturnRepositoryProvider);
+    setState(() => _loadingRecent = true);
+    try {
+      final rows = await ds.getApprovedInvoices(clientId: session.clientId, companyId: session.companyId, invoiceDate: _fmtDate(_selectedDate));
+      if (mounted) setState(() { _recentInvoices = rows; _loadingRecent = false; });
+    } catch (e, st) {
+      AppLogger.error('PosReturnLoadRecent', e, st);
+      if (mounted) setState(() => _loadingRecent = false);
+    }
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(context: context, initialDate: _selectedDate, firstDate: DateTime(2020), lastDate: DateTime.now());
+    if (picked == null) return;
+    setState(() => _selectedDate = picked);
+    _loadRecentInvoices();
   }
 
   Future<void> _findInvoice(String value) async {
@@ -137,7 +161,7 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
   }
 
   Future<void> _submit() async {
-    final returnLines = _lines.where((l) => (double.tryParse(l.returnQtyCtrl.text) ?? 0) > 0).toList();
+    final returnLines = _lines.where((l) => l.returnQty > 0).toList();
     if (returnLines.isEmpty) {
       _showMsg('Enter a return quantity for at least one line.', color: AppColors.negative);
       return;
@@ -162,7 +186,7 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
         'remarks': '',
       };
       final lines = returnLines.asMap().entries.map((e) {
-        final qty = double.tryParse(e.value.returnQtyCtrl.text) ?? 0;
+        final qty = e.value.returnQty;
         final gross = qty * e.value.rate;
         return {
           'serial_no': e.key + 1,
@@ -220,19 +244,65 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 720),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Row(children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchCtrl, autofocus: true,
-                    decoration: const InputDecoration(hintText: 'Invoice number…', border: OutlineInputBorder(), isDense: true),
-                    onSubmitted: _findInvoice,
+              if (_invoice == null) ...[
+                // Browse-first: a date picker (default today) + a tappable
+                // list of that day's APPROVED invoices — typing an invoice
+                // number is kept only as a fallback below, since a cashier
+                // on a touchscreen till has no reliable OS keyboard to type
+                // one with.
+                Row(children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _pickDate,
+                      icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                      label: Text(_fmtDate(_selectedDate)),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                FilledButton(onPressed: _searching ? null : () => _findInvoice(_searchCtrl.text), child: _searching ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Find')),
-              ]),
+                  const SizedBox(width: 10),
+                  if (_loadingRecent) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                ]),
+                const SizedBox(height: 10),
+                if (!_loadingRecent && _recentInvoices.isEmpty)
+                  const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Text('No approved invoices for this date.', style: TextStyle(color: AppColors.textSecondary))),
+                ..._recentInvoices.map((inv) {
+                  final customer = (inv['customer'] as Map<String, dynamic>?)?['account_name'] as String?;
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: const Icon(Icons.receipt_long_outlined, color: AppColors.primary),
+                      title: Text(inv['invoice_no'] as String, style: const TextStyle(fontWeight: FontWeight.w700)),
+                      subtitle: Text('${customer ?? 'Walk-in'} · ${inv['sale_type']}'),
+                      trailing: Text((inv['grand_total'] as num).toStringAsFixed(2), style: const TextStyle(fontWeight: FontWeight.w800)),
+                      onTap: () => _findInvoice(inv['invoice_no'] as String),
+                    ),
+                  );
+                }),
+                const SizedBox(height: 14),
+                const Text('Or find by invoice number', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                const SizedBox(height: 6),
+                Row(children: [
+                  Expanded(
+                    child: PosKeyboardField(
+                      label: 'Invoice number…',
+                      value: _searchCtrl.text,
+                      onChanged: (v) => _searchCtrl.text = v,
+                      onConfirmedSubmit: () => _findInvoice(_searchCtrl.text),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  FilledButton(onPressed: _searching ? null : () => _findInvoice(_searchCtrl.text), child: _searching ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Find')),
+                ]),
+              ],
               if (_error != null) Padding(padding: const EdgeInsets.only(top: 10), child: Text(_error!, style: const TextStyle(color: AppColors.negative))),
               if (_invoice != null) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => setState(() { _invoice = null; _lines.clear(); _error = null; }),
+                    icon: const Icon(Icons.arrow_back, size: 16),
+                    label: const Text('Back to invoice list'),
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Card(
                   child: Padding(
@@ -261,14 +331,12 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
                             ]),
                           ),
                           SizedBox(
-                            width: 90,
-                            child: TextField(
-                              controller: l.returnQtyCtrl,
+                            width: 140,
+                            child: PosQtyStepper(
+                              value: l.returnQty,
+                              min: 0,
                               enabled: !l.isTracked && l.remaining > 0,
-                              textAlign: TextAlign.center,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              decoration: const InputDecoration(isDense: true, labelText: 'Return Qty'),
-                              onChanged: (_) => setState(() {}),
+                              onChanged: (v) => setState(() => l.returnQty = v > l.remaining ? l.remaining : v),
                             ),
                           ),
                         ]),

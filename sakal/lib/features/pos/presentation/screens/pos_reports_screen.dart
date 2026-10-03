@@ -7,6 +7,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../widgets/pos_session_guard.dart';
 
 /// Z-report / shift summary — v1 scope. Reads `rih_sales_invoices`/
 /// `rih_pos_payouts`/`rih_pos_shift_opening_float` directly, NOT any GL
@@ -31,11 +32,39 @@ class _PosReportsScreenState extends ConsumerState<PosReportsScreen> {
   int _salesCount = 0;
   double _cashSales = 0;
   double _creditSales = 0;
-  double _openingFloat = 0;
-  double _cashIn = 0;
-  double _cashOut = 0;
-  double _payout = 0;
-  double _cashDrop = 0;
+  String _localCcy = '';
+
+  // Every cash figure is kept PER CURRENCY — 1500 CDF and 10 USD can never
+  // correctly be summed into one number, which is exactly the bug a live
+  // user report caught (opening float shown as "15010.00" instead of two
+  // separate lines). Cash Out and Payout are merged here (both are simply
+  // "cash leaving the drawer for a reason") — Cash Drop stays separate since
+  // it's a safekeeping transfer, not an expense.
+  final Map<String, double> _openingFloatByCcy = {};
+  final Map<String, double> _cashInByCcy = {};
+  final Map<String, double> _cashOutByCcy = {};
+  final Map<String, double> _cashDropByCcy = {};
+
+  Set<String> get _touchedCurrencies => {
+        ..._openingFloatByCcy.keys,
+        ..._cashInByCcy.keys,
+        ..._cashOutByCcy.keys,
+        ..._cashDropByCcy.keys,
+        if (_localCcy.isNotEmpty) _localCcy,
+      };
+
+  double _expectedCashFor(String currency) {
+    final opening = _openingFloatByCcy[currency] ?? 0;
+    final cashIn = _cashInByCcy[currency] ?? 0;
+    final cashOut = _cashOutByCcy[currency] ?? 0;
+    final cashDrop = _cashDropByCcy[currency] ?? 0;
+    // Cash sales are always collected in the company's own local currency —
+    // the only currency a physical drawer ever actually holds (same "cash
+    // is always local" rule New Sale enforces when forcing the invoice
+    // currency for a CASH sale).
+    final cashSales = currency == _localCcy ? _cashSales : 0;
+    return opening + cashSales + cashIn - cashOut - cashDrop;
+  }
 
   @override
   void initState() {
@@ -51,6 +80,11 @@ class _PosReportsScreenState extends ConsumerState<PosReportsScreen> {
     }
     setState(() { _loading = true; _error = null; });
     try {
+      final companyRes = await DioClient.instance.get('/ric_companies', queryParameters: {
+        'id': 'eq.${session.companyId}', 'select': 'local_currency',
+      });
+      _localCcy = ((companyRes.data as List).first as Map<String, dynamic>)['local_currency'] as String? ?? '';
+
       final res = await DioClient.instance.get('/rih_pos_shifts', queryParameters: {
         'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
         'terminal_id': 'eq.${session.posTerminalId}', 'is_deleted': 'eq.false',
@@ -80,18 +114,32 @@ class _PosReportsScreenState extends ConsumerState<PosReportsScreen> {
     _cashSales = invoices.where((i) => i['sale_type'] == 'CASH').fold(0, (s, i) => s + (i['grand_total'] as num).toDouble());
     _creditSales = _salesTotal - _cashSales;
 
-    final floatRes = await DioClient.instance.get('/rih_pos_shift_opening_float', queryParameters: {'shift_id': 'eq.$shiftId', 'select': 'opening_amount'});
-    _openingFloat = (floatRes.data as List).fold(0, (s, r) => s + ((r as Map<String, dynamic>)['opening_amount'] as num).toDouble());
+    _openingFloatByCcy.clear();
+    _cashInByCcy.clear();
+    _cashOutByCcy.clear();
+    _cashDropByCcy.clear();
 
-    final payoutRes = await DioClient.instance.get('/rih_pos_payouts', queryParameters: {'shift_id': 'eq.$shiftId', 'is_deleted': 'eq.false', 'select': 'movement_type,amount'});
-    final payouts = List<Map<String, dynamic>>.from(payoutRes.data as List);
-    _cashIn = payouts.where((p) => p['movement_type'] == 'CASH_IN').fold(0, (s, p) => s + (p['amount'] as num).toDouble());
-    _cashOut = payouts.where((p) => p['movement_type'] == 'CASH_OUT').fold(0, (s, p) => s + (p['amount'] as num).toDouble());
-    _payout = payouts.where((p) => p['movement_type'] == 'PAYOUT').fold(0, (s, p) => s + (p['amount'] as num).toDouble());
-    _cashDrop = payouts.where((p) => p['movement_type'] == 'CASH_DROP').fold(0, (s, p) => s + (p['amount'] as num).toDouble());
+    final floatRes = await DioClient.instance.get('/rih_pos_shift_opening_float', queryParameters: {'shift_id': 'eq.$shiftId', 'select': 'currency_id,opening_amount'});
+    for (final r in (floatRes.data as List).cast<Map<String, dynamic>>()) {
+      final ccy = r['currency_id'] as String;
+      _openingFloatByCcy[ccy] = (_openingFloatByCcy[ccy] ?? 0) + (r['opening_amount'] as num).toDouble();
+    }
+
+    final payoutRes = await DioClient.instance.get('/rih_pos_payouts', queryParameters: {'shift_id': 'eq.$shiftId', 'is_deleted': 'eq.false', 'select': 'movement_type,amount,currency_id'});
+    for (final p in (payoutRes.data as List).cast<Map<String, dynamic>>()) {
+      final ccy = p['currency_id'] as String;
+      final amount = (p['amount'] as num).toDouble();
+      switch (p['movement_type']) {
+        case 'CASH_IN':
+          _cashInByCcy[ccy] = (_cashInByCcy[ccy] ?? 0) + amount;
+        case 'CASH_OUT':
+        case 'PAYOUT':
+          _cashOutByCcy[ccy] = (_cashOutByCcy[ccy] ?? 0) + amount;
+        case 'CASH_DROP':
+          _cashDropByCcy[ccy] = (_cashDropByCcy[ccy] ?? 0) + amount;
+      }
+    }
   }
-
-  double get _expectedCash => _openingFloat + _cashSales + _cashIn - _cashOut - _payout - _cashDrop;
 
   Future<void> _onShiftChanged(String? id) async {
     if (id == null) return;
@@ -113,10 +161,7 @@ class _PosReportsScreenState extends ConsumerState<PosReportsScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text(_error!, style: const TextStyle(color: AppColors.negative)),
-                  TextButton(onPressed: _loadShifts, child: const Text('Retry')),
-                ]))
+              ? buildPosSessionGuardError(context, _error!, _loadShifts)
               : _shifts.isEmpty
                   ? const Center(child: Text('No shifts yet on this till.', style: TextStyle(color: AppColors.textSecondary)))
                   : Center(
@@ -140,17 +185,23 @@ class _PosReportsScreenState extends ConsumerState<PosReportsScreen> {
                               _row('Total Sales', _salesTotal.toStringAsFixed(2), bold: true),
                             ]),
                             const SizedBox(height: 12),
-                            _sectionCard('Cash Movements', [
-                              _row('Opening Float', _openingFloat.toStringAsFixed(2)),
-                              _row('Cash In', _cashIn.toStringAsFixed(2)),
-                              _row('Cash Out', (-_cashOut).toStringAsFixed(2)),
-                              _row('Payouts', (-_payout).toStringAsFixed(2)),
-                              _row('Cash Drops', (-_cashDrop).toStringAsFixed(2)),
-                              _row('Expected Cash', _expectedCash.toStringAsFixed(2), bold: true),
-                            ]),
-                            const SizedBox(height: 12),
+                            // One card PER CURRENCY — never a single blended
+                            // number (the real bug a live user report caught:
+                            // 1500 CDF + 10 USD can never correctly become
+                            // one figure).
+                            ..._touchedCurrencies.map((ccy) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: _sectionCard('Cash Movements ($ccy)', [
+                                    _row('Opening Float', (_openingFloatByCcy[ccy] ?? 0).toStringAsFixed(2)),
+                                    if (ccy == _localCcy) _row('Cash Sales', _cashSales.toStringAsFixed(2)),
+                                    _row('Cash In', (_cashInByCcy[ccy] ?? 0).toStringAsFixed(2)),
+                                    _row('Pay Outs', (-(_cashOutByCcy[ccy] ?? 0)).toStringAsFixed(2)),
+                                    _row('Cash Drops', (-(_cashDropByCcy[ccy] ?? 0)).toStringAsFixed(2)),
+                                    _row('Expected Cash', _expectedCashFor(ccy).toStringAsFixed(2), bold: true),
+                                  ]),
+                                )),
                             const Text(
-                              'Tender-method and multi-currency breakdowns will appear here once split-tender payments ship (see docs/pos/03_payments_multicurrency.md).',
+                              'Tender-method breakdowns will appear here once split-tender payments ship (see docs/pos/03_payments_multicurrency.md).',
                               style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
                             ),
                           ]),

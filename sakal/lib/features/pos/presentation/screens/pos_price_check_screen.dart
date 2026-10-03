@@ -7,6 +7,7 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../../../sales/presentation/providers/sales_invoice_providers.dart';
+import '../widgets/pos_keyboard.dart';
 
 /// Kiosk-style, read-only: scan or search, see the price and stock on hand.
 /// Deliberately the simplest POS screen — no cart, no customer, nothing
@@ -115,12 +116,44 @@ class _PosPriceCheckScreenState extends ConsumerState<PosPriceCheckScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    TextField(
-                      controller: _searchCtrl, focusNode: _focus, autofocus: true, textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 19),
-                      decoration: const InputDecoration(hintText: 'Scan or type a barcode / SKU…', border: OutlineInputBorder()),
-                      onSubmitted: _search,
-                    ),
+                    // Primary flow stays scan-first (autofocus + a barcode
+                    // scanner needs no on-screen UI at all, it types+Enters
+                    // like a keyboard-wedge) — the keyboard icon is an
+                    // explicit, visible fallback for manual entry, since
+                    // there is no reliable OS on-screen keyboard on real POS
+                    // touchscreen hardware.
+                    Row(children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchCtrl, focusNode: _focus, autofocus: true, textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 19),
+                          decoration: const InputDecoration(hintText: 'Scan or type a barcode / SKU…', border: OutlineInputBorder()),
+                          onSubmitted: _search,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Material(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(10),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(10),
+                          onTap: () => PosKeyboard.show(
+                            context,
+                            title: 'Barcode / SKU',
+                            initialValue: _searchCtrl.text,
+                            onConfirm: (v) {
+                              _searchCtrl.text = v;
+                              _search(v);
+                            },
+                          ),
+                          child: Container(
+                            width: 48, height: 48,
+                            decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
+                            child: const Icon(Icons.keyboard_outlined, color: AppColors.textSecondary),
+                          ),
+                        ),
+                      ),
+                    ]),
                     const SizedBox(height: 28),
                     if (_loading) const CircularProgressIndicator(),
                     if (_error != null) Text(_error!, style: const TextStyle(color: AppColors.negative)),

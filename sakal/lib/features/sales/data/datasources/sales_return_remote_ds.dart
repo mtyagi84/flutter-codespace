@@ -99,6 +99,7 @@ class SalesReturnRemoteDs {
     required String clientId,
     required String companyId,
     String? search,
+    String? invoiceDate,
   }) async {
     final params = <String, dynamic>{
       'client_id':  'eq.$clientId', 'company_id': 'eq.$companyId',
@@ -106,10 +107,11 @@ class SalesReturnRemoteDs {
       'select':     'invoice_no,invoice_date,customer_id,sale_type,grand_total,stock_dispatch_mode,'
           'cash_collection_mode,collected_amount_local,collected_amount_base,'
           'customer:rim_accounts!customer_id(account_code,account_name)',
-      'order':      'invoice_date.desc',
+      'order':      'invoice_date.desc,created_at.desc',
       'limit':      '50',
     };
     if (search != null && search.isNotEmpty) params['invoice_no'] = 'ilike.*$search*';
+    if (invoiceDate != null) params['invoice_date'] = 'eq.$invoiceDate';
     final res = await _dio.get('/rih_sales_invoices', queryParameters: params);
     return List<Map<String, dynamic>>.from(res.data as List);
   }

@@ -35,6 +35,7 @@ abstract class SalesReturnRepository {
     required String clientId,
     required String companyId,
     String? search,
+    String? invoiceDate,
   });
 
   Future<List<Map<String, dynamic>>> getInvoiceLines({

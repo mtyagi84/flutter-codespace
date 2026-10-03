@@ -7,6 +7,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../widgets/pos_session_guard.dart';
 
 /// Held (DRAFT) sales for the CURRENT open shift — "holding" a sale is
 /// nothing more than saving it as a DRAFT without approving
@@ -107,10 +108,7 @@ class _PosHoldSalesScreenState extends ConsumerState<PosHoldSalesScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text(_error!, style: const TextStyle(color: AppColors.negative)),
-                  TextButton(onPressed: _load, child: const Text('Retry')),
-                ]))
+              ? buildPosSessionGuardError(context, _error!, _load)
               : _held.isEmpty
                   ? const Center(child: Text('No baskets on hold.', style: TextStyle(color: AppColors.textSecondary)))
                   : ListView.builder(

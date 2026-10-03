@@ -71,7 +71,8 @@ class SalesReturnRepositoryImpl implements SalesReturnRepository {
     required String clientId,
     required String companyId,
     String? search,
-  }) => _remote.getApprovedInvoices(clientId: clientId, companyId: companyId, search: search);
+    String? invoiceDate,
+  }) => _remote.getApprovedInvoices(clientId: clientId, companyId: companyId, search: search, invoiceDate: invoiceDate);
 
   @override
   Future<List<Map<String, dynamic>>> getInvoiceLines({

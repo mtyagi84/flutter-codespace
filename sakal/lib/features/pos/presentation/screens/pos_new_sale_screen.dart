@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/errors/error_presenter.dart';
@@ -9,6 +8,10 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../../../sales/presentation/providers/sales_invoice_providers.dart';
+import '../widgets/pos_amount_field.dart';
+import '../widgets/pos_numpad.dart';
+import '../widgets/pos_qty_stepper.dart';
+import '../widgets/pos_session_guard.dart';
 
 /// POS New Sale — v1. Deliberately built DIRECTLY on the same, already-
 /// proven `salesInvoiceRepositoryProvider` Quick Invoice itself uses
@@ -55,9 +58,9 @@ class _PosLineRow {
   final String uomLabel;
   final double uomConversionFactor;
   final String? taxGroupId;
-  final TextEditingController qtyCtrl = TextEditingController(text: '1');
-  final TextEditingController rateCtrl;
-  final TextEditingController discountPctCtrl = TextEditingController(text: '0');
+  double qty;
+  double rate;
+  double discountPct = 0;
   String? discountGivenBy;
 
   double baseQty = 0;
@@ -75,20 +78,9 @@ class _PosLineRow {
     required this.uomLabel,
     required this.uomConversionFactor,
     required this.taxGroupId,
-    required double rate,
-  }) : rateCtrl = TextEditingController(text: _trim(rate));
-
-  static String _trim(double v) {
-    var s = v.toStringAsFixed(4);
-    s = s.contains('.') ? s.replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '') : s;
-    return s;
-  }
-
-  void dispose() {
-    qtyCtrl.dispose();
-    rateCtrl.dispose();
-    discountPctCtrl.dispose();
-  }
+    required this.rate,
+    this.qty = 1,
+  });
 }
 
 class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
@@ -125,8 +117,13 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   double _rateToLocal = 1;
 
   final _searchCtrl = TextEditingController();
-  final _collectedCtrl = TextEditingController();
+  double? _collectedAmount; // null = not overridden, defaults to the full total
   final _searchFocus = FocusNode();
+  // Set via the "×N next scan" control below the search bar — applies to the
+  // NEXT product added (scan or search), then resets to 1. Standard
+  // "quantity then scan" supermarket POS flow, so selling 5 of an item
+  // doesn't require scanning it 5 separate times.
+  double _pendingQty = 1;
 
   double get _subtotal => _lines.fold(0, (s, l) => s + l.taxableAmount);
   double get _discountTotal => _lines.fold(0, (s, l) => s + l.discountAmount);
@@ -141,11 +138,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
 
   @override
   void dispose() {
-    for (final l in _lines) {
-      l.dispose();
-    }
     _searchCtrl.dispose();
-    _collectedCtrl.dispose();
     _searchFocus.dispose();
     super.dispose();
   }
@@ -249,9 +242,9 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
         uomConversionFactor: (l['uom_conversion_factor'] as num?)?.toDouble() ?? 1,
         taxGroupId: l['tax_group_id'] as String?,
         rate: (l['rate'] as num?)?.toDouble() ?? 0,
+        qty: (l['qty_pack'] as num?)?.toDouble() ?? 0,
       );
-      row.qtyCtrl.text = ((l['qty_pack'] as num?)?.toDouble() ?? 0).toString();
-      row.discountPctCtrl.text = ((l['discount_percent'] as num?)?.toDouble() ?? 0).toString();
+      row.discountPct = (l['discount_percent'] as num?)?.toDouble() ?? 0;
       row.discountGivenBy = l['discount_given_by'] as String?;
       _lines.add(row);
     }
@@ -382,10 +375,12 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       }
     }
 
+    final qtyToAdd = _pendingQty;
+    _pendingQty = 1;
+
     final existing = _lines.where((l) => l.productId == product['id'] && l.uomId == uomId).toList();
     if (existing.isNotEmpty) {
-      final qty = double.tryParse(existing.first.qtyCtrl.text) ?? 0;
-      existing.first.qtyCtrl.text = (qty + 1).toString();
+      existing.first.qty += qtyToAdd;
       _recompute();
       return;
     }
@@ -400,6 +395,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
         uomConversionFactor: uomFactorOverride ?? 1,
         taxGroupId: product['sales_tax_group_id'] as String?,
         rate: rate,
+        qty: qtyToAdd,
       ));
       _recompute();
     });
@@ -408,19 +404,15 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   void _removeLine(_PosLineRow row) {
     setState(() {
       _lines.remove(row);
-      row.dispose();
       _recompute();
     });
   }
 
   void _recompute() {
     for (final l in _lines) {
-      final qty = double.tryParse(l.qtyCtrl.text) ?? 0;
-      final rate = double.tryParse(l.rateCtrl.text) ?? 0;
-      final discountPct = double.tryParse(l.discountPctCtrl.text) ?? 0;
-      l.baseQty = qty * l.uomConversionFactor;
-      l.grossAmount = l.baseQty * rate;
-      l.discountAmount = l.grossAmount * discountPct / 100;
+      l.baseQty = l.qty * l.uomConversionFactor;
+      l.grossAmount = l.baseQty * l.rate;
+      l.discountAmount = l.grossAmount * l.discountPct / 100;
       l.taxableAmount = l.grossAmount - l.discountAmount;
       final ratePct = l.taxGroupId != null ? (_taxGroupRatePct[l.taxGroupId] ?? 0) : 0;
       l.taxAmount = l.taxableAmount * ratePct / 100;
@@ -429,19 +421,21 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     setState(() {});
   }
 
-  Future<void> _onDiscountChanged(_PosLineRow row, String value) async {
-    final pct = double.tryParse(value) ?? 0;
+  Future<void> _onDiscountChanged(_PosLineRow row, double pct) async {
     final withinCap = _canGiveDiscount && (_maxDiscountPercent == null || pct <= _maxDiscountPercent!);
     final session = ref.read(sessionProvider)!;
     if (pct <= 0) {
+      row.discountPct = 0;
       row.discountGivenBy = null;
     } else if (withinCap) {
+      row.discountPct = pct;
       row.discountGivenBy = session.userId;
     } else {
       final approverId = await _showDiscountOverrideDialog(pct);
       if (approverId == null) {
-        row.discountPctCtrl.text = '0';
+        row.discountPct = 0;
       } else {
+        row.discountPct = pct;
         row.discountGivenBy = approverId;
       }
     }
@@ -547,7 +541,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       'charges_amount': 0,
       'tax_amount': _taxTotal,
       'grand_total': _grandTotal,
-      'collected_amount_local': _saleType == 'CASH' ? (double.tryParse(_collectedCtrl.text) ?? _grandTotal) : null,
+      'collected_amount_local': _saleType == 'CASH' ? (_collectedAmount ?? _grandTotal) : null,
       'collected_amount_base': null,
       'remarks': '',
       'pos_shift_id': _shift?['id'],
@@ -562,14 +556,14 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
             'barcode': '',
             'uom_id': e.value.uomId,
             'uom_conversion_factor': e.value.uomConversionFactor,
-            'qty_pack': double.tryParse(e.value.qtyCtrl.text) ?? 0,
+            'qty_pack': e.value.qty,
             'qty_loose': 0,
             'base_qty': e.value.baseQty,
-            'rate': double.tryParse(e.value.rateCtrl.text) ?? 0,
+            'rate': e.value.rate,
             'price_override_reason': '',
             'discount_given_by': e.value.discountGivenBy,
             'gross_amount': e.value.grossAmount,
-            'discount_percent': double.tryParse(e.value.discountPctCtrl.text) ?? 0,
+            'discount_percent': e.value.discountPct,
             'discount_amount': e.value.discountAmount,
             'tax_group_id': e.value.taxGroupId,
             'tax_amount': e.value.taxAmount,
@@ -614,11 +608,9 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   }
 
   void _resetForNextSale() {
-    for (final l in _lines) {
-      l.dispose();
-    }
     _lines.clear();
-    _collectedCtrl.clear();
+    _collectedAmount = null;
+    _pendingQty = 1;
     _invoiceNo = null;
     _invoiceDate = null;
     setState(() {});
@@ -635,10 +627,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text(_error!, style: const TextStyle(color: AppColors.negative)),
-                  TextButton(onPressed: _init, child: const Text('Retry')),
-                ]))
+              ? buildPosSessionGuardError(context, _error!, _init)
               : _shift == null
                   ? _buildNoShift()
                   : _buildSaleBody(session!),
@@ -663,7 +652,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
         color: AppColors.primary,
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
         child: Row(children: [
-          const Text('SAKAL POS — New Sale', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+          const Text('SAKAL POS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
           const SizedBox(width: 12),
           _Pill(text: session.posTerminalName ?? ''),
           const SizedBox(width: 8),
@@ -674,14 +663,27 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
             selected: {_saleType},
             onSelectionChanged: (s) => _onSaleTypeChanged(s.first),
           ),
-          const SizedBox(width: 8),
-          IconButton(onPressed: () => context.go(RouteNames.posReturn), icon: const Icon(Icons.undo, color: Colors.white), tooltip: 'Return'),
-          IconButton(onPressed: () => context.go(RouteNames.posPriceCheck), icon: const Icon(Icons.search, color: Colors.white), tooltip: 'Price Check'),
-          IconButton(onPressed: () => context.go(RouteNames.posHold), icon: const Icon(Icons.pause_circle_outline, color: Colors.white), tooltip: 'Held Sales'),
-          IconButton(onPressed: () => context.go(RouteNames.posShift), icon: const Icon(Icons.point_of_sale_outlined, color: Colors.white), tooltip: 'Shift & Cash'),
-          IconButton(onPressed: () => context.go(RouteNames.posReports), icon: const Icon(Icons.bar_chart_outlined, color: Colors.white), tooltip: 'Reports'),
-          IconButton(onPressed: () => context.go(RouteNames.posApprovals), icon: const Icon(Icons.fact_check_outlined, color: Colors.white), tooltip: 'Manager Review'),
         ]),
+      ),
+      // A horizontally-scrollable row of LARGE, labeled touch buttons —
+      // replaces 6 bare 36dp icon buttons crammed into the header, which a
+      // real user flagged live as "not touchable by fingertip." Each button
+      // is ≥56dp tall with a visible label, not an icon-only tooltip that
+      // only a mouse hover would ever reveal.
+      Container(
+        color: AppColors.primary,
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+        child: SizedBox(
+          height: 58,
+          child: ListView(scrollDirection: Axis.horizontal, children: [
+            _HeaderActionButton(icon: Icons.undo, label: 'Return', onTap: () => context.go(RouteNames.posReturn)),
+            _HeaderActionButton(icon: Icons.search, label: 'Price Check', onTap: () => context.go(RouteNames.posPriceCheck)),
+            _HeaderActionButton(icon: Icons.pause_circle_outline, label: 'Held Sales', onTap: () => context.go(RouteNames.posHold)),
+            _HeaderActionButton(icon: Icons.point_of_sale_outlined, label: 'Shift & Cash', onTap: () => context.go(RouteNames.posShift)),
+            _HeaderActionButton(icon: Icons.bar_chart_outlined, label: 'Reports', onTap: () => context.go(RouteNames.posReports)),
+            _HeaderActionButton(icon: Icons.fact_check_outlined, label: 'Manager Review', onTap: () => context.go(RouteNames.posApprovals)),
+          ]),
+        ),
       ),
       if (_cashSetupMissing)
         Container(
@@ -696,6 +698,30 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       Padding(
         padding: const EdgeInsets.all(12),
         child: Row(children: [
+          // Set a quantity BEFORE scanning (standard "quantity-then-scan"
+          // supermarket POS flow) — selling 5 of an item no longer requires
+          // scanning it 5 separate times.
+          Material(
+            color: _pendingQty != 1 ? AppColors.secondary.withValues(alpha: 0.15) : AppColors.background,
+            borderRadius: BorderRadius.circular(10),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => PosNumpad.show(
+                context,
+                title: 'Quantity for next scan',
+                initialValue: _pendingQty,
+                onConfirm: (v) => setState(() => _pendingQty = v <= 0 ? 1 : v),
+              ),
+              child: Container(
+                height: 48,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
+                alignment: Alignment.center,
+                child: Text('×${_pendingQty == _pendingQty.roundToDouble() ? _pendingQty.toInt() : _pendingQty}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: TextField(
               controller: _searchCtrl, focusNode: _searchFocus, autofocus: true,
@@ -747,11 +773,11 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
                   Text('${l.productCode} · ${l.uomLabel}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                 ]),
               ),
-              SizedBox(width: 70, child: TextField(controller: l.qtyCtrl, textAlign: TextAlign.center, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: const InputDecoration(isDense: true, labelText: 'Qty'), onChanged: (_) => _recompute())),
+              SizedBox(width: 130, child: PosQtyStepper(value: l.qty, min: 0, onChanged: (v) { l.qty = v; _recompute(); })),
               const SizedBox(width: 8),
-              SizedBox(width: 90, child: TextField(controller: l.rateCtrl, textAlign: TextAlign.right, enabled: _canOverridePrice, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(isDense: true, labelText: 'Rate'), onChanged: (_) => _recompute())),
+              SizedBox(width: 100, child: PosAmountField(label: 'Rate', value: l.rate, enabled: _canOverridePrice, onChanged: (v) { l.rate = v; _recompute(); })),
               const SizedBox(width: 8),
-              SizedBox(width: 70, child: TextField(controller: l.discountPctCtrl, textAlign: TextAlign.right, enabled: _canGiveDiscount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(isDense: true, labelText: 'Disc %'), onChanged: (v) => _onDiscountChanged(l, v))),
+              SizedBox(width: 90, child: PosAmountField(label: 'Disc %', value: l.discountPct, enabled: _canGiveDiscount, onChanged: (v) => _onDiscountChanged(l, v))),
               const SizedBox(width: 10),
               SizedBox(width: 80, child: Text(l.finalAmount.toStringAsFixed(2), textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w800))),
               IconButton(onPressed: () => _removeLine(l), icon: const Icon(Icons.close, size: 18, color: AppColors.negative)),
@@ -777,17 +803,21 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
         ]),
         if (_saleType == 'CASH') ...[
           const SizedBox(height: 10),
-          TextField(
-            controller: _collectedCtrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(labelText: 'Collected ($_localCcy, blank = full amount)', border: const OutlineInputBorder(), isDense: true),
+          PosAmountField(
+            label: 'Collected',
+            value: _collectedAmount ?? _grandTotal,
+            suffixText: _localCcy,
+            onChanged: (v) => setState(() => _collectedAmount = v),
           ),
         ],
         const SizedBox(height: 10),
-        OutlinedButton.icon(
-          onPressed: _holding ? null : _hold,
-          icon: _holding ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.pause_circle_outline, size: 18),
-          label: const Text('Hold Sale'),
+        SizedBox(
+          height: 48,
+          child: OutlinedButton.icon(
+            onPressed: _holding ? null : _hold,
+            icon: _holding ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.pause_circle_outline, size: 18),
+            label: const Text('Hold Sale'),
+          ),
         ),
         const SizedBox(height: 8),
         FilledButton(
@@ -819,6 +849,41 @@ class _Pill extends StatelessWidget {
         decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(999)),
         child: Text(text, style: const TextStyle(color: Color(0xFFC9D4EE), fontSize: 12)),
       );
+}
+
+/// A single large, labeled touch button in New Sale's horizontally-scrollable
+/// navigation row — replaces a bare icon-only `IconButton` (36dp hit target,
+/// tooltip-only label) with a ≥56dp finger-sized target that always shows
+/// its label, not just on mouse hover.
+class _HeaderActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _HeaderActionButton({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Material(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Container(
+            width: 84,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(icon, color: Colors.white, size: 20),
+              const SizedBox(height: 3),
+              Text(label, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w600)),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _CustomerPickerDialog extends StatefulWidget {

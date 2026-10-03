@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
+import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../widgets/pos_amount_field.dart';
+import '../widgets/pos_session_guard.dart';
 
 /// Shift open / cash movements / close-and-cash-up — the operational loop a
 /// cashier repeats every day. See docs/pos/04_shift_cash_management.md.
@@ -116,10 +120,7 @@ class _PosShiftScreenState extends ConsumerState<PosShiftScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text(_error!, style: const TextStyle(color: AppColors.negative)),
-                  TextButton(onPressed: _load, child: const Text('Retry')),
-                ]))
+              ? buildPosSessionGuardError(context, _error!, _load)
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(16),
                   child: Center(
@@ -153,15 +154,22 @@ class _PosShiftScreenState extends ConsumerState<PosShiftScreen> {
         ),
       ),
       const SizedBox(height: 14),
-      GridView.count(
-        crossAxisCount: 4, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: 1.1,
-        children: [
-          _MovementButton(icon: Icons.south_west, label: 'Cash In', onTap: () => _openMovementDialog('CASH_IN')),
-          _MovementButton(icon: Icons.north_east, label: 'Cash Out', onTap: () => _openMovementDialog('CASH_OUT')),
-          _MovementButton(icon: Icons.receipt_long, label: 'Payout', onTap: () => _openMovementDialog('PAYOUT')),
-          _MovementButton(icon: Icons.account_balance, label: 'Cash Drop', onTap: () => _openMovementDialog('CASH_DROP')),
-        ],
+      _MovementTile(
+        icon: Icons.south_west, color: AppColors.positive,
+        title: 'Cash In', subtitle: 'Add cash to the drawer (e.g. a float top-up).',
+        onTap: () => _openMovementDialog('CASH_IN'),
+      ),
+      const SizedBox(height: 10),
+      _MovementTile(
+        icon: Icons.receipt_long, color: AppColors.secondary,
+        title: 'Pay Out', subtitle: 'Cash paid out for a reason — petty expense, courier, supplies.',
+        onTap: () => _openMovementDialog('PAYOUT'),
+      ),
+      const SizedBox(height: 10),
+      _MovementTile(
+        icon: Icons.account_balance, color: AppColors.primary,
+        title: 'Cash Drop', subtitle: 'Move excess cash to the safe for safekeeping — not an expense.',
+        onTap: () => _openMovementDialog('CASH_DROP'),
       ),
       const SizedBox(height: 18),
       const Text('Today\'s Movements', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.textSecondary)),
@@ -230,11 +238,17 @@ class _PosShiftScreenState extends ConsumerState<PosShiftScreen> {
   }
 }
 
-class _MovementButton extends StatelessWidget {
+/// A full-width, large touch target (min 64dp tall) — replaces the old
+/// 4-button grid whose "Cash Out" and "Payout" entries were functionally
+/// duplicated (both just direction=OUT, confirmed confusing live) and whose
+/// 1.1-aspect-ratio tiles were too small for a shop-floor finger tap.
+class _MovementTile extends StatelessWidget {
   final IconData icon;
-  final String label;
+  final Color color;
+  final String title;
+  final String subtitle;
   final VoidCallback onTap;
-  const _MovementButton({required this.icon, required this.label, required this.onTap});
+  const _MovementTile({required this.icon, required this.color, required this.title, required this.subtitle, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -245,12 +259,24 @@ class _MovementButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Container(
+          constraints: const BoxConstraints(minHeight: 64),
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
-          padding: const EdgeInsets.all(8),
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(icon, color: AppColors.primary),
-            const SizedBox(height: 6),
-            Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
+          padding: const EdgeInsets.all(14),
+          child: Row(children: [
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+              alignment: Alignment.center,
+              child: Icon(icon, color: color),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5)),
+                Text(subtitle, style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+              ]),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
           ]),
         ),
       ),
@@ -269,27 +295,24 @@ class _OpenShiftCard extends StatefulWidget {
 }
 
 class _OpenShiftCardState extends State<_OpenShiftCard> {
-  final Map<String, TextEditingController> _floatCtrls = {};
+  final Map<String, double> _floatValues = {};
   final _notesCtrl = TextEditingController();
   bool _saving = false;
 
   @override
   void dispose() {
-    for (final c in _floatCtrls.values) {
-      c.dispose();
-    }
     _notesCtrl.dispose();
     super.dispose();
   }
 
-  TextEditingController _ctrlFor(String currency) => _floatCtrls.putIfAbsent(currency, () => TextEditingController(text: '0'));
+  double _valueFor(String currency) => _floatValues[currency] ?? 0;
 
   Future<void> _open(WidgetRef ref) async {
     final session = ref.read(sessionProvider)!;
     setState(() => _saving = true);
     try {
       final floats = widget.currencies
-          .map((c) => {'currency_id': c['currency_id'], 'amount': double.tryParse(_ctrlFor(c['currency_id'] as String).text) ?? 0})
+          .map((c) => {'currency_id': c['currency_id'], 'amount': _valueFor(c['currency_id'] as String)})
           .where((f) => (f['amount'] as num) > 0)
           .toList();
       await DioClient.instance.post('/rpc/fn_open_pos_shift', data: {
@@ -301,6 +324,10 @@ class _OpenShiftCardState extends State<_OpenShiftCard> {
         'p_opening_floats': floats,
       });
       widget.onOpened();
+      // A cashier who just opened a shift wants to start selling, not stare
+      // at this screen's own summary view — same "land straight in New
+      // Sale" convention as PIN login already uses.
+      if (mounted) context.go(RouteNames.posSale);
     } catch (e, st) {
       AppLogger.error('PosOpenShift', e, st);
       widget.showMsg(ErrorPresenter.format(e, action: 'open this shift'), color: AppColors.negative);
@@ -320,19 +347,26 @@ class _OpenShiftCardState extends State<_OpenShiftCard> {
             const SizedBox(height: 4),
             const Text('Enter the opening float for each currency in the drawer.', style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5)),
             const SizedBox(height: 16),
-            ...widget.currencies.map((c) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: TextField(
-                    controller: _ctrlFor(c['currency_id'] as String),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(labelText: 'Opening Float (${c['currency_id']})', border: const OutlineInputBorder()),
-                  ),
-                )),
+            ...widget.currencies.map((c) {
+              final currency = c['currency_id'] as String;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: PosAmountField(
+                  label: 'Opening Float ($currency)',
+                  value: _valueFor(currency),
+                  suffixText: currency,
+                  onChanged: (v) => setState(() => _floatValues[currency] = v),
+                ),
+              );
+            }),
             TextField(controller: _notesCtrl, decoration: const InputDecoration(labelText: 'Notes (optional)', border: OutlineInputBorder())),
             const SizedBox(height: 16),
-            FilledButton(
-              onPressed: _saving ? null : () => _open(ref),
-              child: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Open Shift'),
+            SizedBox(
+              height: 52,
+              child: FilledButton(
+                onPressed: _saving ? null : () => _open(ref),
+                child: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Open Shift'),
+              ),
             ),
           ]),
         ),
@@ -354,7 +388,7 @@ class _CashMovementDialog extends StatefulWidget {
 }
 
 class _CashMovementDialogState extends State<_CashMovementDialog> {
-  final _amountCtrl = TextEditingController();
+  double _amount = 0;
   final _noteCtrl = TextEditingController();
   String? _currencyId;
   String? _accountId;
@@ -370,13 +404,12 @@ class _CashMovementDialogState extends State<_CashMovementDialog> {
 
   @override
   void dispose() {
-    _amountCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
-    final amount = double.tryParse(_amountCtrl.text) ?? 0;
+    final amount = _amount;
     if (amount <= 0 || _currencyId == null || _accountId == null || _cashAccountId == null) {
       setState(() => _error = 'Amount, currency, cash account, and the other account are all required.');
       return;
@@ -414,7 +447,7 @@ class _CashMovementDialogState extends State<_CashMovementDialog> {
       content: SizedBox(
         width: 360,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: _amountCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Amount', border: OutlineInputBorder())),
+          PosAmountField(label: 'Amount', value: _amount, suffixText: _currencyId, onChanged: (v) => setState(() => _amount = v)),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
             initialValue: _currencyId, isExpanded: true, isDense: true, itemHeight: null,
@@ -470,7 +503,7 @@ class _CloseShiftDialog extends StatefulWidget {
 }
 
 class _CloseShiftDialogState extends State<_CloseShiftDialog> {
-  final Map<String, TextEditingController> _countedCtrls = {};
+  final Map<String, double> _countedValues = {};
   final _notesCtrl = TextEditingController();
   final _reasonCtrl = TextEditingController();
   bool _saving = false;
@@ -478,15 +511,12 @@ class _CloseShiftDialogState extends State<_CloseShiftDialog> {
 
   @override
   void dispose() {
-    for (final c in _countedCtrls.values) {
-      c.dispose();
-    }
     _notesCtrl.dispose();
     _reasonCtrl.dispose();
     super.dispose();
   }
 
-  TextEditingController _ctrlFor(String currency) => _countedCtrls.putIfAbsent(currency, () => TextEditingController());
+  double _valueFor(String currency) => _countedValues[currency] ?? 0;
 
   double _expectedFor(String currency) {
     final opening = widget.openingFloat.where((f) => f['currency_id'] == currency).fold<double>(0, (s, f) => s + (f['opening_amount'] as num).toDouble());
@@ -501,7 +531,7 @@ class _CloseShiftDialogState extends State<_CloseShiftDialog> {
       // v1: one row per currency representing a DIRECT counted total (no
       // denomination breakdown yet — see this screen's own header comment).
       for (final currency in widget.currencies) {
-        final counted = double.tryParse(_ctrlFor(currency).text) ?? 0;
+        final counted = _valueFor(currency);
         await DioClient.instance.post('/rid_pos_shift_denomination_counts', data: {
           'client_id': widget.session.clientId,
           'company_id': widget.session.companyId,
@@ -539,7 +569,7 @@ class _CloseShiftDialogState extends State<_CloseShiftDialog> {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             ...widget.currencies.map((currency) {
               final expected = _expectedFor(currency);
-              final counted = double.tryParse(_ctrlFor(currency).text) ?? 0;
+              final counted = _valueFor(currency);
               final variance = counted - expected;
               return Padding(
                 padding: const EdgeInsets.only(bottom: 14),
@@ -547,11 +577,11 @@ class _CloseShiftDialogState extends State<_CloseShiftDialog> {
                   Text(currency, style: const TextStyle(fontWeight: FontWeight.w700)),
                   Text('Expected: ${expected.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                   const SizedBox(height: 6),
-                  TextField(
-                    controller: _ctrlFor(currency),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: 'Counted Amount', border: OutlineInputBorder()),
-                    onChanged: (_) => setState(() {}),
+                  PosAmountField(
+                    label: 'Counted Amount',
+                    value: counted,
+                    suffixText: currency,
+                    onChanged: (v) => setState(() => _countedValues[currency] = v),
                   ),
                   if (counted != 0 || expected != 0)
                     Padding(
