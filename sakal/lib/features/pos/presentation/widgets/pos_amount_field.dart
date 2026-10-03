@@ -14,6 +14,7 @@ class PosAmountField extends StatelessWidget {
   final String? suffixText;
   final bool allowDecimal;
   final bool enabled;
+  final bool compact;
 
   const PosAmountField({
     super.key,
@@ -23,6 +24,7 @@ class PosAmountField extends StatelessWidget {
     this.suffixText,
     this.allowDecimal = true,
     this.enabled = true,
+    this.compact = false,
   });
 
   static String _trim(double v) {
@@ -49,15 +51,24 @@ class PosAmountField extends StatelessWidget {
                 )
             : null,
         child: Container(
-          constraints: const BoxConstraints(minHeight: 52),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          constraints: BoxConstraints(minHeight: compact ? 44 : 52),
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: compact ? 4 : 8),
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-            Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-            const SizedBox(height: 2),
+            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary)),
+            const SizedBox(height: 1),
             Row(children: [
-              Expanded(child: Text(_trim(value), style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: enabled ? AppColors.textPrimary : AppColors.textSecondary))),
-              if (suffixText != null) Text(suffixText!, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              // FittedBox shrinks the value to fit rather than ever wrapping
+              // onto a second line — a long amount (e.g. a Rate with many
+              // digits) was found live wrapping and bloating the row height.
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(_trim(value), maxLines: 1, style: TextStyle(fontSize: compact ? 14 : 17, fontWeight: FontWeight.w700, color: enabled ? AppColors.textPrimary : AppColors.textSecondary)),
+                ),
+              ),
+              if (suffixText != null) Text(suffixText!, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
             ]),
           ]),
         ),

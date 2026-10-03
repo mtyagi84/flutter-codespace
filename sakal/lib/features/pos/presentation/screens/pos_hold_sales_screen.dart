@@ -7,6 +7,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../widgets/pos_keyboard.dart';
 import '../widgets/pos_session_guard.dart';
 
 /// Held (DRAFT) sales for the CURRENT open shift — "holding" a sale is
@@ -26,6 +27,17 @@ class _PosHoldSalesScreenState extends ConsumerState<PosHoldSalesScreen> {
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _held = [];
+  String _searchQuery = '';
+
+  List<Map<String, dynamic>> get _filtered {
+    if (_searchQuery.isEmpty) return _held;
+    final q = _searchQuery.toLowerCase();
+    return _held.where((row) {
+      final invoiceNo = (row['invoice_no'] as String? ?? '').toLowerCase();
+      final customerName = ((row['customer'] as Map<String, dynamic>?)?['account_name'] as String? ?? row['party_name'] as String? ?? '').toLowerCase();
+      return invoiceNo.contains(q) || customerName.contains(q);
+    }).toList();
+  }
 
   @override
   void initState() {
@@ -109,29 +121,42 @@ class _PosHoldSalesScreenState extends ConsumerState<PosHoldSalesScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? buildPosSessionGuardError(context, _error!, _load)
-              : _held.isEmpty
-                  ? const Center(child: Text('No baskets on hold.', style: TextStyle(color: AppColors.textSecondary)))
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _held.length,
-                      itemBuilder: (context, i) {
-                        final row = _held[i];
-                        final customerName = (row['customer'] as Map<String, dynamic>?)?['account_name'] as String? ?? row['party_name'] as String? ?? 'Walk-in';
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          child: ListTile(
-                            leading: const Icon(Icons.pause_circle_outline, color: AppColors.secondary),
-                            title: Text(row['invoice_no'] as String, style: const TextStyle(fontWeight: FontWeight.w700)),
-                            subtitle: Text('$customerName · ${row['sale_type']}'),
-                            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                              Text((row['grand_total'] as num).toStringAsFixed(2), style: const TextStyle(fontWeight: FontWeight.w800)),
-                              IconButton(icon: const Icon(Icons.delete_outline, color: AppColors.negative), onPressed: () => _delete(row)),
-                            ]),
-                            onTap: () => _resume(row),
-                          ),
-                        );
-                      },
+              : Column(children: [
+                  if (_held.length > 1)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: PosKeyboardField(
+                        label: 'Search invoice no. or customer…',
+                        value: _searchQuery,
+                        onChanged: (v) => setState(() => _searchQuery = v),
+                      ),
                     ),
+                  Expanded(
+                    child: _filtered.isEmpty
+                        ? Center(child: Text(_held.isEmpty ? 'No baskets on hold.' : 'No match for "$_searchQuery".', style: const TextStyle(color: AppColors.textSecondary)))
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _filtered.length,
+                            itemBuilder: (context, i) {
+                              final row = _filtered[i];
+                              final customerName = (row['customer'] as Map<String, dynamic>?)?['account_name'] as String? ?? row['party_name'] as String? ?? 'Walk-in';
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 10),
+                                child: ListTile(
+                                  leading: const Icon(Icons.pause_circle_outline, color: AppColors.secondary),
+                                  title: Text(row['invoice_no'] as String, style: const TextStyle(fontWeight: FontWeight.w700)),
+                                  subtitle: Text('$customerName · ${row['sale_type']}'),
+                                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                                    Text((row['grand_total'] as num).toStringAsFixed(2), style: const TextStyle(fontWeight: FontWeight.w800)),
+                                    IconButton(icon: const Icon(Icons.delete_outline, color: AppColors.negative), onPressed: () => _delete(row)),
+                                  ]),
+                                  onTap: () => _resume(row),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ]),
     );
   }
 }

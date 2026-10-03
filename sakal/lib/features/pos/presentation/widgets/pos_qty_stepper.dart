@@ -12,6 +12,7 @@ class PosQtyStepper extends StatelessWidget {
   final double step;
   final double min;
   final bool enabled;
+  final double buttonSize;
 
   const PosQtyStepper({
     super.key,
@@ -20,6 +21,7 @@ class PosQtyStepper extends StatelessWidget {
     this.step = 1,
     this.min = 0,
     this.enabled = true,
+    this.buttonSize = 44,
   });
 
   static String _trim(double v) {
@@ -36,7 +38,7 @@ class PosQtyStepper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(mainAxisSize: MainAxisSize.min, children: [
-      _StepButton(icon: Icons.remove, onTap: enabled ? () => _bump(-step) : null),
+      _StepButton(icon: Icons.remove, size: buttonSize, onTap: enabled ? () => _bump(-step) : null),
       Expanded(
         child: InkWell(
           onTap: enabled
@@ -49,20 +51,21 @@ class PosQtyStepper extends StatelessWidget {
               : null,
           child: Container(
             alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(_trim(value), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: FittedBox(fit: BoxFit.scaleDown, child: Text(_trim(value), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800))),
           ),
         ),
       ),
-      _StepButton(icon: Icons.add, onTap: enabled ? () => _bump(step) : null),
+      _StepButton(icon: Icons.add, size: buttonSize, onTap: enabled ? () => _bump(step) : null),
     ]);
   }
 }
 
 class _StepButton extends StatelessWidget {
   final IconData icon;
+  final double size;
   final VoidCallback? onTap;
-  const _StepButton({required this.icon, required this.onTap});
+  const _StepButton({required this.icon, required this.size, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -74,9 +77,9 @@ class _StepButton extends StatelessWidget {
         customBorder: const CircleBorder(),
         onTap: onTap,
         child: SizedBox(
-          width: 44,
-          height: 44,
-          child: Icon(icon, size: 20, color: disabled ? AppColors.border : AppColors.primary),
+          width: size,
+          height: size,
+          child: Icon(icon, size: size * 0.45, color: disabled ? AppColors.border : AppColors.primary),
         ),
       ),
     );

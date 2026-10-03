@@ -61,9 +61,10 @@ class _PosPriceCheckScreenState extends ConsumerState<PosPriceCheckScreen> {
       }
 
       final locationId = session.locationId;
+      final hasLocation = locationId != null && locationId.isNotEmpty;
       double? price;
       double? stock;
-      if (locationId != null) {
+      if (hasLocation) {
         final uomId = product['matched_uom_id'] as String? ?? product['base_uom_id'] as String;
         final priceRes = await ds.getActivePrice(
           clientId: session.clientId, companyId: session.companyId, locationId: locationId,
@@ -82,7 +83,7 @@ class _PosPriceCheckScreenState extends ConsumerState<PosPriceCheckScreen> {
         // No location on this session at all (not signed in via POS) means
         // price/stock can never be resolved — say so rather than silently
         // showing a blank price as if nothing were configured.
-        _error = locationId == null ? 'No location on this session — sign in via the POS Login screen for price/stock.' : null;
+        _error = hasLocation ? null : 'No location on this session — sign in via the POS Login screen for price/stock.';
         _loading = false;
       });
     } catch (e, st) {

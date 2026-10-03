@@ -9,9 +9,12 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../../../sales/presentation/providers/sales_invoice_providers.dart';
 import '../widgets/pos_amount_field.dart';
+import '../widgets/pos_keyboard.dart';
 import '../widgets/pos_numpad.dart';
 import '../widgets/pos_qty_stepper.dart';
+import '../widgets/pos_search_sheet.dart';
 import '../widgets/pos_session_guard.dart';
+import 'pos_browse_products_screen.dart';
 
 /// POS New Sale — v1. Deliberately built DIRECTLY on the same, already-
 /// proven `salesInvoiceRepositoryProvider` Quick Invoice itself uses
@@ -87,6 +90,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   bool _loading = true;
   bool _saving = false;
   String? _error;
+  bool _isSessionError = false;
   String? _actionError;
 
   Map<String, dynamic>? _shift;
@@ -146,10 +150,10 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   Future<void> _init() async {
     final session = ref.read(sessionProvider)!;
     if (session.posTerminalId == null) {
-      setState(() { _loading = false; _error = 'This isn\'t a POS till session. Sign out and sign back in from the POS Login screen.'; });
+      setState(() { _loading = false; _error = 'This isn\'t a POS till session. Sign out and sign back in from the POS Login screen.'; _isSessionError = true; });
       return;
     }
-    setState(() { _loading = true; _error = null; });
+    setState(() { _loading = true; _error = null; _isSessionError = false; });
     try {
       final shiftRes = await DioClient.instance.get('/rih_pos_shifts', queryParameters: {
         'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
@@ -278,8 +282,10 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   }
 
   Future<double?> _lookupRate(UserSession session, String from, String to) async {
+    final locationId = session.locationId;
+    if (locationId == null || locationId.isEmpty) return null;
     final ds = ref.read(salesInvoiceRepositoryProvider);
-    return ds.getExchangeRate(companyId: session.companyId, locationId: session.locationId ?? '', fromCurrency: from, toCurrency: to, rateDate: _fmtDate(DateTime.now()));
+    return ds.getExchangeRate(companyId: session.companyId, locationId: locationId, fromCurrency: from, toCurrency: to, rateDate: _fmtDate(DateTime.now()));
   }
 
   void _onSaleTypeChanged(String type) {
@@ -295,16 +301,38 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
 
   Future<void> _pickCustomer() async {
     final session = ref.read(sessionProvider)!;
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (_) => _CustomerPickerDialog(session: session),
+    await PosSearchSheet.show<Map<String, dynamic>>(
+      context,
+      title: 'Select Customer',
+      hintText: 'Search name or code…',
+      onSearch: (q) async {
+        final res = await DioClient.instance.get('/rim_accounts', queryParameters: {
+          'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
+          'account_nature': 'eq.Customer', 'is_deleted': 'eq.false',
+          if (q.isNotEmpty) 'or': '(account_code.ilike.*$q*,account_name.ilike.*$q*)',
+          'select': 'id,account_code,account_name', 'order': 'account_name.asc', 'limit': '30',
+        });
+        return List<Map<String, dynamic>>.from(res.data as List);
+      },
+      itemBuilder: (context, c) => ListTile(title: Text('${c['account_code']} — ${c['account_name']}')),
+      onSelected: (result) {
+        setState(() {
+          _customerId = result['id'] as String;
+          _customerDisplay = '[${result['account_code']}] ${result['account_name']}';
+        });
+      },
     );
-    if (result != null) {
-      setState(() {
-        _customerId = result['id'] as String;
-        _customerDisplay = '[${result['account_code']}] ${result['account_name']}';
-      });
-    }
+  }
+
+  /// A separate, category-drill-down screen for MANUAL product discovery —
+  /// distinct from Price Check (which stays scan-only). Returns the picked
+  /// product map shaped identically to `getProductsForPicker`'s rows, so it
+  /// feeds straight into the existing `_addProduct`.
+  Future<void> _browseProducts() async {
+    final picked = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(builder: (_) => const PosBrowseProductsScreen()),
+    );
+    if (picked != null) await _addProduct(picked);
   }
 
   Future<void> _onSearchSubmitted(String value) async {
@@ -360,10 +388,11 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     final uomLabel = (product['uom'] as Map<String, dynamic>?)?['description'] as String? ?? '';
 
     double rate = 0;
-    if (_customerId != null && _invoiceCurrencyId != null) {
+    final locationId = session.locationId;
+    if (_customerId != null && _invoiceCurrencyId != null && locationId != null && locationId.isNotEmpty) {
       try {
         final price = await ds.getActivePrice(
-          clientId: session.clientId, companyId: session.companyId, locationId: session.locationId ?? '',
+          clientId: session.clientId, companyId: session.companyId, locationId: locationId,
           productId: product['id'] as String, uomId: uomId, customerId: _customerId!,
           asOfDate: _fmtDate(DateTime.now()), currencyCode: _localCcy,
         );
@@ -445,8 +474,8 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   Future<String?> _showDiscountOverrideDialog(double requestedPct) async {
     final session = ref.read(sessionProvider)!;
     final ds = ref.read(salesInvoiceRepositoryProvider);
-    final userCtrl = TextEditingController();
-    final passCtrl = TextEditingController();
+    String username = '';
+    String password = '';
     String? error;
     final result = await showDialog<String>(
       context: context,
@@ -456,8 +485,9 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
           content: Column(mainAxisSize: MainAxisSize.min, children: [
             Text('$requestedPct% exceeds your discount limit. A supervisor must authorize it.'),
             const SizedBox(height: 12),
-            TextField(controller: userCtrl, decoration: const InputDecoration(labelText: 'Supervisor Username')),
-            TextField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Password')),
+            PosKeyboardField(label: 'Supervisor Username', value: username, onChanged: (v) => setDialogState(() => username = v)),
+            const SizedBox(height: 10),
+            PosKeyboardField(label: 'Password', value: password, obscureText: true, onChanged: (v) => setDialogState(() => password = v)),
             if (error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: const TextStyle(color: AppColors.negative, fontSize: 12))),
           ]),
           actions: [
@@ -467,7 +497,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
                 try {
                   final r = await ds.verifyDiscountOverride(
                     clientId: session.clientId, companyId: session.companyId,
-                    username: userCtrl.text.trim(), password: passCtrl.text, requestedDiscountPercent: requestedPct,
+                    username: username.trim(), password: password, requestedDiscountPercent: requestedPct,
                   );
                   if (dialogContext.mounted) Navigator.of(dialogContext).pop(r['user_id'] as String);
                 } catch (e) {
@@ -480,8 +510,6 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
         ),
       ),
     );
-    userCtrl.dispose();
-    passCtrl.dispose();
     return result;
   }
 
@@ -498,8 +526,16 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       return;
     }
     if (_customerId == null) {
-      _showMsg(_saleType == 'CASH' ? 'Quick Invoice Setup is missing for this user — ask an admin.' : 'Pick a customer for this credit sale.', color: AppColors.negative);
-      return;
+      if (_saleType == 'CASH') {
+        _showMsg('Quick Invoice Setup is missing for this user — ask an admin.', color: AppColors.negative);
+        return;
+      }
+      // A credit sale always needs a real customer account (enforced
+      // server-side too) — open the picker right here instead of a dead-end
+      // error, so the cashier doesn't have to go hunt for a separate button.
+      // Picking one continues straight into charging; cancelling just stops.
+      await _pickCustomer();
+      if (_customerId == null) return;
     }
     final session = ref.read(sessionProvider)!;
     setState(() { _saving = true; _actionError = null; });
@@ -587,8 +623,12 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       return;
     }
     if (_customerId == null) {
-      _showMsg(_saleType == 'CASH' ? 'Quick Invoice Setup is missing for this user — ask an admin.' : 'Pick a customer before holding this sale.', color: AppColors.negative);
-      return;
+      if (_saleType == 'CASH') {
+        _showMsg('Quick Invoice Setup is missing for this user — ask an admin.', color: AppColors.negative);
+        return;
+      }
+      await _pickCustomer();
+      if (_customerId == null) return;
     }
     final session = ref.read(sessionProvider)!;
     setState(() { _holding = true; _actionError = null; });
@@ -627,7 +667,25 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? buildPosSessionGuardError(context, _error!, _init)
+              ? (_isSessionError
+                  ? buildPosSessionGuardError(context, _error!, _init)
+                  : Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.negative)),
+                          const SizedBox(height: 14),
+                          Wrap(alignment: WrapAlignment.center, spacing: 10, children: [
+                            TextButton(onPressed: _init, child: const Text('Retry')),
+                            // Resuming a held sale can fail (e.g. a transient
+                            // timeout) — this gets back to a fresh New Sale
+                            // instead of leaving the only options as "retry
+                            // the same failing resume" or "log out".
+                            FilledButton(onPressed: () => context.go(RouteNames.posSale), child: const Text('Back to New Sale')),
+                          ]),
+                        ]),
+                      ),
+                    ))
               : _shift == null
                   ? _buildNoShift()
                   : _buildSaleBody(session!),
@@ -647,6 +705,35 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   }
 
   Widget _buildSaleBody(UserSession session) {
+    return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      _buildNavRail(),
+      Expanded(child: _buildMainColumn(session)),
+    ]);
+  }
+
+  /// A narrow, vertical, top-to-bottom nav rail — replaces the earlier
+  /// horizontally-scrollable row of action buttons, per direct user
+  /// feedback that these belong on the left side, stacked, not scrolled
+  /// through along the top.
+  Widget _buildNavRail() {
+    return Container(
+      width: 88,
+      color: AppColors.primary,
+      child: SafeArea(
+        child: ListView(padding: const EdgeInsets.symmetric(vertical: 8), children: [
+          _HeaderActionButton(icon: Icons.grid_view_rounded, label: 'Browse', onTap: _browseProducts),
+          _HeaderActionButton(icon: Icons.undo, label: 'Return', onTap: () => context.go(RouteNames.posReturn)),
+          _HeaderActionButton(icon: Icons.search, label: 'Price Check', onTap: () => context.go(RouteNames.posPriceCheck)),
+          _HeaderActionButton(icon: Icons.pause_circle_outline, label: 'Held Sales', onTap: () => context.go(RouteNames.posHold)),
+          _HeaderActionButton(icon: Icons.point_of_sale_outlined, label: 'Shift & Cash', onTap: () => context.go(RouteNames.posShift)),
+          _HeaderActionButton(icon: Icons.bar_chart_outlined, label: 'Reports', onTap: () => context.go(RouteNames.posReports)),
+          _HeaderActionButton(icon: Icons.fact_check_outlined, label: 'Manager Review', onTap: () => context.go(RouteNames.posApprovals)),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildMainColumn(UserSession session) {
     return Column(children: [
       Container(
         color: AppColors.primary,
@@ -664,26 +751,6 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
             onSelectionChanged: (s) => _onSaleTypeChanged(s.first),
           ),
         ]),
-      ),
-      // A horizontally-scrollable row of LARGE, labeled touch buttons —
-      // replaces 6 bare 36dp icon buttons crammed into the header, which a
-      // real user flagged live as "not touchable by fingertip." Each button
-      // is ≥56dp tall with a visible label, not an icon-only tooltip that
-      // only a mouse hover would ever reveal.
-      Container(
-        color: AppColors.primary,
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-        child: SizedBox(
-          height: 58,
-          child: ListView(scrollDirection: Axis.horizontal, children: [
-            _HeaderActionButton(icon: Icons.undo, label: 'Return', onTap: () => context.go(RouteNames.posReturn)),
-            _HeaderActionButton(icon: Icons.search, label: 'Price Check', onTap: () => context.go(RouteNames.posPriceCheck)),
-            _HeaderActionButton(icon: Icons.pause_circle_outline, label: 'Held Sales', onTap: () => context.go(RouteNames.posHold)),
-            _HeaderActionButton(icon: Icons.point_of_sale_outlined, label: 'Shift & Cash', onTap: () => context.go(RouteNames.posShift)),
-            _HeaderActionButton(icon: Icons.bar_chart_outlined, label: 'Reports', onTap: () => context.go(RouteNames.posReports)),
-            _HeaderActionButton(icon: Icons.fact_check_outlined, label: 'Manager Review', onTap: () => context.go(RouteNames.posApprovals)),
-          ]),
-        ),
       ),
       if (_cashSetupMissing)
         Container(
@@ -729,6 +796,32 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
               onSubmitted: _onSearchSubmitted,
             ),
           ),
+          const SizedBox(width: 8),
+          // The primary flow is scan-first (a barcode scanner needs no
+          // on-screen UI at all) — this keyboard icon is the explicit,
+          // visible fallback for manual typing, since there is no reliable
+          // OS on-screen keyboard on real POS touchscreen hardware.
+          Material(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(10),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => PosKeyboard.show(
+                context,
+                title: 'Search product',
+                initialValue: _searchCtrl.text,
+                onConfirm: (v) {
+                  _searchCtrl.text = v;
+                  _onSearchSubmitted(v);
+                },
+              ),
+              child: Container(
+                width: 48, height: 48,
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
+                child: const Icon(Icons.keyboard_outlined, color: AppColors.textSecondary),
+              ),
+            ),
+          ),
           if (_saleType == 'CREDIT') ...[
             const SizedBox(width: 10),
             OutlinedButton.icon(onPressed: _pickCustomer, icon: const Icon(Icons.person_outline, size: 18), label: Text(_customerDisplay.isEmpty ? 'Pick Customer' : _customerDisplay, overflow: TextOverflow.ellipsis)),
@@ -762,25 +855,25 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       itemBuilder: (context, i) {
         final l = _lines[i];
         return Card(
-          margin: const EdgeInsets.only(bottom: 8),
+          margin: const EdgeInsets.only(bottom: 6),
           child: Padding(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             child: Row(children: [
               Expanded(
                 flex: 3,
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(l.productName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  Text('${l.productCode} · ${l.uomLabel}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                  Text(l.productName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text('${l.productCode} · ${l.uomLabel}', style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary)),
                 ]),
               ),
-              SizedBox(width: 130, child: PosQtyStepper(value: l.qty, min: 0, onChanged: (v) { l.qty = v; _recompute(); })),
+              SizedBox(width: 120, child: PosQtyStepper(value: l.qty, min: 0, buttonSize: 32, onChanged: (v) { l.qty = v; _recompute(); })),
+              const SizedBox(width: 6),
+              SizedBox(width: 88, child: PosAmountField(label: 'Rate', value: l.rate, enabled: _canOverridePrice, compact: true, onChanged: (v) { l.rate = v; _recompute(); })),
+              const SizedBox(width: 6),
+              SizedBox(width: 72, child: PosAmountField(label: 'Disc %', value: l.discountPct, enabled: _canGiveDiscount, compact: true, onChanged: (v) => _onDiscountChanged(l, v))),
               const SizedBox(width: 8),
-              SizedBox(width: 100, child: PosAmountField(label: 'Rate', value: l.rate, enabled: _canOverridePrice, onChanged: (v) { l.rate = v; _recompute(); })),
-              const SizedBox(width: 8),
-              SizedBox(width: 90, child: PosAmountField(label: 'Disc %', value: l.discountPct, enabled: _canGiveDiscount, onChanged: (v) => _onDiscountChanged(l, v))),
-              const SizedBox(width: 10),
-              SizedBox(width: 80, child: Text(l.finalAmount.toStringAsFixed(2), textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w800))),
-              IconButton(onPressed: () => _removeLine(l), icon: const Icon(Icons.close, size: 18, color: AppColors.negative)),
+              SizedBox(width: 72, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(l.finalAmount.toStringAsFixed(2), textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w800)))),
+              IconButton(onPressed: () => _removeLine(l), icon: const Icon(Icons.close, size: 18, color: AppColors.negative), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32)),
             ]),
           ),
         );
@@ -855,6 +948,9 @@ class _Pill extends StatelessWidget {
 /// navigation row — replaces a bare icon-only `IconButton` (36dp hit target,
 /// tooltip-only label) with a ≥56dp finger-sized target that always shows
 /// its label, not just on mouse hover.
+/// A single tile in New Sale's vertical left-side nav rail — replaces a bare
+/// icon-only `IconButton` (36dp hit target, tooltip-only label) with a
+/// ≥64dp finger-sized target that always shows its label.
 class _HeaderActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -864,7 +960,7 @@ class _HeaderActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Material(
         color: Colors.white.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
@@ -872,12 +968,12 @@ class _HeaderActionButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           onTap: onTap,
           child: Container(
-            width: 84,
-            padding: const EdgeInsets.symmetric(horizontal: 6),
+            constraints: const BoxConstraints(minHeight: 68),
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(icon, color: Colors.white, size: 20),
-              const SizedBox(height: 3),
-              Text(label, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w600)),
+              Icon(icon, color: Colors.white, size: 22),
+              const SizedBox(height: 4),
+              Text(label, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w600)),
             ]),
           ),
         ),
@@ -886,64 +982,3 @@ class _HeaderActionButton extends StatelessWidget {
   }
 }
 
-class _CustomerPickerDialog extends StatefulWidget {
-  final UserSession session;
-  const _CustomerPickerDialog({required this.session});
-  @override
-  State<_CustomerPickerDialog> createState() => _CustomerPickerDialogState();
-}
-
-class _CustomerPickerDialogState extends State<_CustomerPickerDialog> {
-  final _ctrl = TextEditingController();
-  List<Map<String, dynamic>> _results = [];
-  bool _loading = false;
-
-  Future<void> _search(String q) async {
-    setState(() => _loading = true);
-    try {
-      final res = await DioClient.instance.get('/rim_accounts', queryParameters: {
-        'client_id': 'eq.${widget.session.clientId}', 'company_id': 'eq.${widget.session.companyId}',
-        'account_nature': 'eq.Customer', 'is_deleted': 'eq.false',
-        'or': '(account_code.ilike.*$q*,account_name.ilike.*$q*)',
-        'select': 'id,account_code,account_name', 'limit': '20',
-      });
-      if (mounted) setState(() { _results = List<Map<String, dynamic>>.from(res.data as List); _loading = false; });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Select Customer'),
-      content: SizedBox(
-        width: 360, height: 360,
-        child: Column(children: [
-          TextField(controller: _ctrl, autofocus: true, decoration: const InputDecoration(labelText: 'Search name or code'), onChanged: _search),
-          const SizedBox(height: 8),
-          if (_loading) const CircularProgressIndicator(strokeWidth: 2),
-          Expanded(
-            child: ListView.builder(
-              itemCount: _results.length,
-              itemBuilder: (context, i) {
-                final c = _results[i];
-                return ListTile(
-                  title: Text('${c['account_code']} — ${c['account_name']}'),
-                  onTap: () => Navigator.of(context).pop(c),
-                );
-              },
-            ),
-          ),
-        ]),
-      ),
-      actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel'))],
-    );
-  }
-}

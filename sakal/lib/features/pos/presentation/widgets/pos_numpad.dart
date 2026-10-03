@@ -47,11 +47,19 @@ class PosNumpad extends StatefulWidget {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: PosNumpad(title: title, initialValue: initialValue, suffixText: suffixText, allowDecimal: allowDecimal, onConfirm: onConfirm),
+      builder: (sheetContext) => ConstrainedBox(
+        // A short viewport (small laptop window, landscape phone) could not
+        // fit this content before — confirmed live, "BOTTOM OVERFLOWED BY
+        // 112 PIXELS". Capping height + wrapping in a scroll view makes the
+        // sheet degrade to scrollable instead of ever overflowing.
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(sheetContext).size.height * 0.85),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+          child: PosNumpad(title: title, initialValue: initialValue, suffixText: suffixText, allowDecimal: allowDecimal, onConfirm: onConfirm),
+        ),
       ),
     );
   }

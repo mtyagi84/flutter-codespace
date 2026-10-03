@@ -18,8 +18,13 @@ class PosKeyboard extends StatefulWidget {
   final String title;
   final String? initialValue;
   final ValueChanged<String> onConfirm;
+  final bool obscureText;
+  /// Fires on every keystroke — lets a caller do LIVE filtering (e.g. a
+  /// customer search list) while the sheet stays open, unlike `onConfirm`
+  /// which only fires once on Done.
+  final ValueChanged<String>? onChanged;
 
-  const PosKeyboard({super.key, required this.title, this.initialValue, required this.onConfirm});
+  const PosKeyboard({super.key, required this.title, this.initialValue, required this.onConfirm, this.obscureText = false, this.onChanged});
 
   @override
   State<PosKeyboard> createState() => _PosKeyboardState();
@@ -31,15 +36,21 @@ class PosKeyboard extends StatefulWidget {
     required String title,
     String? initialValue,
     required ValueChanged<String> onConfirm,
+    bool obscureText = false,
+    ValueChanged<String>? onChanged,
   }) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: PosKeyboard(title: title, initialValue: initialValue, onConfirm: onConfirm),
+      builder: (sheetContext) => ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(sheetContext).size.height * 0.85),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+          child: PosKeyboard(title: title, initialValue: initialValue, onConfirm: onConfirm, obscureText: obscureText, onChanged: onChanged),
+        ),
       ),
     );
   }
@@ -55,13 +66,25 @@ class _PosKeyboardState extends State<PosKeyboard> {
     _buffer = widget.initialValue ?? '';
   }
 
-  void _type(String ch) => setState(() => _buffer += _shift ? ch.toUpperCase() : ch);
-  void _space() => setState(() => _buffer += ' ');
+  void _notify() => widget.onChanged?.call(_buffer);
+
+  void _type(String ch) {
+    setState(() => _buffer += _shift ? ch.toUpperCase() : ch);
+    _notify();
+  }
+  void _space() {
+    setState(() => _buffer += ' ');
+    _notify();
+  }
   void _backspace() {
     if (_buffer.isEmpty) return;
     setState(() => _buffer = _buffer.substring(0, _buffer.length - 1));
+    _notify();
   }
-  void _clear() => setState(() => _buffer = '');
+  void _clear() {
+    setState(() => _buffer = '');
+    _notify();
+  }
   void _toggleShift() => setState(() => _shift = !_shift);
 
   void _confirm() {
@@ -89,27 +112,47 @@ class _PosKeyboardState extends State<PosKeyboard> {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
           child: Text(
-            _buffer.isEmpty ? ' ' : _buffer,
+            _buffer.isEmpty ? ' ' : (widget.obscureText ? '•' * _buffer.length : _buffer),
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
           ),
         ),
         const SizedBox(height: 14),
-        for (final row in _kKeyboardRows) ...[
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            for (final ch in row) Expanded(child: _Key(label: _shift ? ch.toUpperCase() : ch, onTap: () => _type(ch))),
-          ]),
-          const SizedBox(height: 6),
-        ],
-        Row(children: [
-          Expanded(flex: 2, child: _Key(label: '⇧', muted: true, highlighted: _shift, onTap: _toggleShift)),
-          Expanded(flex: 5, child: _Key(label: 'space', muted: true, onTap: _space)),
-          Expanded(flex: 2, child: _Key(label: '⌫', muted: true, onTap: _backspace)),
-        ]),
+        PosKeyboardKeys(shift: _shift, onType: _type, onSpace: _space, onBackspace: _backspace, onToggleShift: _toggleShift),
         const SizedBox(height: 14),
         SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _confirm, icon: const Icon(Icons.check), label: const Text('Done'))),
       ]),
     );
+  }
+}
+
+/// The key-grid itself, extracted so `PosSearchSheet` can reuse the exact
+/// same QWERTY layout pinned below a live results list, rather than this
+/// widget's own "type then Done" flow.
+class PosKeyboardKeys extends StatelessWidget {
+  final bool shift;
+  final ValueChanged<String> onType;
+  final VoidCallback onSpace;
+  final VoidCallback onBackspace;
+  final VoidCallback onToggleShift;
+
+  const PosKeyboardKeys({super.key, required this.shift, required this.onType, required this.onSpace, required this.onBackspace, required this.onToggleShift});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      for (final row in _kKeyboardRows) ...[
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          for (final ch in row) Expanded(child: _Key(label: shift ? ch.toUpperCase() : ch, onTap: () => onType(ch))),
+        ]),
+        const SizedBox(height: 6),
+      ],
+      Row(children: [
+        Expanded(flex: 2, child: _Key(label: '⇧', muted: true, highlighted: shift, onTap: onToggleShift)),
+        Expanded(flex: 5, child: _Key(label: 'space', muted: true, onTap: onSpace)),
+        Expanded(flex: 2, child: _Key(label: '⌫', muted: true, onTap: onBackspace)),
+      ]),
+    ]);
   }
 }
 
@@ -151,8 +194,9 @@ class PosKeyboardField extends StatelessWidget {
   final String value;
   final ValueChanged<String> onChanged;
   final VoidCallback? onConfirmedSubmit;
+  final bool obscureText;
 
-  const PosKeyboardField({super.key, required this.label, required this.value, required this.onChanged, this.onConfirmedSubmit});
+  const PosKeyboardField({super.key, required this.label, required this.value, required this.onChanged, this.onConfirmedSubmit, this.obscureText = false});
 
   @override
   Widget build(BuildContext context) {
@@ -165,6 +209,7 @@ class PosKeyboardField extends StatelessWidget {
           context,
           title: label,
           initialValue: value,
+          obscureText: obscureText,
           onConfirm: (v) {
             onChanged(v);
             onConfirmedSubmit?.call();
@@ -177,7 +222,7 @@ class PosKeyboardField extends StatelessWidget {
           child: Row(children: [
             const Icon(Icons.keyboard_outlined, size: 18, color: AppColors.textSecondary),
             const SizedBox(width: 10),
-            Expanded(child: Text(value.isEmpty ? label : value, style: TextStyle(fontSize: 15, color: value.isEmpty ? AppColors.textSecondary : AppColors.textPrimary))),
+            Expanded(child: Text(value.isEmpty ? label : (obscureText ? '•' * value.length : value), style: TextStyle(fontSize: 15, color: value.isEmpty ? AppColors.textSecondary : AppColors.textPrimary))),
           ]),
         ),
       ),

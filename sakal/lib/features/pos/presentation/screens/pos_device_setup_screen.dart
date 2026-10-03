@@ -9,6 +9,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../../data/pos_auth_remote_ds.dart';
 import '../../data/pos_device_storage.dart';
+import '../widgets/pos_keyboard.dart';
 
 /// Shown the FIRST time the POS surface runs on a device with no cached
 /// terminal binding — never on a device that's already been set up (that
@@ -38,9 +39,9 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
   String? _error;
 
   // Admin login fields
-  final _clientNoCtrl = TextEditingController();
-  final _usernameCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
+  String _clientNo = '';
+  String _username = '';
+  String _password = '';
 
   // Post-login context
   String? _clientId;
@@ -50,8 +51,8 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
   List<Map<String, dynamic>> _terminals = [];
   String? _selectedLocationId;
   String? _selectedTerminalId;
-  final _newTerminalCodeCtrl = TextEditingController();
-  final _newTerminalNameCtrl = TextEditingController();
+  String _newTerminalCode = '';
+  String _newTerminalName = '';
   bool _creatingNew = false;
 
   @override
@@ -60,23 +61,13 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
     PosDeviceStorage.deviceUid().then((uid) => mounted ? setState(() => _deviceUid = uid) : null);
   }
 
-  @override
-  void dispose() {
-    _clientNoCtrl.dispose();
-    _usernameCtrl.dispose();
-    _passwordCtrl.dispose();
-    _newTerminalCodeCtrl.dispose();
-    _newTerminalNameCtrl.dispose();
-    super.dispose();
-  }
-
   Future<void> _adminLogin() async {
     setState(() { _busy = true; _error = null; });
     try {
       final res = await DioClient.instance.post('/rpc/fn_login', data: {
-        'p_client_no': _clientNoCtrl.text.trim().toUpperCase(),
-        'p_username': _usernameCtrl.text.trim(),
-        'p_password': _passwordCtrl.text,
+        'p_client_no': _clientNo.trim().toUpperCase(),
+        'p_username': _username.trim(),
+        'p_password': _password,
       });
       final d = res.data as Map<String, dynamic>;
       // Admin tokens here are used only to fetch/create the terminal list
@@ -142,12 +133,12 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
           'client_id': _clientId,
           'company_id': _companyId,
           'location_id': _selectedLocationId,
-          'terminal_code': _newTerminalCodeCtrl.text.trim(),
-          'terminal_name': _newTerminalNameCtrl.text.trim(),
+          'terminal_code': _newTerminalCode.trim(),
+          'terminal_name': _newTerminalName.trim(),
         });
         final row = (createRes.data as List).first as Map<String, dynamic>;
         terminalId = row['id'] as String;
-        terminalName = _newTerminalNameCtrl.text.trim();
+        terminalName = _newTerminalName.trim();
       } else {
         terminalId = _selectedTerminalId!;
         terminalName = _terminals.firstWhere((t) => t['id'] == terminalId)['terminal_name'] as String;
@@ -248,11 +239,11 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
           const SizedBox(height: 4),
           const Text('One-time only, to assign this till.', style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5)),
           const SizedBox(height: 16),
-          TextField(controller: _clientNoCtrl, decoration: const InputDecoration(labelText: 'Client No.', border: OutlineInputBorder())),
+          PosKeyboardField(label: 'Client No.', value: _clientNo, onChanged: (v) => setState(() => _clientNo = v)),
           const SizedBox(height: 10),
-          TextField(controller: _usernameCtrl, decoration: const InputDecoration(labelText: 'Username', border: OutlineInputBorder())),
+          PosKeyboardField(label: 'Username', value: _username, onChanged: (v) => setState(() => _username = v)),
           const SizedBox(height: 10),
-          TextField(controller: _passwordCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder())),
+          PosKeyboardField(label: 'Password', value: _password, obscureText: true, onChanged: (v) => setState(() => _password = v)),
           if (_error != null) Padding(padding: const EdgeInsets.only(top: 10), child: Text(_error!, style: const TextStyle(color: AppColors.negative, fontSize: 12.5))),
           const SizedBox(height: 16),
           FilledButton(onPressed: _busy ? null : _adminLogin, child: _busy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Continue')),
@@ -290,9 +281,9 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
                 onChanged: (v) => setState(() => _selectedTerminalId = v),
               )
             else ...[
-              TextField(controller: _newTerminalCodeCtrl, decoration: const InputDecoration(labelText: 'Till Code (e.g. T1)', border: OutlineInputBorder())),
+              PosKeyboardField(label: 'Till Code (e.g. T1)', value: _newTerminalCode, onChanged: (v) => setState(() => _newTerminalCode = v)),
               const SizedBox(height: 10),
-              TextField(controller: _newTerminalNameCtrl, decoration: const InputDecoration(labelText: 'Till Name (e.g. Front Counter)', border: OutlineInputBorder())),
+              PosKeyboardField(label: 'Till Name (e.g. Front Counter)', value: _newTerminalName, onChanged: (v) => setState(() => _newTerminalName = v)),
             ],
           ],
           if (_error != null) Padding(padding: const EdgeInsets.only(top: 10), child: Text(_error!, style: const TextStyle(color: AppColors.negative, fontSize: 12.5))),
@@ -308,7 +299,7 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
 
   bool _canFinish() {
     if (_selectedLocationId == null) return false;
-    if (_creatingNew) return _newTerminalCodeCtrl.text.trim().isNotEmpty && _newTerminalNameCtrl.text.trim().isNotEmpty;
+    if (_creatingNew) return _newTerminalCode.trim().isNotEmpty && _newTerminalName.trim().isNotEmpty;
     return _selectedTerminalId != null;
   }
 }

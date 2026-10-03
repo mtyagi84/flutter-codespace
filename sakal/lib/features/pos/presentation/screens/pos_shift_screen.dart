@@ -8,6 +8,7 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../widgets/pos_amount_field.dart';
+import '../widgets/pos_keyboard.dart';
 import '../widgets/pos_session_guard.dart';
 
 /// Shift open / cash movements / close-and-cash-up — the operational loop a
@@ -296,14 +297,8 @@ class _OpenShiftCard extends StatefulWidget {
 
 class _OpenShiftCardState extends State<_OpenShiftCard> {
   final Map<String, double> _floatValues = {};
-  final _notesCtrl = TextEditingController();
+  String _notes = '';
   bool _saving = false;
-
-  @override
-  void dispose() {
-    _notesCtrl.dispose();
-    super.dispose();
-  }
 
   double _valueFor(String currency) => _floatValues[currency] ?? 0;
 
@@ -320,7 +315,7 @@ class _OpenShiftCardState extends State<_OpenShiftCard> {
         'p_company_id': session.companyId,
         'p_terminal_id': session.posTerminalId,
         'p_cashier_id': session.userId,
-        'p_opening_notes': _notesCtrl.text.trim(),
+        'p_opening_notes': _notes.trim(),
         'p_opening_floats': floats,
       });
       widget.onOpened();
@@ -359,7 +354,7 @@ class _OpenShiftCardState extends State<_OpenShiftCard> {
                 ),
               );
             }),
-            TextField(controller: _notesCtrl, decoration: const InputDecoration(labelText: 'Notes (optional)', border: OutlineInputBorder())),
+            PosKeyboardField(label: 'Notes (optional)', value: _notes, onChanged: (v) => setState(() => _notes = v)),
             const SizedBox(height: 16),
             SizedBox(
               height: 52,
@@ -389,7 +384,7 @@ class _CashMovementDialog extends StatefulWidget {
 
 class _CashMovementDialogState extends State<_CashMovementDialog> {
   double _amount = 0;
-  final _noteCtrl = TextEditingController();
+  String _note = '';
   String? _currencyId;
   String? _accountId;
   String? _cashAccountId;
@@ -400,12 +395,6 @@ class _CashMovementDialogState extends State<_CashMovementDialog> {
   void initState() {
     super.initState();
     _currencyId = widget.currencies.isNotEmpty ? widget.currencies.first['currency_id'] as String : null;
-  }
-
-  @override
-  void dispose() {
-    _noteCtrl.dispose();
-    super.dispose();
   }
 
   Future<void> _submit() async {
@@ -426,7 +415,7 @@ class _CashMovementDialogState extends State<_CashMovementDialog> {
         'p_cash_account_id': _cashAccountId,
         'p_counter_account_id': _accountId,
         'p_reason_id': null,
-        'p_reference_no': _noteCtrl.text.trim(),
+        'p_reference_no': _note.trim(),
         'p_created_by': widget.session.userId,
       });
       if (mounted) Navigator.of(context).pop(true);
@@ -470,7 +459,7 @@ class _CashMovementDialogState extends State<_CashMovementDialog> {
             onChanged: (v) => setState(() => _accountId = v),
           ),
           const SizedBox(height: 10),
-          TextField(controller: _noteCtrl, decoration: const InputDecoration(labelText: 'Note', border: OutlineInputBorder())),
+          PosKeyboardField(label: 'Note', value: _note, onChanged: (v) => setState(() => _note = v)),
           if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: AppColors.negative, fontSize: 12))),
         ]),
       ),
@@ -504,17 +493,10 @@ class _CloseShiftDialog extends StatefulWidget {
 
 class _CloseShiftDialogState extends State<_CloseShiftDialog> {
   final Map<String, double> _countedValues = {};
-  final _notesCtrl = TextEditingController();
-  final _reasonCtrl = TextEditingController();
+  String _notes = '';
+  String _reason = '';
   bool _saving = false;
   String? _error;
-
-  @override
-  void dispose() {
-    _notesCtrl.dispose();
-    _reasonCtrl.dispose();
-    super.dispose();
-  }
 
   double _valueFor(String currency) => _countedValues[currency] ?? 0;
 
@@ -546,8 +528,8 @@ class _CloseShiftDialogState extends State<_CloseShiftDialog> {
         'p_client_id': widget.session.clientId,
         'p_company_id': widget.session.companyId,
         'p_shift_id': widget.shiftId,
-        'p_closing_notes': _notesCtrl.text.trim(),
-        'p_variance_reason': _reasonCtrl.text.trim().isEmpty ? null : _reasonCtrl.text.trim(),
+        'p_closing_notes': _notes.trim(),
+        'p_variance_reason': _reason.trim().isEmpty ? null : _reason.trim(),
         'p_approved_by': null,
       });
       if (mounted) Navigator.of(context).pop(true);
@@ -592,9 +574,9 @@ class _CloseShiftDialogState extends State<_CloseShiftDialog> {
                 ]),
               );
             }),
-            TextField(controller: _reasonCtrl, decoration: const InputDecoration(labelText: 'Variance Reason (if any)', border: OutlineInputBorder())),
+            PosKeyboardField(label: 'Variance Reason (if any)', value: _reason, onChanged: (v) => setState(() => _reason = v)),
             const SizedBox(height: 10),
-            TextField(controller: _notesCtrl, decoration: const InputDecoration(labelText: 'Closing Notes (optional)', border: OutlineInputBorder())),
+            PosKeyboardField(label: 'Closing Notes (optional)', value: _notes, onChanged: (v) => setState(() => _notes = v)),
             if (_error != null) Padding(padding: const EdgeInsets.only(top: 10), child: Text(_error!, style: const TextStyle(color: AppColors.negative, fontSize: 12))),
           ]),
         ),
