@@ -136,7 +136,7 @@ class _PosBrowseProductsScreenState extends ConsumerState<PosBrowseProductsScree
         final price = await ds.getActivePrice(
           clientId: session.clientId, companyId: session.companyId, locationId: locationId,
           productId: p['id'] as String, uomId: p['base_uom_id'] as String,
-          customerId: widget.customerId ?? '', asOfDate: today, currencyCode: widget.localCurrency,
+          customerId: widget.customerId, asOfDate: today, currencyCode: widget.localCurrency,
         );
         final rate = (price?['selling_price'] as num?)?.toDouble();
         if (mounted) setState(() => _prices[p['id'] as String] = (rate != null && rate > 0) ? rate : null);
@@ -219,9 +219,9 @@ class _PosBrowseProductsScreenState extends ConsumerState<PosBrowseProductsScree
         ),
         if (_query.isEmpty)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             child: SizedBox(
-              height: 32,
+              height: 40,
               child: ListView(scrollDirection: Axis.horizontal, children: [
                 _Crumb(label: 'Home', onTap: () => _jumpTo(-1), active: _trail.isEmpty),
                 for (var i = 0; i < _trail.length; i++)
@@ -269,6 +269,11 @@ class _PosBrowseProductsScreenState extends ConsumerState<PosBrowseProductsScree
   }
 }
 
+/// A breadcrumb that actually LOOKS tappable on a touchscreen — the earlier
+/// version was flat text with a faint tint, found live to not read as a
+/// button at all. Always has a visible pill background + border now (not
+/// just a color shift on the active one), same "chip" language as a real
+/// button elsewhere in this app.
 class _Crumb extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
@@ -278,18 +283,23 @@ class _Crumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: active ? AppColors.primary.withValues(alpha: 0.12) : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
+      padding: const EdgeInsets.only(right: 8),
+      child: Material(
+        color: active ? AppColors.primary : Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(999),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 36),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: active ? AppColors.primary : AppColors.border, width: active ? 0 : 1.2),
+            ),
+            alignment: Alignment.center,
+            child: Text(label, style: TextStyle(fontSize: 13, fontWeight: active ? FontWeight.w800 : FontWeight.w600, color: active ? Colors.white : AppColors.textPrimary)),
           ),
-          alignment: Alignment.center,
-          child: Text(label, style: TextStyle(fontSize: 12.5, fontWeight: active ? FontWeight.w800 : FontWeight.w500, color: active ? AppColors.primary : AppColors.textSecondary)),
         ),
       ),
     );

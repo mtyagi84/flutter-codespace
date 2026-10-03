@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -9,11 +10,17 @@ import '../../../../core/utils/app_logger.dart';
 import '../../../sales/presentation/providers/sales_invoice_providers.dart';
 import '../widgets/pos_keyboard.dart';
 
-/// Kiosk-style, read-only: scan or search, see the price and stock on hand.
-/// Deliberately the simplest POS screen — no cart, no customer, nothing
-/// that writes anything. Reuses the same price/product lookups New Sale
-/// already calls (getProductByCode/getProductsForPicker/getActivePrice/
-/// getProductLocationCost) — no new backend surface at all.
+/// Kiosk-style, read-only: scan or type a barcode/SKU/name, see the price and
+/// stock on hand. Deliberately the simplest POS screen — no cart, no
+/// customer, nothing that writes anything.
+///
+/// The on-screen keyboard is an ALWAYS-VISIBLE part of this page — never a
+/// popup sheet — per direct user feedback: this screen has nothing else on
+/// it, so hiding the one input method behind a tap is pure friction and
+/// leaves a cashier wondering why they even had to open it. A barcode
+/// scanner still needs no on-screen UI at all (it types+Enters into the
+/// focused field like a keyboard-wedge); the inline keyboard is simply
+/// always there as well, for the manual case.
 class PosPriceCheckScreen extends ConsumerStatefulWidget {
   const PosPriceCheckScreen({super.key});
 
@@ -22,18 +29,28 @@ class PosPriceCheckScreen extends ConsumerStatefulWidget {
 }
 
 class _PosPriceCheckScreenState extends ConsumerState<PosPriceCheckScreen> {
+  // A REAL, focused TextField — not just a display box — because a
+  // hardware barcode scanner emulates a keyboard: it types into whatever
+  // field currently has focus and sends Enter. The inline keyboard below
+  // simply types into this same controller too, so scanning and manual
+  // on-screen typing both land in one place.
   final _searchCtrl = TextEditingController();
   final _focus = FocusNode();
+  bool _shift = false;
   bool _loading = false;
   String? _error;
   Map<String, dynamic>? _product;
   double? _price;
   double? _stock;
+  String _localCcy = '';
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCompany();
+      _focus.requestFocus();
+    });
   }
 
   @override
@@ -41,6 +58,20 @@ class _PosPriceCheckScreenState extends ConsumerState<PosPriceCheckScreen> {
     _searchCtrl.dispose();
     _focus.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadCompany() async {
+    final session = ref.read(sessionProvider)!;
+    try {
+      final res = await DioClient.instance.get('/ric_companies', queryParameters: {
+        'id': 'eq.${session.companyId}', 'select': 'local_currency',
+      });
+      final rows = res.data as List;
+      if (mounted && rows.isNotEmpty) setState(() => _localCcy = (rows.first as Map<String, dynamic>)['local_currency'] as String? ?? '');
+    } catch (_) {
+      // Price/stock simply won't show a currency suffix if this fails —
+      // not fatal, the lookup itself still works.
+    }
   }
 
   Future<void> _search(String value) async {
@@ -68,7 +99,8 @@ class _PosPriceCheckScreenState extends ConsumerState<PosPriceCheckScreen> {
         final uomId = product['matched_uom_id'] as String? ?? product['base_uom_id'] as String;
         final priceRes = await ds.getActivePrice(
           clientId: session.clientId, companyId: session.companyId, locationId: locationId,
-          productId: product['id'] as String, uomId: uomId, customerId: '', asOfDate: _today(), currencyCode: '',
+          productId: product['id'] as String, uomId: uomId, customerId: null,
+          asOfDate: _today(), currencyCode: _localCcy,
         );
         final costRes = await ds.getProductLocationCost(clientId: session.clientId, companyId: session.companyId, locationId: locationId, productId: product['id'] as String);
         price = (priceRes?['selling_price'] as num?)?.toDouble();
@@ -97,6 +129,14 @@ class _PosPriceCheckScreenState extends ConsumerState<PosPriceCheckScreen> {
     return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
   }
 
+  void _type(String ch) => setState(() => _searchCtrl.text += _shift ? ch.toUpperCase() : ch);
+  void _space() => setState(() => _searchCtrl.text += ' ');
+  void _backspace() {
+    if (_searchCtrl.text.isEmpty) return;
+    setState(() => _searchCtrl.text = _searchCtrl.text.substring(0, _searchCtrl.text.length - 1));
+  }
+  void _clear() => setState(() => _searchCtrl.clear());
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -110,55 +150,55 @@ class _PosPriceCheckScreenState extends ConsumerState<PosPriceCheckScreen> {
               const Text('SAKAL POS — Price Check', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.primary, fontSize: 16)),
             ]),
           ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 4, 16, 0),
+            child: Text(
+              'Scan a barcode, or type a name/code below and look up its price and stock.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+            ),
+          ),
           Expanded(
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    // Primary flow stays scan-first (autofocus + a barcode
-                    // scanner needs no on-screen UI at all, it types+Enters
-                    // like a keyboard-wedge) — the keyboard icon is an
-                    // explicit, visible fallback for manual entry, since
-                    // there is no reliable OS on-screen keyboard on real POS
-                    // touchscreen hardware.
-                    Row(children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _searchCtrl, focusNode: _focus, autofocus: true, textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 19),
-                          decoration: const InputDecoration(hintText: 'Scan or type a barcode / SKU…', border: OutlineInputBorder()),
-                          onSubmitted: _search,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Material(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(10),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(10),
-                          onTap: () => PosKeyboard.show(
-                            context,
-                            title: 'Barcode / SKU',
-                            initialValue: _searchCtrl.text,
-                            onConfirm: (v) {
-                              _searchCtrl.text = v;
-                              _search(v);
-                            },
-                          ),
-                          child: Container(
-                            width: 48, height: 48,
-                            decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
-                            child: const Icon(Icons.keyboard_outlined, color: AppColors.textSecondary),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+                      child: Row(children: [
+                        const Icon(Icons.search, color: AppColors.textSecondary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: _searchCtrl, focusNode: _focus, autofocus: true,
+                            style: const TextStyle(fontSize: 18),
+                            decoration: const InputDecoration(hintText: 'Scan, or type here…', border: InputBorder.none, isDense: true),
+                            onSubmitted: _search,
+                            onChanged: (_) => setState(() {}),
                           ),
                         ),
+                        if (_searchCtrl.text.isNotEmpty) IconButton(icon: const Icon(Icons.close, size: 18), onPressed: _clear),
+                      ]),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: FilledButton.icon(
+                        onPressed: _loading || _searchCtrl.text.isEmpty ? null : () => _search(_searchCtrl.text),
+                        icon: _loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.search),
+                        label: const Text('Look Up'),
                       ),
-                    ]),
-                    const SizedBox(height: 28),
-                    if (_loading) const CircularProgressIndicator(),
-                    if (_error != null) Text(_error!, style: const TextStyle(color: AppColors.negative)),
+                    ),
+                    const SizedBox(height: 18),
+                    if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 14), child: Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.negative))),
                     if (_product != null) _buildResultCard(),
+                    const SizedBox(height: 18),
+                    // Always on the page — a barcode scanner still works with
+                    // no interaction here at all; this is for manual entry.
+                    PosKeyboardKeys(shift: _shift, onType: _type, onSpace: _space, onBackspace: _backspace, onToggleShift: () => setState(() => _shift = !_shift)),
                   ]),
                 ),
               ),
@@ -180,8 +220,8 @@ class _PosPriceCheckScreenState extends ConsumerState<PosPriceCheckScreen> {
           Text('SKU ${_product!['product_code']}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
           const SizedBox(height: 18),
           Text(
-            _price != null ? _price!.toStringAsFixed(2) : '—',
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 44, color: AppColors.primary),
+            _price != null ? '${_price!.toStringAsFixed(2)} $_localCcy' : '—',
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 40, color: AppColors.primary),
           ),
           if (_price == null) const Text('No active price configured', style: TextStyle(color: AppColors.negative, fontSize: 12)),
           const SizedBox(height: 18),

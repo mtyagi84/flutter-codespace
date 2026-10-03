@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +10,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../widgets/pos_amount_field.dart';
 import '../widgets/pos_keyboard.dart';
+import '../widgets/pos_search_sheet.dart';
 import '../widgets/pos_session_guard.dart';
 
 /// Shift open / cash movements / close-and-cash-up — the operational loop a
@@ -200,12 +202,20 @@ class _PosShiftScreenState extends ConsumerState<PosShiftScreen> {
 
   Future<void> _openMovementDialog(String movementType) async {
     final session = ref.read(sessionProvider)!;
+    // Every movement type needs BOTH a cash account (the drawer side) and
+    // an "other side" account — a real bug found live: PAYOUT was passed
+    // only non-cash accounts, so its own "Cash Account (drawer)" dropdown
+    // had nothing to select at all, making every Payout un-submittable
+    // ("Amount, currency, cash account... are all required" could never be
+    // satisfied). The dialog's own build() already splits this combined
+    // list back into cash vs. other by nature — this was the one call site
+    // wrongly pre-filtering before that split ran.
     final result = await showDialog<bool>(
       context: context,
       builder: (_) => _CashMovementDialog(
         movementType: movementType,
         currencies: _currencies,
-        accounts: movementType == 'PAYOUT' ? _nonCashAccounts : [..._cashAccounts, ..._nonCashAccounts],
+        accounts: [..._cashAccounts, ..._nonCashAccounts],
         shiftId: _shift!['id'] as String,
         session: session,
       ),
@@ -388,6 +398,7 @@ class _CashMovementDialogState extends State<_CashMovementDialog> {
   String _note = '';
   String? _currencyId;
   String? _accountId;
+  String? _accountDisplay;
   String? _cashAccountId;
   bool _saving = false;
   String? _error;
@@ -428,6 +439,26 @@ class _CashMovementDialogState extends State<_CashMovementDialog> {
     }
   }
 
+  Future<void> _pickOtherAccount(List<Map<String, dynamic>> otherAccounts) async {
+    await PosSearchSheet.show<Map<String, dynamic>>(
+      context,
+      title: widget.movementType == 'PAYOUT' ? 'Select Expense Account' : 'Select Other Account',
+      hintText: 'Search account name or code…',
+      onSearch: (q) async {
+        if (q.isEmpty) return otherAccounts;
+        final lower = q.toLowerCase();
+        return otherAccounts.where((a) =>
+            (a['account_code'] as String).toLowerCase().contains(lower) ||
+            (a['account_name'] as String).toLowerCase().contains(lower)).toList();
+      },
+      itemBuilder: (context, a) => ListTile(title: Text('${a['account_code']} — ${a['account_name']}')),
+      onSelected: (a) => setState(() {
+        _accountId = a['id'] as String;
+        _accountDisplay = '${a['account_code']} — ${a['account_name']}';
+      }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cashAccounts = widget.accounts.where((a) => a['account_nature'] == 'Cash' || a['account_nature'] == 'Bank').toList();
@@ -436,7 +467,9 @@ class _CashMovementDialogState extends State<_CashMovementDialog> {
       title: Text(_titleFor(widget.movementType)),
       content: SizedBox(
         width: 360,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_explanationFor(widget.movementType), style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+          const SizedBox(height: 14),
           PosAmountField(label: 'Amount', value: _amount, suffixText: _currencyId, onChanged: (v) => setState(() => _amount = v)),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
@@ -452,12 +485,43 @@ class _CashMovementDialogState extends State<_CashMovementDialog> {
             items: cashAccounts.map((a) => DropdownMenuItem(value: a['id'] as String, child: Text('${a['account_code']} — ${a['account_name']}', overflow: TextOverflow.ellipsis))).toList(),
             onChanged: (v) => setState(() => _cashAccountId = v),
           ),
+          const Padding(
+            padding: EdgeInsets.only(top: 3, left: 2),
+            child: Text('The physical till/cash box this terminal uses — where the cash itself physically moves.', style: TextStyle(fontSize: 10.5, color: AppColors.textSecondary)),
+          ),
           const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            initialValue: _accountId, isExpanded: true, isDense: true, itemHeight: null,
-            decoration: InputDecoration(labelText: widget.movementType == 'PAYOUT' ? 'Expense Account' : 'Other Side (Safe/Bank)', border: const OutlineInputBorder()),
-            items: otherAccounts.map((a) => DropdownMenuItem(value: a['id'] as String, child: Text('${a['account_code']} — ${a['account_name']}', overflow: TextOverflow.ellipsis))).toList(),
-            onChanged: (v) => setState(() => _accountId = v),
+          // A plain dropdown doesn't scale to a full Chart of Accounts —
+          // this list can be hundreds of rows long, so it's a live-searched
+          // picker instead, same pattern as Customer search elsewhere.
+          Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => _pickOtherAccount(otherAccounts),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
+                child: Row(children: [
+                  const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _accountDisplay ?? (widget.movementType == 'PAYOUT' ? 'Select Expense Account' : 'Select Other Account'),
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: _accountDisplay == null ? AppColors.textSecondary : AppColors.textPrimary),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 3, left: 2),
+            child: Text(
+              widget.movementType == 'PAYOUT' ? 'What the cash was spent on (e.g. courier, supplies).' : 'The safe, bank, or other account this cash is moving to/from.',
+              style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary),
+            ),
           ),
           const SizedBox(height: 10),
           PosKeyboardField(label: 'Note', value: _note, onChanged: (v) => setState(() => _note = v)),
@@ -477,6 +541,13 @@ class _CashMovementDialogState extends State<_CashMovementDialog> {
         'PAYOUT' => 'Payout',
         'CASH_DROP' => 'Cash Drop',
         _ => t,
+      };
+
+  String _explanationFor(String t) => switch (t) {
+        'CASH_IN' => 'Add cash to the drawer — e.g. a float top-up from the office.',
+        'PAYOUT' => 'Record cash paid out of the drawer for a reason — a petty expense, courier, or supplies.',
+        'CASH_DROP' => 'Move excess cash OUT of the drawer into the safe for safekeeping — this is not an expense, the money is still the business\'s, just no longer sitting in the till.',
+        _ => '',
       };
 }
 
@@ -515,15 +586,26 @@ class _CloseShiftDialogState extends State<_CloseShiftDialog> {
       // denomination breakdown yet — see this screen's own header comment).
       for (final currency in widget.currencies) {
         final counted = _valueFor(currency);
-        await DioClient.instance.post('/rid_pos_shift_denomination_counts', data: {
-          'client_id': widget.session.clientId,
-          'company_id': widget.session.companyId,
-          'shift_id': widget.shiftId,
-          'count_stage': 'CLOSING',
-          'currency_id': currency,
-          'denomination_value': 1,
-          'count': counted,
-        });
+        // Upsert, not a plain INSERT: if a prior Close Shift attempt failed
+        // AFTER this insert already succeeded (e.g. fn_close_pos_shift
+        // itself then rejected a missing variance reason), retrying used to
+        // hit "duplicate key value violates unique constraint
+        // uq_pos_shift_denom_count" — confirmed live. This must be safely
+        // re-runnable.
+        await DioClient.instance.post(
+          '/rid_pos_shift_denomination_counts',
+          data: {
+            'client_id': widget.session.clientId,
+            'company_id': widget.session.companyId,
+            'shift_id': widget.shiftId,
+            'count_stage': 'CLOSING',
+            'currency_id': currency,
+            'denomination_value': 1,
+            'count': counted,
+          },
+          queryParameters: {'on_conflict': 'shift_id,count_stage,currency_id,denomination_value'},
+          options: Options(headers: {'Prefer': 'resolution=merge-duplicates'}),
+        );
       }
       await DioClient.instance.post('/rpc/fn_close_pos_shift', data: {
         'p_client_id': widget.session.clientId,

@@ -155,7 +155,7 @@ abstract class SalesInvoiceRepository {
     required String locationId,
     required String productId,
     required String uomId,
-    required String customerId,
+    String? customerId,
     required String asOfDate,
     required String currencyCode,
   });

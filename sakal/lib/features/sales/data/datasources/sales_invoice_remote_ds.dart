@@ -469,17 +469,23 @@ class SalesInvoiceRemoteDs {
     required String locationId,
     required String productId,
     required String uomId,
-    required String customerId,
+    String? customerId,
     required String asOfDate,
     required String currencyCode,
   }) async {
+    // p_customer_id is a `uuid` column server-side — sending a literal ''
+    // (rather than omitting it / sending null) fails as
+    // "invalid input syntax for type uuid: ''" (confirmed live, Price
+    // Check). A blank/missing customer means "no specific customer, use
+    // the general price tier" and must be sent as a real null, never ''.
+    final cleanCustomerId = (customerId == null || customerId.isEmpty) ? null : customerId;
     final res = await _dio.post('/rpc/fn_get_active_price', data: {
       'p_client_id':       clientId,
       'p_company_id':      companyId,
       'p_location_id':     locationId,
       'p_product_id':      productId,
       'p_uom_id':          uomId,
-      'p_customer_id':     customerId,
+      'p_customer_id':     cleanCustomerId,
       'p_as_of_date':      asOfDate,
       'p_target_currency': currencyCode,
     });

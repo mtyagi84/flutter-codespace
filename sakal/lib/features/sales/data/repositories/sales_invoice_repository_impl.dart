@@ -219,7 +219,7 @@ class SalesInvoiceRepositoryImpl implements SalesInvoiceRepository {
     required String locationId,
     required String productId,
     required String uomId,
-    required String customerId,
+    String? customerId,
     required String asOfDate,
     required String currencyCode,
   }) => _remote.getActivePrice(
