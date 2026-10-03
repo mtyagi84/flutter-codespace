@@ -26,8 +26,13 @@ import '../widgets/pos_keyboard.dart';
 class PosBrowseProductsScreen extends ConsumerStatefulWidget {
   final String? customerId;
   final String localCurrency;
+  /// Skips category drilling entirely and shows a flat grid of active,
+  /// POS-eligible products straight away — for a cashier who just wants to
+  /// tap a common item with zero scanning/typing (a "quick pick" grid, per
+  /// the original Phase-1 design doc).
+  final bool quickPick;
 
-  const PosBrowseProductsScreen({super.key, this.customerId, required this.localCurrency});
+  const PosBrowseProductsScreen({super.key, this.customerId, required this.localCurrency, this.quickPick = false});
 
   @override
   ConsumerState<PosBrowseProductsScreen> createState() => _PosBrowseProductsScreenState();
@@ -66,6 +71,26 @@ class _PosBrowseProductsScreenState extends ConsumerState<PosBrowseProductsScree
     final session = ref.read(sessionProvider)!;
     setState(() => _loading = true);
     try {
+      if (widget.quickPick) {
+        // Deliberately NOT filtered on the is_pos_item flag — that flag type
+        // only exists for a company that has clicked "Load Defaults" on the
+        // Product Flag Types screen; filtering on it unconditionally would
+        // silently show an empty grid for every tenant that hasn't, which
+        // is worse than occasionally showing a product that isn't meant for
+        // the till. Same "missing config = don't crash, don't go empty"
+        // posture as every other optional flag in this app.
+        final prodRes = await DioClient.instance.get('/rim_products', queryParameters: {
+          'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
+          'is_active': 'eq.true', 'is_deleted': 'eq.false',
+          'select': 'id,product_code,product_name,base_uom_id,tracking_type,sales_tax_group_id,'
+              'uom:rim_common_masters!base_uom_id(description)',
+          'order': 'product_name.asc', 'limit': '60',
+        });
+        final products = List<Map<String, dynamic>>.from(prodRes.data as List);
+        if (mounted) setState(() { _categories = []; _products = products; _loading = false; });
+        if (products.isNotEmpty) _loadPrices(products);
+        return;
+      }
       final parentId = _trail.isEmpty ? null : _trail.last['id'] as String;
       final catRes = await DioClient.instance.get('/rim_item_categories', queryParameters: {
         'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
@@ -200,7 +225,7 @@ class _PosBrowseProductsScreenState extends ConsumerState<PosBrowseProductsScree
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.primary, foregroundColor: Colors.white,
-        title: const Text('Search Products'),
+        title: Text(widget.quickPick ? 'Quick Pick' : 'Search Products'),
       ),
       body: Column(children: [
         Padding(
@@ -217,7 +242,7 @@ class _PosBrowseProductsScreenState extends ConsumerState<PosBrowseProductsScree
             ]),
           ),
         ),
-        if (_query.isEmpty)
+        if (_query.isEmpty && !widget.quickPick)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             child: SizedBox(

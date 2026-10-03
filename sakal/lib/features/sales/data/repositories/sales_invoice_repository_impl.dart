@@ -280,6 +280,16 @@ class SalesInvoiceRepositoryImpl implements SalesInvoiceRepository {
         password: password, requestedDiscountPercent: requestedDiscountPercent,
       );
 
+  @override
+  Future<Map<String, dynamic>> verifyDiscountOverridePin({
+    required String clientId,
+    required String companyId,
+    required String pin,
+    required double requestedDiscountPercent,
+  }) => _remote.verifyDiscountOverridePin(
+        clientId: clientId, companyId: companyId, pin: pin, requestedDiscountPercent: requestedDiscountPercent,
+      );
+
   // ── Shared pickers ────────────────────────────────────────────────────────
 
   // getCustomerDetails: offline read falls back to AccountsCache (via the

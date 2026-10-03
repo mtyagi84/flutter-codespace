@@ -12,9 +12,11 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../../../sales/presentation/providers/sales_invoice_providers.dart';
+import '../../data/pos_auth_remote_ds.dart';
+import '../../data/pos_device_storage.dart';
 import '../widgets/pos_amount_field.dart';
-import '../widgets/pos_keyboard.dart';
 import '../widgets/pos_numpad.dart';
+import '../widgets/pos_pin_pad.dart';
 import '../widgets/pos_qty_stepper.dart';
 import '../widgets/pos_session_guard.dart';
 import 'pos_browse_products_screen.dart';
@@ -57,6 +59,26 @@ class PosNewSaleScreen extends ConsumerStatefulWidget {
   ConsumerState<PosNewSaleScreen> createState() => _PosNewSaleScreenState();
 }
 
+/// A candidate lot for a BATCH/BATCH_WITH_EXPIRY-tracked line — mirrors
+/// Quick Invoice's own `_BatchCandidate` (`sales_invoice_entry_screen.dart`)
+/// exactly, just with a plain `double` instead of a `TextEditingController`
+/// since POS line fields are PosAmountField-driven, not raw TextFields.
+class _PosBatchCandidate {
+  final String batchNo;
+  final String? expiryDate;
+  final double availableBalance;
+  double allocatedQty = 0;
+  _PosBatchCandidate({required this.batchNo, this.expiryDate, required this.availableBalance});
+}
+
+/// A candidate unit for a SERIAL-tracked line — mirrors Quick Invoice's own
+/// `_SerialCandidate`.
+class _PosSerialCandidate {
+  final String serialNo;
+  bool selected = false;
+  _PosSerialCandidate({required this.serialNo});
+}
+
 class _PosLineRow {
   final String productId;
   final String productCode;
@@ -69,6 +91,9 @@ class _PosLineRow {
   double rate;
   double discountPct = 0;
   String? discountGivenBy;
+  String trackingType;
+  // Null = no floor configured for this product — rim_products.min_selling_price.
+  final double? minSellingPrice;
 
   double baseQty = 0;
   double grossAmount = 0;
@@ -76,6 +101,14 @@ class _PosLineRow {
   double taxableAmount = 0;
   double taxAmount = 0;
   double finalAmount = 0;
+
+  bool get isBatchTracked => trackingType == 'BATCH' || trackingType == 'BATCH_WITH_EXPIRY';
+  bool get isSerialTracked => trackingType == 'SERIAL';
+  List<_PosBatchCandidate> batchCandidates = [];
+  List<_PosSerialCandidate> serialCandidates = [];
+  bool candidatesLoaded = false;
+  double get batchQtySum => batchCandidates.fold(0.0, (s, b) => s + b.allocatedQty);
+  int get serialSelectedCount => serialCandidates.where((s) => s.selected).length;
 
   _PosLineRow({
     required this.productId,
@@ -87,6 +120,8 @@ class _PosLineRow {
     required this.taxGroupId,
     required this.rate,
     this.qty = 1,
+    this.trackingType = 'NONE',
+    this.minSellingPrice,
   });
 }
 
@@ -141,6 +176,17 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   Timer? _clockTimer;
   DateTime _now = DateTime.now();
 
+  // ── Idle-lock (ric_companies.pos_idle_lock_minutes) ───────────────────────
+  int _idleLockMinutes = 0; // 0 = disabled
+  DateTime _lastInteraction = DateTime.now();
+  bool _locked = false;
+  Timer? _idleCheckTimer;
+
+  // ── Weighted-barcode parsing (ric_companies.weighted_barcode_*) ───────────
+  String? _weightedPrefixFrom;
+  String? _weightedPrefixTo;
+  String? _weightedFormat; // 'WEIGHT_EMBEDDED' | 'PRICE_EMBEDDED' | null (disabled)
+
   @override
   void initState() {
     super.initState();
@@ -151,14 +197,44 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) setState(() => _now = DateTime.now());
     });
+    // Checked periodically rather than via a single long-lived Timer keyed
+    // to the configured minutes — company settings (and therefore the idle
+    // threshold) aren't known until _init() resolves, and re-arming a timer
+    // every time interaction resets would be needless churn for a window
+    // this short either way.
+    _idleCheckTimer = Timer.periodic(const Duration(seconds: 20), (_) => _checkIdle());
   }
 
   @override
   void dispose() {
     _clockTimer?.cancel();
+    _idleCheckTimer?.cancel();
     _searchCtrl.dispose();
     _searchFocus.dispose();
     super.dispose();
+  }
+
+  void _recordInteraction() {
+    _lastInteraction = DateTime.now();
+  }
+
+  void _checkIdle() {
+    if (_idleLockMinutes <= 0 || _locked || !mounted) return;
+    if (DateTime.now().difference(_lastInteraction).inMinutes >= _idleLockMinutes) {
+      setState(() => _locked = true);
+    }
+  }
+
+  /// Re-runs the same PIN login the till already uses — simplest correct
+  /// way to verify "is this really an authorized user" without a second,
+  /// parallel verify-only backend function. The resulting session/menu
+  /// data is discarded; nothing about the cashier's existing session
+  /// changes, only the lock overlay comes down.
+  Future<void> _unlock(String pin) async {
+    final deviceUid = await PosDeviceStorage.deviceUid();
+    await PosAuthRemoteDs().pinLogin(deviceUid: deviceUid, pin: pin);
+    _recordInteraction();
+    if (mounted) setState(() => _locked = false);
   }
 
   String _formatClock(DateTime d) {
@@ -183,11 +259,17 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       _shift = shifts.isEmpty ? null : shifts.first;
 
       final companyRes = await DioClient.instance.get('/ric_companies', queryParameters: {
-        'id': 'eq.${session.companyId}', 'select': 'base_currency,local_currency',
+        'id': 'eq.${session.companyId}',
+        'select': 'base_currency,local_currency,pos_idle_lock_minutes,'
+            'weighted_barcode_prefix_from,weighted_barcode_prefix_to,weighted_barcode_format',
       });
       final company = ((companyRes.data as List).first as Map<String, dynamic>);
       _baseCcy = company['base_currency'] as String? ?? '';
       _localCcy = company['local_currency'] as String? ?? '';
+      _idleLockMinutes = (company['pos_idle_lock_minutes'] as num?)?.toInt() ?? 0;
+      _weightedPrefixFrom = company['weighted_barcode_prefix_from'] as String?;
+      _weightedPrefixTo = company['weighted_barcode_prefix_to'] as String?;
+      _weightedFormat = company['weighted_barcode_format'] as String?;
 
       final ds = ref.read(salesInvoiceRepositoryProvider);
       _quickSetup = await ds.getQuickInvoiceSetup(clientId: session.clientId, companyId: session.companyId, userId: session.userId);
@@ -253,9 +335,16 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     }
 
     final lines = await ds.getLines(clientId: session.clientId, companyId: session.companyId, invoiceNo: _invoiceNo!, invoiceDate: _invoiceDate!);
+    // Resuming a DRAFT with a tracked line previously lost its allocation
+    // entirely (candidates reload at zero) — same class of bug this app has
+    // hit before (see Sales Invoice's own "Resume-a-DRAFT gap" fix). Fetch
+    // both up front, keyed by the line's own saved serial_no.
+    final savedBatches = await ds.getLineBatchAllocations(clientId: session.clientId, companyId: session.companyId, invoiceNo: _invoiceNo!, invoiceDate: _invoiceDate!);
+    final savedSerials = await ds.getLineSerialAllocations(clientId: session.clientId, companyId: session.companyId, invoiceNo: _invoiceNo!, invoiceDate: _invoiceDate!);
     for (final l in lines) {
       final product = l['product'] as Map<String, dynamic>?;
       final uom = l['uom'] as Map<String, dynamic>?;
+      final lineSerial = l['serial_no'] as int;
       final row = _PosLineRow(
         productId: l['product_id'] as String,
         productCode: product?['product_code'] as String? ?? '',
@@ -266,10 +355,41 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
         taxGroupId: l['tax_group_id'] as String?,
         rate: (l['rate'] as num?)?.toDouble() ?? 0,
         qty: (l['qty_pack'] as num?)?.toDouble() ?? 0,
+        trackingType: product?['tracking_type'] as String? ?? 'NONE',
       );
       row.discountPct = (l['discount_percent'] as num?)?.toDouble() ?? 0;
       row.discountGivenBy = l['discount_given_by'] as String?;
       _lines.add(row);
+
+      if (row.isBatchTracked || row.isSerialTracked) {
+        await _loadCandidates(row);
+        if (row.isBatchTracked) {
+          for (final sb in savedBatches.where((sb) => sb['line_serial'] == lineSerial)) {
+            final batchNo = sb['batch_no'] as String;
+            final allocated = (sb['base_qty'] as num?)?.toDouble() ?? 0;
+            final existing = row.batchCandidates.where((b) => b.batchNo == batchNo).toList();
+            if (existing.isNotEmpty) {
+              existing.first.allocatedQty = allocated;
+            } else {
+              // The live candidate list no longer has this batch (e.g. it's
+              // since been fully consumed elsewhere) — still show what was
+              // actually saved, so a resumed DRAFT never silently loses
+              // what it already committed to.
+              row.batchCandidates.add(_PosBatchCandidate(batchNo: batchNo, expiryDate: sb['expiry_date'] as String?, availableBalance: allocated)..allocatedQty = allocated);
+            }
+          }
+        } else {
+          final selectedSerials = savedSerials.where((ss) => ss['line_serial'] == lineSerial).map((ss) => ss['serial_no'] as String).toSet();
+          for (final s in row.serialCandidates) {
+            if (selectedSerials.contains(s.serialNo)) s.selected = true;
+          }
+          for (final serialNo in selectedSerials) {
+            if (!row.serialCandidates.any((s) => s.serialNo == serialNo)) {
+              row.serialCandidates.add(_PosSerialCandidate(serialNo: serialNo)..selected = true);
+            }
+          }
+        }
+      }
     }
     _recompute();
   }
@@ -345,12 +465,56 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     if (picked != null) await _addProduct(picked);
   }
 
+  /// A flat grid of common products for one-tap add — no scanning, no
+  /// typing, no category drilling. One of the original "Phase 1" UX gaps
+  /// flagged by the user early in this module's design.
+  Future<void> _quickPick() async {
+    final picked = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(builder: (_) => PosBrowseProductsScreen(customerId: _customerId, localCurrency: _localCcy, quickPick: true)),
+    );
+    if (picked != null) await _addProduct(picked);
+  }
+
+  /// The common supermarket "in-store weighing scale" convention: a 13-digit
+  /// barcode where positions 1-2 are a reserved prefix (configured per
+  /// company as a RANGE, e.g. '20'..'29'), 3-7 are the product's own short
+  /// code, 8-12 embed either the weight (grams) or the price (cents)
+  /// depending on `weighted_barcode_format`, and 13 is a check digit this
+  /// app doesn't need to verify (the scale that printed the label already
+  /// guarantees it). Returns null for any barcode that isn't in this
+  /// company's configured prefix range — i.e. every ordinary product
+  /// barcode is completely unaffected.
+  ({String itemCode, double? weightKg, double? embeddedPrice})? _parseWeightedBarcode(String code) {
+    if (_weightedFormat == null || _weightedPrefixFrom == null || _weightedPrefixTo == null) return null;
+    if (code.length != 13 || int.tryParse(code) == null) return null;
+    final prefix = code.substring(0, 2);
+    if (prefix.compareTo(_weightedPrefixFrom!) < 0 || prefix.compareTo(_weightedPrefixTo!) > 0) return null;
+    final itemCode = code.substring(2, 7);
+    final embeddedValue = int.parse(code.substring(7, 12));
+    return _weightedFormat == 'WEIGHT_EMBEDDED'
+        ? (itemCode: itemCode, weightKg: embeddedValue / 1000.0, embeddedPrice: null)
+        : (itemCode: itemCode, weightKg: null, embeddedPrice: embeddedValue / 100.0);
+  }
+
   Future<void> _onSearchSubmitted(String value) async {
     final code = value.trim();
     if (code.isEmpty) return;
     final session = ref.read(sessionProvider)!;
     final ds = ref.read(salesInvoiceRepositoryProvider);
     try {
+      final weighted = _parseWeightedBarcode(code);
+      if (weighted != null) {
+        final matches = await ds.getProductsForPicker(clientId: session.clientId, companyId: session.companyId, search: weighted.itemCode);
+        final product = matches.where((p) => p['product_code'] == weighted.itemCode).toList();
+        if (product.isNotEmpty) {
+          await _addProduct(product.first, qtyOverride: weighted.weightKg, rateOverride: weighted.embeddedPrice);
+          _searchCtrl.clear();
+          return;
+        }
+        // Falls through to the normal lookup below if the embedded item
+        // code doesn't match any product — a prefix landing in range is a
+        // strong signal, not a guarantee (e.g. a coincidental EAN clash).
+      }
       final byBarcode = await ds.getProductByCode(clientId: session.clientId, companyId: session.companyId, code: code, tryPartNumber: true);
       if (byBarcode != null) {
         await _addProduct(byBarcode, uomIdOverride: byBarcode['matched_uom_id'] as String?, uomFactorOverride: (byBarcode['matched_uom_conversion_factor'] as num?)?.toDouble());
@@ -386,20 +550,27 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     }
   }
 
-  Future<void> _addProduct(Map<String, dynamic> product, {String? uomIdOverride, double? uomFactorOverride}) async {
+  Future<void> _addProduct(Map<String, dynamic> product, {String? uomIdOverride, double? uomFactorOverride, double? qtyOverride, double? rateOverride}) async {
     final trackingType = product['tracking_type'] as String? ?? 'NONE';
-    if (trackingType != 'NONE') {
-      _showMsg('${product['product_name']} is batch/serial tracked — not yet supported in POS New Sale. Use the back-office Sales Invoice screen for this item.', color: AppColors.secondary);
-      return;
+    // Age-restricted sale confirmation — rim_products.flags is the existing
+    // dynamic, admin-defined flag mechanism (rim_product_flag_types), not a
+    // new column; a company that hasn't defined/enabled this flag simply
+    // never trips it, so this is inert everywhere it isn't configured.
+    final flags = product['flags'] as Map<String, dynamic>?;
+    if (flags?['is_age_restricted'] == true) {
+      final confirmed = await _confirmAgeRestricted(product['product_name'] as String);
+      if (!confirmed) return;
     }
     final session = ref.read(sessionProvider)!;
     final ds = ref.read(salesInvoiceRepositoryProvider);
     final uomId = uomIdOverride ?? product['base_uom_id'] as String;
     final uomLabel = (product['uom'] as Map<String, dynamic>?)?['description'] as String? ?? '';
 
-    double rate = 0;
+    // A PRICE_EMBEDDED weighted barcode already fixes the rate at the scale
+    // itself — never re-resolve a price lookup for it.
+    double rate = rateOverride ?? 0;
     final locationId = session.locationId;
-    if (_customerId != null && _invoiceCurrencyId != null && locationId != null && locationId.isNotEmpty) {
+    if (rateOverride == null && _customerId != null && _invoiceCurrencyId != null && locationId != null && locationId.isNotEmpty) {
       try {
         final price = await ds.getActivePrice(
           clientId: session.clientId, companyId: session.companyId, locationId: locationId,
@@ -423,30 +594,116 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       return;
     }
 
-    final qtyToAdd = _pendingQty;
+    // A WEIGHT_EMBEDDED barcode's own weight IS the quantity — never the
+    // "×N next scan" pending multiplier, which has nothing to do with a
+    // weighing-scale label.
+    final qtyToAdd = qtyOverride ?? _pendingQty;
     _pendingQty = 1;
 
-    final existing = _lines.where((l) => l.productId == product['id'] && l.uomId == uomId).toList();
-    if (existing.isNotEmpty) {
-      existing.first.qty += qtyToAdd;
-      _recompute();
-      return;
+    // Batch/serial-tracked products never merge into an existing line the
+    // way untracked ones do — each scan may draw from a different lot, and
+    // merging would make the FEFO re-allocation below ambiguous about which
+    // physical units the combined quantity actually represents. A second
+    // scan of the same tracked product adds a SEPARATE line instead.
+    final isTracked = trackingType == 'BATCH' || trackingType == 'BATCH_WITH_EXPIRY' || trackingType == 'SERIAL';
+    if (!isTracked) {
+      final existing = _lines.where((l) => l.productId == product['id'] && l.uomId == uomId).toList();
+      if (existing.isNotEmpty) {
+        existing.first.qty += qtyToAdd;
+        _recompute();
+        return;
+      }
     }
 
+    final row = _PosLineRow(
+      productId: product['id'] as String,
+      productCode: product['product_code'] as String,
+      productName: product['product_name'] as String,
+      uomId: uomId,
+      uomLabel: uomLabel,
+      uomConversionFactor: uomFactorOverride ?? 1,
+      taxGroupId: product['sales_tax_group_id'] as String?,
+      rate: rate,
+      qty: qtyToAdd,
+      trackingType: trackingType,
+      minSellingPrice: (product['min_selling_price'] as num?)?.toDouble(),
+    );
     setState(() {
-      _lines.add(_PosLineRow(
-        productId: product['id'] as String,
-        productCode: product['product_code'] as String,
-        productName: product['product_name'] as String,
-        uomId: uomId,
-        uomLabel: uomLabel,
-        uomConversionFactor: uomFactorOverride ?? 1,
-        taxGroupId: product['sales_tax_group_id'] as String?,
-        rate: rate,
-        qty: qtyToAdd,
-      ));
+      _lines.add(row);
       _recompute();
     });
+    if (isTracked) {
+      await _loadCandidates(row);
+      _autoAllocateBatchSerial(row);
+    }
+  }
+
+  // ── Batch/serial allocation (FEFO) ────────────────────────────────────────
+  // Ported from Quick Invoice's own sales_invoice_entry_screen.dart, scoped
+  // down to POS's DIRECT/immediate-dispatch-only context (no against-source
+  // mode, dispatch is always immediate — both guards that method needs are
+  // unconditionally true here, so they're simply omitted).
+
+  Future<void> _loadCandidates(_PosLineRow row) async {
+    final session = ref.read(sessionProvider)!;
+    final locationId = session.locationId;
+    if (locationId == null || locationId.isEmpty) return;
+    final ds = ref.read(salesInvoiceRepositoryProvider);
+    try {
+      if (row.isBatchTracked) {
+        final rows = await ds.getBatchStockBalance(clientId: session.clientId, companyId: session.companyId, locationId: locationId, productId: row.productId);
+        row.batchCandidates = rows.map((b) => _PosBatchCandidate(
+              batchNo: b['batch_no'] as String,
+              expiryDate: b['expiry_date'] as String?,
+              availableBalance: (b['balance'] as num?)?.toDouble() ?? 0,
+            )).toList();
+      } else if (row.isSerialTracked) {
+        final rows = await ds.getSerialStockStatus(clientId: session.clientId, companyId: session.companyId, locationId: locationId, productId: row.productId);
+        row.serialCandidates = rows.map((s) => _PosSerialCandidate(serialNo: s['serial_no'] as String)).toList();
+      }
+      if (mounted) setState(() => row.candidatesLoaded = true);
+    } catch (e, st) {
+      AppLogger.error('PosNewSaleLoadCandidates', e, st);
+      if (mounted) _showMsg('Could not load batch/serial stock for "${row.productName}".', color: AppColors.negative);
+    }
+  }
+
+  void _autoAllocateBatchSerial(_PosLineRow row) {
+    if (!row.candidatesLoaded) return;
+    final needed = row.baseQty;
+    if (needed <= 0) return;
+    if (row.isBatchTracked) {
+      var remaining = needed;
+      for (final b in row.batchCandidates) {
+        final take = remaining <= 0 ? 0.0 : (b.availableBalance < remaining ? b.availableBalance : remaining);
+        b.allocatedQty = take;
+        remaining -= take;
+      }
+    } else if (row.isSerialTracked) {
+      final count = needed.round();
+      for (var i = 0; i < row.serialCandidates.length; i++) {
+        row.serialCandidates[i].selected = i < count;
+      }
+    }
+    if (mounted) setState(() {});
+  }
+
+  /// Same tolerance/shape as Quick Invoice's own `_batchSerialError` — the
+  /// batch sum must equal the line's base qty exactly (within rounding),
+  /// and the serial count must equal it too.
+  String? _batchSerialError(_PosLineRow row) {
+    if (row.baseQty <= 0) return null;
+    if (row.isBatchTracked) {
+      if (row.batchCandidates.isEmpty) return 'No batches currently in stock for "${row.productName}".';
+      if ((row.batchQtySum - row.baseQty).abs() > 0.0001) {
+        return 'Batch quantities for "${row.productName}" total ${row.batchQtySum.toStringAsFixed(2)} but the line quantity is ${row.baseQty.toStringAsFixed(2)}.';
+      }
+    } else if (row.isSerialTracked) {
+      if (row.serialSelectedCount != row.baseQty.round()) {
+        return 'Select exactly ${row.baseQty.round()} serial(s) for "${row.productName}" (${row.serialSelectedCount} selected).';
+      }
+    }
+    return null;
   }
 
   void _removeLine(_PosLineRow row) {
@@ -490,41 +747,49 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     _recompute();
   }
 
+  // PIN-based, not username/password — no password is typed on the till
+  // outside Device Setup. fn_verify_pos_discount_override_pin (migration
+  // 210) never logs the supervisor in or touches the cashier's own
+  // session; it only checks a matching active user's PIN + their own
+  // discount eligibility.
   Future<String?> _showDiscountOverrideDialog(double requestedPct) async {
     final session = ref.read(sessionProvider)!;
     final ds = ref.read(salesInvoiceRepositoryProvider);
-    String username = '';
-    String password = '';
+    final pinPadKey = GlobalKey<PosPinPadState>();
+    bool verifying = false;
     String? error;
     final result = await showDialog<String>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Supervisor Approval Needed'),
-          content: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text('$requestedPct% exceeds your discount limit. A supervisor must authorize it.'),
-            const SizedBox(height: 12),
-            PosKeyboardField(label: 'Supervisor Username', value: username, onChanged: (v) => setDialogState(() => username = v)),
-            const SizedBox(height: 10),
-            PosKeyboardField(label: 'Password', value: password, obscureText: true, onChanged: (v) => setDialogState(() => password = v)),
-            if (error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: const TextStyle(color: AppColors.negative, fontSize: 12))),
-          ]),
+          content: SizedBox(
+            width: 320,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text('$requestedPct% exceeds your discount limit. A supervisor must enter their PIN to authorize it.', textAlign: TextAlign.center),
+              const SizedBox(height: 14),
+              if (error != null) Padding(padding: const EdgeInsets.only(bottom: 10), child: Text(error!, style: const TextStyle(color: AppColors.negative, fontSize: 12), textAlign: TextAlign.center)),
+              PosPinPad(
+                key: pinPadKey,
+                enabled: !verifying,
+                onSubmitted: (pin) async {
+                  setDialogState(() { verifying = true; error = null; });
+                  try {
+                    final r = await ds.verifyDiscountOverridePin(
+                      clientId: session.clientId, companyId: session.companyId,
+                      pin: pin, requestedDiscountPercent: requestedPct,
+                    );
+                    if (dialogContext.mounted) Navigator.of(dialogContext).pop(r['user_id'] as String);
+                  } catch (e) {
+                    pinPadKey.currentState?.clear();
+                    setDialogState(() { verifying = false; error = ErrorPresenter.format(e, action: 'verify this override'); });
+                  }
+                },
+              ),
+            ]),
+          ),
           actions: [
             TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Cancel')),
-            FilledButton(
-              onPressed: () async {
-                try {
-                  final r = await ds.verifyDiscountOverride(
-                    clientId: session.clientId, companyId: session.companyId,
-                    username: username.trim(), password: password, requestedDiscountPercent: requestedPct,
-                  );
-                  if (dialogContext.mounted) Navigator.of(dialogContext).pop(r['user_id'] as String);
-                } catch (e) {
-                  setDialogState(() => error = ErrorPresenter.format(e, action: 'verify this override'));
-                }
-              },
-              child: const Text('Authorize'),
-            ),
           ],
         ),
       ),
@@ -535,6 +800,35 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   void _showMsg(String msg, {Color? color}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
+  }
+
+  Future<bool> _confirmAgeRestricted(String productName) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Age-Restricted Item'),
+        content: Text('"$productName" is age-restricted. Confirm you have checked the customer\'s age before selling it.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('Confirmed — Add Item')),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  /// `rim_products.min_selling_price` — a base-currency floor no
+  /// discount/override may cross (seeded since migration 205, never
+  /// consumed by any screen until now).
+  String? _minPriceError(_PosLineRow row) {
+    final floor = row.minSellingPrice;
+    if (floor == null) return null;
+    final effectiveRate = row.rate * (1 - row.discountPct / 100);
+    if (effectiveRate < floor) {
+      return '${row.productName}: rate after discount (${effectiveRate.toStringAsFixed(2)}) is below its minimum selling price (${floor.toStringAsFixed(2)}).';
+    }
+    return null;
   }
 
   String _fmtDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -617,6 +911,18 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       _showMsg('${unpriced.first.productName} has no price — cannot charge an unpriced item.', color: AppColors.negative);
       return;
     }
+    for (final l in _lines) {
+      final err = _batchSerialError(l);
+      if (err != null) {
+        _showMsg(err, color: AppColors.negative);
+        return;
+      }
+      final priceErr = _minPriceError(l);
+      if (priceErr != null) {
+        _showMsg(priceErr, color: AppColors.negative);
+        return;
+      }
+    }
     if (_customerId == null) {
       // A credit sale's customer is always picked via the dedicated Credit
       // checkout screen BEFORE this is ever called with _saleType=='CREDIT'
@@ -629,8 +935,9 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     try {
       final header = _buildHeader(session);
       final lines = _buildLines();
+      final (batches, serials) = _buildBatchesAndSerials();
       final ds = ref.read(salesInvoiceRepositoryProvider);
-      final invoiceNo = await ds.save(header: header, lines: lines, charges: const [], batches: const [], serials: const [], userId: session.userId);
+      final invoiceNo = await ds.save(header: header, lines: lines, charges: const [], batches: batches, serials: serials, userId: session.userId);
       final invoiceDate = header['invoice_date'] as String;
       await ds.approve(clientId: session.clientId, companyId: session.companyId, invoiceNo: invoiceNo, invoiceDate: invoiceDate, approvedBy: session.userId);
 
@@ -705,6 +1012,28 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
           }).toList();
   }
 
+  /// Keyed to the exact same `_lines` index `_buildLines()` uses for its own
+  /// `serial_no` (1-based, no filtering) — `line_serial` on each batch/serial
+  /// object must match the line it belongs to.
+  (List<Map<String, dynamic>>, List<Map<String, dynamic>>) _buildBatchesAndSerials() {
+    final batches = <Map<String, dynamic>>[];
+    final serials = <Map<String, dynamic>>[];
+    for (final e in _lines.asMap().entries) {
+      final lineSerial = e.key + 1;
+      final row = e.value;
+      if (row.isBatchTracked) {
+        for (final b in row.batchCandidates.where((b) => b.allocatedQty > 0)) {
+          batches.add({'line_serial': lineSerial, 'batch_no': b.batchNo, 'expiry_date': b.expiryDate, 'qty_pack': b.allocatedQty, 'qty_loose': 0, 'base_qty': b.allocatedQty});
+        }
+      } else if (row.isSerialTracked) {
+        for (final s in row.serialCandidates.where((s) => s.selected)) {
+          serials.add({'line_serial': lineSerial, 'serial_no': s.serialNo});
+        }
+      }
+    }
+    return (batches, serials);
+  }
+
   /// Saves the current cart as a DRAFT (no approve) and resets for the next
   /// customer — "Hold Sale". Resuming it later (via the Hold Sales list,
   /// RouteNames.posSale with editInvoiceNo set) calls Charge() again, which
@@ -726,7 +1055,8 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     setState(() { _holding = true; _actionError = null; });
     try {
       final ds = ref.read(salesInvoiceRepositoryProvider);
-      final invoiceNo = await ds.save(header: _buildHeader(session), lines: _buildLines(), charges: const [], batches: const [], serials: const [], userId: session.userId);
+      final (batches, serials) = _buildBatchesAndSerials();
+      final invoiceNo = await ds.save(header: _buildHeader(session), lines: _buildLines(), charges: const [], batches: batches, serials: serials, userId: session.userId);
       if (mounted) {
         _showMsg('Held as $invoiceNo.', color: AppColors.secondary);
         _resetForNextSale();
@@ -759,33 +1089,52 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider);
+    final bodyContent = _loading
+        ? const Center(child: CircularProgressIndicator())
+        : _error != null
+            ? (_isSessionError
+                ? buildPosSessionGuardError(context, _error!, _init)
+                : Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.negative)),
+                        const SizedBox(height: 14),
+                        Wrap(alignment: WrapAlignment.center, spacing: 10, children: [
+                          TextButton(onPressed: _init, child: const Text('Retry')),
+                          // Resuming a held sale can fail (e.g. a transient
+                          // timeout) — this gets back to a fresh New Sale
+                          // instead of leaving the only options as "retry
+                          // the same failing resume" or "log out".
+                          FilledButton(onPressed: () => context.go(RouteNames.posSale), child: const Text('Back to New Sale')),
+                        ]),
+                      ]),
+                    ),
+                  ))
+            : _shift == null
+                ? _buildNoShift()
+                : _buildSaleBody(session!);
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? (_isSessionError
-                  ? buildPosSessionGuardError(context, _error!, _init)
-                  : Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(mainAxisSize: MainAxisSize.min, children: [
-                          Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.negative)),
-                          const SizedBox(height: 14),
-                          Wrap(alignment: WrapAlignment.center, spacing: 10, children: [
-                            TextButton(onPressed: _init, child: const Text('Retry')),
-                            // Resuming a held sale can fail (e.g. a transient
-                            // timeout) — this gets back to a fresh New Sale
-                            // instead of leaving the only options as "retry
-                            // the same failing resume" or "log out".
-                            FilledButton(onPressed: () => context.go(RouteNames.posSale), child: const Text('Back to New Sale')),
-                          ]),
-                        ]),
-                      ),
-                    ))
-              : _shift == null
-                  ? _buildNoShift()
-                  : _buildSaleBody(session!),
+      // Any tap/scan anywhere on this screen counts as activity — resets
+      // the idle-lock clock. A barcode scanner's own keystrokes land in the
+      // focused search field and already go through _onSearchSubmitted,
+      // which also counts, but a pure browse/scroll with no field focused
+      // needs this to not falsely lock mid-use.
+      body: Listener(
+        onPointerDown: (_) => _recordInteraction(),
+        child: Stack(children: [
+          bodyContent,
+          if (_locked) _buildIdleLockOverlay(),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildIdleLockOverlay() {
+    return _IdleLockOverlay(
+      cashierName: ref.read(sessionProvider)?.fullName ?? '',
+      onSubmitPin: _unlock,
     );
   }
 
@@ -818,6 +1167,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       color: AppColors.primary,
       child: SafeArea(
         child: ListView(padding: const EdgeInsets.symmetric(vertical: 8), children: [
+          _HeaderActionButton(icon: Icons.bolt_outlined, label: 'Quick Pick', onTap: _quickPick),
           _HeaderActionButton(icon: Icons.grid_view_rounded, label: 'Browse', onTap: _browseProducts),
           _HeaderActionButton(
             icon: Icons.credit_score_outlined, label: 'Credit', enabled: _lines.isNotEmpty,
@@ -949,30 +1299,84 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       itemCount: _lines.length,
       itemBuilder: (context, i) {
         final l = _lines[i];
+        final trackedVisible = l.isBatchTracked || l.isSerialTracked;
         return Card(
           margin: const EdgeInsets.only(bottom: 6),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Row(children: [
-              Expanded(
-                flex: 3,
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                  Text(l.productName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  Text('${l.productCode} · ${l.uomLabel}', style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary)),
-                ]),
-              ),
-              SizedBox(width: 120, child: PosQtyStepper(value: l.qty, min: 0, buttonSize: 32, onChanged: (v) { l.qty = v; _recompute(); })),
-              const SizedBox(width: 6),
-              SizedBox(width: 88, child: PosAmountField(label: 'Rate', value: l.rate, enabled: _canOverridePrice, compact: true, onChanged: (v) { l.rate = v; _recompute(); })),
-              const SizedBox(width: 6),
-              SizedBox(width: 72, child: PosAmountField(label: 'Disc %', value: l.discountPct, enabled: _canGiveDiscount, compact: true, onChanged: (v) => _onDiscountChanged(l, v))),
-              const SizedBox(width: 8),
-              SizedBox(width: 72, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(l.finalAmount.toStringAsFixed(2), textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w800)))),
-              IconButton(onPressed: () => _removeLine(l), icon: const Icon(Icons.close, size: 18, color: AppColors.negative), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Row(children: [
+                Expanded(
+                  flex: 3,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                    Text(l.productName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text('${l.productCode} · ${l.uomLabel}', style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary)),
+                  ]),
+                ),
+                SizedBox(width: 120, child: PosQtyStepper(value: l.qty, min: 0, buttonSize: 32, onChanged: (v) { l.qty = v; _recompute(); _autoAllocateBatchSerial(l); })),
+                const SizedBox(width: 6),
+                SizedBox(width: 88, child: PosAmountField(label: 'Rate', value: l.rate, enabled: _canOverridePrice, compact: true, onChanged: (v) { l.rate = v; _recompute(); })),
+                const SizedBox(width: 6),
+                SizedBox(width: 72, child: PosAmountField(label: 'Disc %', value: l.discountPct, enabled: _canGiveDiscount, compact: true, onChanged: (v) => _onDiscountChanged(l, v))),
+                const SizedBox(width: 8),
+                SizedBox(width: 72, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(l.finalAmount.toStringAsFixed(2), textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w800)))),
+                IconButton(onPressed: () => _removeLine(l), icon: const Icon(Icons.close, size: 18, color: AppColors.negative), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32)),
+              ]),
+              if (trackedVisible) _buildBatchSerialPanel(l),
             ]),
           ),
         );
       },
+    );
+  }
+
+  /// FEFO auto-fills this on add/qty-change; a cashier can still tap any
+  /// batch's amount or a serial chip to adjust it manually, same
+  /// "starting point, never a lock" convention as Quick Invoice's own
+  /// identical panel.
+  Widget _buildBatchSerialPanel(_PosLineRow row) {
+    final error = _batchSerialError(row);
+    return Container(
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(10)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Expanded(child: Text('Batch/Serial — auto-filled (FEFO), tap to adjust', style: TextStyle(fontSize: 11, color: AppColors.textSecondary))),
+          TextButton(
+            onPressed: !row.candidatesLoaded ? null : () => _autoAllocateBatchSerial(row),
+            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 28)),
+            child: const Text('Reset to FEFO', style: TextStyle(fontSize: 11)),
+          ),
+        ]),
+        if (!row.candidatesLoaded)
+          const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: LinearProgressIndicator())
+        else if (row.isBatchTracked)
+          if (row.batchCandidates.isEmpty)
+            const Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Text('No batches currently in stock.', style: TextStyle(fontSize: 11.5, color: AppColors.negative)))
+          else
+            Wrap(spacing: 8, runSpacing: 8, children: row.batchCandidates.map((b) {
+              return SizedBox(
+                width: 170,
+                child: PosAmountField(
+                  label: '${b.batchNo} (avail ${b.availableBalance.toStringAsFixed(0)})${b.expiryDate != null ? ' · exp ${b.expiryDate}' : ''}',
+                  value: b.allocatedQty,
+                  compact: true,
+                  onChanged: (v) => setState(() => b.allocatedQty = v),
+                ),
+              );
+            }).toList())
+        else if (row.isSerialTracked)
+          if (row.serialCandidates.isEmpty)
+            const Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Text('No serials currently in stock.', style: TextStyle(fontSize: 11.5, color: AppColors.negative)))
+          else
+            Wrap(spacing: 8, runSpacing: 8, children: row.serialCandidates.map((s) => FilterChip(
+                  label: Text(s.serialNo, style: const TextStyle(fontSize: 12)),
+                  selected: s.selected,
+                  onSelected: (v) => setState(() => s.selected = v),
+                )).toList()),
+        if (error != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(error, style: const TextStyle(fontSize: 11, color: AppColors.negative))),
+      ]),
     );
   }
 
@@ -1037,6 +1441,69 @@ class _Pill extends StatelessWidget {
         decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(999)),
         child: Text(text, style: const TextStyle(color: Color(0xFFC9D4EE), fontSize: 12)),
       );
+}
+
+/// Full-screen idle-lock — cart/session untouched underneath, just a PIN
+/// gate on top (ric_companies.pos_idle_lock_minutes). Re-entering the SAME
+/// (or any other authorized) user's PIN dismisses it.
+class _IdleLockOverlay extends StatefulWidget {
+  final String cashierName;
+  final Future<void> Function(String pin) onSubmitPin;
+  const _IdleLockOverlay({required this.cashierName, required this.onSubmitPin});
+
+  @override
+  State<_IdleLockOverlay> createState() => _IdleLockOverlayState();
+}
+
+class _IdleLockOverlayState extends State<_IdleLockOverlay> {
+  final _pinPadKey = GlobalKey<PosPinPadState>();
+  bool _verifying = false;
+  String? _error;
+
+  Future<void> _submit(String pin) async {
+    setState(() { _verifying = true; _error = null; });
+    try {
+      await widget.onSubmitPin(pin);
+    } catch (e) {
+      _pinPadKey.currentState?.clear();
+      if (mounted) setState(() => _error = ErrorPresenter.format(e, action: 'unlock this till'));
+    } finally {
+      if (mounted) setState(() => _verifying = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: Material(
+        color: AppColors.primary,
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.lock_outline, color: Colors.white, size: 36),
+                  const SizedBox(height: 10),
+                  const Text('Till Locked', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18)),
+                  const SizedBox(height: 4),
+                  Text('Enter your PIN to continue, ${widget.cashierName}.', textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFFC9D4EE), fontSize: 13)),
+                  const SizedBox(height: 18),
+                  if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 10), child: Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 12))),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                    child: PosPinPad(key: _pinPadKey, enabled: !_verifying, onSubmitted: _submit),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// A single tile in New Sale's vertical left-side nav rail — replaces a bare

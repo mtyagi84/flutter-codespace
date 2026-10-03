@@ -571,6 +571,26 @@ class SalesInvoiceRemoteDs {
     return list.first as Map<String, dynamic>;
   }
 
+  /// PIN-based twin of `verifyDiscountOverride` — for POS, where no
+  /// password is ever typed on the till outside Device Setup. Never logs
+  /// the supervisor in or touches the cashier's own session; only verifies
+  /// a matching active user's PIN + their own discount eligibility.
+  Future<Map<String, dynamic>> verifyDiscountOverridePin({
+    required String clientId,
+    required String companyId,
+    required String pin,
+    required double requestedDiscountPercent,
+  }) async {
+    final res = await _dio.post('/rpc/fn_verify_pos_discount_override_pin', data: {
+      'p_client_id': clientId,
+      'p_company_id': companyId,
+      'p_pin': pin,
+      'p_requested_discount_percent': requestedDiscountPercent,
+    });
+    final list = res.data as List;
+    return list.first as Map<String, dynamic>;
+  }
+
   // ── Shared pickers (same shape as Sales Order) ────────────────────────────
 
   Future<Map<String, dynamic>?> getCustomerDetails({required String customerId}) async {
@@ -630,7 +650,7 @@ class SalesInvoiceRemoteDs {
       'is_deleted': 'eq.false',
       'is_active':  'eq.true',
       'select':     'id,product_code,product_name,base_uom_id,tracking_type,sales_tax_group_id,'
-          'cost_currency_id,'
+          'cost_currency_id,min_selling_price,flags,'
           'uom:rim_common_masters!base_uom_id(description)',
       'order':      'product_code.asc',
       'limit':      '500',
@@ -655,7 +675,7 @@ class SalesInvoiceRemoteDs {
       'select':     'uom_id,conversion_factor,'
           'uom:rim_common_masters!uom_id(description),'
           'product:rim_products!product_id(id,product_code,product_name,base_uom_id,'
-          'tracking_type,sales_tax_group_id,is_active,is_deleted)',
+          'tracking_type,sales_tax_group_id,is_active,is_deleted,min_selling_price,flags)',
       'limit':      '1',
     });
     final list = res.data as List;

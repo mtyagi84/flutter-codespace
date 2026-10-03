@@ -80,5 +80,6 @@ class ProductFlagTypeModel {
         {'client_id': clientId, 'company_id': companyId, 'flag_key': 'is_intercompany',      'flag_label': 'Intercompany Transfer Allowed', 'default_value': false, 'sort_order': 6},
         {'client_id': clientId, 'company_id': companyId, 'flag_key': 'allow_negative_stock', 'flag_label': 'Allow Negative Stock',          'default_value': false, 'sort_order': 7},
         {'client_id': clientId, 'company_id': companyId, 'flag_key': 'is_consignment',       'flag_label': 'Consignment Stock',             'default_value': false, 'sort_order': 8},
+        {'client_id': clientId, 'company_id': companyId, 'flag_key': 'is_age_restricted',    'flag_label': 'Age-Restricted Sale',           'default_value': false, 'sort_order': 9},
       ];
 }

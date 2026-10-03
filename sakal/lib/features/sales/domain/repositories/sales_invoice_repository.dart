@@ -189,6 +189,14 @@ abstract class SalesInvoiceRepository {
     required double requestedDiscountPercent,
   });
 
+  /// PIN-based twin for POS — no password typed on the till.
+  Future<Map<String, dynamic>> verifyDiscountOverridePin({
+    required String clientId,
+    required String companyId,
+    required String pin,
+    required double requestedDiscountPercent,
+  });
+
   // ── Shared pickers ────────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>?> getCustomerDetails({required String customerId});
