@@ -1,20 +1,33 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../sales/presentation/providers/sales_invoice_providers.dart';
 import '../widgets/pos_keyboard.dart';
 
-/// Manual product discovery via category drill-down — a SEPARATE screen
-/// from Price Check (which stays scan-only), for the case a cashier needs
-/// to find something by browsing rather than knowing a barcode/SKU already.
+/// Manual product discovery — a SEPARATE screen from Price Check (which
+/// stays scan-only), for a cashier who needs to find something by browsing
+/// or typing a partial name/code rather than knowing a barcode already.
 /// Pushed with `Navigator.push` (not a go_router route — always reached from
 /// within an active New Sale cart, never deep-linked) and returns the picked
 /// product map via `Navigator.pop(context, product)`, shaped identically to
 /// `getProductsForPicker`'s own rows so the caller can feed it straight into
 /// its existing `_addProduct(...)`.
+///
+/// The keyboard is an ALWAYS-VISIBLE part of this page's own layout, pinned
+/// at the bottom above a live-updating result grid — never a popup sheet on
+/// top of an already-full-screen page (found live: stacking a keyboard
+/// bottom-sheet on top of this screen looked broken and hid the very field
+/// being typed into). Typing "coc" filters the grid to every matching
+/// product as each keystroke lands, same as the Credit checkout screen's
+/// own customer search.
 class PosBrowseProductsScreen extends ConsumerStatefulWidget {
-  const PosBrowseProductsScreen({super.key});
+  final String? customerId;
+  final String localCurrency;
+
+  const PosBrowseProductsScreen({super.key, this.customerId, required this.localCurrency});
 
   @override
   ConsumerState<PosBrowseProductsScreen> createState() => _PosBrowseProductsScreenState();
@@ -27,12 +40,26 @@ class _PosBrowseProductsScreenState extends ConsumerState<PosBrowseProductsScree
   bool _loading = true;
   List<Map<String, dynamic>> _categories = [];
   List<Map<String, dynamic>> _products = [];
-  String _nameFilter = '';
+  String _query = '';
+  bool _shift = false;
+  Timer? _debounce;
+
+  // Keyed by product id — resolved once a product list is shown, never for
+  // category tiles. Null means "not configured" (shown as "No price" and
+  // left unselectable, consistent with New Sale's own no-price-no-invoice
+  // rule — see `_addProduct`'s own guard).
+  final Map<String, double?> _prices = {};
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -66,6 +93,7 @@ class _PosBrowseProductsScreenState extends ConsumerState<PosBrowseProductsScree
       }
 
       if (mounted) setState(() { _categories = categories; _products = products; _loading = false; });
+      if (products.isNotEmpty) _loadPrices(products);
     } catch (_) {
       if (mounted) setState(() { _categories = []; _products = []; _loading = false; });
     }
@@ -83,14 +111,48 @@ class _PosBrowseProductsScreenState extends ConsumerState<PosBrowseProductsScree
             'uom:rim_common_masters!base_uom_id(description)',
         'order': 'product_name.asc', 'limit': '200',
       });
-      if (mounted) setState(() { _products = List<Map<String, dynamic>>.from(res.data as List); _loading = false; });
+      final products = List<Map<String, dynamic>>.from(res.data as List);
+      if (mounted) setState(() { _products = products; _loading = false; });
+      if (products.isNotEmpty) _loadPrices(products);
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }
 
+  /// One parallel batch of `fn_get_active_price` calls for whatever's
+  /// currently on screen (never more than 200 rows, the same cap every
+  /// product picker in this app already uses) — there's no bulk-price RPC
+  /// in this schema, so this is the same per-row call New Sale's own
+  /// `_addProduct` makes, just fanned out concurrently instead of one at a
+  /// time, and only for products actually visible right now.
+  Future<void> _loadPrices(List<Map<String, dynamic>> products) async {
+    final session = ref.read(sessionProvider)!;
+    final locationId = session.locationId;
+    if (locationId == null || locationId.isEmpty) return;
+    final ds = ref.read(salesInvoiceRepositoryProvider);
+    final today = _today();
+    await Future.wait(products.map((p) async {
+      try {
+        final price = await ds.getActivePrice(
+          clientId: session.clientId, companyId: session.companyId, locationId: locationId,
+          productId: p['id'] as String, uomId: p['base_uom_id'] as String,
+          customerId: widget.customerId ?? '', asOfDate: today, currencyCode: widget.localCurrency,
+        );
+        final rate = (price?['selling_price'] as num?)?.toDouble();
+        if (mounted) setState(() => _prices[p['id'] as String] = (rate != null && rate > 0) ? rate : null);
+      } catch (_) {
+        if (mounted) setState(() => _prices[p['id'] as String] = null);
+      }
+    }));
+  }
+
+  String _today() {
+    final d = DateTime.now();
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  }
+
   void _drillInto(Map<String, dynamic> category) {
-    setState(() { _trail.add(category); _nameFilter = ''; });
+    setState(() { _trail.add(category); _query = ''; });
     _load();
   }
 
@@ -102,9 +164,34 @@ class _PosBrowseProductsScreenState extends ConsumerState<PosBrowseProductsScree
       } else {
         _trail.removeRange(index + 1, _trail.length);
       }
-      _nameFilter = '';
+      _query = '';
     });
     _load();
+  }
+
+  void _onQueryChanged(String q) {
+    setState(() => _query = q);
+    _debounce?.cancel();
+    if (q.isEmpty) {
+      _jumpTo(_trail.length - 1);
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 300), () => _searchByName(q));
+  }
+
+  void _type(String ch) => _onQueryChanged(_query + (_shift ? ch.toUpperCase() : ch));
+  void _space() => _onQueryChanged('$_query ');
+  void _backspace() {
+    if (_query.isEmpty) return;
+    _onQueryChanged(_query.substring(0, _query.length - 1));
+  }
+
+  void _selectProduct(Map<String, dynamic> product) {
+    // No price, no invoice — same rule New Sale's own _addProduct enforces;
+    // checked here too so a cashier never even gets the impression tapping
+    // an unpriced tile "worked" before being bounced back by the cart.
+    if (_prices[product['id']] == null) return;
+    Navigator.of(context).pop(product);
   }
 
   @override
@@ -113,25 +200,24 @@ class _PosBrowseProductsScreenState extends ConsumerState<PosBrowseProductsScree
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.primary, foregroundColor: Colors.white,
-        title: const Text('Browse Products'),
+        title: const Text('Search Products'),
       ),
       body: Column(children: [
         Padding(
-          padding: const EdgeInsets.all(12),
-          child: PosKeyboardField(
-            label: 'Search by name or code (skips category browsing)',
-            value: _nameFilter,
-            onChanged: (v) {
-              setState(() => _nameFilter = v);
-              if (v.isEmpty) {
-                _jumpTo(_trail.length - 1);
-              } else {
-                _searchByName(v);
-              }
-            },
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+            child: Row(children: [
+              const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
+              const SizedBox(width: 8),
+              Expanded(child: Text(_query.isEmpty ? 'Type to search by name or code…' : _query, style: TextStyle(fontSize: 15, color: _query.isEmpty ? AppColors.textSecondary : AppColors.textPrimary))),
+              if (_query.isNotEmpty)
+                IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _onQueryChanged(''), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 28, minHeight: 28)),
+            ]),
           ),
         ),
-        if (_nameFilter.isEmpty)
+        if (_query.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: SizedBox(
@@ -158,10 +244,25 @@ class _PosBrowseProductsScreenState extends ConsumerState<PosBrowseProductsScree
                       ? const Center(child: Text('No products here.', style: TextStyle(color: AppColors.textSecondary)))
                       : GridView.builder(
                           padding: const EdgeInsets.all(12),
-                          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 180, mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: 1.3),
+                          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 180, mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: 1.15),
                           itemCount: _products.length,
-                          itemBuilder: (context, i) => _ProductTile(product: _products[i], onTap: () => Navigator.of(context).pop(_products[i])),
+                          itemBuilder: (context, i) {
+                            final p = _products[i];
+                            final hasPrice = _prices.containsKey(p['id']);
+                            return _ProductTile(
+                              product: p,
+                              price: _prices[p['id']],
+                              priceLoaded: hasPrice,
+                              currency: widget.localCurrency,
+                              onTap: () => _selectProduct(p),
+                            );
+                          },
                         ),
+        ),
+        // ALWAYS part of this page — never a popup on top of it.
+        Padding(
+          padding: const EdgeInsets.all(10),
+          child: PosKeyboardKeys(shift: _shift, onType: _type, onSpace: _space, onBackspace: _backspace, onToggleShift: () => setState(() => _shift = !_shift)),
         ),
       ]),
     );
@@ -224,27 +325,41 @@ class _CategoryTile extends StatelessWidget {
 
 class _ProductTile extends StatelessWidget {
   final Map<String, dynamic> product;
+  final double? price;
+  final bool priceLoaded;
+  final String currency;
   final VoidCallback onTap;
-  const _ProductTile({required this.product, required this.onTap});
+  const _ProductTile({required this.product, required this.price, required this.priceLoaded, required this.currency, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final uomLabel = (product['uom'] as Map<String, dynamic>?)?['description'] as String? ?? '';
+    final noPrice = priceLoaded && price == null;
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
-          padding: const EdgeInsets.all(10),
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Icon(Icons.inventory_2_outlined, size: 26, color: AppColors.secondary),
-            const SizedBox(height: 8),
-            Text(product['product_name'] as String, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-            Text('${product['product_code']} · $uomLabel', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary)),
-          ]),
+        onTap: noPrice ? null : onTap,
+        child: Opacity(
+          opacity: noPrice ? 0.5 : 1,
+          child: Container(
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
+            padding: const EdgeInsets.all(10),
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.inventory_2_outlined, size: 24, color: AppColors.secondary),
+              const SizedBox(height: 6),
+              Text(product['product_name'] as String, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+              Text('${product['product_code']} · $uomLabel', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary)),
+              const SizedBox(height: 4),
+              if (!priceLoaded)
+                const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+              else if (noPrice)
+                const Text('No price', style: TextStyle(fontSize: 11, color: AppColors.negative, fontWeight: FontWeight.w700))
+              else
+                Text('${price!.toStringAsFixed(2)} $currency', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primary)),
+            ]),
+          ),
         ),
       ),
     );

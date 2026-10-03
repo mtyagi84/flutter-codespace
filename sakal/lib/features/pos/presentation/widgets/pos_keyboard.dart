@@ -45,10 +45,14 @@ class PosKeyboard extends StatefulWidget {
       useSafeArea: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (sheetContext) => ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(sheetContext).size.height * 0.85),
-        child: SingleChildScrollView(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+        // Fixed height, Done pinned as a sibling of the (internally
+        // scrollable) key grid — same fix as PosNumpad; Done used to live
+        // inside one big scroll view and could scroll out of reach on a
+        // short viewport.
+        child: SizedBox(
+          height: MediaQuery.of(sheetContext).size.height * 0.9,
           child: PosKeyboard(title: title, initialValue: initialValue, onConfirm: onConfirm, obscureText: obscureText, onChanged: onChanged),
         ),
       ),
@@ -95,10 +99,10 @@ class _PosKeyboardState extends State<PosKeyboard> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      child: Column(children: [
         Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
         Row(children: [
           const SizedBox(width: 48),
           Expanded(
@@ -106,21 +110,25 @@ class _PosKeyboardState extends State<PosKeyboard> {
           ),
           TextButton(onPressed: _clear, child: const Text('Clear')),
         ]),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
           child: Text(
             _buffer.isEmpty ? ' ' : (widget.obscureText ? '•' * _buffer.length : _buffer),
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
           ),
         ),
-        const SizedBox(height: 14),
-        PosKeyboardKeys(shift: _shift, onType: _type, onSpace: _space, onBackspace: _backspace, onToggleShift: _toggleShift),
-        const SizedBox(height: 14),
-        SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _confirm, icon: const Icon(Icons.check), label: const Text('Done'))),
+        const SizedBox(height: 8),
+        Expanded(
+          child: SingleChildScrollView(
+            child: PosKeyboardKeys(shift: _shift, onType: _type, onSpace: _space, onBackspace: _backspace, onToggleShift: _toggleShift),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(width: double.infinity, height: 48, child: FilledButton.icon(onPressed: _confirm, icon: const Icon(Icons.check), label: const Text('Done'))),
       ]),
     );
   }

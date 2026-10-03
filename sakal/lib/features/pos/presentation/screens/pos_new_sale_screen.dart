@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -134,17 +135,32 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   double get _taxTotal => _lines.fold(0, (s, l) => s + l.taxAmount);
   double get _grandTotal => _lines.fold(0, (s, l) => s + l.finalAmount);
 
+  Timer? _clockTimer;
+  DateTime _now = DateTime.now();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _init());
+    // A plain "Cash Sale" badge told the cashier nothing useful (it's
+    // ALWAYS cash sale by default now) — a live clock is actually useful
+    // at a till and was asked for directly.
+    _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
   }
 
   @override
   void dispose() {
+    _clockTimer?.cancel();
     _searchCtrl.dispose();
     _searchFocus.dispose();
     super.dispose();
+  }
+
+  String _formatClock(DateTime d) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(d.day)}-${two(d.month)}-${d.year} ${two(d.hour)}:${two(d.minute)}';
   }
 
   Future<void> _init() async {
@@ -321,7 +337,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   /// feeds straight into the existing `_addProduct`.
   Future<void> _browseProducts() async {
     final picked = await Navigator.of(context).push<Map<String, dynamic>>(
-      MaterialPageRoute(builder: (_) => const PosBrowseProductsScreen()),
+      MaterialPageRoute(builder: (_) => PosBrowseProductsScreen(customerId: _customerId, localCurrency: _localCcy)),
     );
     if (picked != null) await _addProduct(picked);
   }
@@ -393,6 +409,15 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
         // can_override_price can still type one in, same governance as
         // every other sales screen in this app.
       }
+    }
+
+    // No price, no invoice: a cashier without override rights can't add a
+    // line at all for an unpriced product — stops a zero-value line from
+    // ever reaching a saved invoice in the first place, rather than only
+    // catching it later at Charge.
+    if (rate <= 0 && !_canOverridePrice) {
+      _showMsg('${product['product_name']} has no price configured — ask a supervisor.', color: AppColors.negative);
+      return;
     }
 
     final qtyToAdd = _pendingQty;
@@ -514,6 +539,11 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   Future<void> _charge() async {
     if (_lines.isEmpty) {
       _showMsg('Add at least one item.', color: AppColors.negative);
+      return;
+    }
+    final unpriced = _lines.where((l) => l.rate <= 0).toList();
+    if (unpriced.isNotEmpty) {
+      _showMsg('${unpriced.first.productName} has no price — cannot charge an unpriced item.', color: AppColors.negative);
       return;
     }
     if (_customerId == null) {
@@ -743,13 +773,10 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
             _Pill(text: _customerDisplay),
             const SizedBox(width: 8),
           ],
-          // Every POS sale is cash by default — Credit is a deliberate
-          // extra step via the nav rail's own "Credit" button, not a
-          // toggle to remember to switch back. This just reflects which
-          // mode the sale currently is (CASH almost always; CREDIT only
-          // transiently while the credit-checkout flow is charging, or
-          // when resuming an older held CREDIT sale).
-          _Pill(text: _saleType == 'CASH' ? 'Cash Sale' : 'Credit Sale'),
+          // A live clock is actually useful at a till — a static "Cash
+          // Sale" badge told the cashier nothing (every sale is cash by
+          // default now anyway).
+          _Pill(text: _formatClock(_now)),
         ]),
       ),
       if (_cashSetupMissing)
@@ -799,22 +826,17 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
           const SizedBox(width: 8),
           // The primary flow is scan-first (a barcode scanner needs no
           // on-screen UI at all) — this keyboard icon is the explicit,
-          // visible fallback for manual typing, since there is no reliable
-          // OS on-screen keyboard on real POS touchscreen hardware.
+          // visible fallback for manual typing. Opens the same full-screen,
+          // live-filtered Browse Products screen (not a bare type-then-Done
+          // keyboard sheet with no results shown) — a cashier typing "coc"
+          // should see every matching product immediately, not just submit
+          // a search and hope for one exact hit.
           Material(
             color: AppColors.background,
             borderRadius: BorderRadius.circular(10),
             child: InkWell(
               borderRadius: BorderRadius.circular(10),
-              onTap: () => PosKeyboard.show(
-                context,
-                title: 'Search product',
-                initialValue: _searchCtrl.text,
-                onConfirm: (v) {
-                  _searchCtrl.text = v;
-                  _onSearchSubmitted(v);
-                },
-              ),
+              onTap: _browseProducts,
               child: Container(
                 width: 48, height: 48,
                 decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),

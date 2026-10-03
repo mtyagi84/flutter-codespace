@@ -50,14 +50,16 @@ class PosNumpad extends StatefulWidget {
       useSafeArea: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (sheetContext) => ConstrainedBox(
-        // A short viewport (small laptop window, landscape phone) could not
-        // fit this content before — confirmed live, "BOTTOM OVERFLOWED BY
-        // 112 PIXELS". Capping height + wrapping in a scroll view makes the
-        // sheet degrade to scrollable instead of ever overflowing.
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(sheetContext).size.height * 0.85),
-        child: SingleChildScrollView(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+        // A FIXED-height box, not just a max-height cap — the Done button
+        // used to be a trailing item inside one big scroll view, so on a
+        // short viewport it scrolled out of reach entirely ("Done button
+        // not visible, no matter the screen size" — confirmed live). Done
+        // is now a pinned sibling of the (internally scrollable) key grid,
+        // not something a cashier has to discover by scrolling further.
+        child: SizedBox(
+          height: MediaQuery.of(sheetContext).size.height * 0.9,
           child: PosNumpad(title: title, initialValue: initialValue, suffixText: suffixText, allowDecimal: allowDecimal, onConfirm: onConfirm),
         ),
       ),
@@ -107,10 +109,10 @@ class _PosNumpadState extends State<PosNumpad> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+      child: Column(children: [
         Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
         Row(children: [
           const SizedBox(width: 48),
           Expanded(
@@ -118,10 +120,10 @@ class _PosNumpadState extends State<PosNumpad> {
           ),
           TextButton(onPressed: _clear, child: const Text('Clear')),
         ]),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
           child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
             Flexible(
@@ -129,7 +131,7 @@ class _PosNumpadState extends State<PosNumpad> {
                 _buffer.isEmpty ? '0' : _buffer,
                 textAlign: TextAlign.right,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
               ),
             ),
             if (widget.suffixText != null) ...[
@@ -138,11 +140,20 @@ class _PosNumpadState extends State<PosNumpad> {
             ],
           ]),
         ),
-        const SizedBox(height: 16),
-        _NumGrid(allowDecimal: widget.allowDecimal, onDigit: _digit, onDecimal: _decimal, onBackspace: _backspace),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
+        // Expanded + internal scroll is a SAFETY NET only — the grid's own
+        // sizing is tuned to fit comfortably without scrolling on any real
+        // screen. What actually guarantees Done is always reachable is that
+        // it's a fixed sibling below this Expanded, never inside it.
+        Expanded(
+          child: SingleChildScrollView(
+            child: _NumGrid(allowDecimal: widget.allowDecimal, onDigit: _digit, onDecimal: _decimal, onBackspace: _backspace),
+          ),
+        ),
+        const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
+          height: 50,
           child: FilledButton.icon(onPressed: _confirm, icon: const Icon(Icons.check), label: const Text('Done')),
         ),
       ]),
@@ -173,9 +184,9 @@ class _NumGrid extends StatelessWidget {
       crossAxisCount: 3,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 10,
-      crossAxisSpacing: 10,
-      childAspectRatio: 1.6,
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 8,
+      childAspectRatio: 2.0,
       children: [
         key('1'), key('2'), key('3'),
         key('4'), key('5'), key('6'),

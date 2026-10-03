@@ -37,6 +37,7 @@ class PosCreditCheckoutScreen extends ConsumerStatefulWidget {
 
 class _PosCreditCheckoutScreenState extends ConsumerState<PosCreditCheckoutScreen> {
   String _query = '';
+  bool _shift = false;
   bool _loading = false;
   List<Map<String, dynamic>> _results = [];
   Map<String, dynamic>? _selected;
@@ -76,6 +77,13 @@ class _PosCreditCheckoutScreenState extends ConsumerState<PosCreditCheckoutScree
     }
   }
 
+  void _type(String ch) => _onQueryChanged(_query + (_shift ? ch.toUpperCase() : ch));
+  void _space() => _onQueryChanged('$_query ');
+  void _backspace() {
+    if (_query.isEmpty) return;
+    _onQueryChanged(_query.substring(0, _query.length - 1));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -85,24 +93,38 @@ class _PosCreditCheckoutScreenState extends ConsumerState<PosCreditCheckoutScree
         title: const Text('Credit Sale — Select Customer'),
       ),
       body: Column(children: [
+        // A compact one-line summary — the original 4-row totals card left
+        // no room once the keyboard became a permanent, always-visible part
+        // of this page rather than a popup; the full breakdown is still a
+        // tooltip-free glance away via the three labelled figures here.
         Container(
           width: double.infinity,
           color: Colors.white,
-          padding: const EdgeInsets.all(16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            _totalRow('Subtotal', widget.subtotal),
-            _totalRow('Discount', -widget.discount),
-            _totalRow('Tax (VAT)', widget.tax),
-            const Divider(),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('Net Chargeable', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-              Text('${widget.total.toStringAsFixed(2)} ${widget.currency}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-            ]),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(children: [
+            Expanded(
+              child: Text(
+                'Subtotal ${widget.subtotal.toStringAsFixed(2)}  ·  Disc -${widget.discount.toStringAsFixed(2)}  ·  Tax ${widget.tax.toStringAsFixed(2)}',
+                style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Text('${widget.total.toStringAsFixed(2)} ${widget.currency}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
           ]),
         ),
         Padding(
-          padding: const EdgeInsets.all(12),
-          child: PosKeyboardField(label: 'Search customer name or code…', value: _query, onChanged: _onQueryChanged),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+            child: Row(children: [
+              const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
+              const SizedBox(width: 8),
+              Expanded(child: Text(_query.isEmpty ? 'Type a customer name or code…' : _query, style: TextStyle(fontSize: 15, color: _query.isEmpty ? AppColors.textSecondary : AppColors.textPrimary))),
+              if (_query.isNotEmpty)
+                IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _onQueryChanged(''), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 28, minHeight: 28)),
+            ]),
+          ),
         ),
         Expanded(
           child: _loading
@@ -110,15 +132,16 @@ class _PosCreditCheckoutScreenState extends ConsumerState<PosCreditCheckoutScree
               : _results.isEmpty
                   ? const Center(child: Text('No customers found.', style: TextStyle(color: AppColors.textSecondary)))
                   : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       itemCount: _results.length,
                       itemBuilder: (context, i) {
                         final c = _results[i];
                         final selected = _selected != null && _selected!['id'] == c['id'];
                         return Card(
                           color: selected ? AppColors.primary.withValues(alpha: 0.08) : Colors.white,
-                          margin: const EdgeInsets.only(bottom: 8),
+                          margin: const EdgeInsets.only(bottom: 6),
                           child: ListTile(
+                            dense: true,
                             leading: Icon(selected ? Icons.check_circle : Icons.person_outline, color: selected ? AppColors.primary : AppColors.textSecondary),
                             title: Text('${c['account_code']} — ${c['account_name']}'),
                             onTap: () => setState(() => _selected = c),
@@ -127,25 +150,24 @@ class _PosCreditCheckoutScreenState extends ConsumerState<PosCreditCheckoutScree
                       },
                     ),
         ),
+        // ALWAYS part of this page — never a popup on top of it, and search
+        // results above update live on every keystroke.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+          child: PosKeyboardKeys(shift: _shift, onType: _type, onSpace: _space, onBackspace: _backspace, onToggleShift: () => setState(() => _shift = !_shift)),
+        ),
         SafeArea(
-          minimum: const EdgeInsets.all(16),
+          top: false,
+          minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           child: SizedBox(
-            height: 54,
+            height: 50,
             child: FilledButton(
               onPressed: _selected == null ? null : () => Navigator.of(context).pop(_selected),
-              child: Text(_selected == null ? 'Select a customer' : 'Save Credit Sale to ${_selected!['account_name']}'),
+              child: Text(_selected == null ? 'Select a customer' : 'Save Credit Sale to ${_selected!['account_name']}', overflow: TextOverflow.ellipsis),
             ),
           ),
         ),
       ]),
     );
   }
-
-  Widget _totalRow(String label, double value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-          Text(value.toStringAsFixed(2), style: const TextStyle(fontSize: 13)),
-        ]),
-      );
 }

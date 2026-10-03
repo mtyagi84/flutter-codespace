@@ -15,6 +15,7 @@ class PosAmountField extends StatelessWidget {
   final bool allowDecimal;
   final bool enabled;
   final bool compact;
+  final int decimals;
 
   const PosAmountField({
     super.key,
@@ -25,13 +26,8 @@ class PosAmountField extends StatelessWidget {
     this.allowDecimal = true,
     this.enabled = true,
     this.compact = false,
+    this.decimals = 2,
   });
-
-  static String _trim(double v) {
-    var s = v.toStringAsFixed(4);
-    s = s.contains('.') ? s.replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '') : s;
-    return s;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +61,7 @@ class PosAmountField extends StatelessWidget {
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
-                  child: Text(_trim(value), maxLines: 1, style: TextStyle(fontSize: compact ? 14 : 17, fontWeight: FontWeight.w700, color: enabled ? AppColors.textPrimary : AppColors.textSecondary)),
+                  child: Text(value.toStringAsFixed(decimals), maxLines: 1, style: TextStyle(fontSize: compact ? 14 : 17, fontWeight: FontWeight.w700, color: enabled ? AppColors.textPrimary : AppColors.textSecondary)),
                 ),
               ),
               if (suffixText != null) Text(suffixText!, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
