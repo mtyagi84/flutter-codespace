@@ -125,6 +125,15 @@ class _PosLineRow {
   });
 }
 
+/// One currency's worth of a split cash payment — see migration 211's own
+/// header comment for why this is a reconciliation record only, never a
+/// second GL-posting currency on the settlement voucher itself.
+class _PosTenderLine {
+  String currencyId;
+  double amount;
+  _PosTenderLine({required this.currencyId, required this.amount});
+}
+
 class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   bool _loading = true;
   bool _saving = false;
@@ -161,6 +170,16 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
 
   final _searchCtrl = TextEditingController();
   double? _collectedAmount; // null = not overridden, defaults to the full total
+  // Multi-currency split tender — opt-in, off by default (the common case
+  // of "paid the exact total in local currency" stays exactly as simple as
+  // before). See migration 211's own header comment for the GL scope.
+  bool _splitTender = false;
+  List<Map<String, dynamic>> _currencies = [];
+  final List<_PosTenderLine> _tenderLines = [];
+  final Map<String, double> _tenderRateToLocal = {};
+
+  double get _tenderTotalLocal => _tenderLines.fold(0.0, (s, t) => s + t.amount * (_tenderRateToLocal[t.currencyId] ?? 1));
+  double get _tenderRemaining => _grandTotal - _tenderTotalLocal;
   final _searchFocus = FocusNode();
   // Set via the "×N next scan" control below the search bar — applies to the
   // NEXT product added (scan or search), then resets to 1. Standard
@@ -270,6 +289,11 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       _weightedPrefixFrom = company['weighted_barcode_prefix_from'] as String?;
       _weightedPrefixTo = company['weighted_barcode_prefix_to'] as String?;
       _weightedFormat = company['weighted_barcode_format'] as String?;
+
+      final currencyRes = await DioClient.instance.get('/rim_currencies', queryParameters: {
+        'company_id': 'eq.${session.companyId}', 'is_active': 'eq.true', 'select': 'currency_id,currency_name',
+      });
+      _currencies = List<Map<String, dynamic>>.from(currencyRes.data as List);
 
       final ds = ref.read(salesInvoiceRepositoryProvider);
       _quickSetup = await ds.getQuickInvoiceSetup(clientId: session.clientId, companyId: session.companyId, userId: session.userId);
@@ -901,6 +925,67 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     }
   }
 
+  // ── Multi-currency split tender ───────────────────────────────────────────
+
+  void _toggleSplitTender(bool on) {
+    setState(() {
+      _splitTender = on;
+      _tenderLines.clear();
+      if (on) {
+        _tenderRateToLocal[_localCcy] = 1;
+        _tenderLines.add(_PosTenderLine(currencyId: _localCcy, amount: _collectedAmount ?? _grandTotal));
+      }
+    });
+  }
+
+  void _addTenderLine() {
+    // Default to any currency not already in use, falling back to local —
+    // just a sensible starting point, always editable.
+    final unused = _currencies.map((c) => c['currency_id'] as String).firstWhere(
+          (c) => !_tenderLines.any((t) => t.currencyId == c),
+          orElse: () => _localCcy,
+        );
+    _tenderRateToLocal.putIfAbsent(unused, () => unused == _localCcy ? 1 : 1);
+    setState(() => _tenderLines.add(_PosTenderLine(currencyId: unused, amount: 0)));
+    if (unused != _localCcy) _refreshTenderRate(unused);
+  }
+
+  Future<void> _refreshTenderRate(String currencyId) async {
+    if (currencyId == _localCcy) {
+      setState(() => _tenderRateToLocal[currencyId] = 1);
+      return;
+    }
+    final session = ref.read(sessionProvider)!;
+    final rate = await _lookupRate(session, currencyId, _localCcy);
+    if (mounted) setState(() => _tenderRateToLocal[currencyId] = rate ?? 1);
+  }
+
+  /// Pure reconciliation record — see migration 211's own header comment.
+  /// Best-effort: if this fails after the sale itself already succeeded,
+  /// the sale is NOT rolled back (the money was genuinely collected; only
+  /// the per-currency breakdown record would be missing).
+  Future<void> _saveTenderLines(UserSession session, String invoiceNo, String invoiceDate) async {
+    try {
+      final rows = _tenderLines.asMap().entries.map((e) => {
+            'client_id': session.clientId,
+            'company_id': session.companyId,
+            'invoice_no': invoiceNo,
+            'invoice_date': invoiceDate,
+            'serial_no': e.key + 1,
+            'tender_type': 'CASH',
+            'currency_id': e.value.currencyId,
+            'amount': e.value.amount,
+            'rate_to_local': _tenderRateToLocal[e.value.currencyId] ?? 1,
+            'amount_local': e.value.amount * (_tenderRateToLocal[e.value.currencyId] ?? 1),
+            'created_by': session.userId,
+          }).toList();
+      await DioClient.instance.post('/rid_pos_tender_lines', data: rows);
+    } catch (e, st) {
+      AppLogger.error('PosTenderLinesSave', e, st);
+      // Not shown to the cashier as a blocking error — see doc comment.
+    }
+  }
+
   Future<void> _charge() async {
     if (_lines.isEmpty) {
       _showMsg('Add at least one item.', color: AppColors.negative);
@@ -930,6 +1015,11 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       _showMsg('Quick Invoice Setup is missing for this user — ask an admin.', color: AppColors.negative);
       return;
     }
+    if (_saleType == 'CASH' && _splitTender && _tenderRemaining > 0.01) {
+      _showMsg('Tendered amount is short by ${_tenderRemaining.toStringAsFixed(2)} $_localCcy.', color: AppColors.negative);
+      return;
+    }
+    if (_saleType == 'CASH' && _splitTender) _collectedAmount = _tenderTotalLocal;
     final session = ref.read(sessionProvider)!;
     setState(() { _saving = true; _actionError = null; });
     try {
@@ -940,6 +1030,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       final invoiceNo = await ds.save(header: header, lines: lines, charges: const [], batches: batches, serials: serials, userId: session.userId);
       final invoiceDate = header['invoice_date'] as String;
       await ds.approve(clientId: session.clientId, companyId: session.companyId, invoiceNo: invoiceNo, invoiceDate: invoiceDate, approvedBy: session.userId);
+      if (_saleType == 'CASH' && _splitTender) await _saveTenderLines(session, invoiceNo, invoiceDate);
 
       if (mounted) {
         _showMsg('$invoiceNo completed.', color: AppColors.positive);
@@ -1072,6 +1163,8 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   void _resetForNextSale() {
     _lines.clear();
     _collectedAmount = null;
+    _splitTender = false;
+    _tenderLines.clear();
     _pendingQty = 1;
     _invoiceNo = null;
     _invoiceDate = null;
@@ -1380,6 +1473,50 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     );
   }
 
+  Widget _buildTenderLinesEditor() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(children: [
+        const Expanded(child: Text('Split Payment', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5))),
+        TextButton(onPressed: () => _toggleSplitTender(false), child: const Text('Single currency')),
+      ]),
+      ..._tenderLines.map((t) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(children: [
+              SizedBox(
+                width: 90,
+                child: DropdownButtonFormField<String>(
+                  initialValue: t.currencyId,
+                  isDense: true, itemHeight: null,
+                  decoration: const InputDecoration(isDense: true, border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10)),
+                  items: _currencies.map((c) => DropdownMenuItem(value: c['currency_id'] as String, child: Text(c['currency_id'] as String, overflow: TextOverflow.ellipsis))).toList(),
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => t.currencyId = v);
+                    _refreshTenderRate(v);
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: PosAmountField(label: 'Amount', value: t.amount, compact: true, suffixText: t.currencyId, onChanged: (v) => setState(() => t.amount = v))),
+              IconButton(
+                onPressed: _tenderLines.length <= 1 ? null : () => setState(() => _tenderLines.remove(t)),
+                icon: const Icon(Icons.close, size: 18, color: AppColors.negative),
+              ),
+            ]),
+          )),
+      Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: _addTenderLine, icon: const Icon(Icons.add, size: 16), label: const Text('Add Currency'))),
+      const Divider(height: 10),
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text('Collected (≈ $_localCcy)', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        Text(_tenderTotalLocal.toStringAsFixed(2), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+      ]),
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(_tenderRemaining > 0.01 ? 'Short by' : 'Change Due', style: TextStyle(fontSize: 12, color: _tenderRemaining > 0.01 ? AppColors.negative : AppColors.positive)),
+        Text(_tenderRemaining.abs().toStringAsFixed(2), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _tenderRemaining > 0.01 ? AppColors.negative : AppColors.positive)),
+      ]),
+    ]);
+  }
+
   Widget _buildTotals() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1395,12 +1532,20 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
         ]),
         if (_saleType == 'CASH') ...[
           const SizedBox(height: 10),
-          PosAmountField(
-            label: 'Collected',
-            value: _collectedAmount ?? _grandTotal,
-            suffixText: _localCcy,
-            onChanged: (v) => setState(() => _collectedAmount = v),
-          ),
+          if (!_splitTender) ...[
+            PosAmountField(
+              label: 'Collected',
+              value: _collectedAmount ?? _grandTotal,
+              suffixText: _localCcy,
+              onChanged: (v) => setState(() => _collectedAmount = v),
+            ),
+            if (_currencies.length > 1)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(onPressed: () => _toggleSplitTender(true), child: const Text('Split into multiple currencies')),
+              ),
+          ] else
+            _buildTenderLinesEditor(),
         ],
         const SizedBox(height: 10),
         SizedBox(
