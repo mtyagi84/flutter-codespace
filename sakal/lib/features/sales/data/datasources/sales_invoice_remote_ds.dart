@@ -591,6 +591,85 @@ class SalesInvoiceRemoteDs {
     return list.first as Map<String, dynamic>;
   }
 
+  // ── POS schemes / loyalty (migrations 212-215) ────────────────────────────
+
+  Future<Map<String, dynamic>?> resolvePosSchemeForLine({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String productId,
+    String? categoryId,
+    required double qty,
+    required double grossAmount,
+    required String transDate,
+  }) async {
+    final res = await _dio.post('/rpc/fn_resolve_pos_schemes_for_line', data: {
+      'p_client_id': clientId,
+      'p_company_id': companyId,
+      'p_location_id': locationId,
+      'p_product_id': productId,
+      'p_category_id': categoryId,
+      'p_qty': qty,
+      'p_gross_amount': grossAmount,
+      'p_trans_date': transDate,
+    });
+    final list = res.data as List;
+    if (list.isEmpty) return null;
+    return list.first as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getOrCreateLoyaltyProfile({
+    required String clientId,
+    required String companyId,
+    required String mobileNumber,
+    String? displayName,
+  }) async {
+    final res = await _dio.post('/rpc/fn_get_or_create_loyalty_profile', data: {
+      'p_client_id': clientId,
+      'p_company_id': companyId,
+      'p_mobile_number': mobileNumber,
+      'p_display_name': displayName,
+    });
+    final list = res.data as List;
+    return list.first as Map<String, dynamic>;
+  }
+
+  Future<void> setInvoiceLoyalty({
+    required String clientId,
+    required String companyId,
+    required String invoiceNo,
+    required String invoiceDate,
+    required String loyaltyProfileId,
+    double pointsRedeemed = 0,
+    double redeemValueAmount = 0,
+  }) async {
+    await _dio.post('/rpc/fn_set_invoice_loyalty', data: {
+      'p_client_id': clientId,
+      'p_company_id': companyId,
+      'p_invoice_no': invoiceNo,
+      'p_invoice_date': invoiceDate,
+      'p_loyalty_profile_id': loyaltyProfileId,
+      'p_points_redeemed': pointsRedeemed,
+      'p_redeem_value_amount': redeemValueAmount,
+    });
+  }
+
+  Future<void> postLoyaltyForInvoice({
+    required String clientId,
+    required String companyId,
+    required String invoiceNo,
+    required String invoiceDate,
+    required String userId,
+  }) async {
+    await _dio.post('/rpc/fn_post_loyalty_for_sales_invoice', data: {
+      'p_client_id': clientId,
+      'p_company_id': companyId,
+      'p_invoice_no': invoiceNo,
+      'p_invoice_date': invoiceDate,
+      'p_user_id': userId,
+    });
+  }
+
   // ── Shared pickers (same shape as Sales Order) ────────────────────────────
 
   Future<Map<String, dynamic>?> getCustomerDetails({required String customerId}) async {
@@ -650,7 +729,7 @@ class SalesInvoiceRemoteDs {
       'is_deleted': 'eq.false',
       'is_active':  'eq.true',
       'select':     'id,product_code,product_name,base_uom_id,tracking_type,sales_tax_group_id,'
-          'cost_currency_id,min_selling_price,flags,'
+          'cost_currency_id,min_selling_price,flags,category_id,'
           'uom:rim_common_masters!base_uom_id(description)',
       'order':      'product_code.asc',
       'limit':      '500',
@@ -675,7 +754,7 @@ class SalesInvoiceRemoteDs {
       'select':     'uom_id,conversion_factor,'
           'uom:rim_common_masters!uom_id(description),'
           'product:rim_products!product_id(id,product_code,product_name,base_uom_id,'
-          'tracking_type,sales_tax_group_id,is_active,is_deleted,min_selling_price,flags)',
+          'tracking_type,sales_tax_group_id,is_active,is_deleted,min_selling_price,flags,category_id)',
       'limit':      '1',
     });
     final list = res.data as List;
@@ -701,7 +780,7 @@ class SalesInvoiceRemoteDs {
       'part_number': 'eq.$code',
       'is_deleted':  'eq.false',
       'is_active':   'eq.true',
-      'select':      'id,product_code,product_name,base_uom_id,tracking_type,sales_tax_group_id,'
+      'select':      'id,product_code,product_name,base_uom_id,tracking_type,sales_tax_group_id,category_id,'
           'uom:rim_common_masters!base_uom_id(description)',
       'limit':       '1',
     });

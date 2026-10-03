@@ -50,11 +50,13 @@ class _PosSetupScreenState extends ConsumerState<PosSetupScreen>
   List<Map<String, dynamic>> _terminals = [];
   List<Map<String, dynamic>> _devices = [];
   List<Map<String, dynamic>> _users = [];
+  List<Map<String, dynamic>> _schemes = [];
+  Map<String, dynamic>? _loyaltyProgram;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadAll());
   }
 
@@ -89,6 +91,18 @@ class _PosSetupScreenState extends ConsumerState<PosSetupScreen>
           'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
           'is_deleted': 'eq.false', 'select': 'id,full_name', 'order': 'full_name.asc',
         }),
+        DioClient.instance.get('/rim_pos_schemes', queryParameters: {
+          'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
+          'is_deleted': 'eq.false',
+          'select': 'id,scheme_code,scheme_name,scheme_type,priority,is_stackable,is_active,'
+              'rim_pos_scheme_rules(id,applies_to_product_id,applies_to_category_id,min_qty,benefit_type,benefit_value,'
+              'rim_products!applies_to_product_id(product_name))',
+          'order': 'priority.asc',
+        }),
+        DioClient.instance.get('/rim_loyalty_programs', queryParameters: {
+          'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
+          'is_deleted': 'eq.false', 'order': 'created_at.asc', 'limit': '1',
+        }),
       ]);
       if (!mounted) return;
       setState(() {
@@ -96,6 +110,9 @@ class _PosSetupScreenState extends ConsumerState<PosSetupScreen>
         _terminals = List<Map<String, dynamic>>.from(results[1].data as List);
         _devices = List<Map<String, dynamic>>.from(results[2].data as List);
         _users = List<Map<String, dynamic>>.from(results[3].data as List);
+        _schemes = List<Map<String, dynamic>>.from(results[4].data as List);
+        final loyaltyList = results[5].data as List;
+        _loyaltyProgram = loyaltyList.isNotEmpty ? loyaltyList.first as Map<String, dynamic> : null;
         _loading = false;
       });
     } catch (e, st) {
@@ -123,7 +140,7 @@ class _PosSetupScreenState extends ConsumerState<PosSetupScreen>
             controller: _tabController,
             isScrollable: true,
             labelColor: AppColors.primary,
-            tabs: const [Tab(text: 'Terminals'), Tab(text: 'Devices'), Tab(text: 'User Access & PIN')],
+            tabs: const [Tab(text: 'Terminals'), Tab(text: 'Devices'), Tab(text: 'User Access & PIN'), Tab(text: 'Schemes'), Tab(text: 'Loyalty')],
           ),
         ),
         const Divider(height: 1),
@@ -138,6 +155,8 @@ class _PosSetupScreenState extends ConsumerState<PosSetupScreen>
                         _TerminalsTab(locations: _locations, terminals: _terminals, canEdit: canEdit && !offline, onChanged: _loadAll, showMsg: _showMsg),
                         _DevicesTab(terminals: _terminals, devices: _devices, canEdit: canEdit && !offline, onChanged: _loadAll, showMsg: _showMsg),
                         _UserAccessTab(users: _users, terminals: _terminals, canEdit: canEdit && !offline, showMsg: _showMsg),
+                        _SchemesTab(schemes: _schemes, canEdit: canEdit && !offline, onChanged: _loadAll, showMsg: _showMsg),
+                        _LoyaltyTab(program: _loyaltyProgram, canEdit: canEdit && !offline, onChanged: _loadAll, showMsg: _showMsg),
                       ],
                     ),
         ),
@@ -629,6 +648,394 @@ class _SetPinDialogState extends State<_SetPinDialog> {
         TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
         FilledButton(onPressed: _submit, child: const Text('Save')),
       ],
+    );
+  }
+}
+
+/// Promotion/scheme engine admin (migration 212). Deliberately scoped to the
+/// two most common real-world scheme types for v1's UI (PERCENT_OFF,
+/// AMOUNT_OFF), single-product OR single-category scope, one rule per scheme
+/// — the backend resolver (fn_resolve_pos_schemes_for_line) already supports
+/// all 10 scheme_type values and multiple rule rows per scheme; this editor
+/// simply doesn't expose the rest yet. A future pass can widen the form
+/// without any backend change.
+class _SchemesTab extends StatelessWidget {
+  final List<Map<String, dynamic>> schemes;
+  final bool canEdit;
+  final VoidCallback onChanged;
+  final void Function(String, {Color? color}) showMsg;
+
+  const _SchemesTab({required this.schemes, required this.canEdit, required this.onChanged, required this.showMsg});
+
+  Future<void> _openEditor(BuildContext context, {Map<String, dynamic>? existing}) async {
+    await showDialog(
+      context: context,
+      builder: (_) => _SchemeEditorDialog(existing: existing, onSaved: onChanged, showMsg: showMsg),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(children: [
+      if (schemes.isEmpty)
+        const Center(child: Text('No schemes configured yet.', style: TextStyle(color: AppColors.textSecondary)))
+      else
+        ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+          itemCount: schemes.length,
+          itemBuilder: (context, i) {
+            final s = schemes[i];
+            final rules = (s['rim_pos_scheme_rules'] as List?) ?? const [];
+            final rule = rules.isNotEmpty ? rules.first as Map<String, dynamic> : null;
+            final productName = (rule?['rim_products'] as Map<String, dynamic>?)?['product_name'] as String?;
+            final active = s['is_active'] as bool? ?? true;
+            final benefit = rule == null ? '' : '${rule['benefit_type'] == 'PERCENT' ? '${rule['benefit_value']}%' : rule['benefit_value']} off';
+            return Card(
+              child: ListTile(
+                leading: const Icon(Icons.local_offer_outlined),
+                title: Text('${s['scheme_code']} — ${s['scheme_name']}'),
+                subtitle: Text('${s['scheme_type']} · $benefit${productName != null ? ' · $productName' : ''}${active ? '' : ' · Inactive'}'),
+                trailing: canEdit ? const Icon(Icons.edit_outlined, size: 18) : null,
+                onTap: canEdit ? () => _openEditor(context, existing: s) : null,
+              ),
+            );
+          },
+        ),
+      if (canEdit)
+        Positioned(
+          right: 16, bottom: 16,
+          child: FloatingActionButton.extended(onPressed: () => _openEditor(context), icon: const Icon(Icons.add), label: const Text('Add Scheme')),
+        ),
+    ]);
+  }
+}
+
+class _SchemeEditorDialog extends ConsumerStatefulWidget {
+  final Map<String, dynamic>? existing;
+  final VoidCallback onSaved;
+  final void Function(String, {Color? color}) showMsg;
+
+  const _SchemeEditorDialog({required this.existing, required this.onSaved, required this.showMsg});
+
+  @override
+  ConsumerState<_SchemeEditorDialog> createState() => _SchemeEditorDialogState();
+}
+
+class _SchemeEditorDialogState extends ConsumerState<_SchemeEditorDialog> {
+  late final _codeCtrl = TextEditingController(text: widget.existing?['scheme_code'] as String? ?? '');
+  late final _nameCtrl = TextEditingController(text: widget.existing?['scheme_name'] as String? ?? '');
+  late final _valueCtrl = TextEditingController(
+      text: ((widget.existing?['rim_pos_scheme_rules'] as List?)?.isNotEmpty == true
+              ? ((widget.existing!['rim_pos_scheme_rules'] as List).first as Map<String, dynamic>)['benefit_value']
+              : null)
+          ?.toString() ??
+          '');
+  String _benefitType = 'PERCENT';
+  String _scope = 'PRODUCT';
+  int _priority = 100;
+  bool _stackable = false;
+  bool _active = true;
+  bool _saving = false;
+  List<Map<String, dynamic>> _products = [];
+  String? _productId;
+  bool _loadingProducts = true;
+
+  @override
+  void initState() {
+    super.initState();
+    final existingRule = ((widget.existing?['rim_pos_scheme_rules'] as List?)?.isNotEmpty == true)
+        ? ((widget.existing!['rim_pos_scheme_rules'] as List).first as Map<String, dynamic>)
+        : null;
+    _benefitType = existingRule?['benefit_type'] as String? ?? 'PERCENT';
+    _productId = existingRule?['applies_to_product_id'] as String?;
+    _priority = (widget.existing?['priority'] as num?)?.toInt() ?? 100;
+    _stackable = widget.existing?['is_stackable'] as bool? ?? false;
+    _active = widget.existing?['is_active'] as bool? ?? true;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadProducts());
+  }
+
+  Future<void> _loadProducts() async {
+    final session = ref.read(sessionProvider)!;
+    try {
+      final res = await DioClient.instance.get('/rim_products', queryParameters: {
+        'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
+        'is_deleted': 'eq.false', 'is_active': 'eq.true',
+        'select': 'id,product_code,product_name', 'order': 'product_name.asc', 'limit': '500',
+      });
+      if (mounted) setState(() { _products = List<Map<String, dynamic>>.from(res.data as List); _loadingProducts = false; });
+    } catch (e, st) {
+      AppLogger.error('PosSchemeLoadProducts', e, st);
+      if (mounted) setState(() => _loadingProducts = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _codeCtrl.dispose();
+    _nameCtrl.dispose();
+    _valueCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final value = double.tryParse(_valueCtrl.text.trim());
+    if (_codeCtrl.text.trim().isEmpty || _nameCtrl.text.trim().isEmpty || value == null || value <= 0) {
+      widget.showMsg('Code, name, and a positive discount value are all required.', color: AppColors.negative);
+      return;
+    }
+    if (_scope == 'PRODUCT' && _productId == null) {
+      widget.showMsg('Select which product this scheme applies to.', color: AppColors.negative);
+      return;
+    }
+    setState(() => _saving = true);
+    final session = ref.read(sessionProvider)!;
+    try {
+      String schemeId;
+      if (widget.existing == null) {
+        schemeId = const Uuid().v4();
+        await DioClient.instance.post('/rim_pos_schemes', data: {
+          'id': schemeId,
+          'client_id': session.clientId,
+          'company_id': session.companyId,
+          'scheme_code': _codeCtrl.text.trim(),
+          'scheme_name': _nameCtrl.text.trim(),
+          'scheme_type': _benefitType == 'PERCENT' ? 'PERCENT_OFF' : 'AMOUNT_OFF',
+          'scope': _scope,
+          'priority': _priority,
+          'is_stackable': _stackable,
+        });
+      } else {
+        schemeId = widget.existing!['id'] as String;
+        await DioClient.instance.patch('/rim_pos_schemes', queryParameters: {'id': 'eq.$schemeId'}, data: {
+          'scheme_code': _codeCtrl.text.trim(),
+          'scheme_name': _nameCtrl.text.trim(),
+          'scheme_type': _benefitType == 'PERCENT' ? 'PERCENT_OFF' : 'AMOUNT_OFF',
+          'scope': _scope,
+          'priority': _priority,
+          'is_stackable': _stackable,
+          'is_active': _active,
+        });
+        // Full-replace the rule row, same "reseed" convention used elsewhere
+        // in this app for a small child set — simpler than diffing one row.
+        await DioClient.instance.patch('/rim_pos_scheme_rules', queryParameters: {'scheme_id': 'eq.$schemeId'}, data: {'is_deleted': true});
+      }
+      await DioClient.instance.post('/rim_pos_scheme_rules', data: {
+        'id': const Uuid().v4(),
+        'client_id': session.clientId,
+        'company_id': session.companyId,
+        'scheme_id': schemeId,
+        'applies_to_product_id': _scope == 'PRODUCT' ? _productId : null,
+        'min_qty': 0,
+        'benefit_type': _benefitType,
+        'benefit_value': value,
+      });
+      if (mounted) {
+        Navigator.of(context).pop();
+        widget.onSaved();
+        widget.showMsg('Scheme saved.', color: AppColors.positive);
+      }
+    } catch (e, st) {
+      AppLogger.error('PosSchemeSave', e, st);
+      widget.showMsg(ErrorPresenter.format(e, action: 'save this scheme'), color: AppColors.negative);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  String _productDisplay(Map<String, dynamic> p) => '[${p['product_code']}] ${p['product_name']}';
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.existing == null ? 'Add Scheme' : 'Edit Scheme'),
+      content: SizedBox(
+        width: 400,
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            TextField(controller: _codeCtrl, decoration: const InputDecoration(labelText: 'Scheme Code')),
+            const SizedBox(height: 10),
+            TextField(controller: _nameCtrl, decoration: const InputDecoration(labelText: 'Scheme Name (e.g. Weekend 10% Off)')),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: _benefitType,
+                  isExpanded: true, isDense: true, itemHeight: null,
+                  decoration: const InputDecoration(labelText: 'Type'),
+                  items: const [
+                    DropdownMenuItem(value: 'PERCENT', child: Text('% Off')),
+                    DropdownMenuItem(value: 'FIXED_AMOUNT', child: Text('Amount Off')),
+                  ],
+                  onChanged: (v) => setState(() => _benefitType = v!),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: TextField(controller: _valueCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Value'))),
+            ]),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: _scope,
+              isExpanded: true, isDense: true, itemHeight: null,
+              decoration: const InputDecoration(labelText: 'Applies To'),
+              items: const [DropdownMenuItem(value: 'PRODUCT', child: Text('One Product'))],
+              onChanged: (v) => setState(() => _scope = v!),
+            ),
+            const SizedBox(height: 10),
+            if (_loadingProducts)
+              const Padding(padding: EdgeInsets.all(8), child: LinearProgressIndicator())
+            else
+              Builder(builder: (context) {
+                final selected = _products.where((p) => p['id'] == _productId).toList();
+                return SakalAutocomplete<Map<String, dynamic>>(
+                  key: ValueKey(_productId),
+                  initialValue: TextEditingValue(text: selected.isNotEmpty ? _productDisplay(selected.first) : ''),
+                  displayStringForOption: _productDisplay,
+                  optionsBuilder: (v) {
+                    final q = v.text.toLowerCase().trim();
+                    return q.isEmpty ? _products : _products.where((p) => _productDisplay(p).toLowerCase().contains(q));
+                  },
+                  onSelected: (p) => setState(() => _productId = p['id'] as String),
+                  onChanged: (v) { if (v.isEmpty && _productId != null) setState(() => _productId = null); },
+                  decoration: const InputDecoration(labelText: 'Product'),
+                );
+              }),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: TextField(
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Priority (lower runs first)'),
+                  controller: TextEditingController(text: _priority.toString()),
+                  onChanged: (v) => _priority = int.tryParse(v) ?? _priority,
+                ),
+              ),
+            ]),
+            SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Stackable with other schemes'), value: _stackable, onChanged: (v) => setState(() => _stackable = v)),
+            if (widget.existing != null)
+              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Active'), value: _active, onChanged: (v) => setState(() => _active = v)),
+          ]),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: _saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Loyalty program admin (migration 214) — a single company-level
+/// configuration row; the New Sale screen's own phone-capture UI is what
+/// actually earns/redeems points against it.
+class _LoyaltyTab extends ConsumerStatefulWidget {
+  final Map<String, dynamic>? program;
+  final bool canEdit;
+  final VoidCallback onChanged;
+  final void Function(String, {Color? color}) showMsg;
+
+  const _LoyaltyTab({required this.program, required this.canEdit, required this.onChanged, required this.showMsg});
+
+  @override
+  ConsumerState<_LoyaltyTab> createState() => _LoyaltyTabState();
+}
+
+class _LoyaltyTabState extends ConsumerState<_LoyaltyTab> {
+  late final _nameCtrl = TextEditingController(text: widget.program?['program_name'] as String? ?? 'Loyalty Rewards');
+  late final _pointsPerAmountCtrl = TextEditingController(text: (widget.program?['points_per_amount'] as num?)?.toString() ?? '');
+  late final _pointValueCtrl = TextEditingController(text: (widget.program?['point_value_in_base_currency'] as num?)?.toString() ?? '');
+  bool _active = true;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _active = widget.program?['is_active'] as bool? ?? true;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _pointsPerAmountCtrl.dispose();
+    _pointValueCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final pointsPerAmount = double.tryParse(_pointsPerAmountCtrl.text.trim());
+    final pointValue = double.tryParse(_pointValueCtrl.text.trim());
+    if (_nameCtrl.text.trim().isEmpty || pointsPerAmount == null || pointsPerAmount <= 0) {
+      widget.showMsg('Program name and a positive "points per amount" are required.', color: AppColors.negative);
+      return;
+    }
+    setState(() => _saving = true);
+    final session = ref.read(sessionProvider)!;
+    try {
+      if (widget.program == null) {
+        await DioClient.instance.post('/rim_loyalty_programs', data: {
+          'id': const Uuid().v4(),
+          'client_id': session.clientId,
+          'company_id': session.companyId,
+          'program_name': _nameCtrl.text.trim(),
+          'points_per_amount': pointsPerAmount,
+          'point_value_in_base_currency': pointValue ?? 0,
+        });
+      } else {
+        await DioClient.instance.patch('/rim_loyalty_programs', queryParameters: {'id': 'eq.${widget.program!['id']}'}, data: {
+          'program_name': _nameCtrl.text.trim(),
+          'points_per_amount': pointsPerAmount,
+          'point_value_in_base_currency': pointValue ?? 0,
+          'is_active': _active,
+        });
+      }
+      if (mounted) widget.showMsg('Loyalty program saved.', color: AppColors.positive);
+      widget.onChanged();
+    } catch (e, st) {
+      AppLogger.error('PosLoyaltyProgramSave', e, st);
+      if (mounted) widget.showMsg(ErrorPresenter.format(e, action: 'save the loyalty program'), color: AppColors.negative);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              const Text('Loyalty Program', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+              const SizedBox(height: 4),
+              const Text('Customers earn points on every cash/credit sale once a mobile number is captured at the till. Redemption is tracked but does not yet reduce the bill in this build.',
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              const SizedBox(height: 16),
+              TextField(controller: _nameCtrl, enabled: widget.canEdit, decoration: const InputDecoration(labelText: 'Program Name')),
+              const SizedBox(height: 10),
+              TextField(controller: _pointsPerAmountCtrl, enabled: widget.canEdit, keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Points earned per 1 (base currency) spent')),
+              const SizedBox(height: 10),
+              TextField(controller: _pointValueCtrl, enabled: widget.canEdit, keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Value of 1 point (base currency, for future redemption)')),
+              if (widget.program != null) ...[
+                const SizedBox(height: 4),
+                SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Active'), value: _active, onChanged: widget.canEdit ? (v) => setState(() => _active = v) : null),
+              ],
+              const SizedBox(height: 12),
+              if (widget.canEdit)
+                FilledButton(
+                  onPressed: _saving ? null : _save,
+                  child: _saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save'),
+                ),
+            ]),
+          ),
+        ),
+      ),
     );
   }
 }

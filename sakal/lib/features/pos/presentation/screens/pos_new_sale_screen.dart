@@ -94,6 +94,7 @@ class _PosLineRow {
   String trackingType;
   // Null = no floor configured for this product — rim_products.min_selling_price.
   final double? minSellingPrice;
+  final String? categoryId;
 
   double baseQty = 0;
   double grossAmount = 0;
@@ -101,6 +102,11 @@ class _PosLineRow {
   double taxableAmount = 0;
   double taxAmount = 0;
   double finalAmount = 0;
+  // POS scheme engine (migration 212) — resolved via a preview RPC call,
+  // mirrored server-side at save as a snapshot (never uniquely authoritative
+  // over the client's own computed final amounts — see migration 213).
+  double schemeDiscountAmount = 0;
+  String? schemeName;
 
   bool get isBatchTracked => trackingType == 'BATCH' || trackingType == 'BATCH_WITH_EXPIRY';
   bool get isSerialTracked => trackingType == 'SERIAL';
@@ -122,6 +128,7 @@ class _PosLineRow {
     this.qty = 1,
     this.trackingType = 'NONE',
     this.minSellingPrice,
+    this.categoryId,
   });
 }
 
@@ -206,6 +213,19 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   String? _weightedPrefixTo;
   String? _weightedFormat; // 'WEIGHT_EMBEDDED' | 'PRICE_EMBEDDED' | null (disabled)
 
+  // ── Loyalty (migrations 214/215) — phone-number-first, no customer account
+  // required. v1 scope: capture + earn only. Redeeming points against the
+  // bill is tracked server-side (fn_set_invoice_loyalty/fn_post_loyalty_for_
+  // sales_invoice both accept it) but not yet exposed here as a way to
+  // reduce what's collected — that needs the same care around GL impact
+  // this session deliberately avoided rushing for bundles; a clear, later
+  // follow-up, not a silent gap.
+  final _loyaltyMobileCtrl = TextEditingController();
+  String? _loyaltyProfileId;
+  String? _loyaltyDisplayName;
+  double _loyaltyPointsBalance = 0;
+  bool _loyaltyLookingUp = false;
+
   @override
   void initState() {
     super.initState();
@@ -230,7 +250,39 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     _idleCheckTimer?.cancel();
     _searchCtrl.dispose();
     _searchFocus.dispose();
+    _loyaltyMobileCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _lookupLoyalty() async {
+    final mobile = _loyaltyMobileCtrl.text.trim();
+    if (mobile.isEmpty) return;
+    final session = ref.read(sessionProvider)!;
+    setState(() => _loyaltyLookingUp = true);
+    try {
+      final ds = ref.read(salesInvoiceRepositoryProvider);
+      final profile = await ds.getOrCreateLoyaltyProfile(
+        clientId: session.clientId, companyId: session.companyId, mobileNumber: mobile,
+      );
+      if (!mounted) return;
+      setState(() {
+        _loyaltyProfileId = profile['id'] as String?;
+        _loyaltyDisplayName = profile['display_name'] as String?;
+        _loyaltyPointsBalance = (profile['points_balance'] as num?)?.toDouble() ?? 0;
+      });
+    } catch (e, st) {
+      AppLogger.error('PosLoyaltyLookup', e, st);
+      if (mounted) _showMsg('Could not look up loyalty profile.', color: AppColors.negative);
+    } finally {
+      if (mounted) setState(() => _loyaltyLookingUp = false);
+    }
+  }
+
+  void _clearLoyalty() {
+    _loyaltyMobileCtrl.clear();
+    _loyaltyProfileId = null;
+    _loyaltyDisplayName = null;
+    _loyaltyPointsBalance = 0;
   }
 
   void _recordInteraction() {
@@ -651,14 +703,42 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       qty: qtyToAdd,
       trackingType: trackingType,
       minSellingPrice: (product['min_selling_price'] as num?)?.toDouble(),
+      categoryId: product['category_id'] as String?,
     );
     setState(() {
       _lines.add(row);
       _recompute();
     });
+    unawaited(_refreshLineScheme(row));
     if (isTracked) {
       await _loadCandidates(row);
       _autoAllocateBatchSerial(row);
+    }
+  }
+
+  /// Resolves (preview-only) the best-matching POS scheme for this line via
+  /// fn_resolve_pos_schemes_for_line and folds the discount into the line's
+  /// own totals. Fire-and-forget from the caller's point of view — a scheme
+  /// lookup failure must never block adding an item to the cart.
+  Future<void> _refreshLineScheme(_PosLineRow row) async {
+    final session = ref.read(sessionProvider)!;
+    final locationId = session.locationId;
+    if (locationId == null || locationId.isEmpty) return;
+    try {
+      final ds = ref.read(salesInvoiceRepositoryProvider);
+      final result = await ds.resolvePosSchemeForLine(
+        clientId: session.clientId, companyId: session.companyId, locationId: locationId,
+        productId: row.productId, categoryId: row.categoryId,
+        qty: row.baseQty, grossAmount: row.baseQty * row.rate,
+        transDate: _fmtDate(DateTime.now()),
+      );
+      if (!mounted) return;
+      row.schemeDiscountAmount = (result?['discount_amount'] as num?)?.toDouble() ?? 0;
+      row.schemeName = result?['scheme_name'] as String?;
+      _recompute();
+    } catch (_) {
+      // No scheme engine configured / lookup failed — line just has no
+      // promotion applied, same as before this feature existed.
     }
   }
 
@@ -742,7 +822,8 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       l.baseQty = l.qty * l.uomConversionFactor;
       l.grossAmount = l.baseQty * l.rate;
       l.discountAmount = l.grossAmount * l.discountPct / 100;
-      l.taxableAmount = l.grossAmount - l.discountAmount;
+      final afterManualDiscount = l.grossAmount - l.discountAmount;
+      l.taxableAmount = (afterManualDiscount - l.schemeDiscountAmount).clamp(0, afterManualDiscount);
       final ratePct = l.taxGroupId != null ? (_taxGroupRatePct[l.taxGroupId] ?? 0) : 0;
       l.taxAmount = l.taxableAmount * ratePct / 100;
       l.finalAmount = l.taxableAmount + l.taxAmount;
@@ -1029,8 +1110,36 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       final ds = ref.read(salesInvoiceRepositoryProvider);
       final invoiceNo = await ds.save(header: header, lines: lines, charges: const [], batches: batches, serials: serials, userId: session.userId);
       final invoiceDate = header['invoice_date'] as String;
+
+      if (_loyaltyProfileId != null) {
+        // Must happen while the invoice is still DRAFT (fn_set_invoice_loyalty
+        // only writes a DRAFT row) — a soft failure here must never block the
+        // sale itself from being approved.
+        try {
+          await ds.setInvoiceLoyalty(
+            clientId: session.clientId, companyId: session.companyId,
+            invoiceNo: invoiceNo, invoiceDate: invoiceDate, loyaltyProfileId: _loyaltyProfileId!,
+          );
+        } catch (e, st) {
+          AppLogger.error('PosLoyaltySetInvoice', e, st);
+        }
+      }
+
       await ds.approve(clientId: session.clientId, companyId: session.companyId, invoiceNo: invoiceNo, invoiceDate: invoiceDate, approvedBy: session.userId);
       if (_saleType == 'CASH' && _splitTender) await _saveTenderLines(session, invoiceNo, invoiceDate);
+
+      if (_loyaltyProfileId != null) {
+        // Soft failure — a loyalty-posting problem must never undo or block
+        // an already-completed, already-GL-posted sale.
+        try {
+          await ds.postLoyaltyForInvoice(
+            clientId: session.clientId, companyId: session.companyId,
+            invoiceNo: invoiceNo, invoiceDate: invoiceDate, userId: session.userId,
+          );
+        } catch (e, st) {
+          AppLogger.error('PosLoyaltyPost', e, st);
+        }
+      }
 
       if (mounted) {
         _showMsg('$invoiceNo completed.', color: AppColors.positive);
@@ -1168,6 +1277,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     _pendingQty = 1;
     _invoiceNo = null;
     _invoiceDate = null;
+    _clearLoyalty();
     // Every sale is cash by default — without this, a sale right after a
     // Credit checkout would stay stuck in CREDIT mode (wrong customer, no
     // cash customer re-applied) since _saleType is only ever set to
@@ -1406,7 +1516,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
                     Text('${l.productCode} · ${l.uomLabel}', style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary)),
                   ]),
                 ),
-                SizedBox(width: 120, child: PosQtyStepper(value: l.qty, min: 0, buttonSize: 32, onChanged: (v) { l.qty = v; _recompute(); _autoAllocateBatchSerial(l); })),
+                SizedBox(width: 120, child: PosQtyStepper(value: l.qty, min: 0, buttonSize: 32, onChanged: (v) { l.qty = v; _recompute(); _autoAllocateBatchSerial(l); unawaited(_refreshLineScheme(l)); })),
                 const SizedBox(width: 6),
                 SizedBox(width: 88, child: PosAmountField(label: 'Rate', value: l.rate, enabled: _canOverridePrice, compact: true, onChanged: (v) { l.rate = v; _recompute(); })),
                 const SizedBox(width: 6),
@@ -1415,6 +1525,12 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
                 SizedBox(width: 72, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(l.finalAmount.toStringAsFixed(2), textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w800)))),
                 IconButton(onPressed: () => _removeLine(l), icon: const Icon(Icons.close, size: 18, color: AppColors.negative), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32)),
               ]),
+              if (l.schemeDiscountAmount > 0 && l.schemeName != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text('Promo: ${l.schemeName} -${l.schemeDiscountAmount.toStringAsFixed(2)}',
+                      style: const TextStyle(fontSize: 10.5, color: AppColors.positive, fontWeight: FontWeight.w600)),
+                ),
               if (trackedVisible) _buildBatchSerialPanel(l),
             ]),
           ),
@@ -1522,6 +1638,8 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       padding: const EdgeInsets.all(16),
       color: AppColors.surface,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        _buildLoyaltySection(),
+        const SizedBox(height: 10),
         _totalRow('Subtotal', _subtotal + _discountTotal),
         _totalRow('Discount', -_discountTotal),
         _totalRow('Tax', _taxTotal),
@@ -1566,6 +1684,45 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
         ),
       ]),
     );
+  }
+
+  Widget _buildLoyaltySection() {
+    if (_loyaltyProfileId != null) {
+      return Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(color: AppColors.positive.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+        child: Row(children: [
+          const Icon(Icons.loyalty, size: 16, color: AppColors.positive),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              '${_loyaltyDisplayName?.isNotEmpty == true ? _loyaltyDisplayName : _loyaltyMobileCtrl.text} · ${_loyaltyPointsBalance.toStringAsFixed(0)} pts',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          IconButton(onPressed: () => setState(_clearLoyalty), icon: const Icon(Icons.close, size: 16), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 28, minHeight: 28)),
+        ]),
+      );
+    }
+    return Row(children: [
+      Expanded(
+        child: TextField(
+          controller: _loyaltyMobileCtrl,
+          keyboardType: TextInputType.phone,
+          decoration: const InputDecoration(labelText: 'Loyalty mobile (optional)', isDense: true, border: OutlineInputBorder()),
+          onSubmitted: (_) => _lookupLoyalty(),
+        ),
+      ),
+      const SizedBox(width: 6),
+      SizedBox(
+        height: 40,
+        child: OutlinedButton(
+          onPressed: _loyaltyLookingUp ? null : _lookupLoyalty,
+          child: _loyaltyLookingUp ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Add'),
+        ),
+      ),
+    ]);
   }
 
   Widget _totalRow(String label, double value) => Padding(

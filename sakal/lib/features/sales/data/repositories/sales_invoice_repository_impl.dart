@@ -290,6 +290,59 @@ class SalesInvoiceRepositoryImpl implements SalesInvoiceRepository {
         clientId: clientId, companyId: companyId, pin: pin, requestedDiscountPercent: requestedDiscountPercent,
       );
 
+  // ── POS schemes / loyalty (migrations 212-215) — direct pass-through,
+  // always online (admin/preview-only data, not master-data cached offline).
+  @override
+  Future<Map<String, dynamic>?> resolvePosSchemeForLine({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String productId,
+    String? categoryId,
+    required double qty,
+    required double grossAmount,
+    required String transDate,
+  }) => _remote.resolvePosSchemeForLine(
+        clientId: clientId, companyId: companyId, locationId: locationId,
+        productId: productId, categoryId: categoryId, qty: qty,
+        grossAmount: grossAmount, transDate: transDate,
+      );
+
+  @override
+  Future<Map<String, dynamic>> getOrCreateLoyaltyProfile({
+    required String clientId,
+    required String companyId,
+    required String mobileNumber,
+    String? displayName,
+  }) => _remote.getOrCreateLoyaltyProfile(
+        clientId: clientId, companyId: companyId, mobileNumber: mobileNumber, displayName: displayName,
+      );
+
+  @override
+  Future<void> setInvoiceLoyalty({
+    required String clientId,
+    required String companyId,
+    required String invoiceNo,
+    required String invoiceDate,
+    required String loyaltyProfileId,
+    double pointsRedeemed = 0,
+    double redeemValueAmount = 0,
+  }) => _remote.setInvoiceLoyalty(
+        clientId: clientId, companyId: companyId, invoiceNo: invoiceNo, invoiceDate: invoiceDate,
+        loyaltyProfileId: loyaltyProfileId, pointsRedeemed: pointsRedeemed, redeemValueAmount: redeemValueAmount,
+      );
+
+  @override
+  Future<void> postLoyaltyForInvoice({
+    required String clientId,
+    required String companyId,
+    required String invoiceNo,
+    required String invoiceDate,
+    required String userId,
+  }) => _remote.postLoyaltyForInvoice(
+        clientId: clientId, companyId: companyId, invoiceNo: invoiceNo, invoiceDate: invoiceDate, userId: userId,
+      );
+
   // ── Shared pickers ────────────────────────────────────────────────────────
 
   // getCustomerDetails: offline read falls back to AccountsCache (via the

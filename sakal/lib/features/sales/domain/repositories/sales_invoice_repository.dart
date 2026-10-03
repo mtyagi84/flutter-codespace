@@ -197,6 +197,47 @@ abstract class SalesInvoiceRepository {
     required double requestedDiscountPercent,
   });
 
+  // ── POS schemes / loyalty (migrations 212-215) ──────────────────────────────
+
+  /// Preview-only resolution of the best-matching scheme for one cart line —
+  /// mirrors what fn_save_sales_invoice independently resolves server-side
+  /// as a snapshot; the client still sends its own computed final amounts.
+  Future<Map<String, dynamic>?> resolvePosSchemeForLine({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String productId,
+    String? categoryId,
+    required double qty,
+    required double grossAmount,
+    required String transDate,
+  });
+
+  Future<Map<String, dynamic>> getOrCreateLoyaltyProfile({
+    required String clientId,
+    required String companyId,
+    required String mobileNumber,
+    String? displayName,
+  });
+
+  Future<void> setInvoiceLoyalty({
+    required String clientId,
+    required String companyId,
+    required String invoiceNo,
+    required String invoiceDate,
+    required String loyaltyProfileId,
+    double pointsRedeemed = 0,
+    double redeemValueAmount = 0,
+  });
+
+  Future<void> postLoyaltyForInvoice({
+    required String clientId,
+    required String companyId,
+    required String invoiceNo,
+    required String invoiceDate,
+    required String userId,
+  });
+
   // ── Shared pickers ────────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>?> getCustomerDetails({required String customerId});
