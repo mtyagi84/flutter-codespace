@@ -12,9 +12,9 @@ import '../widgets/pos_amount_field.dart';
 import '../widgets/pos_keyboard.dart';
 import '../widgets/pos_numpad.dart';
 import '../widgets/pos_qty_stepper.dart';
-import '../widgets/pos_search_sheet.dart';
 import '../widgets/pos_session_guard.dart';
 import 'pos_browse_products_screen.dart';
+import 'pos_credit_checkout_screen.dart';
 
 /// POS New Sale — v1. Deliberately built DIRECTLY on the same, already-
 /// proven `salesInvoiceRepositoryProvider` Quick Invoice itself uses
@@ -288,40 +288,31 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     return ds.getExchangeRate(companyId: session.companyId, locationId: locationId, fromCurrency: from, toCurrency: to, rateDate: _fmtDate(DateTime.now()));
   }
 
-  void _onSaleTypeChanged(String type) {
-    setState(() => _saleType = type);
-    final session = ref.read(sessionProvider)!;
-    if (type == 'CASH') {
-      _applyCashCustomerCurrency(session);
-    } else {
-      _customerId = null;
-      _customerDisplay = '';
-    }
-  }
-
-  Future<void> _pickCustomer() async {
-    final session = ref.read(sessionProvider)!;
-    await PosSearchSheet.show<Map<String, dynamic>>(
-      context,
-      title: 'Select Customer',
-      hintText: 'Search name or code…',
-      onSearch: (q) async {
-        final res = await DioClient.instance.get('/rim_accounts', queryParameters: {
-          'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
-          'account_nature': 'eq.Customer', 'is_deleted': 'eq.false',
-          if (q.isNotEmpty) 'or': '(account_code.ilike.*$q*,account_name.ilike.*$q*)',
-          'select': 'id,account_code,account_name', 'order': 'account_name.asc', 'limit': '30',
-        });
-        return List<Map<String, dynamic>>.from(res.data as List);
-      },
-      itemBuilder: (context, c) => ListTile(title: Text('${c['account_code']} — ${c['account_name']}')),
-      onSelected: (result) {
-        setState(() {
-          _customerId = result['id'] as String;
-          _customerDisplay = '[${result['account_code']}] ${result['account_name']}';
-        });
-      },
+  /// Every POS invoice is cash by default; Credit is a deliberate extra
+  /// step from the nav rail, only enabled once the cart has at least one
+  /// line. Shows the cart's own totals read-only, picks a customer, then
+  /// hands straight into this screen's own `_charge()` — no separate
+  /// Cash/Credit toggle to forget to switch back.
+  Future<void> _startCreditCheckout() async {
+    if (_lines.isEmpty) return;
+    final customer = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (_) => PosCreditCheckoutScreen(
+          subtotal: _subtotal + _discountTotal,
+          discount: _discountTotal,
+          tax: _taxTotal,
+          total: _grandTotal,
+          currency: _localCcy,
+        ),
+      ),
     );
+    if (customer == null || !mounted) return;
+    setState(() {
+      _saleType = 'CREDIT';
+      _customerId = customer['id'] as String;
+      _customerDisplay = '[${customer['account_code']}] ${customer['account_name']}';
+    });
+    await _charge();
   }
 
   /// A separate, category-drill-down screen for MANUAL product discovery —
@@ -526,16 +517,11 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       return;
     }
     if (_customerId == null) {
-      if (_saleType == 'CASH') {
-        _showMsg('Quick Invoice Setup is missing for this user — ask an admin.', color: AppColors.negative);
-        return;
-      }
-      // A credit sale always needs a real customer account (enforced
-      // server-side too) — open the picker right here instead of a dead-end
-      // error, so the cashier doesn't have to go hunt for a separate button.
-      // Picking one continues straight into charging; cancelling just stops.
-      await _pickCustomer();
-      if (_customerId == null) return;
+      // A credit sale's customer is always picked via the dedicated Credit
+      // checkout screen BEFORE this is ever called with _saleType=='CREDIT'
+      // — reaching this branch means Quick Invoice Setup itself is missing.
+      _showMsg('Quick Invoice Setup is missing for this user — ask an admin.', color: AppColors.negative);
+      return;
     }
     final session = ref.read(sessionProvider)!;
     setState(() { _saving = true; _actionError = null; });
@@ -623,12 +609,11 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       return;
     }
     if (_customerId == null) {
-      if (_saleType == 'CASH') {
-        _showMsg('Quick Invoice Setup is missing for this user — ask an admin.', color: AppColors.negative);
-        return;
-      }
-      await _pickCustomer();
-      if (_customerId == null) return;
+      // Hold is only ever reached in CASH mode (Credit always goes
+      // straight to _charge() via its own checkout screen) — a null
+      // customer here means Quick Invoice Setup itself is missing.
+      _showMsg('Quick Invoice Setup is missing for this user — ask an admin.', color: AppColors.negative);
+      return;
     }
     final session = ref.read(sessionProvider)!;
     setState(() { _holding = true; _actionError = null; });
@@ -653,6 +638,11 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     _pendingQty = 1;
     _invoiceNo = null;
     _invoiceDate = null;
+    // Every sale is cash by default — without this, a sale right after a
+    // Credit checkout would stay stuck in CREDIT mode (wrong customer, no
+    // cash customer re-applied) since _saleType is only ever set to
+    // CREDIT transiently by _startCreditCheckout.
+    _saleType = 'CASH';
     setState(() {});
     final session = ref.read(sessionProvider);
     if (session != null) _applyCashCustomerCurrency(session);
@@ -722,6 +712,10 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       child: SafeArea(
         child: ListView(padding: const EdgeInsets.symmetric(vertical: 8), children: [
           _HeaderActionButton(icon: Icons.grid_view_rounded, label: 'Browse', onTap: _browseProducts),
+          _HeaderActionButton(
+            icon: Icons.credit_score_outlined, label: 'Credit', enabled: _lines.isNotEmpty,
+            onTap: _startCreditCheckout,
+          ),
           _HeaderActionButton(icon: Icons.undo, label: 'Return', onTap: () => context.go(RouteNames.posReturn)),
           _HeaderActionButton(icon: Icons.search, label: 'Price Check', onTap: () => context.go(RouteNames.posPriceCheck)),
           _HeaderActionButton(icon: Icons.pause_circle_outline, label: 'Held Sales', onTap: () => context.go(RouteNames.posHold)),
@@ -745,11 +739,17 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
           const SizedBox(width: 8),
           _Pill(text: session.fullName),
           const Spacer(),
-          SegmentedButton<String>(
-            segments: const [ButtonSegment(value: 'CASH', label: Text('Cash')), ButtonSegment(value: 'CREDIT', label: Text('Credit'))],
-            selected: {_saleType},
-            onSelectionChanged: (s) => _onSaleTypeChanged(s.first),
-          ),
+          if (_saleType == 'CREDIT' && _customerDisplay.isNotEmpty) ...[
+            _Pill(text: _customerDisplay),
+            const SizedBox(width: 8),
+          ],
+          // Every POS sale is cash by default — Credit is a deliberate
+          // extra step via the nav rail's own "Credit" button, not a
+          // toggle to remember to switch back. This just reflects which
+          // mode the sale currently is (CASH almost always; CREDIT only
+          // transiently while the credit-checkout flow is charging, or
+          // when resuming an older held CREDIT sale).
+          _Pill(text: _saleType == 'CASH' ? 'Cash Sale' : 'Credit Sale'),
         ]),
       ),
       if (_cashSetupMissing)
@@ -822,10 +822,6 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
               ),
             ),
           ),
-          if (_saleType == 'CREDIT') ...[
-            const SizedBox(width: 10),
-            OutlinedButton.icon(onPressed: _pickCustomer, icon: const Icon(Icons.person_outline, size: 18), label: Text(_customerDisplay.isEmpty ? 'Pick Customer' : _customerDisplay, overflow: TextOverflow.ellipsis)),
-          ],
         ]),
       ),
       Expanded(
@@ -944,10 +940,6 @@ class _Pill extends StatelessWidget {
       );
 }
 
-/// A single large, labeled touch button in New Sale's horizontally-scrollable
-/// navigation row — replaces a bare icon-only `IconButton` (36dp hit target,
-/// tooltip-only label) with a ≥56dp finger-sized target that always shows
-/// its label, not just on mouse hover.
 /// A single tile in New Sale's vertical left-side nav rail — replaces a bare
 /// icon-only `IconButton` (36dp hit target, tooltip-only label) with a
 /// ≥64dp finger-sized target that always shows its label.
@@ -955,25 +947,26 @@ class _HeaderActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const _HeaderActionButton({required this.icon, required this.label, required this.onTap});
+  final bool enabled;
+  const _HeaderActionButton({required this.icon, required this.label, required this.onTap, this.enabled = true});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Material(
-        color: Colors.white.withValues(alpha: 0.12),
+        color: Colors.white.withValues(alpha: enabled ? 0.12 : 0.05),
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
+          onTap: enabled ? onTap : null,
           child: Container(
             constraints: const BoxConstraints(minHeight: 68),
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(icon, color: Colors.white, size: 22),
+              Icon(icon, color: enabled ? Colors.white : Colors.white.withValues(alpha: 0.35), size: 22),
               const SizedBox(height: 4),
-              Text(label, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w600)),
+              Text(label, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: enabled ? Colors.white : Colors.white.withValues(alpha: 0.35), fontSize: 10.5, fontWeight: FontWeight.w600)),
             ]),
           ),
         ),

@@ -6,6 +6,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../../../sales/presentation/providers/sales_invoice_providers.dart';
 import '../../../sales/presentation/providers/sales_return_providers.dart';
 import '../widgets/pos_keyboard.dart';
 import '../widgets/pos_qty_stepper.dart';
@@ -76,10 +77,21 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
   bool _loadingRecent = false;
   List<Map<String, dynamic>> _recentInvoices = [];
 
+  // Tax-group effective rate, keyed by group id — resolved once the
+  // invoice's lines are known. Real bug found live: the refund value never
+  // included tax at all (a return of one 41207.62 item, 35523.81 pre-tax +
+  // 5683.81 tax, refunded only 35523.81) — this was a stated "simplified
+  // v1" shortcut that turned out to matter the first time someone tested a
+  // taxed sale.
+  Map<String, double> _taxGroupRatePct = {};
+
   bool get _showRefund => _invoice != null && _invoice!['sale_type'] == 'CASH' && _invoice!['cash_collection_mode'] == 'IMMEDIATE';
 
   double get _taxableTotal => _lines.fold(0, (s, l) => s + l.returnQty * l.rate);
-  double get _taxTotal => 0; // simplified v1 — see header note on tax below
+  double get _taxTotal => _lines.fold(0, (s, l) {
+        final ratePct = l.taxGroupId != null ? (_taxGroupRatePct[l.taxGroupId] ?? 0) : 0;
+        return s + (l.returnQty * l.rate) * ratePct / 100;
+      });
   double get _returnTotal => _taxableTotal + _taxTotal;
 
   @override
@@ -114,6 +126,13 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
     _loadRecentInvoices();
   }
 
+  /// Partial text is expected here (a cashier typing "0004" should find
+  /// "SI/HO/2026/00004") — the datasource already does an `ilike` search;
+  /// this used to then throw those results away with an exact `==` check,
+  /// which is the real bug a live user report caught ("No approved invoice
+  /// found for '0004'" even though it clearly exists). A single match loads
+  /// straight through; several matches are shown as a pick list instead of
+  /// guessing which one was meant.
   Future<void> _findInvoice(String value) async {
     final invoiceNo = value.trim();
     if (invoiceNo.isEmpty) return;
@@ -122,13 +141,29 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
     setState(() { _searching = true; _error = null; _invoice = null; _lines.clear(); });
     try {
       final matches = await ds.getApprovedInvoices(clientId: session.clientId, companyId: session.companyId, search: invoiceNo);
-      final match = matches.where((i) => i['invoice_no'] == invoiceNo).toList();
-      if (match.isEmpty) {
+      if (matches.isEmpty) {
         setState(() { _searching = false; _error = 'No approved invoice found for "$invoiceNo".'; });
         return;
       }
-      _invoice = match.first;
-      final invDate = _invoice!['invoice_date'] as String;
+      if (matches.length > 1) {
+        setState(() { _searching = false; _recentInvoices = matches; });
+        return;
+      }
+      await _loadInvoice(matches.first);
+    } catch (e, st) {
+      AppLogger.error('PosReturnFind', e, st);
+      if (mounted) setState(() { _searching = false; _error = ErrorPresenter.format(e, action: 'find this invoice'); });
+    }
+  }
+
+  Future<void> _loadInvoice(Map<String, dynamic> invoice) async {
+    final session = ref.read(sessionProvider)!;
+    final ds = ref.read(salesReturnRepositoryProvider);
+    setState(() { _searching = true; _error = null; _invoice = null; _lines.clear(); });
+    try {
+      _invoice = invoice;
+      final invoiceNo = invoice['invoice_no'] as String;
+      final invDate = invoice['invoice_date'] as String;
 
       final lines = await ds.getInvoiceLines(clientId: session.clientId, companyId: session.companyId, invoiceNo: invoiceNo, invoiceDate: invDate);
       final returnedRows = await ds.getAlreadyReturnedByLine(clientId: session.clientId, companyId: session.companyId, invoiceNo: invoiceNo, invoiceDate: invDate);
@@ -153,6 +188,20 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
           isTracked: (product?['tracking_type'] as String? ?? 'NONE') != 'NONE',
         ));
       }
+
+      final groupIds = _lines.map((l) => l.taxGroupId).whereType<String>().toSet().toList();
+      if (groupIds.isNotEmpty) {
+        final invDs = ref.read(salesInvoiceRepositoryProvider);
+        final memberMap = await invDs.getTaxGroupMemberTaxIds(groupIds);
+        final allTaxIds = memberMap.values.expand((v) => v).toSet().toList();
+        final taxRatePct = await invDs.getTaxRatesByIds(taxIds: allTaxIds, asOfDate: invDate);
+        _taxGroupRatePct = {
+          for (final e in memberMap.entries) e.key: e.value.fold<double>(0, (s, id) => s + (taxRatePct[id] ?? 0)),
+        };
+      } else {
+        _taxGroupRatePct = {};
+      }
+
       setState(() => _searching = false);
     } catch (e, st) {
       AppLogger.error('PosReturnFind', e, st);
@@ -188,6 +237,8 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
       final lines = returnLines.asMap().entries.map((e) {
         final qty = e.value.returnQty;
         final gross = qty * e.value.rate;
+        final ratePct = e.value.taxGroupId != null ? (_taxGroupRatePct[e.value.taxGroupId] ?? 0) : 0;
+        final lineTax = gross * ratePct / 100;
         return {
           'serial_no': e.key + 1,
           'invoice_line_serial': e.value.invoiceLineSerial,
@@ -201,8 +252,8 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
           'rate': e.value.rate,
           'tax_group_id': e.value.taxGroupId,
           'gross_amount': gross,
-          'tax_amount': 0,
-          'final_amount': gross,
+          'tax_amount': lineTax,
+          'final_amount': gross + lineTax,
         };
       }).toList();
 
@@ -273,7 +324,7 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
                       title: Text(inv['invoice_no'] as String, style: const TextStyle(fontWeight: FontWeight.w700)),
                       subtitle: Text('${customer ?? 'Walk-in'} · ${inv['sale_type']}'),
                       trailing: Text((inv['grand_total'] as num).toStringAsFixed(2), style: const TextStyle(fontWeight: FontWeight.w800)),
-                      onTap: () => _findInvoice(inv['invoice_no'] as String),
+                      onTap: () => _loadInvoice(inv),
                     ),
                   );
                 }),

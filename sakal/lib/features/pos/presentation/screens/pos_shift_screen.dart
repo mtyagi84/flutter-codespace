@@ -117,6 +117,7 @@ class _PosShiftScreenState extends ConsumerState<PosShiftScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.primary, foregroundColor: Colors.white,
         title: Text('Shift & Cash — ${session?.posTerminalName ?? ''}'),
+        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go(RouteNames.posSale)),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
