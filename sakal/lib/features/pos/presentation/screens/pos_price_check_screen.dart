@@ -59,18 +59,29 @@ class _PosPriceCheckScreenState extends ConsumerState<PosPriceCheckScreen> {
         return;
       }
 
-      final uomId = product['matched_uom_id'] as String? ?? product['base_uom_id'] as String;
-      final priceRes = await ds.getActivePrice(
-        clientId: session.clientId, companyId: session.companyId, locationId: session.locationId ?? '',
-        productId: product['id'] as String, uomId: uomId, customerId: '', asOfDate: _today(), currencyCode: '',
-      );
-      final costRes = await ds.getProductLocationCost(clientId: session.clientId, companyId: session.companyId, locationId: session.locationId ?? '', productId: product['id'] as String);
+      final locationId = session.locationId;
+      double? price;
+      double? stock;
+      if (locationId != null) {
+        final uomId = product['matched_uom_id'] as String? ?? product['base_uom_id'] as String;
+        final priceRes = await ds.getActivePrice(
+          clientId: session.clientId, companyId: session.companyId, locationId: locationId,
+          productId: product['id'] as String, uomId: uomId, customerId: '', asOfDate: _today(), currencyCode: '',
+        );
+        final costRes = await ds.getProductLocationCost(clientId: session.clientId, companyId: session.companyId, locationId: locationId, productId: product['id'] as String);
+        price = (priceRes?['selling_price'] as num?)?.toDouble();
+        stock = (costRes?['current_stock'] as num?)?.toDouble();
+      }
 
       if (!mounted) return;
       setState(() {
         _product = product;
-        _price = (priceRes?['selling_price'] as num?)?.toDouble();
-        _stock = (costRes?['current_stock'] as num?)?.toDouble();
+        _price = price;
+        _stock = stock;
+        // No location on this session at all (not signed in via POS) means
+        // price/stock can never be resolved — say so rather than silently
+        // showing a blank price as if nothing were configured.
+        _error = locationId == null ? 'No location on this session — sign in via the POS Login screen for price/stock.' : null;
         _loading = false;
       });
     } catch (e, st) {

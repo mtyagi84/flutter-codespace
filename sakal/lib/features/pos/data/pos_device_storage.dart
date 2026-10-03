@@ -20,7 +20,6 @@ class PosDeviceStorage {
   static const _kTerminalId = 'pos_cached_terminal_id';
   static const _kTerminalName = 'pos_cached_terminal_name';
   static const _kCompanyName = 'pos_cached_company_name';
-  static const _kPinLength = 'pos_cached_pin_length';
 
   /// This device's own stable identifier. Generated once, on first launch of
   /// the POS surface, and never changes afterwards — this IS the identity
@@ -50,19 +49,6 @@ class PosDeviceStorage {
   static Future<String?> cachedTerminalId() => _storage.read(key: _kTerminalId);
   static Future<String?> cachedTerminalName() => _storage.read(key: _kTerminalName);
   static Future<String?> cachedCompanyName() => _storage.read(key: _kCompanyName);
-
-  /// The company's `ric_companies.pos_pin_length` policy, cached at setup
-  /// time so the PIN pad shows the right number of dots from the very first
-  /// login — never hardcoded to 4. `fn_pos_pin_login` itself is still the
-  /// real authority on whether a PIN is correct regardless of this value;
-  /// this only controls how many dots the pad displays before submitting.
-  static Future<void> cachePinLength(int length) =>
-      _storage.write(key: _kPinLength, value: length.toString());
-
-  static Future<int> cachedPinLength({int fallback = 4}) async {
-    final raw = await _storage.read(key: _kPinLength);
-    return int.tryParse(raw ?? '') ?? fallback;
-  }
 
   /// Used only by the "this isn't my till" escape hatch on the PIN screen —
   /// forgets the cached display context so the setup screen shows again.

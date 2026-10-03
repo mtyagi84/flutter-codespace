@@ -98,10 +98,23 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
       setState(() => _step = _Step.pickTerminal);
     } catch (e, st) {
       AppLogger.error('PosDeviceSetupAdminLogin', e, st);
-      if (mounted) setState(() => _error = ErrorPresenter.format(e, action: 'sign in'));
+      if (mounted) setState(() => _error = _friendlyError(ErrorPresenter.format(e, action: 'sign in')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// fn_login is a shared, pre-auth, generic function with no USING DETAIL
+  /// on any of its exceptions (see login_screen.dart's own identical
+  /// method) — friendliness for its bare codes is handled client-side here,
+  /// not by adding DETAIL text to fn_login itself.
+  String _friendlyError(String raw) {
+    if (raw.contains('INVALID_CREDENTIALS')) return 'Invalid username or password.';
+    if (raw.contains('ACCOUNT_INACTIVE')) return 'This account has been deactivated. Contact your administrator.';
+    if (raw.contains('ACCOUNT_LOCKED')) return 'Account locked after too many failed attempts. Try again in 30 minutes.';
+    if (raw.contains('TRIAL_EXPIRED')) return 'Your trial has expired. Please contact the SAKAL team.';
+    if (raw.contains('LICENSE_EXPIRED')) return 'Your license has expired. Please contact the SAKAL team.';
+    return 'Sign in failed. Please try again.';
   }
 
   Future<void> _onLocationChanged(String? locationId) async {
@@ -164,12 +177,6 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
         terminalName: terminalName,
         companyName: _companyName ?? '',
       );
-
-      final companyRes = await DioClient.instance.get('/ric_companies', queryParameters: {
-        'id': 'eq.$_companyId', 'select': 'pos_pin_length',
-      });
-      final pinLength = (((companyRes.data as List).first as Map<String, dynamic>)['pos_pin_length'] as num?)?.toInt() ?? 4;
-      await PosDeviceStorage.cachePinLength(pinLength);
 
       if (!mounted) return;
       context.go(RouteNames.posLogin);

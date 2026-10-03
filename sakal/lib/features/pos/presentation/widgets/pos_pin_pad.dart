@@ -10,18 +10,21 @@ import '../../../../core/theme/app_colors.dart';
 ///
 /// Deliberately NOT a text field: a physical/on-screen keyboard is exactly
 /// what this widget exists to avoid (see docs/pos/06_access_security.md §4 —
-/// "PIN-only, no password UI anywhere on the till"). [length] is the number
-/// of dots/digits to collect — callers read it from the company's own
-/// `pos_pin_length` setting rather than hardcoding 4, so a different
-/// deployment's PIN policy needs no code change.
+/// "PIN-only, no password UI anywhere on the till"). PIN length is
+/// deliberately NOT fixed (migration 208 — user-specified: "PIN can be any
+/// [number of] digit[s]") — the pad accepts [minLength]..[maxLength] digits
+/// and only submits when the cashier explicitly taps Enter, never by
+/// auto-detecting a fixed count.
 class PosPinPad extends StatefulWidget {
-  final int length;
+  final int minLength;
+  final int maxLength;
   final ValueChanged<String> onSubmitted;
   final bool enabled;
 
   const PosPinPad({
     super.key,
-    required this.length,
+    this.minLength = 1,
+    this.maxLength = 10,
     required this.onSubmitted,
     this.enabled = true,
   });
@@ -38,15 +41,8 @@ class PosPinPadState extends State<PosPinPad> {
   void clear() => setState(() => _entered = '');
 
   void _tap(String digit) {
-    if (!widget.enabled || _entered.length >= widget.length) return;
+    if (!widget.enabled || _entered.length >= widget.maxLength) return;
     setState(() => _entered += digit);
-    if (_entered.length == widget.length) {
-      final pin = _entered;
-      // Clear immediately so a second tap (or a failed-attempt retry)
-      // never appends onto an already-submitted PIN.
-      setState(() => _entered = '');
-      widget.onSubmitted(pin);
-    }
   }
 
   void _backspace() {
@@ -54,29 +50,47 @@ class PosPinPadState extends State<PosPinPad> {
     setState(() => _entered = _entered.substring(0, _entered.length - 1));
   }
 
+  void _submit() {
+    if (!widget.enabled || _entered.length < widget.minLength) return;
+    final pin = _entered;
+    // Clear immediately so a second tap (or a failed-attempt retry) never
+    // appends onto an already-submitted PIN.
+    setState(() => _entered = '');
+    widget.onSubmitted(pin);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final canSubmit = widget.enabled && _entered.length >= widget.minLength;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(widget.length, (i) {
-            final filled = i < _entered.length;
-            return Container(
-              width: 16,
-              height: 16,
-              margin: const EdgeInsets.symmetric(horizontal: 6),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: filled ? AppColors.primary : Colors.transparent,
-                border: Border.all(color: filled ? AppColors.primary : AppColors.border, width: 2),
-              ),
-            );
-          }),
+        // A single dot per digit typed so far — grows/shrinks with input,
+        // never a fixed count of empty placeholders.
+        SizedBox(
+          height: 16,
+          child: _entered.isEmpty
+              ? null
+              : Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 10,
+                  children: List.generate(
+                    _entered.length,
+                    (_) => Container(width: 14, height: 14, decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.primary)),
+                  ),
+                ),
         ),
         const SizedBox(height: 18),
         _KeyGrid(onDigit: _tap, onBackspace: _backspace, onClear: () => setState(() => _entered = ''), enabled: widget.enabled),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: canSubmit ? _submit : null,
+            icon: const Icon(Icons.check),
+            label: const Text('Enter'),
+          ),
+        ),
       ],
     );
   }

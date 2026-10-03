@@ -42,13 +42,6 @@ class _PosPinLoginScreenState extends ConsumerState<PosPinLoginScreen> {
   String? _error;
   String? _terminalName;
   String? _companyName;
-  // PIN length is a company policy (ric_companies.pos_pin_length), never
-  // hardcoded — defaulted to 4 only until the first successful login tells
-  // us the real value via the cached terminal context. A brand-new device
-  // showing "4" for one login before learning the true length is an
-  // acceptable cold-start trade-off; fn_pos_pin_login itself is always the
-  // real authority regardless of what the pad displays.
-  int _pinLength = 4;
 
   @override
   void initState() {
@@ -64,8 +57,7 @@ class _PosPinLoginScreenState extends ConsumerState<PosPinLoginScreen> {
     }
     _terminalName = await PosDeviceStorage.cachedTerminalName();
     _companyName = await PosDeviceStorage.cachedCompanyName();
-    final pinLength = await PosDeviceStorage.cachedPinLength();
-    if (mounted) setState(() { _pinLength = pinLength; _loading = false; });
+    if (mounted) setState(() => _loading = false);
   }
 
   Future<void> _onPinSubmitted(String pin) async {
@@ -93,18 +85,6 @@ class _PosPinLoginScreenState extends ConsumerState<PosPinLoginScreen> {
         terminalName: d['pos_terminal_name'] as String? ?? '',
         companyName: d['company_name'] as String? ?? '',
       );
-      // Re-fetched (not trusted from the login response itself, which
-      // doesn't carry it) so a later admin change to the company's PIN
-      // policy is picked up on this device's very next login.
-      try {
-        final companyRes = await DioClient.instance.get('/ric_companies', queryParameters: {
-          'id': 'eq.${d['company_id']}', 'select': 'pos_pin_length',
-        });
-        final pinLength = (((companyRes.data as List).first as Map<String, dynamic>)['pos_pin_length'] as num?)?.toInt();
-        if (pinLength != null) await PosDeviceStorage.cachePinLength(pinLength);
-      } catch (_) {
-        // Non-fatal — the previously cached length (or the 4-digit default) still works.
-      }
 
       final menuRes = await DioClient.instance.post('/rpc/fn_get_user_menu', data: {
         'p_user_id': d['user_id'],
@@ -149,6 +129,7 @@ class _PosPinLoginScreenState extends ConsumerState<PosPinLoginScreen> {
 
   String _friendlyError(Object e) {
     final raw = ErrorPresenter.format(e, action: 'sign in');
+    if (raw.contains('DEVICE_NOT_REGISTERED')) return 'This device isn\'t registered. Ask a manager to set it up.';
     if (raw.contains('DEVICE_BLOCKED')) return 'This till has been blocked. Contact your administrator.';
     if (raw.contains('DEVICE_NOT_BOUND')) return 'This device isn\'t assigned to a till yet. Ask a manager to set it up.';
     if (raw.contains('PIN_LOCKED')) return 'Too many incorrect PINs. Try again in a few minutes, or ask a manager to unlock this till.';
@@ -214,7 +195,7 @@ class _PosPinLoginScreenState extends ConsumerState<PosPinLoginScreen> {
               children: [
                 const Text('Enter your PIN', style: TextStyle(fontFamily: null, fontWeight: FontWeight.w800, fontSize: 15)),
                 const SizedBox(height: 16),
-                PosPinPad(key: _pinPadKey, length: _pinLength, enabled: !_submitting, onSubmitted: _onPinSubmitted),
+                PosPinPad(key: _pinPadKey, enabled: !_submitting, onSubmitted: _onPinSubmitted),
                 if (_submitting) ...[
                   const SizedBox(height: 14),
                   const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),

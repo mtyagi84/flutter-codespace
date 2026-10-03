@@ -44,6 +44,10 @@ class _PosShiftScreenState extends ConsumerState<PosShiftScreen> {
 
   Future<void> _load() async {
     final session = ref.read(sessionProvider)!;
+    if (session.posTerminalId == null) {
+      setState(() { _loading = false; _error = 'This isn\'t a POS till session. Sign out and sign back in from the POS Login screen.'; });
+      return;
+    }
     setState(() { _loading = true; _error = null; });
     try {
       final results = await Future.wait([
