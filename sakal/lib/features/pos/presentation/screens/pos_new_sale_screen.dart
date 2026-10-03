@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/printing/print_engine.dart';
+import '../../../../core/printing/print_template_provider.dart';
+import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -536,6 +539,74 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
 
   String _fmtDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+  // ── Receipt printing ──────────────────────────────────────────────────────
+  // A POS sale is a Sales Invoice row (see this file's own header comment),
+  // so it reuses the exact same 'SALES_INVOICE' print template/field
+  // registry the back-office Quick Invoice screen already prints with —
+  // same document shape, same PrintEngine call, just always fired
+  // automatically rather than behind a Print button or a "print now?"
+  // confirmation dialog.
+
+  Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company, String invoiceNo, String invoiceDate) {
+    return {
+      'company': company,
+      'header': {
+        'invoice_no': invoiceNo,
+        'invoice_date': invoiceDate,
+        'provisional': false,
+        'sale_type': _saleType,
+        'status': 'APPROVED',
+        'customer_name': _customerDisplay.contains('] ') ? _customerDisplay.split('] ').last : _customerDisplay,
+        'party_phone': '',
+        'party_address': '',
+        'sales_person_name': '',
+        'currency_code': _localCcy,
+        'remarks': '',
+      },
+      'lines': _lines.map((l) => {
+        'product_name': l.productName,
+        'uom_label': l.uomLabel,
+        'base_qty': l.baseQty,
+        'rate': l.rate,
+        'final_amount': l.finalAmount,
+      }).toList(),
+      'charges': const [],
+      'totals': {
+        'gross_amount': _subtotal + _discountTotal,
+        'discount_amount': _discountTotal,
+        'charges_amount': 0,
+        'tax_amount': _taxTotal,
+        'grand_total': _grandTotal,
+      },
+      'signatures': {'prepared_by': '', 'authorised_by': ''},
+    };
+  }
+
+  Future<void> _printReceipt(String invoiceNo, String invoiceDate) async {
+    try {
+      final company = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
+      final template = await ref.read(printTemplateProvider('SALES_INVOICE').future);
+      final document = _buildPrintDocument(company, invoiceNo, invoiceDate);
+      final session = ref.read(sessionProvider);
+      if (!mounted) return;
+      await PrintEngine.printDocument(
+        template: template,
+        document: document,
+        filename: '$invoiceNo.pdf',
+        printedByName: session?.fullName,
+        printedOn: DateTime.now(),
+        directPrint: true,
+      );
+    } catch (e, st) {
+      // Printing is best-effort — a printer/PDF failure must never block
+      // the sale itself, which has already been saved and approved by the
+      // time this runs. The cashier sees a clear message and can use the
+      // back-office Sales Invoice screen's own Print button to retry.
+      AppLogger.error('PosReceiptPrint', e, st);
+      if (mounted) _showMsg('Sale saved, but printing the receipt failed: ${ErrorPresenter.format(e, action: 'print this receipt')}', color: AppColors.secondary);
+    }
+  }
+
   Future<void> _charge() async {
     if (_lines.isEmpty) {
       _showMsg('Add at least one item.', color: AppColors.negative);
@@ -560,10 +631,16 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       final lines = _buildLines();
       final ds = ref.read(salesInvoiceRepositoryProvider);
       final invoiceNo = await ds.save(header: header, lines: lines, charges: const [], batches: const [], serials: const [], userId: session.userId);
-      await ds.approve(clientId: session.clientId, companyId: session.companyId, invoiceNo: invoiceNo, invoiceDate: _fmtDate(DateTime.now()), approvedBy: session.userId);
+      final invoiceDate = header['invoice_date'] as String;
+      await ds.approve(clientId: session.clientId, companyId: session.companyId, invoiceNo: invoiceNo, invoiceDate: invoiceDate, approvedBy: session.userId);
 
       if (mounted) {
         _showMsg('$invoiceNo completed.', color: AppColors.positive);
+        // Every sale prints a receipt automatically — no "print now?"
+        // confirmation like the back-office Quick Invoice screen uses; a
+        // till is expected to just print, every time, per direct user
+        // instruction ("every save action needs a direct print").
+        await _printReceipt(invoiceNo, invoiceDate);
         _resetForNextSale();
       }
     } catch (e, st) {

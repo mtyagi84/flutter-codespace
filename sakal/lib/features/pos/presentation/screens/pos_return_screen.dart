@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/printing/print_engine.dart';
+import '../../../../core/printing/print_template_provider.dart';
+import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -259,17 +262,69 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
 
       final ds = ref.read(salesReturnRepositoryProvider);
       final returnNo = await ds.save(header: header, lines: lines, batches: const [], serials: const [], charges: const [], userId: session.userId);
-      await ds.approve(clientId: session.clientId, companyId: session.companyId, returnNo: returnNo, returnDate: _fmtDate(DateTime.now()), approvedBy: session.userId);
+      final returnDate = header['return_date'] as String;
+      await ds.approve(clientId: session.clientId, companyId: session.companyId, returnNo: returnNo, returnDate: returnDate, approvedBy: session.userId);
 
       if (mounted) {
         _showMsg('$returnNo completed.', color: AppColors.positive);
-        context.go(RouteNames.posSale);
+        // Same "always print, no confirmation" rule as New Sale's own
+        // receipt — a refund slip prints automatically every time.
+        await _printReceipt(returnNo, returnDate, returnLines);
+        if (mounted) context.go(RouteNames.posSale);
       }
     } catch (e, st) {
       AppLogger.error('PosReturnSubmit', e, st);
       if (mounted) setState(() => _actionError = ErrorPresenter.format(e, action: 'complete this return'));
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  // Reuses the exact 'SALES_RETURN' print template/field registry the
+  // back-office Sales Return screen already prints with.
+  Future<void> _printReceipt(String returnNo, String returnDate, List<_ReturnableLine> returnLines) async {
+    try {
+      final company = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
+      final template = await ref.read(printTemplateProvider('SALES_RETURN').future);
+      final customerName = (_invoice!['customer'] as Map<String, dynamic>?)?['account_name'] as String? ?? 'Walk-in';
+      final document = {
+        'company': company,
+        'header': {
+          'return_no': returnNo,
+          'return_date': returnDate,
+          'status': 'APPROVED',
+          'invoice_no': _invoice!['invoice_no'],
+          'customer_name': customerName,
+          'currency_code': '',
+          'reason': _reason,
+          'remarks': '',
+          'signatures': {'prepared_by': '', 'authorised_by': ''},
+        },
+        'lines': returnLines.map((l) => {
+          'product_name': l.productName,
+          'return_qty': l.returnQty,
+          'rate': l.rate,
+          'final_amount': l.returnQty * l.rate * (1 + (l.taxGroupId != null ? (_taxGroupRatePct[l.taxGroupId] ?? 0) : 0) / 100),
+        }).toList(),
+        'totals': {
+          'taxable_amount': _taxableTotal,
+          'tax_amount': _taxTotal,
+          'return_total': _returnTotal,
+        },
+      };
+      final session = ref.read(sessionProvider);
+      if (!mounted) return;
+      await PrintEngine.printDocument(
+        template: template,
+        document: document,
+        filename: '$returnNo.pdf',
+        printedByName: session?.fullName,
+        printedOn: DateTime.now(),
+        directPrint: true,
+      );
+    } catch (e, st) {
+      AppLogger.error('PosReturnReceiptPrint', e, st);
+      if (mounted) _showMsg('Return saved, but printing the receipt failed: ${ErrorPresenter.format(e, action: 'print this receipt')}', color: AppColors.secondary);
     }
   }
 
