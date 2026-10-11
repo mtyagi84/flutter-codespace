@@ -11,7 +11,6 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
-import '../../../sales/presentation/providers/sales_invoice_providers.dart';
 import '../../../sales/presentation/providers/sales_return_providers.dart';
 import '../widgets/pos_keyboard.dart';
 import '../widgets/pos_qty_stepper.dart';
@@ -31,7 +30,24 @@ class _ReturnableLine {
   final bool isTracked;
   double returnQty = 0;
 
+  // The ORIGINAL invoice line's own stored amounts — already net of any
+  // scheme/promo discount applied at sale time (e.g. "buy 2 get 1 free").
+  // Real bug fixed 2026-10-11: this screen used to recompute
+  // `returnQty * rate` from scratch, ignoring any discount entirely —
+  // refunding MORE than the customer ever paid whenever a promo applied.
+  // Fix mirrors the back-office Sales Return screen's own proven approach
+  // (sales_return_entry_screen.dart's _SRLineRow): derive the return
+  // line's own amounts as a proportion of what this invoice line actually
+  // totaled, never by recomputing from unit rate.
+  final double invoiceGrossAmount;
+  final double invoiceTaxAmount;
+  final double invoiceFinalAmount;
+
   double get remaining => soldQty - alreadyReturned;
+  double get _fraction => soldQty > 0 ? returnQty / soldQty : 0;
+  double get grossAmount => invoiceGrossAmount * _fraction;
+  double get taxAmount => invoiceTaxAmount * _fraction;
+  double get finalAmount => invoiceFinalAmount * _fraction;
 
   _ReturnableLine({
     required this.invoiceLineSerial,
@@ -44,6 +60,9 @@ class _ReturnableLine {
     required this.soldQty,
     required this.alreadyReturned,
     required this.isTracked,
+    required this.invoiceGrossAmount,
+    required this.invoiceTaxAmount,
+    required this.invoiceFinalAmount,
   });
 }
 
@@ -82,25 +101,14 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
   bool _loadingRecent = false;
   List<Map<String, dynamic>> _recentInvoices = [];
 
-  // Tax-group effective rate, keyed by group id — resolved once the
-  // invoice's lines are known. Real bug found live: the refund value never
-  // included tax at all (a return of one 41207.62 item, 35523.81 pre-tax +
-  // 5683.81 tax, refunded only 35523.81) — this was a stated "simplified
-  // v1" shortcut that turned out to matter the first time someone tested a
-  // taxed sale.
-  Map<String, double> _taxGroupRatePct = {};
-
   // ── Receipt printing (ric_pos_terminals.receipt_*, migration 217) ────────
   String? _receiptPaperProfile;
   String? _receiptPrinterUrl;
 
   bool get _showRefund => _invoice != null && _invoice!['sale_type'] == 'CASH' && _invoice!['cash_collection_mode'] == 'IMMEDIATE';
 
-  double get _taxableTotal => _lines.fold(0, (s, l) => s + l.returnQty * l.rate);
-  double get _taxTotal => _lines.fold(0, (s, l) {
-        final ratePct = l.taxGroupId != null ? (_taxGroupRatePct[l.taxGroupId] ?? 0) : 0;
-        return s + (l.returnQty * l.rate) * ratePct / 100;
-      });
+  double get _taxableTotal => _lines.fold(0, (s, l) => s + l.grossAmount);
+  double get _taxTotal => _lines.fold(0, (s, l) => s + l.taxAmount);
   double get _returnTotal => _taxableTotal + _taxTotal;
 
   @override
@@ -218,20 +226,10 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
           soldQty: (l['base_qty'] as num?)?.toDouble() ?? 0,
           alreadyReturned: returnedByLine[l['serial_no']] ?? 0,
           isTracked: (product?['tracking_type'] as String? ?? 'NONE') != 'NONE',
+          invoiceGrossAmount: (l['gross_amount'] as num?)?.toDouble() ?? 0,
+          invoiceTaxAmount: (l['tax_amount'] as num?)?.toDouble() ?? 0,
+          invoiceFinalAmount: (l['final_amount'] as num?)?.toDouble() ?? 0,
         ));
-      }
-
-      final groupIds = _lines.map((l) => l.taxGroupId).whereType<String>().toSet().toList();
-      if (groupIds.isNotEmpty) {
-        final invDs = ref.read(salesInvoiceRepositoryProvider);
-        final memberMap = await invDs.getTaxGroupMemberTaxIds(groupIds);
-        final allTaxIds = memberMap.values.expand((v) => v).toSet().toList();
-        final taxRatePct = await invDs.getTaxRatesByIds(taxIds: allTaxIds, asOfDate: invDate);
-        _taxGroupRatePct = {
-          for (final e in memberMap.entries) e.key: e.value.fold<double>(0, (s, id) => s + (taxRatePct[id] ?? 0)),
-        };
-      } else {
-        _taxGroupRatePct = {};
       }
 
       setState(() => _searching = false);
@@ -268,9 +266,6 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
       };
       final lines = returnLines.asMap().entries.map((e) {
         final qty = e.value.returnQty;
-        final gross = qty * e.value.rate;
-        final ratePct = e.value.taxGroupId != null ? (_taxGroupRatePct[e.value.taxGroupId] ?? 0) : 0;
-        final lineTax = gross * ratePct / 100;
         return {
           'serial_no': e.key + 1,
           'invoice_line_serial': e.value.invoiceLineSerial,
@@ -283,9 +278,12 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
           'base_qty': qty,
           'rate': e.value.rate,
           'tax_group_id': e.value.taxGroupId,
-          'gross_amount': gross,
-          'tax_amount': lineTax,
-          'final_amount': gross + lineTax,
+          // Proportional to this invoice line's own actual totals (see
+          // _ReturnableLine's own doc comment) — NOT qty * rate, which
+          // ignores any scheme/promo discount applied at sale time.
+          'gross_amount': e.value.grossAmount,
+          'tax_amount': e.value.taxAmount,
+          'final_amount': e.value.finalAmount,
         };
       }).toList();
 
@@ -375,7 +373,7 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
           'product_name': l.productName,
           'return_qty': l.returnQty,
           'rate': l.rate,
-          'final_amount': l.returnQty * l.rate * (1 + (l.taxGroupId != null ? (_taxGroupRatePct[l.taxGroupId] ?? 0) : 0) / 100),
+          'final_amount': l.finalAmount,
         }).toList(),
         'totals': {
           'taxable_amount': _taxableTotal,
