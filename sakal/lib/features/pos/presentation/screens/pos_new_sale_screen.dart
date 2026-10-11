@@ -25,6 +25,7 @@ import '../widgets/pos_qty_stepper.dart';
 import '../widgets/pos_session_guard.dart';
 import 'pos_browse_products_screen.dart';
 import 'pos_credit_checkout_screen.dart';
+import 'pos_payment_checkout_screen.dart';
 
 /// POS New Sale — v1. Deliberately built DIRECTLY on the same, already-
 /// proven `salesInvoiceRepositoryProvider` Quick Invoice itself uses
@@ -163,17 +164,6 @@ class _PosTenderLine {
   String? referenceNo; // card/mobile transaction reference, optional
   _PosTenderLine({required this.currencyId, required this.amount});
 }
-
-const _posTenderTypes = ['CASH', 'CARD', 'MOBILE_MONEY', 'VOUCHER', 'GIFT_CARD', 'STORE_CREDIT'];
-String _tenderTypeLabel(String t) => switch (t) {
-      'CASH' => 'Cash',
-      'CARD' => 'Card',
-      'MOBILE_MONEY' => 'Mobile Money',
-      'VOUCHER' => 'Voucher',
-      'GIFT_CARD' => 'Gift Card',
-      'STORE_CREDIT' => 'Store Credit',
-      _ => t,
-    };
 
 class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   bool _loading = true;
@@ -614,6 +604,84 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       _saleType = 'CREDIT';
       _customerId = customer['id'] as String;
       _customerDisplay = '[${customer['account_code']}] ${customer['account_name']}';
+    });
+    await _charge();
+  }
+
+  /// Dedicated full-page payment collection — reached from the "Charge"
+  /// button on a CASH sale, mirroring `_startCreditCheckout` exactly: a
+  /// separate screen owns the editing, returns the finished result via
+  /// `Navigator.pop`, and THIS screen performs the actual save/approve/
+  /// print/reset via its own already-proven `_charge()` — no duplicated
+  /// posting logic in the new screen.
+  Future<void> _startPaymentCheckout() async {
+    if (_lines.isEmpty) {
+      _showMsg('Add at least one item.', color: AppColors.negative);
+      return;
+    }
+    final unpriced = _lines.where((l) => l.rate <= 0).toList();
+    if (unpriced.isNotEmpty) {
+      _showMsg('${unpriced.first.productName} has no price — cannot charge an unpriced item.', color: AppColors.negative);
+      return;
+    }
+
+    final due = _netDueAfterExchangeCredit.clamp(0.0, double.infinity);
+
+    // Pre-fetch every currency's rate up front so the payment page never
+    // needs a network call of its own — it just converts using this map.
+    for (final c in _currencies) {
+      final ccy = c['currency_id'] as String;
+      if (ccy != _localCcy && !_tenderRateToLocal.containsKey(ccy)) {
+        await _refreshTenderRate(ccy);
+      }
+    }
+    if (!mounted) return;
+
+    final initialLines = _splitTender
+        ? _tenderLines
+            .map((t) => {'tenderType': t.tenderType, 'currencyId': t.currencyId, 'amount': t.amount, 'referenceNo': t.referenceNo})
+            .toList()
+        : [
+            {'tenderType': 'CASH', 'currencyId': _localCcy, 'amount': _collectedAmount ?? due, 'referenceNo': null}
+          ];
+
+    final result = await Navigator.of(context).push<List<Map<String, dynamic>>>(
+      MaterialPageRoute(
+        builder: (_) => PosPaymentCheckoutScreen(
+          subtotal: _subtotal + _discountTotal,
+          discount: _discountTotal,
+          tax: _taxTotal,
+          total: _grandTotal,
+          dueAmount: due,
+          exchangeCreditAmount: widget.exchangeCreditAmount,
+          localCurrency: _localCcy,
+          currencies: _currencies,
+          rateToLocal: Map<String, double>.from(_tenderRateToLocal),
+          initialLines: initialLines,
+        ),
+      ),
+    );
+    if (result == null || !mounted) return;
+
+    setState(() {
+      _tenderLines
+        ..clear()
+        ..addAll(result.map((m) => _PosTenderLine(currencyId: m['currencyId'] as String, amount: m['amount'] as double)
+          ..tenderType = m['tenderType'] as String
+          ..referenceNo = m['referenceNo'] as String?));
+
+      // The common case — a single plain Cash line in local currency —
+      // stays on the simple `_collectedAmount` path (no tender-lines rows
+      // written, no non-cash settlement call); anything else goes through
+      // the real split/multi-method tender model, exactly as before.
+      final only = _tenderLines.length == 1 ? _tenderLines.first : null;
+      if (only != null && only.tenderType == 'CASH' && only.currencyId == _localCcy) {
+        _collectedAmount = only.amount;
+        _splitTender = false;
+        _tenderLines.clear();
+      } else {
+        _splitTender = true;
+      }
     });
     await _charge();
   }
@@ -1163,18 +1231,6 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   }
 
   // ── Multi-currency split tender ───────────────────────────────────────────
-
-  void _addTenderLine() {
-    // Default to any currency not already in use, falling back to local —
-    // just a sensible starting point, always editable.
-    final unused = _currencies.map((c) => c['currency_id'] as String).firstWhere(
-          (c) => !_tenderLines.any((t) => t.currencyId == c),
-          orElse: () => _localCcy,
-        );
-    _tenderRateToLocal.putIfAbsent(unused, () => unused == _localCcy ? 1 : 1);
-    setState(() => _tenderLines.add(_PosTenderLine(currencyId: unused, amount: 0)));
-    if (unused != _localCcy) _refreshTenderRate(unused);
-  }
 
   Future<void> _refreshTenderRate(String currencyId) async {
     if (currencyId == _localCcy) {
@@ -1818,235 +1874,6 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     );
   }
 
-  // ── Payment collection — inline, compact, side-by-side ────────────────────
-  // Real bug fixed 2026-10-11: the FIRST attempt at fixing the overflowing
-  // split-tender editor made it a full-screen modal — which traded one
-  // problem for another the user immediately flagged live: cashiers had no
-  // idea where to even type an amount, and a modal breaks the "stay on the
-  // main screen, Charge prints + refocuses the scanner" flow every other
-  // POS action already follows. Payment entry is back to being INLINE in
-  // the totals panel (method selector and amount field side by side, one
-  // compact row, no scrolling needed for the common case) — never a
-  // separate screen. Cashiers start with a single implicit Cash line (no
-  // extra tap needed for the common case); tapping a different method or
-  // currency, or "+ Add payment method", is what promotes to the real
-  // multi-line `_tenderLines` model used for split/non-cash settlement —
-  // the user never sees that distinction, it's just "edit the line(s)".
-
-  static const _methodIcons = {
-    'CASH': Icons.payments_outlined,
-    'CARD': Icons.credit_card_outlined,
-    'MOBILE_MONEY': Icons.smartphone_outlined,
-    'VOUCHER': Icons.card_giftcard_outlined,
-    'GIFT_CARD': Icons.redeem_outlined,
-    'STORE_CREDIT': Icons.account_balance_wallet_outlined,
-  };
-
-  String _tenderTypeShortLabel(String t) => switch (t) {
-        'CASH' => 'Cash',
-        'CARD' => 'Card',
-        'MOBILE_MONEY' => 'Mobile',
-        'VOUCHER' => 'Voucher',
-        'GIFT_CARD' => 'Gift Card',
-        'STORE_CREDIT' => 'Credit',
-        _ => t,
-      };
-
-  /// Switches from the simple implicit single-Cash-line model to the real
-  /// `_tenderLines` model, seeded from whatever was already entered — only
-  /// called the moment the cashier picks a non-Cash method or a non-local
-  /// currency, never just for an amount edit (so typing a plain cash
-  /// amount never triggers the split/settlement machinery).
-  void _promoteToTenderLines({String? tenderType, String? currencyId}) {
-    if (!_splitTender) {
-      final due = _netDueAfterExchangeCredit.clamp(0.0, double.infinity);
-      final line = _PosTenderLine(currencyId: currencyId ?? _localCcy, amount: _collectedAmount ?? due);
-      line.tenderType = tenderType ?? 'CASH';
-      setState(() {
-        _splitTender = true;
-        _tenderLines..clear()..add(line);
-      });
-      if ((currencyId ?? _localCcy) != _localCcy) _refreshTenderRate(currencyId!);
-    } else if (_tenderLines.length == 1) {
-      setState(() {
-        if (tenderType != null) _tenderLines.first.tenderType = tenderType;
-        if (currencyId != null) _tenderLines.first.currencyId = currencyId;
-      });
-      if (currencyId != null && currencyId != _localCcy) _refreshTenderRate(currencyId);
-    }
-  }
-
-  void _addPaymentMethod() {
-    if (!_splitTender) _promoteToTenderLines();
-    _addTenderLine();
-  }
-
-  void _onMethodChanged(_PosTenderLine? line, String type) {
-    if (line == null) {
-      if (type != 'CASH') _promoteToTenderLines(tenderType: type);
-    } else {
-      setState(() => line.tenderType = type);
-    }
-  }
-
-  void _onCurrencyChanged(_PosTenderLine? line, String ccy) {
-    if (line == null) {
-      if (ccy != _localCcy) _promoteToTenderLines(currencyId: ccy);
-    } else {
-      setState(() => line.currencyId = ccy);
-      if (ccy != _localCcy) _refreshTenderRate(ccy);
-    }
-  }
-
-  void _onAmountChanged(_PosTenderLine? line, double v) {
-    if (line == null) {
-      setState(() => _collectedAmount = v);
-    } else {
-      setState(() => line.amount = v);
-    }
-  }
-
-  Widget _buildPaymentInline() {
-    final due = _netDueAfterExchangeCredit.clamp(0.0, double.infinity);
-    final collected = _splitTender ? _tenderTotalLocal : (_collectedAmount ?? due);
-    final diff = collected - due;
-    final short = diff < -0.01;
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Row(children: [
-        const Text('Payment', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
-        const Spacer(),
-        TextButton.icon(
-          onPressed: _addPaymentMethod,
-          icon: const Icon(Icons.add, size: 14),
-          label: const Text('Add payment method', style: TextStyle(fontSize: 11.5)),
-          style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 26), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-        ),
-      ]),
-      const SizedBox(height: 4),
-      if (!_splitTender)
-        _buildTenderLineRow(null)
-      else
-        ..._tenderLines.map((t) => _buildTenderLineRow(t)),
-      const SizedBox(height: 4),
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(short ? 'Short by' : 'Change Due', style: TextStyle(fontSize: 12.5, color: short ? AppColors.negative : AppColors.positive, fontWeight: FontWeight.w600)),
-        Text('${diff.abs().toStringAsFixed(2)} $_localCcy', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: short ? AppColors.negative : AppColors.positive)),
-      ]),
-    ]);
-  }
-
-  /// One payment line, method + currency + amount all side by side on a
-  /// single compact row — `line == null` renders the simple implicit
-  /// single-Cash-line state (no `_tenderLines` entry exists yet).
-  Widget _buildTenderLineRow(_PosTenderLine? line) {
-    final effectiveType = line?.tenderType ?? 'CASH';
-    final effectiveCcy = line?.currencyId ?? _localCcy;
-    final due = _netDueAfterExchangeCredit.clamp(0.0, double.infinity);
-    final amount = line?.amount ?? (_collectedAmount ?? due);
-
-    // What's still needed, converted into THIS line's own currency — so
-    // switching currency immediately shows how much to actually collect
-    // in it, instead of leaving the cashier to do the maths themselves.
-    final othersLocal = _splitTender
-        ? _tenderLines.where((t) => t != line).fold(0.0, (s, t) => s + t.amount * (_tenderRateToLocal[t.currencyId] ?? 1))
-        : 0.0;
-    final remainingLocalExcl = due - othersLocal;
-    final rate = effectiveCcy == _localCcy ? 1.0 : (_tenderRateToLocal[effectiveCcy] ?? 1.0);
-    final neededInCcy = rate == 0 ? 0.0 : remainingLocalExcl / rate;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          PopupMenuButton<String>(
-            initialValue: effectiveType,
-            onSelected: (t) => _onMethodChanged(line, t),
-            itemBuilder: (ctx) => _posTenderTypes.map((t) => PopupMenuItem(
-                  value: t,
-                  height: 44,
-                  child: Row(children: [Icon(_methodIcons[t], size: 18, color: AppColors.primary), const SizedBox(width: 10), Text(_tenderTypeLabel(t))]),
-                )).toList(),
-            child: Container(
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(_methodIcons[effectiveType], size: 15, color: AppColors.primary),
-                const SizedBox(width: 5),
-                Text(_tenderTypeShortLabel(effectiveType), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                const Icon(Icons.arrow_drop_down, size: 16),
-              ]),
-            ),
-          ),
-          const SizedBox(width: 6),
-          if (_currencies.length > 1) ...[
-            PopupMenuButton<String>(
-              initialValue: effectiveCcy,
-              onSelected: (c) => _onCurrencyChanged(line, c),
-              itemBuilder: (ctx) => _currencies.map((c) {
-                final ccyId = c['currency_id'] as String;
-                return PopupMenuItem(value: ccyId, height: 44, child: Text(ccyId, style: const TextStyle(fontWeight: FontWeight.w600)));
-              }).toList(),
-              child: Container(
-                height: 40,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text(effectiveCcy, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                  const Icon(Icons.arrow_drop_down, size: 16),
-                ]),
-              ),
-            ),
-            const SizedBox(width: 6),
-          ],
-          Expanded(
-            child: PosAmountField(
-              label: 'Amount',
-              value: amount,
-              compact: true,
-              suffixText: effectiveCcy,
-              onChanged: (v) => _onAmountChanged(line, v),
-            ),
-          ),
-          if (_splitTender && _tenderLines.length > 1)
-            IconButton(
-              onPressed: () => setState(() => _tenderLines.remove(line)),
-              icon: const Icon(Icons.close, size: 18, color: AppColors.negative),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-              tooltip: 'Remove this payment method',
-            ),
-        ]),
-        if (effectiveCcy != _localCcy)
-          Padding(
-            padding: const EdgeInsets.only(top: 2, left: 2),
-            child: Row(children: [
-              Expanded(
-                child: Text(
-                  'Collect ${neededInCcy.toStringAsFixed(2)} $effectiveCcy to cover ${remainingLocalExcl.clamp(0.0, double.infinity).toStringAsFixed(2)} $_localCcy',
-                  style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              TextButton(
-                onPressed: () => _onAmountChanged(line, neededInCcy),
-                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 22), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                child: const Text('Fill', style: TextStyle(fontSize: 11)),
-              ),
-            ]),
-          ),
-        if (effectiveType == 'CARD' || effectiveType == 'MOBILE_MONEY')
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: TextField(
-              decoration: const InputDecoration(isDense: true, labelText: 'Reference No. (optional)', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
-              onChanged: (v) { if (line != null) line.referenceNo = v; },
-            ),
-          ),
-      ]),
-    );
-  }
-
   Widget _buildTotals() {
     // Scrollable content + a FIXED footer for Hold/Charge — the general fix
     // for "screen overflow should never hide the primary action buttons"
@@ -2090,10 +1917,6 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
                   style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
                 ),
               ],
-              if (_saleType == 'CASH') ...[
-                const SizedBox(height: 10),
-                _buildPaymentInline(),
-              ],
             ]),
           ),
         ),
@@ -2111,7 +1934,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
             ),
             const SizedBox(height: 8),
             FilledButton(
-              onPressed: _saving ? null : _charge,
+              onPressed: _saving ? null : (_saleType == 'CASH' ? _startPaymentCheckout : _charge),
               style: FilledButton.styleFrom(backgroundColor: AppColors.secondary, minimumSize: const Size.fromHeight(54)),
               child: _saving
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
