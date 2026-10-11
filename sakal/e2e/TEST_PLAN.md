@@ -72,15 +72,71 @@ flagged rather than silently worked around.
 Cash In/Payout movement; the consolidated shift-close GL voucher pair
 (SLS/COS) itself was never reached/verified due to the issue above.
 
-## Phase 2 — Returns + Exchange
+## Phase 2 — Returns + Exchange (in progress, see status below)
 
-- Full-qty and partial-qty returns against a cash sale, verifying refund
-  amount via DB (`rih_sales_return_headers.refund_amount_local` matches
-  the invoice's actual collected amount — this exact class of bug was
-  found and fixed manually earlier this session; a test locks it in).
-- Return against a scheme-discounted sale (same bug class, different
-  trigger).
-- Exchange flow (return → chained new sale with carried-forward credit).
+**Confirmed working** (`tests/returns.spec.js`): a full return of a fresh
+single-line cash sale, verified end to end against the database —
+`rih_sales_return_headers.status = 'APPROVED'` and both
+`refund_amount_local`/`return_total` match the invoice's actual collected
+amount exactly. Locks in the refund-overcharge class of bug fixed manually
+earlier this session.
+
+**Two real, significant Playwright/Flutter-Web interaction findings**, both
+root-caused and fixed in the test (not app bugs — neither affects a real
+sighted user, since Flutter only builds this semantics tree at all because
+automation explicitly enables it):
+1. **A Flutter semantics live-region announcement
+   (`<flt-announcement-polite>`, permanently off-screen by design) can
+   contain the same text substring as a REAL, later, on-screen element** —
+   e.g. a "`<invoiceNo>` completed." snackbar announcement vs. that same
+   invoice number appearing as a real clickable row moments later.
+   `textVisible()`'s `.first()` can match the stale announcement instead,
+   and a `.click()` on it then retries forever ("visible, enabled and
+   stable" but "outside of the viewport"). **Fixed at the shared helper
+   level** (`helpers/flutter.js`) — `textVisible()` now excludes
+   `flt-announcement-polite` by default, benefiting every current and
+   future test, not just this one.
+2. **A scrollable list's `:text()` substring match can also hit a much
+   larger ANCESTOR semantics node, not just the specific row** — Flutter
+   merges an entire invoice list into one oversized semantics node
+   (spanning the whole list's rendered height, containing every row's text
+   concatenated) that sits EARLIER in DOM order than the individual rows.
+   `.first()` silently picks that non-interactive wrapper over the real
+   row; clicking it (even `force: true`) does nothing, since there's no tap
+   handler on the wrapper itself — it just silently fails with zero
+   console/page error, making it genuinely hard to diagnose (looked
+   identical to a "click succeeded, nothing happened" app bug until a
+   direct `flt-semantics` DOM dump revealed the oversized wrapper).
+   **Fixed per call site**: each invoice row has its own stable
+   `role="button"` semantics node — matching via `getByRole('button', {name})`
+   instead of plain substring text sidesteps the wrapper entirely. Any
+   future test clicking into a long Flutter list should match by role, not
+   by `textVisible()`, when more than one row could plausibly be on screen.
+
+**One separate, still-unexplained finding, worked around rather than
+root-caused**: clicking the sidebar "Return" nav button (already
+role-based, not text-based, so NOT explained by finding #2 above)
+immediately after ringing up a sale consistently (3/3 attempts, confirmed
+via direct Playwright trace inspection — the click action itself reports
+success every time, zero console/page errors) fails to navigate via
+`context.go(RouteNames.posReturn)`. A plain, isolated repro script with the
+identical steps succeeded once outside the Playwright test runner, so this
+may be specific to some interaction between go_router and the test
+runner's own page state — not yet understood. **Worked around** by
+navigating directly via `page.goto('/#/pos/return')` (a plain hash-route
+change, not a full reload) instead of clicking the sidebar button — this
+is a reasonable substitute for THIS test's purpose (verifying the return
+engine, not sidebar nav robustness) but the underlying click issue itself
+is still open, and may be the same root cause behind
+`shift-cash.spec.js`'s own still-unresolved "second Close Shift click"
+issue from Phase 1 — both share the "Playwright reports success, Flutter
+visibly does nothing, zero errors anywhere" shape.
+
+**Not yet covered**: partial-qty return (only a full qty=1 return tested
+so far), a return against a scheme-discounted sale, and the Exchange flow
+itself (the "Return complete" dialog is reached and declined via "Done",
+but "Start Exchange" → chained new sale with carried-forward credit is not
+yet exercised).
 
 ## Phase 3 — Non-cash tender settlement
 

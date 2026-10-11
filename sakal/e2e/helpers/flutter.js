@@ -62,9 +62,22 @@ async function enableSemantics(page) {
 // predictable from the outside, so match BOTH forms rather than guessing
 // per screen: `:text()` is Playwright's own substring text-content
 // selector (comma = OR, same as CSS).
+// Real bug found live (2026-10-11): Flutter's own screen-reader live-region
+// announcement of a snackbar message (a `<flt-announcement-polite>` element,
+// permanently off-screen by design — it exists only for assistive tech) can
+// contain the SAME substring as a real, later, on-screen piece of text (e.g.
+// a snackbar reading "SI/HO/2026/00042 completed." vs. that same invoice
+// number appearing as a real, clickable list row moments later) — and
+// without exclusion, `.first()` can match the stale, permanently-invisible
+// announcement instead of the real element, making a subsequent `.click()`
+// retry forever against something "visible, enabled and stable" but
+// "outside of the viewport". Excluded by default here so every caller gets
+// this for free; a caller that genuinely needs the announcement itself
+// (rare) can query `flt-announcement-polite` directly instead of using this
+// helper.
 function textVisible(page, text) {
   const escaped = text.replace(/"/g, '\\"');
-  return page.locator(`[aria-label*="${escaped}"], :text("${escaped}")`).first();
+  return page.locator(`[aria-label*="${escaped}"]:not(flt-announcement-polite), :text("${escaped}"):not(flt-announcement-polite)`).first();
 }
 
 // Real bug found live (2026-10-11): `page.getByLabel(label).fill(value)`
