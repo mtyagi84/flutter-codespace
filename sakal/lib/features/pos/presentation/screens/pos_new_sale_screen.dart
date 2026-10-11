@@ -1451,11 +1451,40 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       return;
     }
     final session = ref.read(sessionProvider)!;
+
+    if (session.offlineMode && _lines.any((l) => l.isBatchTracked || l.isSerialTracked)) {
+      _showMsg('This sale has a batch/serial-tracked item — those cannot be held offline. Remove it or reconnect.', color: AppColors.negative);
+      return;
+    }
+
     setState(() { _holding = true; _actionError = null; });
     try {
       final ds = ref.read(salesInvoiceRepositoryProvider);
+      final header = _buildHeader(session);
+      final lines = _buildLines();
       final (batches, serials) = _buildBatchesAndSerials();
-      final invoiceNo = await ds.save(header: _buildHeader(session), lines: _buildLines(), charges: const [], batches: batches, serials: serials, userId: session.userId);
+
+      if (session.offlineMode) {
+        // A "held" sale is just a DRAFT rih_sales_invoices row — same
+        // shape fn_save_sales_invoice already produces online, so the
+        // offline queue path is identical to _charge()'s own (save only,
+        // never approve — holding never approves even online either).
+        final localId = generateLocalId();
+        await ref.read(syncEngineProvider).enqueue(
+          documentType: 'SALES_INVOICE',
+          documentId: localId,
+          endpoint: '/rpc/fn_save_sales_invoice',
+          payload: {'p_header': header, 'p_lines': lines, 'p_charges': const [], 'p_batches': batches, 'p_serials': serials, 'p_user_id': session.userId, 'p_enforce_cost_check': false},
+        );
+        await ds.cacheInvoiceLocally(effectiveInvoiceNo: localId, header: header, lines: lines);
+        if (mounted) {
+          _showMsg('Held offline as $localId — will sync once this till is back online.', color: AppColors.secondary);
+          _resetForNextSale();
+        }
+        return;
+      }
+
+      final invoiceNo = await ds.save(header: header, lines: lines, charges: const [], batches: batches, serials: serials, userId: session.userId);
       if (mounted) {
         _showMsg('Held as $invoiceNo.', color: AppColors.secondary);
         _resetForNextSale();

@@ -27,6 +27,15 @@ import '../widgets/pos_session_guard.dart';
 /// Sales screen (rid_pos_tender_lines) hasn't been built yet; see this
 /// screen's own `fn_close_pos_shift` counterpart in
 /// backend/migrations/206_pos_shift_cash_management.sql for the same note.
+///
+/// Deliberately ONLINE-ONLY (2026-10-11 decision, not an oversight): unlike
+/// a sale, open/close has no "draft now, sync later" shape that's safe to
+/// queue — `rih_pos_shifts` enforces at most one OPEN shift per terminal
+/// server-side, and an offline device has no way to know whether a shift
+/// is already open elsewhere; close needs a live read of this shift's own
+/// movements/sales to compute expected cash. Same "online-only for a real
+/// state-changing/reconciliation action" convention already used
+/// everywhere else in this app (Approve, for every document type).
 class PosShiftScreen extends ConsumerStatefulWidget {
   const PosShiftScreen({super.key});
 
