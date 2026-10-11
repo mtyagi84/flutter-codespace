@@ -142,8 +142,26 @@ class _PosLineRow {
 class _PosTenderLine {
   String currencyId;
   double amount;
+  // Real tender methods (migration 218) — CASH, CARD, MOBILE_MONEY,
+  // VOUCHER, GIFT_CARD, STORE_CREDIT. Only CASH counts toward the cash-
+  // drawer's own collected_amount_local (see _cashTenderTotalLocal) — a
+  // non-cash line settles separately via fn_settle_pos_non_cash_tenders,
+  // never through the cash-collection CRV.
+  String tenderType = 'CASH';
+  String? referenceNo; // card/mobile transaction reference, optional
   _PosTenderLine({required this.currencyId, required this.amount});
 }
+
+const _posTenderTypes = ['CASH', 'CARD', 'MOBILE_MONEY', 'VOUCHER', 'GIFT_CARD', 'STORE_CREDIT'];
+String _tenderTypeLabel(String t) => switch (t) {
+      'CASH' => 'Cash',
+      'CARD' => 'Card',
+      'MOBILE_MONEY' => 'Mobile Money',
+      'VOUCHER' => 'Voucher',
+      'GIFT_CARD' => 'Gift Card',
+      'STORE_CREDIT' => 'Store Credit',
+      _ => t,
+    };
 
 class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   bool _loading = true;
@@ -190,6 +208,11 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   final Map<String, double> _tenderRateToLocal = {};
 
   double get _tenderTotalLocal => _tenderLines.fold(0.0, (s, t) => s + t.amount * (_tenderRateToLocal[t.currencyId] ?? 1));
+  // Only the CASH portion of a split payment actually lands in the till's
+  // own cash drawer — this is what collected_amount_local must carry, so
+  // the existing cash-collection CRV never settles money that was really
+  // taken by card/mobile/voucher/gift-card/store-credit.
+  double get _cashTenderTotalLocal => _tenderLines.where((t) => t.tenderType == 'CASH').fold(0.0, (s, t) => s + t.amount * (_tenderRateToLocal[t.currencyId] ?? 1));
   double get _tenderRemaining => _grandTotal - _tenderTotalLocal;
   final _searchFocus = FocusNode();
   // Set via the "×N next scan" control below the search bar — applies to the
@@ -1089,14 +1112,30 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
             'invoice_no': invoiceNo,
             'invoice_date': invoiceDate,
             'serial_no': e.key + 1,
-            'tender_type': 'CASH',
+            'tender_type': e.value.tenderType,
             'currency_id': e.value.currencyId,
             'amount': e.value.amount,
             'rate_to_local': _tenderRateToLocal[e.value.currencyId] ?? 1,
             'amount_local': e.value.amount * (_tenderRateToLocal[e.value.currencyId] ?? 1),
+            'reference_no': e.value.referenceNo,
             'created_by': session.userId,
           }).toList();
       await DioClient.instance.post('/rid_pos_tender_lines', data: rows);
+
+      // Settles any non-CASH tender line's own GL leg (card/mobile/
+      // voucher/gift-card/store-credit clearing account) against this
+      // invoice's bill — see fn_settle_pos_non_cash_tenders' own header
+      // comment (migration 218) for why this is a separate, soft-failing
+      // call rather than embedded in fn_approve_sales_invoice itself.
+      if (_tenderLines.any((t) => t.tenderType != 'CASH')) {
+        await DioClient.instance.post('/rpc/fn_settle_pos_non_cash_tenders', data: {
+          'p_client_id': session.clientId,
+          'p_company_id': session.companyId,
+          'p_invoice_no': invoiceNo,
+          'p_invoice_date': invoiceDate,
+          'p_user_id': session.userId,
+        });
+      }
     } catch (e, st) {
       AppLogger.error('PosTenderLinesSave', e, st);
       // Not shown to the cashier as a blocking error — see doc comment.
@@ -1247,7 +1286,9 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       'charges_amount': 0,
       'tax_amount': _taxTotal,
       'grand_total': _grandTotal,
-      'collected_amount_local': _saleType == 'CASH' ? (_collectedAmount ?? _grandTotal) : null,
+      'collected_amount_local': _saleType == 'CASH'
+          ? (_splitTender ? _cashTenderTotalLocal : (_collectedAmount ?? _grandTotal))
+          : null,
       'collected_amount_base': null,
       'remarks': '',
       'pos_shift_id': _shift?['id'],
@@ -1668,30 +1709,51 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       ]),
       ..._tenderLines.map((t) => Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Row(children: [
-              SizedBox(
-                width: 90,
-                child: DropdownButtonFormField<String>(
-                  initialValue: t.currencyId,
-                  isDense: true, itemHeight: null,
-                  decoration: const InputDecoration(isDense: true, border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10)),
-                  items: _currencies.map((c) => DropdownMenuItem(value: c['currency_id'] as String, child: Text(c['currency_id'] as String, overflow: TextOverflow.ellipsis))).toList(),
-                  onChanged: (v) {
-                    if (v == null) return;
-                    setState(() => t.currencyId = v);
-                    _refreshTenderRate(v);
-                  },
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Row(children: [
+                SizedBox(
+                  width: 120,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: t.tenderType,
+                    isDense: true, itemHeight: null,
+                    decoration: const InputDecoration(isDense: true, border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10)),
+                    items: _posTenderTypes.map((m) => DropdownMenuItem(value: m, child: Text(_tenderTypeLabel(m), overflow: TextOverflow.ellipsis))).toList(),
+                    onChanged: (v) { if (v != null) setState(() => t.tenderType = v); },
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(child: PosAmountField(label: 'Amount', value: t.amount, compact: true, suffixText: t.currencyId, onChanged: (v) => setState(() => t.amount = v))),
-              IconButton(
-                onPressed: _tenderLines.length <= 1 ? null : () => setState(() => _tenderLines.remove(t)),
-                icon: const Icon(Icons.close, size: 18, color: AppColors.negative),
-              ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 90,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: t.currencyId,
+                    isDense: true, itemHeight: null,
+                    decoration: const InputDecoration(isDense: true, border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10)),
+                    items: _currencies.map((c) => DropdownMenuItem(value: c['currency_id'] as String, child: Text(c['currency_id'] as String, overflow: TextOverflow.ellipsis))).toList(),
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() => t.currencyId = v);
+                      _refreshTenderRate(v);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: PosAmountField(label: 'Amount', value: t.amount, compact: true, suffixText: t.currencyId, onChanged: (v) => setState(() => t.amount = v))),
+                IconButton(
+                  onPressed: _tenderLines.length <= 1 ? null : () => setState(() => _tenderLines.remove(t)),
+                  icon: const Icon(Icons.close, size: 18, color: AppColors.negative),
+                ),
+              ]),
+              if (t.tenderType == 'CARD' || t.tenderType == 'MOBILE_MONEY')
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: TextField(
+                    decoration: const InputDecoration(isDense: true, labelText: 'Reference No. (optional)', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10)),
+                    onChanged: (v) => t.referenceNo = v,
+                  ),
+                ),
             ]),
           )),
-      Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: _addTenderLine, icon: const Icon(Icons.add, size: 16), label: const Text('Add Currency'))),
+      Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: _addTenderLine, icon: const Icon(Icons.add, size: 16), label: const Text('Add Tender'))),
       const Divider(height: 10),
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text('Collected (≈ $_localCcy)', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
@@ -1728,11 +1790,10 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
               suffixText: _localCcy,
               onChanged: (v) => setState(() => _collectedAmount = v),
             ),
-            if (_currencies.length > 1)
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(onPressed: () => _toggleSplitTender(true), child: const Text('Split into multiple currencies')),
-              ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(onPressed: () => _toggleSplitTender(true), child: const Text('Split payment (card, mobile money, etc.)')),
+            ),
           ] else
             _buildTenderLinesEditor(),
         ],
