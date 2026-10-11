@@ -175,75 +175,6 @@ String _tenderTypeLabel(String t) => switch (t) {
       _ => t,
     };
 
-/// Large touch target for a binary mode choice (Single/Split Payment) —
-/// replaces a small TextButton link that was easy to miss/mis-tap on a
-/// touchscreen.
-class _ModeTile extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-  const _ModeTile({required this.label, required this.icon, required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.primary.withValues(alpha: 0.1) : AppColors.background,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          height: 56,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: selected ? AppColors.primary : AppColors.border, width: selected ? 1.5 : 1),
-          ),
-          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(icon, size: 18, color: selected ? AppColors.primary : AppColors.textSecondary),
-            const SizedBox(width: 8),
-            Text(label, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: selected ? AppColors.primary : AppColors.textPrimary)),
-          ]),
-        ),
-      ),
-    );
-  }
-}
-
-/// A tappable pill — the touch-friendly replacement for a
-/// DropdownButtonFormField wherever the option set is short enough to show
-/// all at once (tender type, currency, quick cash amount). Reading and
-/// hitting a dropdown's tiny closed-state text/chevron on a touchscreen was
-/// the specific complaint this replaces.
-class _ChoiceTile extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  const _ChoiceTile({required this.label, required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.secondary.withValues(alpha: 0.15) : AppColors.surface,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Container(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: selected ? AppColors.secondary : AppColors.border),
-          ),
-          child: Text(label, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5, color: selected ? AppColors.secondary : AppColors.textPrimary)),
-        ),
-      ),
-    );
-  }
-}
-
 class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   bool _loading = true;
   bool _saving = false;
@@ -1233,17 +1164,6 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
 
   // ── Multi-currency split tender ───────────────────────────────────────────
 
-  void _toggleSplitTender(bool on) {
-    setState(() {
-      _splitTender = on;
-      _tenderLines.clear();
-      if (on) {
-        _tenderRateToLocal[_localCcy] = 1;
-        _tenderLines.add(_PosTenderLine(currencyId: _localCcy, amount: _collectedAmount ?? _grandTotal));
-      }
-    });
-  }
-
   void _addTenderLine() {
     // Default to any currency not already in use, falling back to local —
     // just a sensible starting point, always editable.
@@ -1898,242 +1818,231 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     );
   }
 
-  // ── Payment collection — dedicated full-height sheet ──────────────────────
-  // Real bug fixed 2026-10-11: the inline split-tender editor (small
-  // dropdowns + a plain Column with no scroll of its own) overflowed the
-  // fixed-width totals panel the moment 2+ tender lines were added, hiding
-  // the Hold/Charge buttons behind it with no way to recover other than
-  // removing a line blind. Payment entry is now its own full-height modal
-  // sheet — real space for touch, chip-style pickers instead of
-  // DropdownButtonFormField (hard to hit/read on a touchscreen), and a
-  // scrollable middle + a FIXED header/footer so it can never hide its own
-  // Done button no matter how many payment methods are added.
+  // ── Payment collection — inline, compact, side-by-side ────────────────────
+  // Real bug fixed 2026-10-11: the FIRST attempt at fixing the overflowing
+  // split-tender editor made it a full-screen modal — which traded one
+  // problem for another the user immediately flagged live: cashiers had no
+  // idea where to even type an amount, and a modal breaks the "stay on the
+  // main screen, Charge prints + refocuses the scanner" flow every other
+  // POS action already follows. Payment entry is back to being INLINE in
+  // the totals panel (method selector and amount field side by side, one
+  // compact row, no scrolling needed for the common case) — never a
+  // separate screen. Cashiers start with a single implicit Cash line (no
+  // extra tap needed for the common case); tapping a different method or
+  // currency, or "+ Add payment method", is what promotes to the real
+  // multi-line `_tenderLines` model used for split/non-cash settlement —
+  // the user never sees that distinction, it's just "edit the line(s)".
 
-  Future<void> _openPaymentSheet() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
-        child: SizedBox(
-          height: MediaQuery.of(sheetContext).size.height * 0.92,
-          // A local StatefulBuilder keeps every tap inside the sheet fast
-          // (no full-screen rebuild while it's open); the outer screen's
-          // own `setState` already runs too via the helper methods below,
-          // so the totals panel is already correct the instant this sheet
-          // closes.
-          child: StatefulBuilder(builder: (ctx, setSheetState) => _buildPaymentSheetBody(ctx, setSheetState)),
-        ),
-      ),
-    );
-    if (mounted) setState(() {});
+  static const _methodIcons = {
+    'CASH': Icons.payments_outlined,
+    'CARD': Icons.credit_card_outlined,
+    'MOBILE_MONEY': Icons.smartphone_outlined,
+    'VOUCHER': Icons.card_giftcard_outlined,
+    'GIFT_CARD': Icons.redeem_outlined,
+    'STORE_CREDIT': Icons.account_balance_wallet_outlined,
+  };
+
+  String _tenderTypeShortLabel(String t) => switch (t) {
+        'CASH' => 'Cash',
+        'CARD' => 'Card',
+        'MOBILE_MONEY' => 'Mobile',
+        'VOUCHER' => 'Voucher',
+        'GIFT_CARD' => 'Gift Card',
+        'STORE_CREDIT' => 'Credit',
+        _ => t,
+      };
+
+  /// Switches from the simple implicit single-Cash-line model to the real
+  /// `_tenderLines` model, seeded from whatever was already entered — only
+  /// called the moment the cashier picks a non-Cash method or a non-local
+  /// currency, never just for an amount edit (so typing a plain cash
+  /// amount never triggers the split/settlement machinery).
+  void _promoteToTenderLines({String? tenderType, String? currencyId}) {
+    if (!_splitTender) {
+      final due = _netDueAfterExchangeCredit.clamp(0.0, double.infinity);
+      final line = _PosTenderLine(currencyId: currencyId ?? _localCcy, amount: _collectedAmount ?? due);
+      line.tenderType = tenderType ?? 'CASH';
+      setState(() {
+        _splitTender = true;
+        _tenderLines..clear()..add(line);
+      });
+      if ((currencyId ?? _localCcy) != _localCcy) _refreshTenderRate(currencyId!);
+    } else if (_tenderLines.length == 1) {
+      setState(() {
+        if (tenderType != null) _tenderLines.first.tenderType = tenderType;
+        if (currencyId != null) _tenderLines.first.currencyId = currencyId;
+      });
+      if (currencyId != null && currencyId != _localCcy) _refreshTenderRate(currencyId);
+    }
   }
 
-  Widget _buildPaymentSheetBody(BuildContext ctx, StateSetter setSheetState) {
+  void _addPaymentMethod() {
+    if (!_splitTender) _promoteToTenderLines();
+    _addTenderLine();
+  }
+
+  void _onMethodChanged(_PosTenderLine? line, String type) {
+    if (line == null) {
+      if (type != 'CASH') _promoteToTenderLines(tenderType: type);
+    } else {
+      setState(() => line.tenderType = type);
+    }
+  }
+
+  void _onCurrencyChanged(_PosTenderLine? line, String ccy) {
+    if (line == null) {
+      if (ccy != _localCcy) _promoteToTenderLines(currencyId: ccy);
+    } else {
+      setState(() => line.currencyId = ccy);
+      if (ccy != _localCcy) _refreshTenderRate(ccy);
+    }
+  }
+
+  void _onAmountChanged(_PosTenderLine? line, double v) {
+    if (line == null) {
+      setState(() => _collectedAmount = v);
+    } else {
+      setState(() => line.amount = v);
+    }
+  }
+
+  Widget _buildPaymentInline() {
     final due = _netDueAfterExchangeCredit.clamp(0.0, double.infinity);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-      child: Column(children: [
-        Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
-        const SizedBox(height: 10),
-        Row(children: [
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Payment', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-              Text('Total due: ${due.toStringAsFixed(2)} $_localCcy', style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
-            ]),
-          ),
-          IconButton(onPressed: () => Navigator.of(ctx).pop(), icon: const Icon(Icons.close)),
-        ]),
-        const SizedBox(height: 10),
-        Row(children: [
-          Expanded(
-            child: _ModeTile(
-              label: 'Single Payment',
-              icon: Icons.payments_outlined,
-              selected: !_splitTender,
-              onTap: () { _toggleSplitTender(false); setSheetState(() {}); },
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _ModeTile(
-              label: 'Split Payment',
-              icon: Icons.call_split,
-              selected: _splitTender,
-              onTap: () { _toggleSplitTender(true); setSheetState(() {}); },
-            ),
-          ),
-        ]),
-        const SizedBox(height: 12),
-        // Scrollable middle — this is what keeps the Done button reachable
-        // no matter how many payment methods/currencies are added, instead
-        // of the old fixed-height Column that used to overflow.
-        Expanded(
-          child: SingleChildScrollView(
-            child: _splitTender ? _buildSplitTenderEditor(setSheetState) : _buildSingleTenderEditor(setSheetState),
-          ),
-        ),
-        const Divider(height: 18),
-        _buildPaymentSheetFooter(ctx),
-      ]),
-    );
-  }
-
-  Widget _buildSingleTenderEditor(StateSetter setSheetState) {
-    final due = _netDueAfterExchangeCredit.clamp(0.0, double.infinity);
-    final collected = _collectedAmount ?? due;
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      PosAmountField(
-        label: 'Amount Collected (Cash)',
-        value: collected,
-        suffixText: _localCcy,
-        onChanged: (v) { _collectedAmount = v; setSheetState(() {}); },
-      ),
-      const SizedBox(height: 12),
-      Wrap(spacing: 8, runSpacing: 8, children: [
-        _ChoiceTile(label: 'Exact Amount', selected: (collected - due).abs() < 0.01, onTap: () { _collectedAmount = due; setSheetState(() {}); }),
-        for (final amt in _quickCashRoundUps(due))
-          _ChoiceTile(label: amt.toStringAsFixed(0), selected: (collected - amt).abs() < 0.01, onTap: () { _collectedAmount = amt; setSheetState(() {}); }),
-      ]),
-    ]);
-  }
-
-  /// A couple of sensible "handed a round note" amounts at/above what's
-  /// due — not an attempt at real denomination logic, just two quick taps
-  /// so the cashier rarely has to type an exact figure for a cash sale.
-  List<double> _quickCashRoundUps(double due) {
-    if (due <= 0) return const [];
-    final unit = due < 100 ? 10.0 : (due < 1000 ? 50.0 : (due < 10000 ? 500.0 : 5000.0));
-    final first = (due / unit).ceil() * unit;
-    final opts = <double>{};
-    if (first - due > 0.01) opts.add(first);
-    opts.add(first + unit);
-    return opts.toList();
-  }
-
-  Widget _buildSplitTenderEditor(StateSetter setSheetState) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      ..._tenderLines.map((t) => Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Row(children: [
-                Expanded(child: Text(_tenderTypeLabel(t.tenderType), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-                if (_tenderLines.length > 1)
-                  IconButton(
-                    onPressed: () { setState(() => _tenderLines.remove(t)); setSheetState(() {}); },
-                    icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.negative),
-                    tooltip: 'Remove this payment method',
-                  ),
-              ]),
-              Wrap(spacing: 8, runSpacing: 8, children: _posTenderTypes.map((type) => _ChoiceTile(
-                    label: _tenderTypeLabel(type),
-                    selected: t.tenderType == type,
-                    onTap: () { t.tenderType = type; setSheetState(() {}); },
-                  )).toList()),
-              if (_currencies.length > 1) ...[
-                const SizedBox(height: 8),
-                Wrap(spacing: 8, runSpacing: 8, children: _currencies.map((c) {
-                  final ccyId = c['currency_id'] as String;
-                  return _ChoiceTile(
-                    label: ccyId,
-                    selected: t.currencyId == ccyId,
-                    onTap: () {
-                      t.currencyId = ccyId;
-                      setSheetState(() {});
-                      _refreshTenderRate(ccyId).then((_) { if (mounted) setSheetState(() {}); });
-                    },
-                  );
-                }).toList()),
-              ],
-              const SizedBox(height: 10),
-              PosAmountField(label: 'Amount', value: t.amount, suffixText: t.currencyId, onChanged: (v) { t.amount = v; setSheetState(() {}); }),
-              if (t.tenderType == 'CARD' || t.tenderType == 'MOBILE_MONEY') ...[
-                const SizedBox(height: 8),
-                TextField(
-                  decoration: const InputDecoration(isDense: true, labelText: 'Reference No. (optional)', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12)),
-                  onChanged: (v) => t.referenceNo = v,
-                ),
-              ],
-            ]),
-          )),
-      SizedBox(
-        height: 46,
-        child: OutlinedButton.icon(
-          onPressed: () { _addTenderLine(); setSheetState(() {}); },
-          icon: const Icon(Icons.add),
-          label: const Text('Add Payment Method'),
-        ),
-      ),
-    ]);
-  }
-
-  Widget _buildPaymentSheetFooter(BuildContext ctx) {
-    final collected = _splitTender ? _tenderTotalLocal : (_collectedAmount ?? _netDueAfterExchangeCredit.clamp(0.0, double.infinity));
-    final diff = collected - _netDueAfterExchangeCredit;
-    final short = diff < -0.01;
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        const Text('Collected', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-        Text('${collected.toStringAsFixed(2)} $_localCcy', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-      ]),
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(short ? 'Short by' : 'Change Due', style: TextStyle(fontSize: 13, color: short ? AppColors.negative : AppColors.positive)),
-        Text('${diff.abs().toStringAsFixed(2)} $_localCcy', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: short ? AppColors.negative : AppColors.positive)),
-      ]),
-      const SizedBox(height: 10),
-      SizedBox(
-        height: 50,
-        child: FilledButton(
-          onPressed: (_splitTender && short) ? null : () => Navigator.of(ctx).pop(),
-          child: const Text('Done', style: TextStyle(fontWeight: FontWeight.w700)),
-        ),
-      ),
-    ]);
-  }
-
-  /// Compact, always-visible summary shown on the main screen — tapping it
-  /// is the only way into the full payment sheet above. Replaces the old
-  /// inline Collected field / "Split payment" text link.
-  Widget _buildPaymentSummaryCard() {
-    final due = _netDueAfterExchangeCredit;
-    final collected = _splitTender ? _tenderTotalLocal : (_collectedAmount ?? due.clamp(0.0, double.infinity));
+    final collected = _splitTender ? _tenderTotalLocal : (_collectedAmount ?? due);
     final diff = collected - due;
     final short = diff < -0.01;
-    final summary = _splitTender
-        ? (_tenderLines.isEmpty
-            ? 'No payment method added yet'
-            : _tenderLines.map((t) => '${_tenderTypeLabel(t.tenderType)} ${t.amount.toStringAsFixed(2)} ${t.currencyId}').join('  +  '))
-        : 'Cash · ${collected.toStringAsFixed(2)} $_localCcy';
-    return Container(
-      margin: const EdgeInsets.only(top: 4),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: short ? AppColors.negative.withValues(alpha: 0.4) : AppColors.border),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          const Icon(Icons.payments_outlined, size: 16, color: AppColors.primary),
-          const SizedBox(width: 6),
-          Expanded(child: Text(summary, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5), maxLines: 2, overflow: TextOverflow.ellipsis)),
-        ]),
-        const SizedBox(height: 8),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(short ? 'Short by' : 'Change Due', style: TextStyle(fontSize: 12, color: short ? AppColors.negative : AppColors.positive)),
-          Text('${diff.abs().toStringAsFixed(2)} $_localCcy', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: short ? AppColors.negative : AppColors.positive)),
-        ]),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 44,
-          child: OutlinedButton.icon(onPressed: _openPaymentSheet, icon: const Icon(Icons.edit_outlined, size: 16), label: const Text('Enter / Edit Payment')),
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(children: [
+        const Text('Payment', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
+        const Spacer(),
+        TextButton.icon(
+          onPressed: _addPaymentMethod,
+          icon: const Icon(Icons.add, size: 14),
+          label: const Text('Add payment method', style: TextStyle(fontSize: 11.5)),
+          style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 26), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
         ),
+      ]),
+      const SizedBox(height: 4),
+      if (!_splitTender)
+        _buildTenderLineRow(null)
+      else
+        ..._tenderLines.map((t) => _buildTenderLineRow(t)),
+      const SizedBox(height: 4),
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(short ? 'Short by' : 'Change Due', style: TextStyle(fontSize: 12.5, color: short ? AppColors.negative : AppColors.positive, fontWeight: FontWeight.w600)),
+        Text('${diff.abs().toStringAsFixed(2)} $_localCcy', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: short ? AppColors.negative : AppColors.positive)),
+      ]),
+    ]);
+  }
+
+  /// One payment line, method + currency + amount all side by side on a
+  /// single compact row — `line == null` renders the simple implicit
+  /// single-Cash-line state (no `_tenderLines` entry exists yet).
+  Widget _buildTenderLineRow(_PosTenderLine? line) {
+    final effectiveType = line?.tenderType ?? 'CASH';
+    final effectiveCcy = line?.currencyId ?? _localCcy;
+    final due = _netDueAfterExchangeCredit.clamp(0.0, double.infinity);
+    final amount = line?.amount ?? (_collectedAmount ?? due);
+
+    // What's still needed, converted into THIS line's own currency — so
+    // switching currency immediately shows how much to actually collect
+    // in it, instead of leaving the cashier to do the maths themselves.
+    final othersLocal = _splitTender
+        ? _tenderLines.where((t) => t != line).fold(0.0, (s, t) => s + t.amount * (_tenderRateToLocal[t.currencyId] ?? 1))
+        : 0.0;
+    final remainingLocalExcl = due - othersLocal;
+    final rate = effectiveCcy == _localCcy ? 1.0 : (_tenderRateToLocal[effectiveCcy] ?? 1.0);
+    final neededInCcy = rate == 0 ? 0.0 : remainingLocalExcl / rate;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          PopupMenuButton<String>(
+            initialValue: effectiveType,
+            onSelected: (t) => _onMethodChanged(line, t),
+            itemBuilder: (ctx) => _posTenderTypes.map((t) => PopupMenuItem(
+                  value: t,
+                  height: 44,
+                  child: Row(children: [Icon(_methodIcons[t], size: 18, color: AppColors.primary), const SizedBox(width: 10), Text(_tenderTypeLabel(t))]),
+                )).toList(),
+            child: Container(
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(_methodIcons[effectiveType], size: 15, color: AppColors.primary),
+                const SizedBox(width: 5),
+                Text(_tenderTypeShortLabel(effectiveType), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                const Icon(Icons.arrow_drop_down, size: 16),
+              ]),
+            ),
+          ),
+          const SizedBox(width: 6),
+          if (_currencies.length > 1) ...[
+            PopupMenuButton<String>(
+              initialValue: effectiveCcy,
+              onSelected: (c) => _onCurrencyChanged(line, c),
+              itemBuilder: (ctx) => _currencies.map((c) {
+                final ccyId = c['currency_id'] as String;
+                return PopupMenuItem(value: ccyId, height: 44, child: Text(ccyId, style: const TextStyle(fontWeight: FontWeight.w600)));
+              }).toList(),
+              child: Container(
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(effectiveCcy, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                  const Icon(Icons.arrow_drop_down, size: 16),
+                ]),
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+          Expanded(
+            child: PosAmountField(
+              label: 'Amount',
+              value: amount,
+              compact: true,
+              suffixText: effectiveCcy,
+              onChanged: (v) => _onAmountChanged(line, v),
+            ),
+          ),
+          if (_splitTender && _tenderLines.length > 1)
+            IconButton(
+              onPressed: () => setState(() => _tenderLines.remove(line)),
+              icon: const Icon(Icons.close, size: 18, color: AppColors.negative),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+              tooltip: 'Remove this payment method',
+            ),
+        ]),
+        if (effectiveCcy != _localCcy)
+          Padding(
+            padding: const EdgeInsets.only(top: 2, left: 2),
+            child: Row(children: [
+              Expanded(
+                child: Text(
+                  'Collect ${neededInCcy.toStringAsFixed(2)} $effectiveCcy to cover ${remainingLocalExcl.clamp(0.0, double.infinity).toStringAsFixed(2)} $_localCcy',
+                  style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              TextButton(
+                onPressed: () => _onAmountChanged(line, neededInCcy),
+                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 22), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                child: const Text('Fill', style: TextStyle(fontSize: 11)),
+              ),
+            ]),
+          ),
+        if (effectiveType == 'CARD' || effectiveType == 'MOBILE_MONEY')
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: TextField(
+              decoration: const InputDecoration(isDense: true, labelText: 'Reference No. (optional)', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
+              onChanged: (v) { if (line != null) line.referenceNo = v; },
+            ),
+          ),
       ]),
     );
   }
@@ -2183,7 +2092,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
               ],
               if (_saleType == 'CASH') ...[
                 const SizedBox(height: 10),
-                _buildPaymentSummaryCard(),
+                _buildPaymentInline(),
               ],
             ]),
           ),
