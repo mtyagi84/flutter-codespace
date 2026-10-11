@@ -100,6 +100,16 @@ class _PosSetupScreenState extends ConsumerState<PosSetupScreen>
           'select': 'id,scheme_code,scheme_name,scheme_type,scope,priority,is_stackable,is_active,'
               'rim_pos_scheme_rules(id,applies_to_product_id,applies_to_category_id,min_qty,max_qty,benefit_type,benefit_value,free_product_id,'
               'rim_products!applies_to_product_id(product_name))',
+          // Real bug fixed 2026-10-11: with no filter on the embedded
+          // resource, PostgREST returned EVERY rule row regardless of
+          // is_deleted — a rule the user had already deleted (via this same
+          // screen's own "replace all rules" save, see below) kept showing
+          // up in the Edit Scheme dialog as if still active. The resolver
+          // function (fn_resolve_pos_schemes_for_line, migration 212) was
+          // never affected — it correctly filters is_deleted=false — so the
+          // actual discount applied on a sale was always right; only this
+          // admin screen's own display/edit list was stale.
+          'rim_pos_scheme_rules.is_deleted': 'eq.false',
           'order': 'priority.asc',
         }),
         DioClient.instance.get('/rim_loyalty_programs', queryParameters: {
