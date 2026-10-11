@@ -54,11 +54,12 @@ class _PosSetupScreenState extends ConsumerState<PosSetupScreen>
   List<Map<String, dynamic>> _users = [];
   List<Map<String, dynamic>> _schemes = [];
   Map<String, dynamic>? _loyaltyProgram;
+  List<Map<String, dynamic>> _bundles = [];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadAll());
   }
 
@@ -105,6 +106,15 @@ class _PosSetupScreenState extends ConsumerState<PosSetupScreen>
           'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
           'is_deleted': 'eq.false', 'order': 'created_at.asc', 'limit': '1',
         }),
+        DioClient.instance.get('/rim_product_bundles', queryParameters: {
+          'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
+          'is_deleted': 'eq.false',
+          'select': 'id,bundle_product_id,bundle_mode,is_active,'
+              'rim_products!bundle_product_id(product_code,product_name),'
+              'rim_bundle_components(id,component_product_id,component_qty,component_rate_contribution,'
+              'rim_products!component_product_id(product_code,product_name))',
+          'order': 'created_at.desc',
+        }),
       ]);
       if (!mounted) return;
       setState(() {
@@ -115,6 +125,7 @@ class _PosSetupScreenState extends ConsumerState<PosSetupScreen>
         _schemes = List<Map<String, dynamic>>.from(results[4].data as List);
         final loyaltyList = results[5].data as List;
         _loyaltyProgram = loyaltyList.isNotEmpty ? loyaltyList.first as Map<String, dynamic> : null;
+        _bundles = List<Map<String, dynamic>>.from(results[6].data as List);
         _loading = false;
       });
     } catch (e, st) {
@@ -142,7 +153,7 @@ class _PosSetupScreenState extends ConsumerState<PosSetupScreen>
             controller: _tabController,
             isScrollable: true,
             labelColor: AppColors.primary,
-            tabs: const [Tab(text: 'Terminals'), Tab(text: 'Devices'), Tab(text: 'User Access & PIN'), Tab(text: 'Schemes'), Tab(text: 'Loyalty')],
+            tabs: const [Tab(text: 'Terminals'), Tab(text: 'Devices'), Tab(text: 'User Access & PIN'), Tab(text: 'Schemes'), Tab(text: 'Loyalty'), Tab(text: 'Bundles')],
           ),
         ),
         const Divider(height: 1),
@@ -159,6 +170,7 @@ class _PosSetupScreenState extends ConsumerState<PosSetupScreen>
                         _UserAccessTab(users: _users, terminals: _terminals, canEdit: canEdit && !offline, showMsg: _showMsg),
                         _SchemesTab(schemes: _schemes, canEdit: canEdit && !offline, onChanged: _loadAll, showMsg: _showMsg),
                         _LoyaltyTab(program: _loyaltyProgram, canEdit: canEdit && !offline, onChanged: _loadAll, showMsg: _showMsg),
+                        _BundlesTab(bundles: _bundles, canEdit: canEdit && !offline, onChanged: _loadAll, showMsg: _showMsg),
                       ],
                     ),
         ),
@@ -1285,6 +1297,313 @@ class _LoyaltyTabState extends ConsumerState<_LoyaltyTab> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Bundle admin (migration 216) — a bundle is itself a row in rim_products
+/// (its own barcode/price/tax group, scannable like any product); this tab
+/// only adds the bundle-specific metadata (mode + component list).
+///
+/// PREASSEMBLED mode is fully functional today — the bundle product
+/// carries real stock, built via the existing Stock Adjustment screen, and
+/// a POS sale of it is just an ordinary stocked-product sale, no engine
+/// change needed. COMMERCIAL mode (auto-consume components at sale time,
+/// no bundle stock) is configurable here but its sale-time explosion is
+/// NOT yet wired into fn_approve_sales_invoice — see this file's own
+/// _BundleEditorDialogState for the exact warning shown when it's picked.
+/// DYNAMIC_MIX has no admin UI here at all — per the original design, it's
+/// realized entirely through a MIX_AND_MATCH scheme (Schemes tab), not a
+/// bundle row.
+class _BundlesTab extends StatelessWidget {
+  final List<Map<String, dynamic>> bundles;
+  final bool canEdit;
+  final VoidCallback onChanged;
+  final void Function(String, {Color? color}) showMsg;
+
+  const _BundlesTab({required this.bundles, required this.canEdit, required this.onChanged, required this.showMsg});
+
+  Future<void> _openEditor(BuildContext context, {Map<String, dynamic>? existing}) async {
+    await showDialog(
+      context: context,
+      builder: (_) => _BundleEditorDialog(existing: existing, onSaved: onChanged, showMsg: showMsg),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(children: [
+      if (bundles.isEmpty)
+        const Center(child: Text('No bundles configured yet.', style: TextStyle(color: AppColors.textSecondary)))
+      else
+        ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+          itemCount: bundles.length,
+          itemBuilder: (context, i) {
+            final b = bundles[i];
+            final product = b['rim_products'] as Map<String, dynamic>?;
+            final components = (b['rim_bundle_components'] as List?) ?? const [];
+            final active = b['is_active'] as bool? ?? true;
+            return Card(
+              child: ListTile(
+                leading: const Icon(Icons.inventory_2_outlined),
+                title: Text('[${product?['product_code']}] ${product?['product_name']}'),
+                subtitle: Text('${b['bundle_mode']} · ${components.length} component(s)${active ? '' : ' · Inactive'}'),
+                trailing: canEdit ? const Icon(Icons.edit_outlined, size: 18) : null,
+                onTap: canEdit ? () => _openEditor(context, existing: b) : null,
+              ),
+            );
+          },
+        ),
+      if (canEdit)
+        Positioned(
+          right: 16, bottom: 16,
+          child: FloatingActionButton.extended(onPressed: () => _openEditor(context), icon: const Icon(Icons.add), label: const Text('Add Bundle')),
+        ),
+    ]);
+  }
+}
+
+class _BundleComponentDraft {
+  String? productId;
+  double qty;
+  double? rateContribution;
+  _BundleComponentDraft({this.productId, this.qty = 1, this.rateContribution});
+}
+
+class _BundleEditorDialog extends ConsumerStatefulWidget {
+  final Map<String, dynamic>? existing;
+  final VoidCallback onSaved;
+  final void Function(String, {Color? color}) showMsg;
+
+  const _BundleEditorDialog({required this.existing, required this.onSaved, required this.showMsg});
+
+  @override
+  ConsumerState<_BundleEditorDialog> createState() => _BundleEditorDialogState();
+}
+
+class _BundleEditorDialogState extends ConsumerState<_BundleEditorDialog> {
+  String? _bundleProductId;
+  String _bundleMode = 'PREASSEMBLED';
+  bool _active = true;
+  bool _saving = false;
+  List<Map<String, dynamic>> _products = [];
+  bool _loadingProducts = true;
+  late List<_BundleComponentDraft> _components;
+  String? _bundleProductDisplayFallback;
+
+  @override
+  void initState() {
+    super.initState();
+    final product = widget.existing?['rim_products'] as Map<String, dynamic>?;
+    _bundleProductId = widget.existing?['bundle_product_id'] as String?;
+    _bundleMode = widget.existing?['bundle_mode'] as String? ?? 'PREASSEMBLED';
+    _active = widget.existing?['is_active'] as bool? ?? true;
+    final existingComponents = (widget.existing?['rim_bundle_components'] as List?) ?? const [];
+    _components = existingComponents.isEmpty
+        ? [_BundleComponentDraft()]
+        : existingComponents.map((c) {
+            final m = c as Map<String, dynamic>;
+            return _BundleComponentDraft(
+              productId: m['component_product_id'] as String?,
+              qty: (m['component_qty'] as num?)?.toDouble() ?? 1,
+              rateContribution: (m['component_rate_contribution'] as num?)?.toDouble(),
+            );
+          }).toList();
+    // Only used for display continuity while products load — not written back.
+    if (product != null) _bundleProductDisplayFallback = '[${product['product_code']}] ${product['product_name']}';
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadProducts());
+  }
+
+  Future<void> _loadProducts() async {
+    final session = ref.read(sessionProvider)!;
+    try {
+      final res = await DioClient.instance.get('/rim_products', queryParameters: {
+        'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
+        'is_deleted': 'eq.false', 'is_active': 'eq.true',
+        'select': 'id,product_code,product_name', 'order': 'product_name.asc', 'limit': '500',
+      });
+      if (mounted) {
+        setState(() { _products = List<Map<String, dynamic>>.from(res.data as List); _loadingProducts = false; });
+      }
+    } catch (e, st) {
+      AppLogger.error('PosBundleLoadProducts', e, st);
+      if (mounted) setState(() => _loadingProducts = false);
+    }
+  }
+
+  Future<void> _save() async {
+    if (_bundleProductId == null) {
+      widget.showMsg('Select which product is the bundle itself.', color: AppColors.negative);
+      return;
+    }
+    if (_components.any((c) => c.productId == null)) {
+      widget.showMsg('Every component row needs a product.', color: AppColors.negative);
+      return;
+    }
+    setState(() => _saving = true);
+    final session = ref.read(sessionProvider)!;
+    try {
+      String bundleId;
+      if (widget.existing == null) {
+        bundleId = const Uuid().v4();
+        await DioClient.instance.post('/rim_product_bundles', data: {
+          'id': bundleId,
+          'client_id': session.clientId,
+          'company_id': session.companyId,
+          'bundle_product_id': _bundleProductId,
+          'bundle_mode': _bundleMode,
+        });
+      } else {
+        bundleId = widget.existing!['id'] as String;
+        await DioClient.instance.patch('/rim_product_bundles', queryParameters: {'id': 'eq.$bundleId'}, data: {
+          'bundle_mode': _bundleMode,
+          'is_active': _active,
+        });
+        await DioClient.instance.patch('/rim_bundle_components', queryParameters: {'bundle_id': 'eq.$bundleId'}, data: {'is_deleted': true});
+      }
+      final componentRows = _components.map((c) => {
+            'id': const Uuid().v4(),
+            'client_id': session.clientId,
+            'company_id': session.companyId,
+            'bundle_id': bundleId,
+            'component_product_id': c.productId,
+            'component_qty': c.qty,
+            'component_rate_contribution': c.rateContribution,
+          }).toList();
+      await DioClient.instance.post('/rim_bundle_components', data: componentRows);
+      if (mounted) {
+        Navigator.of(context).pop();
+        widget.onSaved();
+        widget.showMsg('Bundle saved.', color: AppColors.positive);
+      }
+    } catch (e, st) {
+      AppLogger.error('PosBundleSave', e, st);
+      widget.showMsg(ErrorPresenter.format(e, action: 'save this bundle'), color: AppColors.negative);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  String _productDisplay(Map<String, dynamic> p) => '[${p['product_code']}] ${p['product_name']}';
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.existing == null ? 'Add Bundle' : 'Edit Bundle'),
+      content: SizedBox(
+        width: 440,
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            if (_loadingProducts)
+              const Padding(padding: EdgeInsets.all(8), child: LinearProgressIndicator())
+            else if (widget.existing != null)
+              // The bundle's own product identity never changes once
+              // created (rim_product_bundles.bundle_product_id is UNIQUE
+              // and is the join key everything else here hangs off) —
+              // shown read-only rather than offered as an editable picker.
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(_bundleProductDisplayFallback ?? 'Bundle Product', style: const TextStyle(fontWeight: FontWeight.w700)),
+              )
+            else
+              Builder(builder: (context) {
+                final selected = _products.where((p) => p['id'] == _bundleProductId).toList();
+                return SakalAutocomplete<Map<String, dynamic>>(
+                  key: ValueKey(_bundleProductId),
+                  initialValue: TextEditingValue(text: selected.isNotEmpty ? _productDisplay(selected.first) : ''),
+                  displayStringForOption: _productDisplay,
+                  optionsBuilder: (v) {
+                    final q = v.text.toLowerCase().trim();
+                    return q.isEmpty ? _products : _products.where((p) => _productDisplay(p).toLowerCase().contains(q));
+                  },
+                  onSelected: (p) => setState(() => _bundleProductId = p['id'] as String),
+                  onChanged: (v) { if (v.isEmpty && _bundleProductId != null) setState(() => _bundleProductId = null); },
+                  decoration: const InputDecoration(labelText: 'Bundle Product (an existing product marked as a bundle)'),
+                );
+              }),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: _bundleMode,
+              isExpanded: true, isDense: true, itemHeight: null,
+              decoration: const InputDecoration(labelText: 'Mode'),
+              items: const [
+                DropdownMenuItem(value: 'PREASSEMBLED', child: Text('Preassembled — carries its own stock')),
+                DropdownMenuItem(value: 'COMMERCIAL', child: Text('Commercial — auto-consume components (not yet wired)')),
+              ],
+              onChanged: (v) => setState(() => _bundleMode = v!),
+            ),
+            if (_bundleMode == 'COMMERCIAL')
+              const Padding(
+                padding: EdgeInsets.only(top: 6),
+                child: Text(
+                  'Selling this bundle will NOT yet deduct component stock — that engine change hasn\'t been built. '
+                  'Use Preassembled (build via Stock Adjustment) until this is wired up.',
+                  style: TextStyle(fontSize: 11, color: AppColors.negative),
+                ),
+              ),
+            const SizedBox(height: 14),
+            const Text('Components', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
+            const SizedBox(height: 6),
+            if (!_loadingProducts)
+              ..._components.map((c) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(children: [
+                      Expanded(
+                        child: Builder(builder: (context) {
+                          final selected = _products.where((p) => p['id'] == c.productId).toList();
+                          return SakalAutocomplete<Map<String, dynamic>>(
+                            key: ValueKey(c.productId),
+                            initialValue: TextEditingValue(text: selected.isNotEmpty ? _productDisplay(selected.first) : ''),
+                            displayStringForOption: _productDisplay,
+                            optionsBuilder: (v) {
+                              final q = v.text.toLowerCase().trim();
+                              return q.isEmpty ? _products : _products.where((p) => _productDisplay(p).toLowerCase().contains(q));
+                            },
+                            onSelected: (p) => c.productId = p['id'] as String,
+                            onChanged: (v) { if (v.isEmpty) c.productId = null; },
+                            decoration: const InputDecoration(isDense: true, labelText: 'Component Product'),
+                          );
+                        }),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 70,
+                        child: TextField(
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(isDense: true, labelText: 'Qty'),
+                          controller: TextEditingController(text: c.qty.toString()),
+                          onChanged: (v) => c.qty = double.tryParse(v) ?? c.qty,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: _components.length <= 1 ? null : () => setState(() => _components.remove(c)),
+                        icon: const Icon(Icons.close, size: 18, color: AppColors.negative),
+                      ),
+                    ]),
+                  )),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => setState(() => _components.add(_BundleComponentDraft())),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Add Component'),
+              ),
+            ),
+            if (widget.existing != null) ...[
+              const SizedBox(height: 4),
+              SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Active'), value: _active, onChanged: (v) => setState(() => _active = v)),
+            ],
+          ]),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: _saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save'),
+        ),
+      ],
     );
   }
 }
