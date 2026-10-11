@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
+import '../../../../core/config/app_constants.dart';
 import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/router/route_names.dart';
@@ -56,6 +58,16 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
   bool _creatingNew = false;
 
   @override
+  void dispose() {
+    // Defensive cleanup for the admin token stashed in _adminLogin, in
+    // case this screen is abandoned (back navigation, browser close)
+    // before _finishSetup's own cleanup ever runs — this screen must
+    // never leave a lingering admin session behind on the till either way.
+    const FlutterSecureStorage().delete(key: AppConstants.keyAccessToken);
+    super.dispose();
+  }
+
+  @override
   void initState() {
     super.initState();
     PosDeviceStorage.deviceUid().then((uid) => mounted ? setState(() => _deviceUid = uid) : null);
@@ -76,6 +88,24 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
       _clientId = d['client_id'] as String;
       _companyId = d['company_id'] as String;
       _companyName = d['company_name'] as String? ?? '';
+
+      // Real bug found live 2026-10-11 (via a genuinely fresh browser
+      // profile with no prior session — e.g. first-ever setup of a real
+      // new till): DioClient's own interceptor only ever attaches a JWT it
+      // finds in secure storage, and fn_login's response token was never
+      // written there — every request after this one (starting with the
+      // very next line) silently fell back to the anon key and got 401
+      // Unauthorized from RLS. This never surfaced in prior manual testing
+      // only because that same browser already had a stale admin JWT
+      // cached from an earlier, unrelated back-office login, which
+      // happened to satisfy these calls by coincidence. Stored here (and
+      // explicitly cleared again once setup finishes, in _finishSetup) so
+      // this screen's own requests actually authenticate, without turning
+      // this one-time admin login into a lingering session on the till.
+      final token = d['access_token'] as String?;
+      if (token != null) {
+        await const FlutterSecureStorage().write(key: AppConstants.keyAccessToken, value: token);
+      }
 
       final locRes = await DioClient.instance.get('/ric_locations', queryParameters: {
         'client_id': 'eq.$_clientId',
@@ -168,6 +198,11 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
         terminalName: terminalName,
         companyName: _companyName ?? '',
       );
+
+      // Clear the temporary admin token stashed in _adminLogin — setup is
+      // done, and this till must boot straight to PIN entry from here on,
+      // never carry a lingering admin session.
+      await const FlutterSecureStorage().delete(key: AppConstants.keyAccessToken);
 
       if (!mounted) return;
       context.go(RouteNames.posLogin);
