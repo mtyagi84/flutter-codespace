@@ -778,7 +778,12 @@ class _SchemesTab extends StatelessWidget {
   Future<void> _openEditor(BuildContext context, {Map<String, dynamic>? existing}) async {
     await showDialog(
       context: context,
-      builder: (_) => _SchemeEditorDialog(existing: existing, onSaved: onChanged, showMsg: showMsg),
+      builder: (_) => _SchemeEditorDialog(
+        existing: existing,
+        onSaved: onChanged,
+        showMsg: showMsg,
+        existingCodes: schemes.map((s) => s['scheme_code'] as String).toSet(),
+      ),
     );
   }
 
@@ -822,8 +827,12 @@ class _SchemeEditorDialog extends ConsumerStatefulWidget {
   final Map<String, dynamic>? existing;
   final VoidCallback onSaved;
   final void Function(String, {Color? color}) showMsg;
+  // Every OTHER scheme's own code, used to auto-generate the next free one
+  // for a brand-new scheme — a cashier/admin should never have to invent
+  // or remember a code themselves (real user feedback, 2026-10-11).
+  final Set<String> existingCodes;
 
-  const _SchemeEditorDialog({required this.existing, required this.onSaved, required this.showMsg});
+  const _SchemeEditorDialog({required this.existing, required this.onSaved, required this.showMsg, this.existingCodes = const {}});
 
   @override
   ConsumerState<_SchemeEditorDialog> createState() => _SchemeEditorDialogState();
@@ -869,8 +878,22 @@ String _ruleBenefitTypeLabel(String t) => switch (t) {
       _ => t,
     };
 
+/// Finds the lowest-numbered unused "SCH-NNN" code — not just COUNT+1, so a
+/// deleted/renamed scheme in the middle of the sequence doesn't collide
+/// with a code that's already taken (the same reasoning this schema
+/// already requires scheme_code to be unique for).
+String _nextSchemeCode(Set<String> existingCodes) {
+  var n = 1;
+  while (existingCodes.contains('SCH-${n.toString().padLeft(3, '0')}')) {
+    n++;
+  }
+  return 'SCH-${n.toString().padLeft(3, '0')}';
+}
+
 class _SchemeEditorDialogState extends ConsumerState<_SchemeEditorDialog> {
-  late final _codeCtrl = TextEditingController(text: widget.existing?['scheme_code'] as String? ?? '');
+  late final _codeCtrl = TextEditingController(
+    text: widget.existing?['scheme_code'] as String? ?? _nextSchemeCode(widget.existingCodes),
+  );
   late final _nameCtrl = TextEditingController(text: widget.existing?['scheme_name'] as String? ?? '');
   String _schemeType = 'PERCENT_OFF';
   String _scope = 'PRODUCT';
@@ -1099,7 +1122,11 @@ class _SchemeEditorDialogState extends ConsumerState<_SchemeEditorDialog> {
         width: 440,
         child: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            TextField(controller: _codeCtrl, decoration: const InputDecoration(labelText: 'Scheme Code')),
+            TextField(
+              controller: _codeCtrl,
+              readOnly: true,
+              decoration: const InputDecoration(labelText: 'Scheme Code', helperText: 'Assigned automatically', filled: true, fillColor: AppColors.background),
+            ),
             const SizedBox(height: 10),
             TextField(controller: _nameCtrl, decoration: const InputDecoration(labelText: 'Scheme Name (e.g. Weekend 10% Off)')),
             const SizedBox(height: 10),
