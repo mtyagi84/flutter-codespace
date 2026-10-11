@@ -49,6 +49,14 @@ const posReceiptDefaultTemplate = PrintTemplate(
         PrintTableColumn(bind: 'product_name', label: 'Item'),
         PrintTableColumn(bind: 'base_qty', label: 'Qty', format: PrintDataFormat.number),
         PrintTableColumn(bind: 'rate', label: 'Rate', format: PrintDataFormat.currency),
+        // Blank on an ordinary line (bound value is null there — see
+        // PosNewSaleScreen._buildPrintDocument), so a plain sale's receipt
+        // is unchanged; a scheme-discounted line shows what was knocked
+        // off so qty x rate - Promo = Amount visibly reconciles, instead
+        // of the printed Amount just looking wrong with no explanation —
+        // real bug reported live 2026-10-11 (security-gate reconciliation
+        // concern: the receipt gave no indication a unit was free).
+        PrintTableColumn(bind: 'scheme_discount_amount', label: 'Promo', format: PrintDataFormat.currency),
         PrintTableColumn(bind: 'final_amount', label: 'Amount', format: PrintDataFormat.currency),
       ],
     ),

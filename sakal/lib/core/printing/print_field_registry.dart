@@ -368,6 +368,14 @@ class PrintFieldRegistry {
       PrintFieldDef('base_qty', 'Quantity', PrintDataFormat.number),
       PrintFieldDef('rate', 'Rate', PrintDataFormat.currency),
       PrintFieldDef('final_amount', 'Amount', PrintDataFormat.currency),
+      // Real gap found live 2026-10-11: a POS line discounted by a scheme
+      // (e.g. "buy 2 get 1 free") showed qty x rate NOT reconciling against
+      // the printed line amount anywhere on the receipt, with zero
+      // indication why — a real problem for a security gate/customer
+      // reconciling the receipt against bag contents. Exposed here so
+      // POS_RECEIPT's default template (and any future custom one) can
+      // show it per line.
+      PrintFieldDef('scheme_discount_amount', 'Promo Discount', PrintDataFormat.currency),
     ],
     'charges': [
       PrintFieldDef('charge_name', 'Charge Name'),

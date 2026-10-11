@@ -1181,6 +1181,11 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
         'base_qty': l.baseQty,
         'rate': l.rate,
         'final_amount': l.finalAmount,
+        // Real gap fixed 2026-10-11: a scheme-discounted line's printed
+        // qty x rate never reconciled against its own amount anywhere on
+        // the receipt — null (blank cell) for an ordinary line, so the
+        // column only ever shows on a line that actually had a promo.
+        'scheme_discount_amount': l.schemeDiscountAmount > 0 ? l.schemeDiscountAmount : null,
       }).toList(),
       'charges': const [],
       'totals': {
