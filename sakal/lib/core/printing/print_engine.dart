@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:printing/printing.dart';
 import 'pdf_canvas_renderer.dart';
@@ -26,11 +27,37 @@ class PrintEngine {
     // silent, zero-click print). Native desktop already uses layoutPdf
     // unconditionally below, so this flag is a no-op there.
     bool directPrint = false,
+    // The POS till's own configured receipt printer (ric_pos_terminals.
+    // receipt_printer_url) — when set and running on a native desktop
+    // build, routes through Printing.directPrintPdf() for a genuinely
+    // silent print (no OS dialog at all), the real fix for the "direct
+    // print still shows a dialog" gap found 2026-10-11. Never attempted
+    // on Web or mobile — directPrintPdf isn't supported there, and the
+    // existing layoutPdf/sharePdf fallback below already handles those.
+    String? printerUrl,
   }) async {
     final doc = template.paperProfile.isReceipt
         ? PdfFlowRenderer.render(template, document)
         : PdfCanvasRenderer.render(template, document, printedByName: printedByName, printedOn: printedOn);
     final bytes = await doc.save();
+
+    if (printerUrl != null && printerUrl.isNotEmpty && !kIsWeb &&
+        defaultTargetPlatform != TargetPlatform.android && defaultTargetPlatform != TargetPlatform.iOS) {
+      try {
+        final printers = await Printing.listPrinters();
+        final match = printers.where((p) => p.url == printerUrl).firstOrNull;
+        if (match != null) {
+          await Printing.directPrintPdf(printer: match, onLayout: (_) async => bytes, name: filename);
+          return;
+        }
+        // Configured printer no longer exists on this device (renamed/
+        // unplugged) — fall through to the dialog-based path below rather
+        // than failing the print entirely.
+      } catch (_) {
+        // listPrinters()/directPrintPdf() unsupported or errored on this
+        // platform — same fall-through.
+      }
+    }
 
     // Real bug found live: kIsWeb is true even when the app is opened in a
     // *mobile browser* (this project is primarily deployed as a Flutter Web

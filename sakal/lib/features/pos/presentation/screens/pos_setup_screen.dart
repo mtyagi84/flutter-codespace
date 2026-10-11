@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:printing/printing.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/layout/screen_header.dart';
@@ -78,7 +80,7 @@ class _PosSetupScreenState extends ConsumerState<PosSetupScreen>
         DioClient.instance.get('/ric_pos_terminals', queryParameters: {
           'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
           'is_deleted': 'eq.false',
-          'select': 'id,terminal_code,terminal_name,receipt_paper_profile,is_active,location_id,ric_locations(location_name)',
+          'select': 'id,terminal_code,terminal_name,receipt_paper_profile,receipt_printer_name,receipt_printer_url,is_active,location_id,ric_locations(location_name)',
           'order': 'terminal_code.asc',
         }),
         DioClient.instance.get('/ric_pos_devices', queryParameters: {
@@ -211,7 +213,9 @@ class _TerminalsTab extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.point_of_sale_outlined),
               title: Text('${t['terminal_code']} — ${t['terminal_name']}'),
-              subtitle: Text('$locName · ${t['receipt_paper_profile']}${active ? '' : ' · Inactive'}'),
+              subtitle: Text('$locName · ${t['receipt_paper_profile']}'
+                  '${t['receipt_printer_name'] != null ? ' · Printer: ${t['receipt_printer_name']}' : ' · no printer configured'}'
+                  '${active ? '' : ' · Inactive'}'),
               trailing: canEdit ? const Icon(Icons.edit_outlined, size: 18) : null,
               onTap: canEdit ? () => _openEditor(context, existing: t) : null,
             ),
@@ -246,6 +250,19 @@ class _TerminalEditorDialogState extends ConsumerState<_TerminalEditorDialog> {
   String _paperProfile = 'RECEIPT_80MM';
   bool _active = true;
   bool _saving = false;
+  String? _printerUrl;
+  String? _printerName;
+  late final _printerUrlCtrl = TextEditingController(text: widget.existing?['receipt_printer_url'] as String? ?? '');
+  List<Printer> _detectedPrinters = [];
+  bool _detectingPrinters = false;
+  // listPrinters() only works on a native desktop build, and only returns
+  // THIS machine's own printers — if POS Setup is opened on the admin's own
+  // PC rather than the till itself, the detected list won't be the till's
+  // printers. Detection is still offered (the common case: a manager
+  // configuring the printer directly on the till machine), with the manual
+  // URL field underneath as the fallback for every other case.
+  bool get _canDetectPrinters => !kIsWeb &&
+      defaultTargetPlatform != TargetPlatform.android && defaultTargetPlatform != TargetPlatform.iOS;
 
   @override
   void initState() {
@@ -253,12 +270,26 @@ class _TerminalEditorDialogState extends ConsumerState<_TerminalEditorDialog> {
     _locationId = widget.existing?['location_id'] as String?;
     _paperProfile = widget.existing?['receipt_paper_profile'] as String? ?? 'RECEIPT_80MM';
     _active = widget.existing?['is_active'] as bool? ?? true;
+    _printerUrl = widget.existing?['receipt_printer_url'] as String?;
+    _printerName = widget.existing?['receipt_printer_name'] as String?;
+    if (_canDetectPrinters) _detectPrinters();
+  }
+
+  Future<void> _detectPrinters() async {
+    setState(() => _detectingPrinters = true);
+    try {
+      final printers = await Printing.listPrinters();
+      if (mounted) setState(() { _detectedPrinters = printers; _detectingPrinters = false; });
+    } catch (_) {
+      if (mounted) setState(() => _detectingPrinters = false);
+    }
   }
 
   @override
   void dispose() {
     _codeCtrl.dispose();
     _nameCtrl.dispose();
+    _printerUrlCtrl.dispose();
     super.dispose();
   }
 
@@ -267,6 +298,11 @@ class _TerminalEditorDialogState extends ConsumerState<_TerminalEditorDialog> {
       widget.showMsg('Location, code, and name are all required.', color: AppColors.negative);
       return;
     }
+    // Manual URL field (fallback when a printer wasn't picked from the
+    // detected list) wins if the admin typed something into it.
+    final manualUrl = _printerUrlCtrl.text.trim();
+    final finalPrinterUrl = manualUrl.isNotEmpty ? manualUrl : _printerUrl;
+    final finalPrinterName = manualUrl.isNotEmpty && manualUrl != _printerUrl ? manualUrl : _printerName;
     setState(() => _saving = true);
     final session = ref.read(sessionProvider)!;
     try {
@@ -279,6 +315,8 @@ class _TerminalEditorDialogState extends ConsumerState<_TerminalEditorDialog> {
           'terminal_code': _codeCtrl.text.trim(),
           'terminal_name': _nameCtrl.text.trim(),
           'receipt_paper_profile': _paperProfile,
+          'receipt_printer_url': finalPrinterUrl,
+          'receipt_printer_name': finalPrinterName,
         });
       } else {
         await DioClient.instance.patch(
@@ -289,6 +327,8 @@ class _TerminalEditorDialogState extends ConsumerState<_TerminalEditorDialog> {
             'terminal_code': _codeCtrl.text.trim(),
             'terminal_name': _nameCtrl.text.trim(),
             'receipt_paper_profile': _paperProfile,
+            'receipt_printer_url': finalPrinterUrl,
+            'receipt_printer_name': finalPrinterName,
             'is_active': _active,
           },
         );
@@ -334,6 +374,45 @@ class _TerminalEditorDialogState extends ConsumerState<_TerminalEditorDialog> {
               DropdownMenuItem(value: 'RECEIPT_80MM', child: Text('80mm')),
             ],
             onChanged: (v) => setState(() => _paperProfile = v!),
+          ),
+          const SizedBox(height: 10),
+          if (_canDetectPrinters) ...[
+            if (_detectingPrinters)
+              const Padding(padding: EdgeInsets.all(8), child: LinearProgressIndicator())
+            else
+              DropdownButtonFormField<String>(
+                // Guard against a saved printer URL that no longer appears
+                // in this machine's own detected list (e.g. configured
+                // from a different machine, or the printer was renamed/
+                // unplugged) — DropdownButtonFormField asserts its value
+                // matches exactly one item, so an unmatched value falls
+                // back to "None" here rather than crashing; the manual URL
+                // field below still shows/edits the real stored value.
+                initialValue: _detectedPrinters.any((p) => p.url == _printerUrl) ? _printerUrl : null,
+                isExpanded: true, isDense: true, itemHeight: null,
+                decoration: InputDecoration(
+                  labelText: 'Receipt Printer (detected on this machine)',
+                  suffixIcon: IconButton(icon: const Icon(Icons.refresh, size: 18), onPressed: _detectPrinters),
+                ),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('None — use dialog-based printing')),
+                  ..._detectedPrinters.map((p) => DropdownMenuItem(value: p.url, child: Text(p.name))),
+                ],
+                onChanged: (v) => setState(() {
+                  _printerUrl = v;
+                  _printerName = v == null ? null : _detectedPrinters.firstWhere((p) => p.url == v).name;
+                  _printerUrlCtrl.clear();
+                }),
+              ),
+            const Padding(
+              padding: EdgeInsets.only(top: 4, bottom: 4),
+              child: Text('Configuring from a different machine than the till itself? Type the printer URL below instead.',
+                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+            ),
+          ],
+          TextField(
+            controller: _printerUrlCtrl,
+            decoration: const InputDecoration(labelText: 'Printer URL (manual override)', hintText: 'Leave blank to use the detected printer above'),
           ),
           if (widget.existing != null) ...[
             const SizedBox(height: 4),

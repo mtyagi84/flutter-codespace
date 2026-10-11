@@ -24,6 +24,8 @@ import 'default_templates/sales_return_default_template.dart';
 import 'default_templates/sales_delivery_default_template.dart';
 import 'default_templates/cash_receipt_default_template.dart';
 import 'default_templates/expense_voucher_default_template.dart';
+import 'default_templates/pos_receipt_default_template.dart';
+import 'default_templates/pos_return_receipt_default_template.dart';
 import 'print_models.dart';
 
 /// Fetches the company's active default template for a document type, or
@@ -82,5 +84,7 @@ PrintTemplate defaultTemplateFor(String documentType) => switch (documentType) {
   'SALES_DELIVERY'          => salesDeliveryDefaultTemplate,
   'CASH_RECEIPT'            => cashReceiptDefaultTemplate,
   'EXPENSE_VOUCHER'         => expenseVoucherDefaultTemplate,
+  'POS_RECEIPT'             => posReceiptDefaultTemplate,
+  'POS_RETURN_RECEIPT'      => posReturnReceiptDefaultTemplate,
   _ => throw ArgumentError('No default print template registered for document type "$documentType".'),
 };

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/errors/error_presenter.dart';
+import '../../../../core/network/dio_client.dart';
 import '../../../../core/printing/print_engine.dart';
+import '../../../../core/printing/print_models.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
@@ -88,6 +90,10 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
   // taxed sale.
   Map<String, double> _taxGroupRatePct = {};
 
+  // ── Receipt printing (ric_pos_terminals.receipt_*, migration 217) ────────
+  String? _receiptPaperProfile;
+  String? _receiptPrinterUrl;
+
   bool get _showRefund => _invoice != null && _invoice!['sale_type'] == 'CASH' && _invoice!['cash_collection_mode'] == 'IMMEDIATE';
 
   double get _taxableTotal => _lines.fold(0, (s, l) => s + l.returnQty * l.rate);
@@ -100,7 +106,30 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadRecentInvoices());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadRecentInvoices();
+      _loadTerminalPrintConfig();
+    });
+  }
+
+  Future<void> _loadTerminalPrintConfig() async {
+    final terminalId = ref.read(sessionProvider)?.posTerminalId;
+    if (terminalId == null) return;
+    try {
+      final res = await DioClient.instance.get('/ric_pos_terminals', queryParameters: {
+        'id': 'eq.$terminalId', 'select': 'receipt_paper_profile,receipt_printer_url',
+      });
+      final list = res.data as List;
+      if (list.isEmpty || !mounted) return;
+      final t = list.first as Map<String, dynamic>;
+      setState(() {
+        _receiptPaperProfile = t['receipt_paper_profile'] as String?;
+        _receiptPrinterUrl = t['receipt_printer_url'] as String?;
+      });
+    } catch (_) {
+      // Printer config is best-effort — falls back to the dialog-based
+      // default path if this fetch fails for any reason.
+    }
   }
 
   @override
@@ -280,13 +309,19 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
     }
   }
 
-  // Reuses the exact 'SALES_RETURN' print template/field registry the
-  // back-office Sales Return screen already prints with.
+  // Prints the dedicated narrow 'POS_RETURN_RECEIPT' template, never the
+  // back-office 'SALES_RETURN' A4 letterhead layout — same fix as New
+  // Sale's own receipt (2026-10-11).
   Future<void> _printReceipt(String returnNo, String returnDate, List<_ReturnableLine> returnLines) async {
     try {
       final company = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
-      final template = await ref.read(printTemplateProvider('SALES_RETURN').future);
+      final baseTemplate = await ref.read(printTemplateProvider('POS_RETURN_RECEIPT').future);
+      final template = _receiptPaperProfile == 'RECEIPT_58MM'
+          ? PrintTemplate(documentType: baseTemplate.documentType, templateName: baseTemplate.templateName,
+              paperProfile: PaperProfile.receipt58mm, isDefault: baseTemplate.isDefault, elements: baseTemplate.elements)
+          : baseTemplate;
       final customerName = (_invoice!['customer'] as Map<String, dynamic>?)?['account_name'] as String? ?? 'Walk-in';
+      final session = ref.read(sessionProvider);
       final document = {
         'company': company,
         'header': {
@@ -295,6 +330,7 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
           'status': 'APPROVED',
           'invoice_no': _invoice!['invoice_no'],
           'customer_name': customerName,
+          'cashier_name': session?.fullName ?? '',
           'currency_code': '',
           'reason': _reason,
           'remarks': '',
@@ -312,7 +348,6 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
           'return_total': _returnTotal,
         },
       };
-      final session = ref.read(sessionProvider);
       if (!mounted) return;
       await PrintEngine.printDocument(
         template: template,
@@ -321,6 +356,7 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
         printedByName: session?.fullName,
         printedOn: DateTime.now(),
         directPrint: true,
+        printerUrl: _receiptPrinterUrl,
       );
     } catch (e, st) {
       AppLogger.error('PosReturnReceiptPrint', e, st);

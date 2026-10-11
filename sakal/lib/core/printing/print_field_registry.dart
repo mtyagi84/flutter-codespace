@@ -626,6 +626,14 @@ class PrintFieldRegistry {
       'SALES_RETURN'            => _salesReturnScalarFields,
       'SALES_DELIVERY'          => _salesDeliveryScalarFields,
       'CASH_RECEIPT'            => _cashReceiptScalarFields,
+      // POS receipts reuse Sales Invoice/Return's own field set for the
+      // designer's field picker — the handful of POS-only keys (cashier,
+      // till, tendered/change, loyalty points) aren't registered here yet,
+      // so they're not drag-and-droppable in the designer, but the
+      // hardcoded default template still binds them directly (the
+      // renderer reads straight from the document map, not this registry).
+      'POS_RECEIPT'             => _salesInvoiceScalarFields,
+      'POS_RETURN_RECEIPT'      => _salesReturnScalarFields,
       _ => const <PrintFieldDef>[],
     },
     ..._companyFields,
@@ -657,6 +665,8 @@ class PrintFieldRegistry {
     'SALES_RETURN'            => const ['lines'],
     'SALES_DELIVERY'          => const ['lines'],
     'CASH_RECEIPT'            => const ['lines'],
+    'POS_RECEIPT'             => const ['lines'],
+    'POS_RETURN_RECEIPT'      => const ['lines'],
     _ => const [],
   };
 
@@ -685,6 +695,8 @@ class PrintFieldRegistry {
     'SALES_RETURN'            => _salesReturnTableRowFields[tableName] ?? const [],
     'SALES_DELIVERY'          => _salesDeliveryTableRowFields[tableName] ?? const [],
     'CASH_RECEIPT'            => _cashReceiptTableRowFields[tableName] ?? const [],
+    'POS_RECEIPT'             => _salesInvoiceTableRowFields[tableName] ?? const [],
+    'POS_RETURN_RECEIPT'      => _salesReturnTableRowFields[tableName] ?? const [],
     _ => const [],
   };
 
@@ -698,6 +710,7 @@ class PrintFieldRegistry {
     'MATERIAL_REQUISITION', 'MATERIAL_ISSUE', 'STOCK_TRANSFER_REQUEST', 'STOCK_TRANSFER', 'STOCK_RECEIPT',
     'STOCK_ADJUSTMENT', 'OPENING_STOCK', 'STOCK_COUNT', 'STOCK_COUNT_REVIEW', 'PRICE_MASTER',
     'SALES_INVOICE', 'SALES_RETURN', 'SALES_DELIVERY', 'CASH_RECEIPT', 'EXPENSE_VOUCHER',
+    'POS_RECEIPT', 'POS_RETURN_RECEIPT',
   ];
 
   static String documentTypeLabel(String documentType) => switch (documentType) {
@@ -724,6 +737,8 @@ class PrintFieldRegistry {
     'SALES_RETURN'            => 'Sales Return',
     'SALES_DELIVERY'          => 'Sales Delivery',
     'CASH_RECEIPT'            => 'Cash Receipt',
+    'POS_RECEIPT'             => 'POS Receipt',
+    'POS_RETURN_RECEIPT'      => 'POS Return Receipt',
     _ => documentType,
   };
 }

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/printing/print_engine.dart';
+import '../../../../core/printing/print_models.dart';
 import '../../../../core/printing/print_template_provider.dart';
 import '../../../../core/providers/master_cache_providers.dart';
 import '../../../../core/providers/session_provider.dart';
@@ -216,6 +217,11 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   String? _weightedPrefixTo;
   String? _weightedFormat; // 'WEIGHT_EMBEDDED' | 'PRICE_EMBEDDED' | null (disabled)
 
+  // ── Receipt printing (ric_pos_terminals.receipt_*, migration 217) ────────
+  String? _terminalName;
+  String? _receiptPaperProfile; // 'RECEIPT_58MM' | 'RECEIPT_80MM' | null
+  String? _receiptPrinterUrl;   // Printing.listPrinters()'s stable `url`, configured in POS Setup
+
   // ── Loyalty (migrations 214/215) — phone-number-first, no customer account
   // required. v1 scope: capture + earn only. Redeeming points against the
   // bill is tracked server-side (fn_set_invoice_loyalty/fn_post_loyalty_for_
@@ -331,6 +337,18 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       });
       final shifts = List<Map<String, dynamic>>.from(shiftRes.data as List);
       _shift = shifts.isEmpty ? null : shifts.first;
+
+      final terminalRes = await DioClient.instance.get('/ric_pos_terminals', queryParameters: {
+        'id': 'eq.${session.posTerminalId}',
+        'select': 'terminal_name,receipt_paper_profile,receipt_printer_url',
+      });
+      final terminalList = terminalRes.data as List;
+      if (terminalList.isNotEmpty) {
+        final t = terminalList.first as Map<String, dynamic>;
+        _terminalName = t['terminal_name'] as String?;
+        _receiptPaperProfile = t['receipt_paper_profile'] as String?;
+        _receiptPrinterUrl = t['receipt_printer_url'] as String?;
+      }
 
       final companyRes = await DioClient.instance.get('/ric_companies', queryParameters: {
         'id': 'eq.${session.companyId}',
@@ -943,13 +961,14 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
 
   // ── Receipt printing ──────────────────────────────────────────────────────
   // A POS sale is a Sales Invoice row (see this file's own header comment),
-  // so it reuses the exact same 'SALES_INVOICE' print template/field
-  // registry the back-office Quick Invoice screen already prints with —
-  // same document shape, same PrintEngine call, just always fired
-  // automatically rather than behind a Print button or a "print now?"
-  // confirmation dialog.
+  // but prints its OWN dedicated 'POS_RECEIPT' template — a narrow receipt-
+  // roll layout, never the back-office 'SALES_INVOICE' A4 template with its
+  // full letterhead/signature block (a real bug found live 2026-10-11:
+  // every POS sale was printing that A4 layout verbatim). See
+  // pos_receipt_default_template.dart.
 
   Map<String, dynamic> _buildPrintDocument(Map<String, dynamic> company, String invoiceNo, String invoiceDate) {
+    final session = ref.read(sessionProvider);
     return {
       'company': company,
       'header': {
@@ -962,8 +981,11 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
         'party_phone': '',
         'party_address': '',
         'sales_person_name': '',
+        'cashier_name': session?.fullName ?? '',
+        'terminal_name': _terminalName ?? '',
         'currency_code': _localCcy,
         'remarks': '',
+        'has_loyalty': _loyaltyProfileId != null,
       },
       'lines': _lines.map((l) => {
         'product_name': l.productName,
@@ -979,6 +1001,8 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
         'charges_amount': 0,
         'tax_amount': _taxTotal,
         'grand_total': _grandTotal,
+        'collected_amount': _collectedAmount ?? _grandTotal,
+        'change_amount': ((_collectedAmount ?? _grandTotal) - _grandTotal).clamp(0, double.infinity),
       },
       'signatures': {'prepared_by': '', 'authorised_by': ''},
     };
@@ -987,7 +1011,15 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   Future<void> _printReceipt(String invoiceNo, String invoiceDate) async {
     try {
       final company = await ref.read(companyDetailsProvider.future) ?? <String, dynamic>{};
-      final template = await ref.read(printTemplateProvider('SALES_INVOICE').future);
+      final baseTemplate = await ref.read(printTemplateProvider('POS_RECEIPT').future);
+      // The terminal's own configured roll width overrides whatever paper
+      // profile the template itself carries — a company-wide default
+      // template shouldn't have to be duplicated per terminal just to pick
+      // 58mm vs 80mm.
+      final template = _receiptPaperProfile == 'RECEIPT_58MM'
+          ? PrintTemplate(documentType: baseTemplate.documentType, templateName: baseTemplate.templateName,
+              paperProfile: PaperProfile.receipt58mm, isDefault: baseTemplate.isDefault, elements: baseTemplate.elements)
+          : baseTemplate;
       final document = _buildPrintDocument(company, invoiceNo, invoiceDate);
       final session = ref.read(sessionProvider);
       if (!mounted) return;
@@ -998,6 +1030,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
         printedByName: session?.fullName,
         printedOn: DateTime.now(),
         directPrint: true,
+        printerUrl: _receiptPrinterUrl,
       );
     } catch (e, st) {
       // Printing is best-effort — a printer/PDF failure must never block
