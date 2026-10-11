@@ -175,6 +175,75 @@ String _tenderTypeLabel(String t) => switch (t) {
       _ => t,
     };
 
+/// Large touch target for a binary mode choice (Single/Split Payment) —
+/// replaces a small TextButton link that was easy to miss/mis-tap on a
+/// touchscreen.
+class _ModeTile extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ModeTile({required this.label, required this.icon, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? AppColors.primary.withValues(alpha: 0.1) : AppColors.background,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          height: 56,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: selected ? AppColors.primary : AppColors.border, width: selected ? 1.5 : 1),
+          ),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(icon, size: 18, color: selected ? AppColors.primary : AppColors.textSecondary),
+            const SizedBox(width: 8),
+            Text(label, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: selected ? AppColors.primary : AppColors.textPrimary)),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// A tappable pill — the touch-friendly replacement for a
+/// DropdownButtonFormField wherever the option set is short enough to show
+/// all at once (tender type, currency, quick cash amount). Reading and
+/// hitting a dropdown's tiny closed-state text/chevron on a touchscreen was
+/// the specific complaint this replaces.
+class _ChoiceTile extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ChoiceTile({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? AppColors.secondary.withValues(alpha: 0.15) : AppColors.surface,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: selected ? AppColors.secondary : AppColors.border),
+          ),
+          child: Text(label, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5, color: selected ? AppColors.secondary : AppColors.textPrimary)),
+        ),
+      ),
+    );
+  }
+}
+
 class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   bool _loading = true;
   bool _saving = false;
@@ -1829,137 +1898,317 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     );
   }
 
-  Widget _buildTenderLinesEditor() {
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Row(children: [
-        const Expanded(child: Text('Split Payment', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5))),
-        TextButton(onPressed: () => _toggleSplitTender(false), child: const Text('Single currency')),
-      ]),
-      ..._tenderLines.map((t) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Row(children: [
-                SizedBox(
-                  width: 120,
-                  child: DropdownButtonFormField<String>(
-                    initialValue: t.tenderType,
-                    isDense: true, itemHeight: null,
-                    decoration: const InputDecoration(isDense: true, border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10)),
-                    items: _posTenderTypes.map((m) => DropdownMenuItem(value: m, child: Text(_tenderTypeLabel(m), overflow: TextOverflow.ellipsis))).toList(),
-                    onChanged: (v) { if (v != null) setState(() => t.tenderType = v); },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 90,
-                  child: DropdownButtonFormField<String>(
-                    initialValue: t.currencyId,
-                    isDense: true, itemHeight: null,
-                    decoration: const InputDecoration(isDense: true, border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10)),
-                    items: _currencies.map((c) => DropdownMenuItem(value: c['currency_id'] as String, child: Text(c['currency_id'] as String, overflow: TextOverflow.ellipsis))).toList(),
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setState(() => t.currencyId = v);
-                      _refreshTenderRate(v);
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(child: PosAmountField(label: 'Amount', value: t.amount, compact: true, suffixText: t.currencyId, onChanged: (v) => setState(() => t.amount = v))),
-                IconButton(
-                  onPressed: _tenderLines.length <= 1 ? null : () => setState(() => _tenderLines.remove(t)),
-                  icon: const Icon(Icons.close, size: 18, color: AppColors.negative),
-                ),
-              ]),
-              if (t.tenderType == 'CARD' || t.tenderType == 'MOBILE_MONEY')
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: TextField(
-                    decoration: const InputDecoration(isDense: true, labelText: 'Reference No. (optional)', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10)),
-                    onChanged: (v) => t.referenceNo = v,
-                  ),
-                ),
+  // ── Payment collection — dedicated full-height sheet ──────────────────────
+  // Real bug fixed 2026-10-11: the inline split-tender editor (small
+  // dropdowns + a plain Column with no scroll of its own) overflowed the
+  // fixed-width totals panel the moment 2+ tender lines were added, hiding
+  // the Hold/Charge buttons behind it with no way to recover other than
+  // removing a line blind. Payment entry is now its own full-height modal
+  // sheet — real space for touch, chip-style pickers instead of
+  // DropdownButtonFormField (hard to hit/read on a touchscreen), and a
+  // scrollable middle + a FIXED header/footer so it can never hide its own
+  // Done button no matter how many payment methods are added.
+
+  Future<void> _openPaymentSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+        child: SizedBox(
+          height: MediaQuery.of(sheetContext).size.height * 0.92,
+          // A local StatefulBuilder keeps every tap inside the sheet fast
+          // (no full-screen rebuild while it's open); the outer screen's
+          // own `setState` already runs too via the helper methods below,
+          // so the totals panel is already correct the instant this sheet
+          // closes.
+          child: StatefulBuilder(builder: (ctx, setSheetState) => _buildPaymentSheetBody(ctx, setSheetState)),
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
+  Widget _buildPaymentSheetBody(BuildContext ctx, StateSetter setSheetState) {
+    final due = _netDueAfterExchangeCredit.clamp(0.0, double.infinity);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      child: Column(children: [
+        Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Payment', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              Text('Total due: ${due.toStringAsFixed(2)} $_localCcy', style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
             ]),
-          )),
-      Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: _addTenderLine, icon: const Icon(Icons.add, size: 16), label: const Text('Add Tender'))),
-      const Divider(height: 10),
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text('Collected (≈ $_localCcy)', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-        Text(_tenderTotalLocal.toStringAsFixed(2), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+          ),
+          IconButton(onPressed: () => Navigator.of(ctx).pop(), icon: const Icon(Icons.close)),
+        ]),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(
+            child: _ModeTile(
+              label: 'Single Payment',
+              icon: Icons.payments_outlined,
+              selected: !_splitTender,
+              onTap: () { _toggleSplitTender(false); setSheetState(() {}); },
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _ModeTile(
+              label: 'Split Payment',
+              icon: Icons.call_split,
+              selected: _splitTender,
+              onTap: () { _toggleSplitTender(true); setSheetState(() {}); },
+            ),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        // Scrollable middle — this is what keeps the Done button reachable
+        // no matter how many payment methods/currencies are added, instead
+        // of the old fixed-height Column that used to overflow.
+        Expanded(
+          child: SingleChildScrollView(
+            child: _splitTender ? _buildSplitTenderEditor(setSheetState) : _buildSingleTenderEditor(setSheetState),
+          ),
+        ),
+        const Divider(height: 18),
+        _buildPaymentSheetFooter(ctx),
       ]),
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(_tenderRemaining > 0.01 ? 'Short by' : 'Change Due', style: TextStyle(fontSize: 12, color: _tenderRemaining > 0.01 ? AppColors.negative : AppColors.positive)),
-        Text(_tenderRemaining.abs().toStringAsFixed(2), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _tenderRemaining > 0.01 ? AppColors.negative : AppColors.positive)),
+    );
+  }
+
+  Widget _buildSingleTenderEditor(StateSetter setSheetState) {
+    final due = _netDueAfterExchangeCredit.clamp(0.0, double.infinity);
+    final collected = _collectedAmount ?? due;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      PosAmountField(
+        label: 'Amount Collected (Cash)',
+        value: collected,
+        suffixText: _localCcy,
+        onChanged: (v) { _collectedAmount = v; setSheetState(() {}); },
+      ),
+      const SizedBox(height: 12),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        _ChoiceTile(label: 'Exact Amount', selected: (collected - due).abs() < 0.01, onTap: () { _collectedAmount = due; setSheetState(() {}); }),
+        for (final amt in _quickCashRoundUps(due))
+          _ChoiceTile(label: amt.toStringAsFixed(0), selected: (collected - amt).abs() < 0.01, onTap: () { _collectedAmount = amt; setSheetState(() {}); }),
       ]),
     ]);
   }
 
-  Widget _buildTotals() {
+  /// A couple of sensible "handed a round note" amounts at/above what's
+  /// due — not an attempt at real denomination logic, just two quick taps
+  /// so the cashier rarely has to type an exact figure for a cash sale.
+  List<double> _quickCashRoundUps(double due) {
+    if (due <= 0) return const [];
+    final unit = due < 100 ? 10.0 : (due < 1000 ? 50.0 : (due < 10000 ? 500.0 : 5000.0));
+    final first = (due / unit).ceil() * unit;
+    final opts = <double>{};
+    if (first - due > 0.01) opts.add(first);
+    opts.add(first + unit);
+    return opts.toList();
+  }
+
+  Widget _buildSplitTenderEditor(StateSetter setSheetState) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      ..._tenderLines.map((t) => Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Row(children: [
+                Expanded(child: Text(_tenderTypeLabel(t.tenderType), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
+                if (_tenderLines.length > 1)
+                  IconButton(
+                    onPressed: () { setState(() => _tenderLines.remove(t)); setSheetState(() {}); },
+                    icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.negative),
+                    tooltip: 'Remove this payment method',
+                  ),
+              ]),
+              Wrap(spacing: 8, runSpacing: 8, children: _posTenderTypes.map((type) => _ChoiceTile(
+                    label: _tenderTypeLabel(type),
+                    selected: t.tenderType == type,
+                    onTap: () { t.tenderType = type; setSheetState(() {}); },
+                  )).toList()),
+              if (_currencies.length > 1) ...[
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, runSpacing: 8, children: _currencies.map((c) {
+                  final ccyId = c['currency_id'] as String;
+                  return _ChoiceTile(
+                    label: ccyId,
+                    selected: t.currencyId == ccyId,
+                    onTap: () {
+                      t.currencyId = ccyId;
+                      setSheetState(() {});
+                      _refreshTenderRate(ccyId).then((_) { if (mounted) setSheetState(() {}); });
+                    },
+                  );
+                }).toList()),
+              ],
+              const SizedBox(height: 10),
+              PosAmountField(label: 'Amount', value: t.amount, suffixText: t.currencyId, onChanged: (v) { t.amount = v; setSheetState(() {}); }),
+              if (t.tenderType == 'CARD' || t.tenderType == 'MOBILE_MONEY') ...[
+                const SizedBox(height: 8),
+                TextField(
+                  decoration: const InputDecoration(isDense: true, labelText: 'Reference No. (optional)', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12)),
+                  onChanged: (v) => t.referenceNo = v,
+                ),
+              ],
+            ]),
+          )),
+      SizedBox(
+        height: 46,
+        child: OutlinedButton.icon(
+          onPressed: () { _addTenderLine(); setSheetState(() {}); },
+          icon: const Icon(Icons.add),
+          label: const Text('Add Payment Method'),
+        ),
+      ),
+    ]);
+  }
+
+  Widget _buildPaymentSheetFooter(BuildContext ctx) {
+    final collected = _splitTender ? _tenderTotalLocal : (_collectedAmount ?? _netDueAfterExchangeCredit.clamp(0.0, double.infinity));
+    final diff = collected - _netDueAfterExchangeCredit;
+    final short = diff < -0.01;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        const Text('Collected', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+        Text('${collected.toStringAsFixed(2)} $_localCcy', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+      ]),
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(short ? 'Short by' : 'Change Due', style: TextStyle(fontSize: 13, color: short ? AppColors.negative : AppColors.positive)),
+        Text('${diff.abs().toStringAsFixed(2)} $_localCcy', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: short ? AppColors.negative : AppColors.positive)),
+      ]),
+      const SizedBox(height: 10),
+      SizedBox(
+        height: 50,
+        child: FilledButton(
+          onPressed: (_splitTender && short) ? null : () => Navigator.of(ctx).pop(),
+          child: const Text('Done', style: TextStyle(fontWeight: FontWeight.w700)),
+        ),
+      ),
+    ]);
+  }
+
+  /// Compact, always-visible summary shown on the main screen — tapping it
+  /// is the only way into the full payment sheet above. Replaces the old
+  /// inline Collected field / "Split payment" text link.
+  Widget _buildPaymentSummaryCard() {
+    final due = _netDueAfterExchangeCredit;
+    final collected = _splitTender ? _tenderTotalLocal : (_collectedAmount ?? due.clamp(0.0, double.infinity));
+    final diff = collected - due;
+    final short = diff < -0.01;
+    final summary = _splitTender
+        ? (_tenderLines.isEmpty
+            ? 'No payment method added yet'
+            : _tenderLines.map((t) => '${_tenderTypeLabel(t.tenderType)} ${t.amount.toStringAsFixed(2)} ${t.currencyId}').join('  +  '))
+        : 'Cash · ${collected.toStringAsFixed(2)} $_localCcy';
     return Container(
-      padding: const EdgeInsets.all(16),
-      color: AppColors.surface,
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: short ? AppColors.negative.withValues(alpha: 0.4) : AppColors.border),
+      ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        _buildLoyaltySection(),
-        const SizedBox(height: 10),
-        _totalRow('Subtotal', _subtotal + _discountTotal),
-        _totalRow('Discount', -_discountTotal),
-        if (_loyaltyRedeemTotal > 0.001) _totalRow('Loyalty Redeemed', -_loyaltyRedeemTotal),
-        _totalRow('Tax', _taxTotal),
-        const Divider(),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          const Text('Total', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-          Text('${_grandTotal.toStringAsFixed(2)} $_localCcy', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
+        Row(children: [
+          const Icon(Icons.payments_outlined, size: 16, color: AppColors.primary),
+          const SizedBox(width: 6),
+          Expanded(child: Text(summary, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5), maxLines: 2, overflow: TextOverflow.ellipsis)),
         ]),
-        if (widget.exchangeCreditAmount != null) ...[
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(color: AppColors.secondary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
-            child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('Exchange credit from return', style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
-              Text('${widget.exchangeCreditAmount!.toStringAsFixed(2)} $_localCcy', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text(short ? 'Short by' : 'Change Due', style: TextStyle(fontSize: 12, color: short ? AppColors.negative : AppColors.positive)),
+          Text('${diff.abs().toStringAsFixed(2)} $_localCcy', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: short ? AppColors.negative : AppColors.positive)),
+        ]),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 44,
+          child: OutlinedButton.icon(onPressed: _openPaymentSheet, icon: const Icon(Icons.edit_outlined, size: 16), label: const Text('Enter / Edit Payment')),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildTotals() {
+    // Scrollable content + a FIXED footer for Hold/Charge — the general fix
+    // for "screen overflow should never hide the primary action buttons"
+    // (this right-hand panel used to be one unscrollable Column; any growth
+    // in its content — loyalty card, exchange-credit banner, payment
+    // summary — pushed Hold/Charge off the bottom of a short viewport with
+    // no way to reach them).
+    return Container(
+      color: AppColors.surface,
+      child: Column(children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              _buildLoyaltySection(),
+              const SizedBox(height: 10),
+              _totalRow('Subtotal', _subtotal + _discountTotal),
+              _totalRow('Discount', -_discountTotal),
+              if (_loyaltyRedeemTotal > 0.001) _totalRow('Loyalty Redeemed', -_loyaltyRedeemTotal),
+              _totalRow('Tax', _taxTotal),
+              const Divider(),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                const Text('Total', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+                Text('${_grandTotal.toStringAsFixed(2)} $_localCcy', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
+              ]),
+              if (widget.exchangeCreditAmount != null) ...[
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(color: AppColors.secondary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+                  child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    const Text('Exchange credit from return', style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+                    Text('${widget.exchangeCreditAmount!.toStringAsFixed(2)} $_localCcy', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                  ]),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _netDueAfterExchangeCredit >= 0
+                      ? 'Collect ${_netDueAfterExchangeCredit.toStringAsFixed(2)} $_localCcy more from the customer.'
+                      : 'Refund ${(-_netDueAfterExchangeCredit).toStringAsFixed(2)} $_localCcy back to the customer.',
+                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+                ),
+              ],
+              if (_saleType == 'CASH') ...[
+                const SizedBox(height: 10),
+                _buildPaymentSummaryCard(),
+              ],
             ]),
           ),
-          const SizedBox(height: 2),
-          Text(
-            _netDueAfterExchangeCredit >= 0
-                ? 'Collect ${_netDueAfterExchangeCredit.toStringAsFixed(2)} $_localCcy more from the customer.'
-                : 'Refund ${(-_netDueAfterExchangeCredit).toStringAsFixed(2)} $_localCcy back to the customer.',
-            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
-          ),
-        ],
-        if (_saleType == 'CASH') ...[
-          const SizedBox(height: 10),
-          if (!_splitTender) ...[
-            PosAmountField(
-              label: 'Collected',
-              value: _collectedAmount ?? _netDueAfterExchangeCredit.clamp(0, double.infinity),
-              suffixText: _localCcy,
-              onChanged: (v) => setState(() => _collectedAmount = v),
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(onPressed: () => _toggleSplitTender(true), child: const Text('Split payment (card, mobile money, etc.)')),
-            ),
-          ] else
-            _buildTenderLinesEditor(),
-        ],
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 48,
-          child: OutlinedButton.icon(
-            onPressed: _holding ? null : _hold,
-            icon: _holding ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.pause_circle_outline, size: 18),
-            label: const Text('Hold Sale'),
-          ),
         ),
-        const SizedBox(height: 8),
-        FilledButton(
-          onPressed: _saving ? null : _charge,
-          style: FilledButton.styleFrom(backgroundColor: AppColors.secondary, minimumSize: const Size.fromHeight(54)),
-          child: _saving
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : Text('Charge ${_grandTotal.toStringAsFixed(2)} $_localCcy', style: const TextStyle(fontWeight: FontWeight.w800)),
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+          decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            SizedBox(
+              height: 48,
+              child: OutlinedButton.icon(
+                onPressed: _holding ? null : _hold,
+                icon: _holding ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.pause_circle_outline, size: 18),
+                label: const Text('Hold Sale'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            FilledButton(
+              onPressed: _saving ? null : _charge,
+              style: FilledButton.styleFrom(backgroundColor: AppColors.secondary, minimumSize: const Size.fromHeight(54)),
+              child: _saving
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : Text('Charge ${_grandTotal.toStringAsFixed(2)} $_localCcy', style: const TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ]),
         ),
       ]),
     );
