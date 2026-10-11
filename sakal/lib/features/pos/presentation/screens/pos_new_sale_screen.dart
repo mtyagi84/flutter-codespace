@@ -111,6 +111,11 @@ class _PosLineRow {
   // over the client's own computed final amounts — see migration 213).
   double schemeDiscountAmount = 0;
   String? schemeName;
+  // This line's own apportioned share of a bill-level loyalty-points
+  // redemption (see _recompute) — display-only, not sent to the server
+  // (the server never needs to know the apportionment, only the final
+  // per-line amounts it already trusts).
+  double loyaltyRedeemShare = 0;
 
   bool get isBatchTracked => trackingType == 'BATCH' || trackingType == 'BATCH_WITH_EXPIRY';
   bool get isSerialTracked => trackingType == 'SERIAL';
@@ -225,6 +230,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   double get _discountTotal => _lines.fold(0, (s, l) => s + l.discountAmount);
   double get _taxTotal => _lines.fold(0, (s, l) => s + l.taxAmount);
   double get _grandTotal => _lines.fold(0, (s, l) => s + l.finalAmount);
+  double get _loyaltyRedeemTotal => _lines.fold(0.0, (s, l) => s + l.loyaltyRedeemShare);
 
   Timer? _clockTimer;
   DateTime _now = DateTime.now();
@@ -252,11 +258,24 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   // reduce what's collected — that needs the same care around GL impact
   // this session deliberately avoided rushing for bundles; a clear, later
   // follow-up, not a silent gap.
+  //
+  // UPDATE (2026-10-11): redemption now DOES reduce the bill — see
+  // _onRedeemPointsChanged/_recompute. The value is apportioned across
+  // lines by each line's own share of the pre-redemption taxable amount
+  // (same treatment as a scheme discount, _PosLineRow.schemeDiscountAmount)
+  // so the per-line final_amount sum still equals the header's own
+  // grand_total — fn_approve_sales_invoice's GL posting sums PER-LINE
+  // amounts and would otherwise fail fn_post_voucher's DR=CR balance
+  // check if only the header total were reduced.
   final _loyaltyMobileCtrl = TextEditingController();
   String? _loyaltyProfileId;
   String? _loyaltyDisplayName;
   double _loyaltyPointsBalance = 0;
   bool _loyaltyLookingUp = false;
+  double? _loyaltyPointValueBase;       // rim_loyalty_programs.point_value_in_base_currency
+  int? _loyaltyMinPointsToRedeem;
+  double? _loyaltyMaxRedemptionPercentOfBill;
+  double _loyaltyPointsToRedeem = 0;    // what the cashier typed/confirmed
 
   @override
   void initState() {
@@ -315,6 +334,8 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     _loyaltyProfileId = null;
     _loyaltyDisplayName = null;
     _loyaltyPointsBalance = 0;
+    _loyaltyPointsToRedeem = 0;
+    _recompute();
   }
 
   void _recordInteraction() {
@@ -390,6 +411,18 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
         'company_id': 'eq.${session.companyId}', 'is_active': 'eq.true', 'select': 'currency_id,currency_name',
       });
       _currencies = List<Map<String, dynamic>>.from(currencyRes.data as List);
+
+      final loyaltyProgramRes = await DioClient.instance.get('/rim_loyalty_programs', queryParameters: {
+        'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
+        'is_active': 'eq.true', 'is_deleted': 'eq.false', 'order': 'created_at.asc', 'limit': '1',
+      });
+      final loyaltyProgramList = loyaltyProgramRes.data as List;
+      if (loyaltyProgramList.isNotEmpty) {
+        final p = loyaltyProgramList.first as Map<String, dynamic>;
+        _loyaltyPointValueBase = (p['point_value_in_base_currency'] as num?)?.toDouble();
+        _loyaltyMinPointsToRedeem = (p['min_points_to_redeem'] as num?)?.toInt();
+        _loyaltyMaxRedemptionPercentOfBill = (p['max_redemption_percent_of_bill'] as num?)?.toDouble();
+      }
 
       final ds = ref.read(salesInvoiceRepositoryProvider);
       _quickSetup = await ds.getQuickInvoiceSetup(clientId: session.clientId, companyId: session.companyId, userId: session.userId);
@@ -861,16 +894,69 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     });
   }
 
+  /// Loyalty redeem value in the invoice's OWN currency — point_value_in_
+  /// base_currency is in BASE currency; the "always-multiply" convention
+  /// (amount_base = amount_invoice * rate_to_base) means converting the
+  /// other way round divides.
+  double get _loyaltyRedeemValueInvoiceCcy =>
+      _loyaltyPointsToRedeem * (_loyaltyPointValueBase ?? 0) / (_rateToBase == 0 ? 1 : _rateToBase);
+
+  /// The bill total BEFORE any currently-applied redemption — adding the
+  /// current redemption back to the (already-reduced) grand total.
+  double get _preRedeemGrandTotal => _grandTotal + _loyaltyRedeemTotal;
+
+  /// UX guidance only — the real safety net is `_recompute()`'s own
+  /// `redeem.clamp(0, preRedeemSubtotal)`, which can never let a line go
+  /// negative regardless of what's typed here.
+  double get _maxRedeemablePoints {
+    double max = _loyaltyPointsBalance;
+    final pointValue = _loyaltyPointValueBase;
+    if (pointValue != null && pointValue > 0 && _loyaltyMaxRedemptionPercentOfBill != null) {
+      final maxValueInvoiceCcy = _preRedeemGrandTotal * (_loyaltyMaxRedemptionPercentOfBill! / 100);
+      final maxPointsByBill = maxValueInvoiceCcy * _rateToBase / pointValue;
+      max = max < maxPointsByBill ? max : maxPointsByBill;
+    }
+    return max < 0 ? 0 : max;
+  }
+
+  void _onRedeemPointsChanged(double v) {
+    final clamped = v.clamp(0, _maxRedeemablePoints);
+    if (_loyaltyMinPointsToRedeem != null && clamped > 0 && clamped < _loyaltyMinPointsToRedeem!) {
+      _showMsg('Minimum redemption is $_loyaltyMinPointsToRedeem points.', color: AppColors.secondary);
+    }
+    setState(() => _loyaltyPointsToRedeem = clamped.toDouble());
+    _recompute();
+  }
+
   void _recompute() {
+    // Pass 1 — gross/manual-discount/scheme-discount/taxable per line,
+    // ignoring any loyalty redemption (its own apportionment needs the
+    // TOTAL pre-redemption taxable amount across all lines first).
     for (final l in _lines) {
       l.baseQty = l.qty * l.uomConversionFactor;
       l.grossAmount = l.baseQty * l.rate;
       l.discountAmount = l.grossAmount * l.discountPct / 100;
       final afterManualDiscount = l.grossAmount - l.discountAmount;
       l.taxableAmount = (afterManualDiscount - l.schemeDiscountAmount).clamp(0, afterManualDiscount);
+    }
+
+    // Pass 2 — apportion the loyalty redemption across lines by each
+    // line's own share of that pre-redemption taxable total (same
+    // treatment as a scheme discount — reduces the taxable base, not a
+    // separate post-tax deduction), THEN compute tax/final per line. This
+    // is what makes the per-line final_amount sum equal the header's own
+    // (reduced) grand_total — required for fn_post_voucher's DR=CR check,
+    // since fn_approve_sales_invoice posts GL from per-line amounts, never
+    // re-derives them from a header-level total.
+    final preRedeemSubtotal = _lines.fold(0.0, (s, l) => s + l.taxableAmount);
+    final redeem = _loyaltyRedeemValueInvoiceCcy.clamp(0, preRedeemSubtotal);
+    for (final l in _lines) {
+      final share = preRedeemSubtotal > 0 ? l.taxableAmount / preRedeemSubtotal : 0.0;
+      l.loyaltyRedeemShare = redeem * share;
+      final taxableAfterRedeem = (l.taxableAmount - l.loyaltyRedeemShare).clamp(0, l.taxableAmount);
       final ratePct = l.taxGroupId != null ? (_taxGroupRatePct[l.taxGroupId] ?? 0) : 0;
-      l.taxAmount = l.taxableAmount * ratePct / 100;
-      l.finalAmount = l.taxableAmount + l.taxAmount;
+      l.taxAmount = taxableAfterRedeem * ratePct / 100;
+      l.finalAmount = taxableAfterRedeem + l.taxAmount;
     }
     setState(() {});
   }
@@ -1228,6 +1314,8 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
           await ds.setInvoiceLoyalty(
             clientId: session.clientId, companyId: session.companyId,
             invoiceNo: invoiceNo, invoiceDate: invoiceDate, loyaltyProfileId: _loyaltyProfileId!,
+            pointsRedeemed: _loyaltyPointsToRedeem,
+            redeemValueAmount: _loyaltyRedeemTotal,
           );
         } catch (e, st) {
           AppLogger.error('PosLoyaltySetInvoice', e, st);
@@ -1775,6 +1863,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
         const SizedBox(height: 10),
         _totalRow('Subtotal', _subtotal + _discountTotal),
         _totalRow('Discount', -_discountTotal),
+        if (_loyaltyRedeemTotal > 0.001) _totalRow('Loyalty Redeemed', -_loyaltyRedeemTotal),
         _totalRow('Tax', _taxTotal),
         const Divider(),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -1820,22 +1909,39 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
 
   Widget _buildLoyaltySection() {
     if (_loyaltyProfileId != null) {
-      return Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: AppColors.positive.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
-        child: Row(children: [
-          const Icon(Icons.loyalty, size: 16, color: AppColors.positive),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              '${_loyaltyDisplayName?.isNotEmpty == true ? _loyaltyDisplayName : _loyaltyMobileCtrl.text} · ${_loyaltyPointsBalance.toStringAsFixed(0)} pts',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-              overflow: TextOverflow.ellipsis,
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: AppColors.positive.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+          child: Row(children: [
+            const Icon(Icons.loyalty, size: 16, color: AppColors.positive),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                '${_loyaltyDisplayName?.isNotEmpty == true ? _loyaltyDisplayName : _loyaltyMobileCtrl.text} · ${_loyaltyPointsBalance.toStringAsFixed(0)} pts',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-          IconButton(onPressed: () => setState(_clearLoyalty), icon: const Icon(Icons.close, size: 16), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 28, minHeight: 28)),
-        ]),
-      );
+            IconButton(onPressed: () => setState(_clearLoyalty), icon: const Icon(Icons.close, size: 16), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 28, minHeight: 28)),
+          ]),
+        ),
+        if ((_loyaltyPointValueBase ?? 0) > 0 && _loyaltyPointsBalance > 0) ...[
+          const SizedBox(height: 6),
+          Row(children: [
+            Expanded(
+              child: PosAmountField(
+                label: 'Redeem Points (max ${_maxRedeemablePoints.toStringAsFixed(0)})',
+                value: _loyaltyPointsToRedeem,
+                compact: true,
+                onChanged: _onRedeemPointsChanged,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text('≈ ${_loyaltyRedeemValueInvoiceCcy.toStringAsFixed(2)} $_localCcy', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          ]),
+        ],
+      ]);
     }
     return Row(children: [
       Expanded(
