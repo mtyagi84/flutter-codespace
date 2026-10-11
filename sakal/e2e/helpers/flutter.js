@@ -46,16 +46,25 @@ async function enableSemantics(page) {
 
 // Confirmed by direct inspection (2026-10-11): once semantics is enabled,
 // Flutter's CanvasKit renderer still paints all actual pixels to a canvas
-// — there is no real DOM text content anywhere. The only textual
-// representation in the DOM is the `aria-label` Flutter writes onto each
-// `<flt-semantics>` node for assistive tech, and nearby Text widgets are
-// frequently MERGED into one node's combined aria-label (e.g. a heading +
-// its body paragraph can appear as a single accessible name). That means
-// `page.getByText(...)` — which matches rendered text content, not ARIA
-// attributes — can never find this app's text, even when it's genuinely
-// on screen. Match the accessible name instead.
+// — there is no real DOM text content for MOST widgets, only the
+// `aria-label` Flutter writes onto each `<flt-semantics>` node for
+// assistive tech (nearby Text widgets are frequently MERGED into one
+// node's combined aria-label — e.g. a heading + its body paragraph can
+// appear as a single accessible name). `page.getByText(...)` can't see
+// any of that.
+//
+// BUT a later phase found this isn't universal: some widgets (e.g. a
+// plain centered error/placeholder `Text`, confirmed live on New Sale's
+// "No shift is open on this till." guard) render as a REAL DOM text node
+// instead — confirmed via Playwright's own accessibility snapshot showing
+// `text: ...` rather than a `[aria-label]` attribute on a group/heading.
+// Flutter's semantics-merging behavior is widget-structure-dependent, not
+// predictable from the outside, so match BOTH forms rather than guessing
+// per screen: `:text()` is Playwright's own substring text-content
+// selector (comma = OR, same as CSS).
 function textVisible(page, text) {
-  return page.locator(`[aria-label*="${text}"]`).first();
+  const escaped = text.replace(/"/g, '\\"');
+  return page.locator(`[aria-label*="${escaped}"], :text("${escaped}")`).first();
 }
 
 // Real bug found live (2026-10-11): `page.getByLabel(label).fill(value)`
