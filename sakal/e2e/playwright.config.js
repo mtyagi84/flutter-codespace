@@ -13,6 +13,16 @@ module.exports = defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
+    // Confirmed live (2026-10-11): any flow that triggers a real print
+    // (directPrint: true -> Printing.layoutPdf -> window.print()) hangs
+    // forever in HEADLESS Chromium — the 'afterprint' event the browser
+    // print lifecycle relies on to resolve never fires there, even though
+    // the print itself silently succeeds (confirmed via a captured
+    // download event). The exact same flow completes correctly in a real,
+    // headed browser. Default to headed for this reason, not because
+    // tests need to be watched — a real browser is what the printing
+    // flow genuinely requires to behave like production.
+    headless: false,
   },
   projects: [
     // One-time till setup (admin login + bind this "device" to a terminal)
@@ -22,7 +32,7 @@ module.exports = defineConfig({
     { name: 'setup', testMatch: /till-setup\.setup\.js/ },
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'], storageState: 'e2e/.auth/till.json' },
+      use: { ...devices['Desktop Chrome'], storageState: '.auth/till.json' },
       dependencies: ['setup'],
     },
   ],

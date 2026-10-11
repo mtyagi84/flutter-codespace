@@ -107,17 +107,55 @@ generic Flutter-web documentation):
   `role="button"` (not `combobox`), merging its label + selected value into
   one accessible name once a value is picked — and its open popup's items
   are `role="menuitem"`, not the web-standard `role="option"`.
+- **Not every screen merges text the same way**: some screens expose a
+  title as a real `heading` role with actual text content rather than a
+  merged `aria-label` group (confirmed on the Payment screen's own AppBar
+  title) — match by role (`getByRole('heading', { name })`) when
+  `textVisible(...)` doesn't find it, don't assume one strategy covers
+  every screen.
+- **`getByPlaceholder` is unreliable for an unfocused field**: Flutter Web
+  only materializes a real native `<input placeholder="...">` DOM element
+  while a TextField is actually focused — unfocused, it's canvas-painted
+  with just an accessible name. Use `getByRole('textbox', { name })`
+  instead, which matches the accessible name regardless of focus state.
+- **Printing hangs forever in headless mode**: any flow using
+  `directPrint: true` (`Printing.layoutPdf` -> `window.print()`) hangs
+  indefinitely in headless Chromium — the `afterprint` event the browser
+  print lifecycle relies on to resolve never fires there, even though the
+  print itself silently succeeds (confirmed via a captured `download`
+  event while the `await` stayed pending). The identical flow completes
+  normally in a real, headed browser. `playwright.config.js` defaults to
+  `headless: false` for this reason — not to watch tests run, but because
+  a real browser is what the printing flow genuinely requires.
 
-## A real product bug this harness found (fixed, not a test workaround)
+## Two real product bugs this harness found (fixed, not test workarounds)
 
-`PosDeviceSetupScreen._adminLogin()` (Till Setup's Administrator Sign-In)
-called `fn_login`, got back a valid JWT, and then **discarded it** —
-`DioClient`'s interceptor only ever attaches a token it finds in secure
-storage, which this screen never wrote to. Every subsequent request (the
-very next line: fetching locations) silently fell back to the anon key and
-got `401 Unauthorized` from RLS. This never surfaced in manual testing only
-because that browser already had a stale admin JWT cached from an earlier,
-unrelated login — a genuinely fresh till hit it every single time. Fixed in
-`pos_device_setup_screen.dart`: the token is now stored for the duration of
-setup and explicitly cleared again once setup finishes (or the screen is
-abandoned), so this never becomes a lingering admin session on the till.
+Both were only reachable from a genuinely fresh browser profile with zero
+prior app state — exactly what this harness uses, and exactly what a real
+new till being set up for the first time would also be. Neither bug was
+visible in the project's own prior manual testing, because that browser
+already carried leftover state (a cached admin JWT, a cached `clientNo`)
+from earlier, unrelated sessions that happened to paper over both gaps.
+
+1. **`PosDeviceSetupScreen._adminLogin()` discarded its own JWT.** It
+   called `fn_login`, got back a valid token, and never stored it anywhere.
+   `DioClient`'s interceptor only ever attaches a token it finds in secure
+   storage — every subsequent request in the setup flow (starting with the
+   very next line, fetching locations) silently fell back to the anon key
+   and got `401 Unauthorized` from RLS. Fixed in `pos_device_setup_screen.dart`:
+   the token is now stored for the duration of setup and explicitly
+   cleared again once setup finishes (or the screen is abandoned), so it
+   never becomes a lingering admin session on the till.
+
+2. **The router bounced a freshly-PIN-logged-in cashier straight back to
+   the landing page.** `app_router.dart`'s redirect checked
+   `LocalStorage.clientNo` (a back-office-only value) to decide whether
+   *any* non-login POS route was reachable — but `PosPinLoginScreen` never
+   sets that value (`UserSession.clientNo` is hardcoded `''` there: "the
+   till never types/shows a Client No. at all"). A successful PIN login
+   set a real session and navigated to New Sale, and the redirect
+   immediately bounced it back to landing because `hasClient` was false —
+   making POS completely unusable past the PIN screen on any till that
+   had only ever done PIN login. Fixed in `app_router.dart`: any `/pos/`
+   route now only ever checks for a real `session`, never the
+   back-office-specific `hasClient` flag.

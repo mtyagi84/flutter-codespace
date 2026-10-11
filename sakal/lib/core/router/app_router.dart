@@ -164,12 +164,29 @@ final appRouter = GoRouter(
 
     // POS is a separate, chrome-less surface with its own PIN-based sign-in
     // (see docs/pos/06_access_security.md §4) — it must never be pulled into
-    // the regular username/password redirect below. A POS session (set by
-    // PosPinLoginScreen) is still a real `session`, so once signed in, POS
-    // routes fall through to the normal "logged in" handling further down
-    // like any other route.
+    // the regular username/password redirect below.
     if (loc == RouteNames.posDeviceSetup || loc == RouteNames.posLogin) {
       return null; // always reachable, with or without a session — see note above
+    }
+
+    // Real bug found live 2026-10-11, via a genuinely fresh browser/till
+    // that had only ever done PIN login, never a regular back-office
+    // login: every OTHER POS route (New Sale, Shift, Reports, ...) fell
+    // through to the `!hasClient` check below, which reads
+    // `LocalStorage.clientNo` — a back-office-only value PosPinLoginScreen
+    // never sets (`UserSession.clientNo` is hardcoded `''` there, "the
+    // till never types/shows a Client No. at all"). A successful PIN
+    // login would set a real `session`, call `context.go(posSale)`, and
+    // then get immediately bounced straight back to the landing page by
+    // this very check — making POS completely unusable past the PIN
+    // screen on any till whose browser never separately did a back-office
+    // login. Any POS route's own access requirement is simply "is there a
+    // session" (set by either PosPinLoginScreen or the regular
+    // LoginScreen — a back-office user can legitimately reach POS too,
+    // per the comment below) — it must never be routed through the
+    // back-office-specific `hasClient` check at all.
+    if (loc.startsWith('/pos/')) {
+      return session == null ? RouteNames.posLogin : null;
     }
 
     // No cached client → allow landing and login (login screen shows Client ID field).
