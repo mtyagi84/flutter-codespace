@@ -299,13 +299,48 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
         // Same "always print, no confirmation" rule as New Sale's own
         // receipt — a refund slip prints automatically every time.
         await _printReceipt(returnNo, returnDate, returnLines);
-        if (mounted) context.go(RouteNames.posSale);
+        if (mounted) await _offerExchange();
       }
     } catch (e, st) {
       AppLogger.error('PosReturnSubmit', e, st);
       if (mounted) setState(() => _actionError = ErrorPresenter.format(e, action: 'complete this return'));
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  /// "Exchange" (2026-10-11) is deliberately NOT a new financial primitive
+  /// — it's the exact same Return + new Sale this app already does
+  /// correctly on its own, just chained with one convenience: the refund
+  /// amount just handed back is carried into New Sale as a starting
+  /// credit (see PosNewSaleScreen.exchangeCreditAmount) so the cashier
+  /// doesn't have to do the "how much more do I collect / hand back"
+  /// math themselves, and isn't forced to physically exchange cash twice.
+  /// Only offered when a real cash refund was actually processed (credit-
+  /// sale returns have no cash amount to carry forward).
+  Future<void> _offerExchange() async {
+    if (!_showRefund || _returnTotal <= 0) {
+      if (mounted) context.go(RouteNames.posSale);
+      return;
+    }
+    if (!mounted) return;
+    final startExchange = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Return complete'),
+        content: Text('${_returnTotal.toStringAsFixed(2)} refunded. Is the customer exchanging for something else?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Done')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Start Exchange')),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (startExchange == true) {
+      context.go(RouteNames.posSale, extra: {'exchangeCreditAmount': _returnTotal});
+    } else {
+      context.go(RouteNames.posSale);
     }
   }
 

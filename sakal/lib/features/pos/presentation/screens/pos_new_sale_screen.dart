@@ -57,7 +57,14 @@ class PosNewSaleScreen extends ConsumerStatefulWidget {
   /// already receive an edit target via GoRouter's `extra`.
   final String? editInvoiceNo;
   final String? editInvoiceDate;
-  const PosNewSaleScreen({super.key, this.editInvoiceNo, this.editInvoiceDate});
+  // Set only when arriving straight from a completed Return via its
+  // "Start Exchange" button — the refund amount already handed back (or
+  // not, if the cashier chose not to refund), applied as a starting
+  // credit toward this new sale's own Collected field. See _init()/
+  // _buildLoyaltySection's sibling, the exchange-credit banner, for how
+  // this is actually surfaced to the cashier.
+  final double? exchangeCreditAmount;
+  const PosNewSaleScreen({super.key, this.editInvoiceNo, this.editInvoiceDate, this.exchangeCreditAmount});
 
   @override
   ConsumerState<PosNewSaleScreen> createState() => _PosNewSaleScreenState();
@@ -231,6 +238,10 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   double get _taxTotal => _lines.fold(0, (s, l) => s + l.taxAmount);
   double get _grandTotal => _lines.fold(0, (s, l) => s + l.finalAmount);
   double get _loyaltyRedeemTotal => _lines.fold(0.0, (s, l) => s + l.loyaltyRedeemShare);
+  // Only a DEFAULT for the Collected field — the real cash handled in an
+  // exchange (give some back vs. collect more) is always whatever the
+  // cashier actually counts, which the field stays fully editable for.
+  double get _netDueAfterExchangeCredit => _grandTotal - (widget.exchangeCreditAmount ?? 0);
 
   Timer? _clockTimer;
   DateTime _now = DateTime.now();
@@ -1899,12 +1910,30 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
           const Text('Total', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
           Text('${_grandTotal.toStringAsFixed(2)} $_localCcy', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
         ]),
+        if (widget.exchangeCreditAmount != null) ...[
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(color: AppColors.secondary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+            child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Text('Exchange credit from return', style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+              Text('${widget.exchangeCreditAmount!.toStringAsFixed(2)} $_localCcy', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            ]),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            _netDueAfterExchangeCredit >= 0
+                ? 'Collect ${_netDueAfterExchangeCredit.toStringAsFixed(2)} $_localCcy more from the customer.'
+                : 'Refund ${(-_netDueAfterExchangeCredit).toStringAsFixed(2)} $_localCcy back to the customer.',
+            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+          ),
+        ],
         if (_saleType == 'CASH') ...[
           const SizedBox(height: 10),
           if (!_splitTender) ...[
             PosAmountField(
               label: 'Collected',
-              value: _collectedAmount ?? _grandTotal,
+              value: _collectedAmount ?? _netDueAfterExchangeCredit.clamp(0, double.infinity),
               suffixText: _localCcy,
               onChanged: (v) => setState(() => _collectedAmount = v),
             ),

@@ -216,7 +216,11 @@ final appRouter = GoRouter(
       path: RouteNames.posSale,
       builder: (c, s) {
         final extra = s.extra as Map<String, dynamic>?;
-        return PosNewSaleScreen(editInvoiceNo: extra?['invoiceNo'] as String?, editInvoiceDate: extra?['invoiceDate'] as String?);
+        return PosNewSaleScreen(
+          editInvoiceNo: extra?['invoiceNo'] as String?,
+          editInvoiceDate: extra?['invoiceDate'] as String?,
+          exchangeCreditAmount: (extra?['exchangeCreditAmount'] as num?)?.toDouble(),
+        );
       },
     ),
     GoRoute(path: RouteNames.posHold,         builder: (c, s) => const PosHoldSalesScreen()),
