@@ -96,8 +96,8 @@ class _PosSetupScreenState extends ConsumerState<PosSetupScreen>
         DioClient.instance.get('/rim_pos_schemes', queryParameters: {
           'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
           'is_deleted': 'eq.false',
-          'select': 'id,scheme_code,scheme_name,scheme_type,priority,is_stackable,is_active,'
-              'rim_pos_scheme_rules(id,applies_to_product_id,applies_to_category_id,min_qty,benefit_type,benefit_value,'
+          'select': 'id,scheme_code,scheme_name,scheme_type,scope,priority,is_stackable,is_active,'
+              'rim_pos_scheme_rules(id,applies_to_product_id,applies_to_category_id,min_qty,max_qty,benefit_type,benefit_value,free_product_id,'
               'rim_products!applies_to_product_id(product_name))',
           'order': 'priority.asc',
         }),
@@ -731,13 +731,30 @@ class _SetPinDialogState extends State<_SetPinDialog> {
   }
 }
 
-/// Promotion/scheme engine admin (migration 212). Deliberately scoped to the
-/// two most common real-world scheme types for v1's UI (PERCENT_OFF,
-/// AMOUNT_OFF), single-product OR single-category scope, one rule per scheme
-/// — the backend resolver (fn_resolve_pos_schemes_for_line) already supports
-/// all 10 scheme_type values and multiple rule rows per scheme; this editor
-/// simply doesn't expose the rest yet. A future pass can widen the form
-/// without any backend change.
+/// Promotion/scheme engine admin (migration 212).
+///
+/// Widened 2026-10-11 from the original 2-type/single-rule editor to cover
+/// 8 of the 10 scheme_type values, PRODUCT or CATEGORY scope, and a
+/// repeatable rule-row list (needed for SLAB_QUANTITY's multiple qty
+/// bands) — all backed by fn_resolve_pos_schemes_for_line's EXISTING
+/// resolution logic, confirmed by reading it directly: that function
+/// never actually branches on scheme_type at all (it's purely a display/
+/// categorization label) — the real computation is driven entirely by
+/// each rule row's own benefit_type + min_qty/max_qty band + applies_to_
+/// product/category. So BUY_X_GET_Y, BUY_X_GET_DISCOUNT, FIXED_PRICE_QTY,
+/// MIX_AND_MATCH, SLAB_QUANTITY, and FREE_ITEM are all really just
+/// different qty-band/benefit-type combinations under the hood, and this
+/// editor can expose all of them with zero backend change.
+///
+/// BILL_THRESHOLD and COUPON are deliberately EXCLUDED from the type
+/// dropdown — fn_resolve_pos_schemes_for_line explicitly filters them out
+/// (`scheme_type NOT IN ('BILL_THRESHOLD','COUPON')`) because they need a
+/// HEADER-level resolution pass (whole-bill total, or an explicit typed
+/// code) that was never built, only ever planned as "213's own header-
+/// level pass, not here" in a code comment. Offering them in the UI would
+/// let an admin configure a scheme that silently never applies — a real
+/// trap, not just an unfinished feature. Left as a clearly flagged future
+/// item, not a silent gap.
 class _SchemesTab extends StatelessWidget {
   final List<Map<String, dynamic>> schemes;
   final bool canEdit;
@@ -800,51 +817,105 @@ class _SchemeEditorDialog extends ConsumerStatefulWidget {
   ConsumerState<_SchemeEditorDialog> createState() => _SchemeEditorDialogState();
 }
 
+const _posSchemeTypes = ['PERCENT_OFF', 'AMOUNT_OFF', 'BUY_X_GET_Y', 'BUY_X_GET_DISCOUNT', 'FIXED_PRICE_QTY', 'MIX_AND_MATCH', 'SLAB_QUANTITY', 'FREE_ITEM'];
+String _schemeTypeLabel(String t) => switch (t) {
+      'PERCENT_OFF' => '% Off',
+      'AMOUNT_OFF' => 'Amount Off',
+      'BUY_X_GET_Y' => 'Buy X Get Y Free',
+      'BUY_X_GET_DISCOUNT' => 'Buy X Get a Discount',
+      'FIXED_PRICE_QTY' => 'Fixed Price for N Qty',
+      'MIX_AND_MATCH' => 'Mix & Match',
+      'SLAB_QUANTITY' => 'Slab / Tiered Quantity',
+      'FREE_ITEM' => 'Free Item',
+      _ => t,
+    };
+
+/// One editable rule row — a scheme can have several (e.g. SLAB_QUANTITY's
+/// 1-2/3-5/6+ bands). Mirrors rim_pos_scheme_rules' own columns.
+class _SchemeRuleDraft {
+  double minQty;
+  double? maxQty;
+  String benefitType; // PERCENT | FIXED_AMOUNT | FIXED_PRICE | FREE_QTY
+  double benefitValue;
+  String? freeProductId;
+  _SchemeRuleDraft({this.minQty = 0, this.maxQty, this.benefitType = 'PERCENT', this.benefitValue = 0, this.freeProductId});
+
+  factory _SchemeRuleDraft.fromJson(Map<String, dynamic> j) => _SchemeRuleDraft(
+        minQty: (j['min_qty'] as num?)?.toDouble() ?? 0,
+        maxQty: (j['max_qty'] as num?)?.toDouble(),
+        benefitType: j['benefit_type'] as String? ?? 'PERCENT',
+        benefitValue: (j['benefit_value'] as num?)?.toDouble() ?? 0,
+        freeProductId: j['free_product_id'] as String?,
+      );
+}
+
+String _ruleBenefitTypeLabel(String t) => switch (t) {
+      'PERCENT' => '% Off',
+      'FIXED_AMOUNT' => 'Amount Off',
+      'FIXED_PRICE' => 'Fixed Price',
+      'FREE_QTY' => 'Free Qty',
+      _ => t,
+    };
+
 class _SchemeEditorDialogState extends ConsumerState<_SchemeEditorDialog> {
   late final _codeCtrl = TextEditingController(text: widget.existing?['scheme_code'] as String? ?? '');
   late final _nameCtrl = TextEditingController(text: widget.existing?['scheme_name'] as String? ?? '');
-  late final _valueCtrl = TextEditingController(
-      text: ((widget.existing?['rim_pos_scheme_rules'] as List?)?.isNotEmpty == true
-              ? ((widget.existing!['rim_pos_scheme_rules'] as List).first as Map<String, dynamic>)['benefit_value']
-              : null)
-          ?.toString() ??
-          '');
-  String _benefitType = 'PERCENT';
+  String _schemeType = 'PERCENT_OFF';
   String _scope = 'PRODUCT';
   int _priority = 100;
   bool _stackable = false;
   bool _active = true;
   bool _saving = false;
   List<Map<String, dynamic>> _products = [];
+  List<Map<String, dynamic>> _categories = [];
   String? _productId;
-  bool _loadingProducts = true;
+  String? _categoryId;
+  bool _loadingPickers = true;
+  late List<_SchemeRuleDraft> _rules;
 
   @override
   void initState() {
     super.initState();
-    final existingRule = ((widget.existing?['rim_pos_scheme_rules'] as List?)?.isNotEmpty == true)
-        ? ((widget.existing!['rim_pos_scheme_rules'] as List).first as Map<String, dynamic>)
-        : null;
-    _benefitType = existingRule?['benefit_type'] as String? ?? 'PERCENT';
-    _productId = existingRule?['applies_to_product_id'] as String?;
+    final existingRules = (widget.existing?['rim_pos_scheme_rules'] as List?) ?? const [];
+    _rules = existingRules.isEmpty
+        ? [_SchemeRuleDraft()]
+        : existingRules.map((r) => _SchemeRuleDraft.fromJson(r as Map<String, dynamic>)).toList();
+    final firstRule = existingRules.isNotEmpty ? existingRules.first as Map<String, dynamic> : null;
+    _schemeType = widget.existing?['scheme_type'] as String? ?? 'PERCENT_OFF';
+    _productId = firstRule?['applies_to_product_id'] as String?;
+    _categoryId = firstRule?['applies_to_category_id'] as String?;
+    _scope = widget.existing?['scope'] as String? ?? (_categoryId != null ? 'CATEGORY' : 'PRODUCT');
     _priority = (widget.existing?['priority'] as num?)?.toInt() ?? 100;
     _stackable = widget.existing?['is_stackable'] as bool? ?? false;
     _active = widget.existing?['is_active'] as bool? ?? true;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadProducts());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadPickers());
   }
 
-  Future<void> _loadProducts() async {
+  Future<void> _loadPickers() async {
     final session = ref.read(sessionProvider)!;
     try {
-      final res = await DioClient.instance.get('/rim_products', queryParameters: {
-        'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
-        'is_deleted': 'eq.false', 'is_active': 'eq.true',
-        'select': 'id,product_code,product_name', 'order': 'product_name.asc', 'limit': '500',
-      });
-      if (mounted) setState(() { _products = List<Map<String, dynamic>>.from(res.data as List); _loadingProducts = false; });
+      final results = await Future.wait([
+        DioClient.instance.get('/rim_products', queryParameters: {
+          'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
+          'is_deleted': 'eq.false', 'is_active': 'eq.true',
+          'select': 'id,product_code,product_name', 'order': 'product_name.asc', 'limit': '500',
+        }),
+        DioClient.instance.get('/rim_item_categories', queryParameters: {
+          'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
+          'is_deleted': 'eq.false', 'is_active': 'eq.true',
+          'select': 'id,category_name', 'order': 'category_name.asc', 'limit': '500',
+        }),
+      ]);
+      if (mounted) {
+        setState(() {
+          _products = List<Map<String, dynamic>>.from(results[0].data as List);
+          _categories = List<Map<String, dynamic>>.from(results[1].data as List);
+          _loadingPickers = false;
+        });
+      }
     } catch (e, st) {
-      AppLogger.error('PosSchemeLoadProducts', e, st);
-      if (mounted) setState(() => _loadingProducts = false);
+      AppLogger.error('PosSchemeLoadPickers', e, st);
+      if (mounted) setState(() => _loadingPickers = false);
     }
   }
 
@@ -852,18 +923,24 @@ class _SchemeEditorDialogState extends ConsumerState<_SchemeEditorDialog> {
   void dispose() {
     _codeCtrl.dispose();
     _nameCtrl.dispose();
-    _valueCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
-    final value = double.tryParse(_valueCtrl.text.trim());
-    if (_codeCtrl.text.trim().isEmpty || _nameCtrl.text.trim().isEmpty || value == null || value <= 0) {
-      widget.showMsg('Code, name, and a positive discount value are all required.', color: AppColors.negative);
+    if (_codeCtrl.text.trim().isEmpty || _nameCtrl.text.trim().isEmpty) {
+      widget.showMsg('Code and name are both required.', color: AppColors.negative);
       return;
     }
     if (_scope == 'PRODUCT' && _productId == null) {
       widget.showMsg('Select which product this scheme applies to.', color: AppColors.negative);
+      return;
+    }
+    if (_scope == 'CATEGORY' && _categoryId == null) {
+      widget.showMsg('Select which category this scheme applies to.', color: AppColors.negative);
+      return;
+    }
+    if (_rules.any((r) => r.benefitType != 'FREE_QTY' && r.benefitValue <= 0)) {
+      widget.showMsg('Every rule needs a positive value.', color: AppColors.negative);
       return;
     }
     setState(() => _saving = true);
@@ -878,7 +955,7 @@ class _SchemeEditorDialogState extends ConsumerState<_SchemeEditorDialog> {
           'company_id': session.companyId,
           'scheme_code': _codeCtrl.text.trim(),
           'scheme_name': _nameCtrl.text.trim(),
-          'scheme_type': _benefitType == 'PERCENT' ? 'PERCENT_OFF' : 'AMOUNT_OFF',
+          'scheme_type': _schemeType,
           'scope': _scope,
           'priority': _priority,
           'is_stackable': _stackable,
@@ -888,26 +965,31 @@ class _SchemeEditorDialogState extends ConsumerState<_SchemeEditorDialog> {
         await DioClient.instance.patch('/rim_pos_schemes', queryParameters: {'id': 'eq.$schemeId'}, data: {
           'scheme_code': _codeCtrl.text.trim(),
           'scheme_name': _nameCtrl.text.trim(),
-          'scheme_type': _benefitType == 'PERCENT' ? 'PERCENT_OFF' : 'AMOUNT_OFF',
+          'scheme_type': _schemeType,
           'scope': _scope,
           'priority': _priority,
           'is_stackable': _stackable,
           'is_active': _active,
         });
-        // Full-replace the rule row, same "reseed" convention used elsewhere
-        // in this app for a small child set — simpler than diffing one row.
+        // Full-replace every rule row, same "reseed" convention used
+        // elsewhere in this app for a small child set — simpler than
+        // diffing N rows against whatever was there before.
         await DioClient.instance.patch('/rim_pos_scheme_rules', queryParameters: {'scheme_id': 'eq.$schemeId'}, data: {'is_deleted': true});
       }
-      await DioClient.instance.post('/rim_pos_scheme_rules', data: {
-        'id': const Uuid().v4(),
-        'client_id': session.clientId,
-        'company_id': session.companyId,
-        'scheme_id': schemeId,
-        'applies_to_product_id': _scope == 'PRODUCT' ? _productId : null,
-        'min_qty': 0,
-        'benefit_type': _benefitType,
-        'benefit_value': value,
-      });
+      final ruleRows = _rules.map((r) => {
+            'id': const Uuid().v4(),
+            'client_id': session.clientId,
+            'company_id': session.companyId,
+            'scheme_id': schemeId,
+            'applies_to_product_id': _scope == 'PRODUCT' ? _productId : null,
+            'applies_to_category_id': _scope == 'CATEGORY' ? _categoryId : null,
+            'min_qty': r.minQty,
+            'max_qty': r.maxQty,
+            'benefit_type': r.benefitType,
+            'benefit_value': r.benefitValue,
+            'free_product_id': r.benefitType == 'FREE_QTY' ? r.freeProductId : null,
+          }).toList();
+      await DioClient.instance.post('/rim_pos_scheme_rules', data: ruleRows);
       if (mounted) {
         Navigator.of(context).pop();
         widget.onSaved();
@@ -923,46 +1005,114 @@ class _SchemeEditorDialogState extends ConsumerState<_SchemeEditorDialog> {
 
   String _productDisplay(Map<String, dynamic> p) => '[${p['product_code']}] ${p['product_name']}';
 
+  Widget _buildRuleRow(_SchemeRuleDraft r) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(6)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Expanded(
+            child: TextField(
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(isDense: true, labelText: 'Min Qty'),
+              controller: TextEditingController(text: r.minQty.toString()),
+              onChanged: (v) => r.minQty = double.tryParse(v) ?? r.minQty,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(isDense: true, labelText: 'Max Qty (optional)'),
+              controller: TextEditingController(text: r.maxQty?.toString() ?? ''),
+              onChanged: (v) => r.maxQty = double.tryParse(v),
+            ),
+          ),
+          IconButton(
+            onPressed: _rules.length <= 1 ? null : () => setState(() => _rules.remove(r)),
+            icon: const Icon(Icons.close, size: 18, color: AppColors.negative),
+          ),
+        ]),
+        const SizedBox(height: 6),
+        Row(children: [
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              initialValue: r.benefitType,
+              isExpanded: true, isDense: true, itemHeight: null,
+              decoration: const InputDecoration(labelText: 'Benefit'),
+              items: const ['PERCENT', 'FIXED_AMOUNT', 'FIXED_PRICE', 'FREE_QTY']
+                  .map((b) => DropdownMenuItem(value: b, child: Text(_ruleBenefitTypeLabel(b))))
+                  .toList(),
+              onChanged: (v) => setState(() => r.benefitType = v!),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(isDense: true, labelText: r.benefitType == 'FREE_QTY' ? 'Free Qty' : 'Value'),
+              controller: TextEditingController(text: r.benefitValue.toString()),
+              onChanged: (v) => r.benefitValue = double.tryParse(v) ?? r.benefitValue,
+            ),
+          ),
+        ]),
+        if (r.benefitType == 'FREE_QTY' && !_loadingPickers) ...[
+          const SizedBox(height: 6),
+          Builder(builder: (context) {
+            final selected = _products.where((p) => p['id'] == r.freeProductId).toList();
+            return SakalAutocomplete<Map<String, dynamic>>(
+              key: ValueKey(r.freeProductId),
+              initialValue: TextEditingValue(text: selected.isNotEmpty ? _productDisplay(selected.first) : ''),
+              displayStringForOption: _productDisplay,
+              optionsBuilder: (v) {
+                final q = v.text.toLowerCase().trim();
+                return q.isEmpty ? _products : _products.where((p) => _productDisplay(p).toLowerCase().contains(q));
+              },
+              onSelected: (p) => setState(() => r.freeProductId = p['id'] as String),
+              onChanged: (v) { if (v.isEmpty) r.freeProductId = null; },
+              decoration: const InputDecoration(labelText: 'Free Product (leave blank = same product free)'),
+            );
+          }),
+        ],
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text(widget.existing == null ? 'Add Scheme' : 'Edit Scheme'),
       content: SizedBox(
-        width: 400,
+        width: 440,
         child: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             TextField(controller: _codeCtrl, decoration: const InputDecoration(labelText: 'Scheme Code')),
             const SizedBox(height: 10),
             TextField(controller: _nameCtrl, decoration: const InputDecoration(labelText: 'Scheme Name (e.g. Weekend 10% Off)')),
             const SizedBox(height: 10),
-            Row(children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: _benefitType,
-                  isExpanded: true, isDense: true, itemHeight: null,
-                  decoration: const InputDecoration(labelText: 'Type'),
-                  items: const [
-                    DropdownMenuItem(value: 'PERCENT', child: Text('% Off')),
-                    DropdownMenuItem(value: 'FIXED_AMOUNT', child: Text('Amount Off')),
-                  ],
-                  onChanged: (v) => setState(() => _benefitType = v!),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(child: TextField(controller: _valueCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Value'))),
-            ]),
+            DropdownButtonFormField<String>(
+              initialValue: _schemeType,
+              isExpanded: true, isDense: true, itemHeight: null,
+              decoration: const InputDecoration(labelText: 'Scheme Type'),
+              items: _posSchemeTypes.map((t) => DropdownMenuItem(value: t, child: Text(_schemeTypeLabel(t)))).toList(),
+              onChanged: (v) => setState(() => _schemeType = v!),
+            ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
               initialValue: _scope,
               isExpanded: true, isDense: true, itemHeight: null,
               decoration: const InputDecoration(labelText: 'Applies To'),
-              items: const [DropdownMenuItem(value: 'PRODUCT', child: Text('One Product'))],
+              items: const [
+                DropdownMenuItem(value: 'PRODUCT', child: Text('One Product')),
+                DropdownMenuItem(value: 'CATEGORY', child: Text('A Category')),
+              ],
               onChanged: (v) => setState(() => _scope = v!),
             ),
             const SizedBox(height: 10),
-            if (_loadingProducts)
+            if (_loadingPickers)
               const Padding(padding: EdgeInsets.all(8), child: LinearProgressIndicator())
-            else
+            else if (_scope == 'PRODUCT')
               Builder(builder: (context) {
                 final selected = _products.where((p) => p['id'] == _productId).toList();
                 return SakalAutocomplete<Map<String, dynamic>>(
@@ -977,7 +1127,27 @@ class _SchemeEditorDialogState extends ConsumerState<_SchemeEditorDialog> {
                   onChanged: (v) { if (v.isEmpty && _productId != null) setState(() => _productId = null); },
                   decoration: const InputDecoration(labelText: 'Product'),
                 );
-              }),
+              })
+            else
+              DropdownButtonFormField<String>(
+                initialValue: _categories.any((c) => c['id'] == _categoryId) ? _categoryId : null,
+                isExpanded: true, isDense: true, itemHeight: null,
+                decoration: const InputDecoration(labelText: 'Category'),
+                items: _categories.map((c) => DropdownMenuItem(value: c['id'] as String, child: Text(c['category_name'] as String, overflow: TextOverflow.ellipsis))).toList(),
+                onChanged: (v) => setState(() => _categoryId = v),
+              ),
+            const SizedBox(height: 14),
+            const Text('Rules', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
+            const SizedBox(height: 6),
+            ..._rules.map(_buildRuleRow),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => setState(() => _rules.add(_SchemeRuleDraft())),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Add Rule (e.g. a slab band)'),
+              ),
+            ),
             const SizedBox(height: 10),
             Row(children: [
               Expanded(
