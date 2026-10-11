@@ -12,6 +12,16 @@ const _kKeyboardRows = [
   ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
   ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
   ['z', 'x', 'c', 'v', 'b', 'n', 'm'],
+  // Real bug found live 2026-10-11: this keyboard had ZERO symbol keys —
+  // a password containing '@' (or any other non-alphanumeric character)
+  // was literally untypeable through it, and since PosKeyboardField used
+  // to be a tap-opens-this-sheet BUTTON with no real TextField underneath
+  // at all, a physical keyboard had nothing to type into either. Fixed at
+  // the root in PosKeyboardField below (now a real TextField, so a
+  // physical keyboard and the OS's own on-screen keyboard both just
+  // work); this row is kept/added so the sheet keyboard itself is no
+  // longer symbol-blind for whoever still taps the optional button.
+  ['@', '#', '\$', '%', '&', '*', '-', '_', '.', '/'],
 ];
 
 class PosKeyboard extends StatefulWidget {
@@ -193,46 +203,106 @@ class _Key extends StatelessWidget {
   }
 }
 
-/// The touch-first replacement for a raw `TextField` used as a manual-entry
-/// FALLBACK next to a scan-first search field. Renders as a tappable display
-/// box (same visual language as `PosAmountField`); tapping opens
-/// `PosKeyboard`. The field's own value only changes once Done is tapped.
-class PosKeyboardField extends StatelessWidget {
+/// A real `TextField` styled to match POS's touch-first look — NOT a tap-
+/// opens-a-sheet button anymore (see the real bug this fixed, 2026-10-11,
+/// in `_kKeyboardRows`'s own comment above). Always accepts BOTH a
+/// physical keyboard (a real `TextField` does this automatically — there
+/// was simply no real text field here before) AND the OS's own native
+/// on-screen keyboard when tapped on a touch device with no physical
+/// keyboard attached (also automatic platform behavior for any focused
+/// text field — Windows tablet mode and Android both already do this with
+/// zero app code, which is why this widget existed at all, originally for
+/// the wrong reason: a worry that the OS keyboard might not reliably
+/// appear). The custom `PosKeyboard` sheet from above is now purely an
+/// OPTIONAL secondary input method (the small keyboard icon button) for a
+/// device where the OS's own IME is awkward to use — never required,
+/// never blocking the real field beside it.
+class PosKeyboardField extends StatefulWidget {
   final String label;
   final String value;
   final ValueChanged<String> onChanged;
   final VoidCallback? onConfirmedSubmit;
   final bool obscureText;
+  final TextInputType? keyboardType;
+  final bool showTouchKeyboardButton;
 
-  const PosKeyboardField({super.key, required this.label, required this.value, required this.onChanged, this.onConfirmedSubmit, this.obscureText = false});
+  const PosKeyboardField({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.onConfirmedSubmit,
+    this.obscureText = false,
+    this.keyboardType,
+    this.showTouchKeyboardButton = true,
+  });
+
+  @override
+  State<PosKeyboardField> createState() => _PosKeyboardFieldState();
+}
+
+class _PosKeyboardFieldState extends State<PosKeyboardField> {
+  late final TextEditingController _controller = TextEditingController(text: widget.value);
+
+  @override
+  void didUpdateWidget(covariant PosKeyboardField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Stay in sync with an externally-driven value change (e.g. a parent
+    // clearing the field after submit) without clobbering the cursor
+    // position on every keystroke this same widget itself just caused.
+    if (widget.value != oldWidget.value && widget.value != _controller.text) {
+      _controller.value = _controller.value.copyWith(
+        text: widget.value,
+        selection: TextSelection.collapsed(offset: widget.value.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _openTouchKeyboard() {
+    PosKeyboard.show(
+      context,
+      title: widget.label,
+      initialValue: _controller.text,
+      obscureText: widget.obscureText,
+      onConfirm: (v) {
+        _controller.value = _controller.value.copyWith(text: v, selection: TextSelection.collapsed(offset: v.length));
+        widget.onChanged(v);
+        widget.onConfirmedSubmit?.call();
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => PosKeyboard.show(
-          context,
-          title: label,
-          initialValue: value,
-          obscureText: obscureText,
-          onConfirm: (v) {
-            onChanged(v);
-            onConfirmedSubmit?.call();
-          },
-        ),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 52),
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
-          child: Row(children: [
-            const Icon(Icons.keyboard_outlined, size: 18, color: AppColors.textSecondary),
-            const SizedBox(width: 10),
-            Expanded(child: Text(value.isEmpty ? label : (obscureText ? '•' * value.length : value), style: TextStyle(fontSize: 15, color: value.isEmpty ? AppColors.textSecondary : AppColors.textPrimary))),
-          ]),
-        ),
+    return TextField(
+      controller: _controller,
+      obscureText: widget.obscureText,
+      keyboardType: widget.keyboardType,
+      autocorrect: !widget.obscureText,
+      enableSuggestions: !widget.obscureText,
+      onChanged: widget.onChanged,
+      onSubmitted: (_) => widget.onConfirmedSubmit?.call(),
+      style: const TextStyle(fontSize: 15, color: AppColors.textPrimary),
+      decoration: InputDecoration(
+        labelText: widget.label,
+        prefixIcon: const Icon(Icons.keyboard_outlined, size: 18, color: AppColors.textSecondary),
+        suffixIcon: widget.showTouchKeyboardButton
+            ? IconButton(
+                icon: const Icon(Icons.keyboard_alt_outlined, size: 18),
+                tooltip: 'Open touch keyboard',
+                onPressed: _openTouchKeyboard,
+              )
+            : null,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
       ),
     );
   }
