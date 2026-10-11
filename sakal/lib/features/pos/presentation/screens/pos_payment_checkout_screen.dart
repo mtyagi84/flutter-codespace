@@ -94,7 +94,29 @@ class _PosPaymentCheckoutScreenState extends State<PosPaymentCheckoutScreen> {
 
   double get _collectedLocal => _lines.fold(0.0, (s, l) => s + l.amount * (l.currencyId == widget.localCurrency ? 1 : (widget.rateToLocal[l.currencyId] ?? 1)));
   double get _diff => _collectedLocal - widget.dueAmount;
-  bool get _short => _diff < -0.01;
+
+  // Real bug fixed 2026-10-11: a foreign-currency amount can only be typed
+  // to 2 decimal places, but at a high local-currency rate (e.g. 1 EUR ~
+  // 3,097 CDF) one cent of rounding is worth ~31 CDF — an exact match is
+  // mathematically unreachable once a cashier types the rounded figure the
+  // "Collect X <ccy> to cover Y <local>" hint itself shows. Half a cent of
+  // the highest-rate currency in use bounds this unavoidable gap; a plain
+  // local-currency-only cash sale keeps a tight ~0.005 tolerance, same as
+  // the previous flat 0.01. Must match pos_new_sale_screen.dart's own
+  // `_tenderRoundingTolerance` — _charge() re-validates with that same
+  // formula after this screen hands back its result.
+  double get _roundingTolerance {
+    var maxRate = 1.0;
+    for (final l in _lines) {
+      if (l.currencyId == widget.localCurrency) continue;
+      final r = widget.rateToLocal[l.currencyId] ?? 1;
+      if (r > maxRate) maxRate = r;
+    }
+    return 0.005 * maxRate;
+  }
+
+  bool get _short => _diff < -_roundingTolerance;
+  double get _displayDiff => _diff.abs() <= _roundingTolerance ? 0.0 : _diff;
 
   void _addLine() {
     final unused = widget.currencies.map((c) => c['currency_id'] as String).firstWhere(
@@ -166,7 +188,7 @@ class _PosPaymentCheckoutScreenState extends State<PosPaymentCheckoutScreen> {
             ]),
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               Text(_short ? 'Short by' : 'Change Due', style: TextStyle(fontSize: 13, color: _short ? AppColors.negative : AppColors.positive, fontWeight: FontWeight.w600)),
-              Text('${_diff.abs().toStringAsFixed(2)} ${widget.localCurrency}', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _short ? AppColors.negative : AppColors.positive)),
+              Text('${_displayDiff.abs().toStringAsFixed(2)} ${widget.localCurrency}', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _short ? AppColors.negative : AppColors.positive)),
             ]),
             const SizedBox(height: 10),
             SafeArea(

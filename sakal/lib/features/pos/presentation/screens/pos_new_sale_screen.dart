@@ -216,6 +216,24 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   // taken by card/mobile/voucher/gift-card/store-credit.
   double get _cashTenderTotalLocal => _tenderLines.where((t) => t.tenderType == 'CASH').fold(0.0, (s, t) => s + t.amount * (_tenderRateToLocal[t.currencyId] ?? 1));
   double get _tenderRemaining => _grandTotal - _tenderTotalLocal;
+  // Real bug fixed 2026-10-11: a foreign-currency tender line can only be
+  // entered to 2 decimal places, but at a high local-currency rate (e.g.
+  // 1 EUR ~ 3,097 CDF) a single cent of rounding is worth ~31 CDF — making
+  // an EXACT local-currency match mathematically unreachable for a
+  // cashier who types the rounded amount shown by the "Collect X <ccy> to
+  // cover Y <local>" hint. Half a cent of the highest-rate currency in use
+  // bounds this unavoidable rounding gap without loosening the check for
+  // an ordinary local-currency-only cash sale (tolerance stays ~0.005
+  // local units there, same as the previous 0.01 threshold).
+  double get _tenderRoundingTolerance {
+    var maxRate = 1.0;
+    for (final t in _tenderLines) {
+      if (t.currencyId == _localCcy) continue;
+      final r = _tenderRateToLocal[t.currencyId] ?? 1;
+      if (r > maxRate) maxRate = r;
+    }
+    return 0.005 * maxRate;
+  }
   final _searchFocus = FocusNode();
   // Set via the "×N next scan" control below the search bar — applies to the
   // NEXT product added (scan or search), then resets to 1. Standard
@@ -1318,7 +1336,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       _showMsg('Quick Invoice Setup is missing for this user — ask an admin.', color: AppColors.negative);
       return;
     }
-    if (_saleType == 'CASH' && _splitTender && _tenderRemaining > 0.01) {
+    if (_saleType == 'CASH' && _splitTender && _tenderRemaining > _tenderRoundingTolerance) {
       _showMsg('Tendered amount is short by ${_tenderRemaining.toStringAsFixed(2)} $_localCcy.', color: AppColors.negative);
       return;
     }
