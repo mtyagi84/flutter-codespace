@@ -1305,16 +1305,17 @@ class _LoyaltyTabState extends ConsumerState<_LoyaltyTab> {
 /// (its own barcode/price/tax group, scannable like any product); this tab
 /// only adds the bundle-specific metadata (mode + component list).
 ///
-/// PREASSEMBLED mode is fully functional today — the bundle product
-/// carries real stock, built via the existing Stock Adjustment screen, and
-/// a POS sale of it is just an ordinary stocked-product sale, no engine
-/// change needed. COMMERCIAL mode (auto-consume components at sale time,
-/// no bundle stock) is configurable here but its sale-time explosion is
-/// NOT yet wired into fn_approve_sales_invoice — see this file's own
-/// _BundleEditorDialogState for the exact warning shown when it's picked.
-/// DYNAMIC_MIX has no admin UI here at all — per the original design, it's
-/// realized entirely through a MIX_AND_MATCH scheme (Schemes tab), not a
-/// bundle row.
+/// PREASSEMBLED mode: the bundle product carries real stock, built via
+/// the existing Stock Adjustment screen; a POS sale of it is just an
+/// ordinary stocked-product sale. COMMERCIAL mode (auto-consume
+/// components at sale time, no bundle stock of its own) is fully wired as
+/// of migration 219 — fn_approve_sales_invoice explodes the bundle line
+/// into one stock movement + GL pair per component, scaled by qty sold. A
+/// batch/serial-tracked component is explicitly not supported (no
+/// allocation UI exists for a bundle's own components) and raises a clear
+/// error at approve rather than mis-posting. DYNAMIC_MIX has no admin UI
+/// here at all — per the original design, it's realized entirely through
+/// a MIX_AND_MATCH scheme (Schemes tab), not a bundle row.
 class _BundlesTab extends StatelessWidget {
   final List<Map<String, dynamic>> bundles;
   final bool canEdit;
@@ -1529,7 +1530,7 @@ class _BundleEditorDialogState extends ConsumerState<_BundleEditorDialog> {
               decoration: const InputDecoration(labelText: 'Mode'),
               items: const [
                 DropdownMenuItem(value: 'PREASSEMBLED', child: Text('Preassembled — carries its own stock')),
-                DropdownMenuItem(value: 'COMMERCIAL', child: Text('Commercial — auto-consume components (not yet wired)')),
+                DropdownMenuItem(value: 'COMMERCIAL', child: Text('Commercial — auto-consume components at sale time')),
               ],
               onChanged: (v) => setState(() => _bundleMode = v!),
             ),
@@ -1537,9 +1538,9 @@ class _BundleEditorDialogState extends ConsumerState<_BundleEditorDialog> {
               const Padding(
                 padding: EdgeInsets.only(top: 6),
                 child: Text(
-                  'Selling this bundle will NOT yet deduct component stock — that engine change hasn\'t been built. '
-                  'Use Preassembled (build via Stock Adjustment) until this is wired up.',
-                  style: TextStyle(fontSize: 11, color: AppColors.negative),
+                  'Selling this bundle will deduct every component\'s own stock, scaled by the qty sold. '
+                  'A batch/serial-tracked component is not yet supported — the sale will be blocked with a clear error if one is used.',
+                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                 ),
               ),
             const SizedBox(height: 14),
