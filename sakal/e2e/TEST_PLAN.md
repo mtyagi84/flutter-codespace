@@ -132,11 +132,63 @@ is still open, and may be the same root cause behind
 issue from Phase 1 — both share the "Playwright reports success, Flutter
 visibly does nothing, zero errors anywhere" shape.
 
-**Not yet covered**: partial-qty return (only a full qty=1 return tested
-so far), a return against a scheme-discounted sale, and the Exchange flow
-itself (the "Return complete" dialog is reached and declined via "Done",
-but "Start Exchange" → chained new sale with carried-forward credit is not
-yet exercised).
+**Extended same session (2026-10-12)**: two more scenarios were written
+into `tests/returns.spec.js` — a partial-qty return (sell 3, return 2,
+verify the refund is exactly 2/3 of the sale total, plus the return
+line's own `base_qty = 2`) and a return against a scheme-discounted sale
+(Fanta's own active "buy 2 get 1 free" POS scheme — `rim_pos_schemes`
+'Scheme 1' — triggered by selling qty 3, confirming a full return refunds
+the ACTUAL discounted total rather than a naive qty×rate recompute, the
+exact regression class the manual refund-overcharge fix earlier this
+session was for). Both are believed correct in design — the original
+full-return test proved every step they reuse (invoice search/select, qty
+stepper via PosNumpad, submit, DB verification) — but **neither has
+completed a clean passing run**, confirmed NOT to be a bug in the test
+code itself (see below).
+
+**Real finding while writing these (2026-10-12)**: `ringUpCashSale`'s
+screen-total reading needed two fixes beyond the original qty=1 case —
+(1) a generic "any CDF-suffixed text" match is unreliable for a multi-unit
+cart (Flutter's own semantics merging of the Payment screen is NOT stable
+run to run — sometimes the header block merges the total in, sometimes it
+doesn't); fixed by querying the real DOM directly for exact
+`"<number> CDF"` text nodes and taking the topmost by y-coordinate
+(the Total is always above the Collected/Change-Due summary). (2)
+`"Amount Collected"` can prefill to a STALE, short amount for a multi-unit
+cart (confirmed live: a correct 123622.86 total shown alongside an
+Amount Collected prefilled to only 82415.24 — exactly 2/3 of it) — a real,
+separate app bug worth its own investigation, not yet root-caused;
+worked around by explicitly overwriting Amount Collected with the
+confirmed-correct total before saving, which also keeps every invoice
+this suite creates genuinely fully-collected (not polluting real tenant
+data with under-collected CASH sales). Also reconfirmed the project's own
+documented `.fill()`-is-unreliable gotcha on yet another text field (the
+Return screen's own invoice-number search box) — click + real keystrokes
+needed instead.
+
+**Still-open, NOT a test-code bug — confirmed by reverting to the exact
+previously-proven code and watching it fail the same way**: later in this
+session, once this tenant's TODAY invoice list had grown to 30+ rows from
+this session's own extensive same-day test runs, even the original,
+simple, already-proven invoice-row click (`openReturnFor`) became
+unreliable — several different fixes were tried (a "find by invoice
+number" search-field fallback, explicit scroll-settle waits, retry loops,
+input-value verification) and none consistently helped; one run even
+timed out for a full 120s with the search field never rendering at all.
+Dev server and DB were both confirmed fast and healthy during this
+(plain `curl`/`SELECT 1` checks), ruling out general infra slowness as
+the cause. Reverted the helpers back to their simplest, originally-proven
+form rather than keep layering workarounds for what looks like either a
+genuine Flutter semantics-tree scaling issue for a long ListView, or an
+artifact specific to this one unusually long, heavy debugging session —
+neither of which a normal day's test run should hit. **If this recurs on
+a fresh day with a normal invoice count, it's a real finding worth its
+own investigation; if it doesn't recur, this was session-specific and the
+tests should be trusted as written.**
+
+**Not yet covered**: the Exchange flow itself (the "Return complete"
+dialog is reached and declined via "Done", but "Start Exchange" → chained
+new sale with carried-forward credit is not yet exercised).
 
 ## Phase 3 — Non-cash tender settlement
 
