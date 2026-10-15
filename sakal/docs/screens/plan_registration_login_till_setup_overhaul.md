@@ -1,6 +1,6 @@
 # Registration Wizard, Login & Till Setup Overhaul
 
-Status: Drafted 2026-10-15, reviewed and clarified with user via AskUserQuestion — paused before ExitPlanMode approval at the user's explicit request ("save this plan, we'll resume in an hour"). Not yet approved, not yet implemented.
+Status: Implemented and live-verified 2026-10-15 (commit `b4b219b`). All 11 parts shipped: Till Setup duplicate-code check + icon fix, Login screen Register link + email/password sign-in, rebrand, registration wizard field/label/validation changes, first-login detection + Company Setup popup, email-based login (migration 226). One real bug found and fixed during verification, not in the original plan: the first-login redirect to `/setup/company` raced against GoRouter's own default-to-`/dashboard` redirect (triggered synchronously by the `sessionProvider` state assignment) — two successive attempts at an explicit/deferred `context.go()` override both lost that race. Fixed by moving the destination decision into GoRouter's `redirect` callback itself (`setPendingPostLoginRoute`/`consumeFirstLoginFlag` in `app_router.dart`), set before the session assignment rather than racing against its side effects. Confirmed live via Playwright: a genuinely fresh first login now lands on `/setup/company` with the popup showing; a second login correctly goes straight to `/dashboard`.
 
 ## Context
 
