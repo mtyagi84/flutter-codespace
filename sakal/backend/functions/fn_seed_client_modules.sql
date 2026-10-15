@@ -240,7 +240,7 @@ begin
         (p_client_id, p_company_id, v_sl, 'SL-INR', 'Pending Approvals',  '/sales/pending-approvals', 3, 'SL-TXN', 'Transactions', 0, true,  false, false),
         (p_client_id, p_company_id, v_sl, 'SL-RET', 'Sales Return',       '/sales/returns',           4, 'SL-TXN', 'Transactions', 0, true,  false, false),
         (p_client_id, p_company_id, v_sl, 'SL-DEL', 'Sales Delivery',     '/sales/deliveries',        5, 'SL-TXN', 'Transactions', 0, true,  false, false),
-        (p_client_id, p_company_id, v_sl, 'SL-RCP', 'Cash Receipt',       '/sales/receipts',          6, 'SL-TXN', 'Transactions', 0, false, false, false),
+        (p_client_id, p_company_id, v_sl, 'SL-RCP', 'Cash Receipt',       '/sales/receipts',          6, 'SL-TXN', 'Transactions', 0, true,  false, false),
         (p_client_id, p_company_id, v_sl, 'SL-CINV', 'Credit Sales Invoice', '/sales/credit-invoices', 7, 'SL-TXN', 'Transactions', 0, true,  false, false),
         (p_client_id, p_company_id, v_sl, 'SL-RPT-REG', 'Sales Register', '/reports/SALES_REGISTER',  0, 'SL-RPT', 'Reports',      1, false, false, false),
         (p_client_id, p_company_id, v_sl, 'SL-RPT-IGP', 'Item-wise Gross Profit', '/reports/ITEM_GROSS_PROFIT', 2, 'SL-RPT', 'Reports', 1, false, false, false),
