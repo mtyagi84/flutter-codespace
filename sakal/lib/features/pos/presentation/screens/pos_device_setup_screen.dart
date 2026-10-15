@@ -158,6 +158,20 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
       String terminalName;
 
       if (_creatingNew) {
+        // Real bug found live 2026-10-15 (client SK-32130): a second setup
+        // attempt reusing an already-taken Till Code hit
+        // ric_pos_terminals's own `uq_pos_terminal_code UNIQUE (client_id,
+        // company_id, location_id, terminal_code)` constraint, surfacing
+        // only as a raw, unfriendly Postgres message via
+        // ErrorPresenter.format — `_terminals` is already loaded in memory
+        // (the same list the "Existing Till" dropdown uses, fetched by
+        // _onLocationChanged), so this is a free, no-extra-query check.
+        final code = _newTerminalCode.trim();
+        final alreadyExists = _terminals.any((t) => (t['terminal_code'] as String).toUpperCase() == code.toUpperCase());
+        if (alreadyExists) {
+          setState(() => _error = 'Till code "$code" already exists at this location — pick "Existing Till" instead, or choose a different code.');
+          return;
+        }
         final createRes = await DioClient.instance.post('/ric_pos_terminals', data: {
           'id': const Uuid().v4(),
           'client_id': _clientId,

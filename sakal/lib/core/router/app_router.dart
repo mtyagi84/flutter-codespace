@@ -126,6 +126,38 @@ import '../../features/pos/presentation/screens/pos_shift_screen.dart';
 // whenever the user logs in, logs out, or the session is restored on page refresh.
 final sessionNotifier = ValueNotifier<UserSession?>(null);
 
+// Real race found live 2026-10-15: LoginScreen used to call an explicit
+// context.go() override (to /setup/company on first login, or /sync when
+// offline docs are pending) right after assigning sessionProvider's state.
+// That lost the race against THIS redirect callback's own default
+// session!=null -> /dashboard behavior every time — ref.listen(sessionProvider)
+// in app.dart fires synchronously within the same call stack as the state
+// assignment, so sessionNotifier.value is updated (and this redirect
+// re-evaluated, navigating to /dashboard and disposing LoginScreen) before
+// LoginScreen's own deferred context.go() ever got a chance to run against
+// a State that was already unmounted. Fix: the override decision now lives
+// HERE, inside the one redirect pass that actually decides the post-login
+// destination, instead of as a second navigation call racing against it.
+// LoginScreen calls setPendingPostLoginRoute(...) BEFORE assigning
+// sessionProvider's state; this redirect consumes (and clears) it the one
+// time it next evaluates /login or /landing with a non-null session.
+String? _pendingPostLoginRoute;
+bool _pendingFirstLoginFlag = false;
+
+void setPendingPostLoginRoute(String route, {bool firstLogin = false}) {
+  _pendingPostLoginRoute = route;
+  _pendingFirstLoginFlag = firstLogin;
+}
+
+/// Consumed once by CompanyScreen's own GoRoute builder — true only on the
+/// one build that follows a first-login override, false on every other
+/// navigation to this route (including a user manually revisiting it later).
+bool consumeFirstLoginFlag() {
+  final v = _pendingFirstLoginFlag;
+  _pendingFirstLoginFlag = false;
+  return v;
+}
+
 // Explicit, stable identities for the root Navigator and each nested
 // ShellRoute's own Navigator. Without these, go_router can end up
 // ambiguous about a nested Navigator's identity across a route-table
@@ -203,6 +235,11 @@ final appRouter = GoRouter(
 
     // Logged in — don't let them land on login/landing again.
     if (loc == RouteNames.login || loc == RouteNames.landing) {
+      final override = _pendingPostLoginRoute;
+      if (override != null) {
+        _pendingPostLoginRoute = null;
+        return override;
+      }
       return RouteNames.dashboard;
     }
 
@@ -282,7 +319,7 @@ final appRouter = GoRouter(
 
         // Administration
         GoRoute(path: RouteNames.masterMenu,  builder: (c, s) => const MasterMenuScreen()),
-        GoRoute(path: RouteNames.company,     builder: (c, s) => const CompanyScreen()),
+        GoRoute(path: RouteNames.company,     builder: (c, s) => CompanyScreen(firstLogin: consumeFirstLoginFlag())),
         GoRoute(path: RouteNames.locations,   builder: (c, s) => const LocationsScreen()),
         GoRoute(path: RouteNames.locationGroups, builder: (c, s) => const LocationGroupsScreen()),
         GoRoute(path: RouteNames.currencies,  builder: (c, s) => const CurrenciesScreen()),

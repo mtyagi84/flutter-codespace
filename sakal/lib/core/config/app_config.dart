@@ -1,7 +1,7 @@
 class AppConfig {
-  static const String appName     = 'SAKAL ERP';
+  static const String appName     = 'LiteLink ERP';
   static const String companyName = 'Rigevedam Innovations';
-  static const String appTagline  = 'Sampurna — Complete Business Solution';
+  static const String appTagline  = 'INTEGRATED. INTELLIGENT. IMPACTFUL';
   static const String appVersion  = '1.0.0';
 
   // Supabase — anon key is safe to embed (it is the public key, protected by RLS).

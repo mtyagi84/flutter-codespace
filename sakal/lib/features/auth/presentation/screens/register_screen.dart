@@ -23,7 +23,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   // Step 0 — Business Info
   final _key0 = GlobalKey<FormState>();
   final _businessNameCtrl = TextEditingController();
-  final _countryCtrl      = TextEditingController();
+  String _country         = _countryOptions.first;
   final _contactNameCtrl  = TextEditingController();
   final _emailCtrl        = TextEditingController();
   final _phoneCtrl        = TextEditingController();
@@ -48,29 +48,59 @@ class _RegisterScreenState extends State<RegisterScreen> {
   // accounting_setup_screen.dart; that screen stays as a fallback for any
   // tenant that skips this step (or a pre-existing tenant from before this
   // change), but a fresh registration completes it inline now.
-  String _accountingStd = 'OHADA';
+  String _accountingStd = 'INDIAN';
   bool   _accountingStdTouched = false;
   int    _fyStartMonth = 1;
 
   // Step 4 — Admin User
   final _key3 = GlobalKey<FormState>();
-  final _adminNameCtrl = TextEditingController();
-  final _usernameCtrl  = TextEditingController();
-  final _passwordCtrl  = TextEditingController();
-  final _confirmCtrl   = TextEditingController();
+  final _adminNameCtrl  = TextEditingController();
+  final _adminEmailCtrl = TextEditingController();
+  final _usernameCtrl   = TextEditingController();
+  final _passwordCtrl   = TextEditingController();
+  final _confirmCtrl    = TextEditingController();
   bool _obscurePass    = true;
   bool _obscureConfirm = true;
 
   static const _currencies = ['USD', 'EUR', 'GBP', 'ZAR', 'CDF', 'ZMW', 'NGN', 'KES', 'INR'];
-  static const _locationTypes = ['STORE', 'WAREHOUSE', 'OFFICE'];
+
+  // Friendly label -> raw value stored (and sent to fn_register_client's
+  // p_location_type, which just upper()/trim()s whatever string it gets —
+  // no CHECK constraint on ric_locations.location_type, confirmed live).
+  static const _locationTypes = <String, String>{
+    'Store': 'STORE',
+    'Warehouse': 'WAREHOUSE',
+    'Office': 'OFFICE',
+    'Retail Shop': 'RETAIL_SHOP',
+  };
+
+  // Step 0 — the 4 countries this app's own accounting standards/currencies
+  // actually support today (India/Zambia/DRC map directly to Step 3's own
+  // 3 accounting standards; UAE added per direct user request).
+  static const _countryOptions = ['India', 'Zambia', 'United Arab Emirates', 'Democratic Republic of Congo'];
+  static const _countryDialCodes = {
+    'India': '+91',
+    'Zambia': '+260',
+    'United Arab Emirates': '+971',
+    'Democratic Republic of Congo': '+243',
+  };
+  // National-number digit count expected per country — a light sanity
+  // check (right length), not a full international-phone-number library.
+  static const _countryPhoneDigits = {
+    'India': 10,
+    'Zambia': 9,
+    'United Arab Emirates': 9,
+    'Democratic Republic of Congo': 9,
+  };
 
   @override
   void dispose() {
-    _businessNameCtrl.dispose(); _countryCtrl.dispose();
+    _businessNameCtrl.dispose();
     _contactNameCtrl.dispose();  _emailCtrl.dispose();
     _phoneCtrl.dispose();        _companyNameCtrl.dispose();
     _companyShortCtrl.dispose(); _locationNameCtrl.dispose();
     _locationShortCtrl.dispose(); _adminNameCtrl.dispose();
+    _adminEmailCtrl.dispose();
     _usernameCtrl.dispose();     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
     super.dispose();
@@ -121,10 +151,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       final res = await DioClient.instance.post('/rpc/fn_register_client', data: {
         'p_business_name':  _businessNameCtrl.text.trim(),
-        'p_country':        _countryCtrl.text.trim(),
+        'p_country':        _country,
         'p_contact_name':   _contactNameCtrl.text.trim(),
         'p_email':          _emailCtrl.text.trim(),
-        'p_phone':          _phoneCtrl.text.trim(),
+        'p_phone':          '${_countryDialCodes[_country]}${_phoneCtrl.text.trim()}',
         'p_company_name':   _companyNameCtrl.text.trim(),
         'p_company_short':  _companyShortCtrl.text.trim(),
         'p_base_currency':  _baseCurrency,
@@ -133,6 +163,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'p_location_short': _locationShortCtrl.text.trim(),
         'p_location_type':  _locationType,
         'p_admin_name':     _adminNameCtrl.text.trim(),
+        'p_admin_email':    _adminEmailCtrl.text.trim(),
         'p_username':       _usernameCtrl.text.trim(),
         'p_password':       _passwordCtrl.text,
       });
@@ -162,9 +193,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       setState(() { _clientNo = data['client_no'] as String; _step = 5; });
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] as String? ?? '';
-      setState(() => _error = msg.contains('EMAIL_EXISTS')
-          ? 'This email is already registered. Please sign in instead.'
-          : 'Registration failed. Please check your details and try again.');
+      setState(() => _error = switch (msg) {
+            _ when msg.contains('ADMIN_EMAIL_EXISTS') => 'That administrator email is already in use by another account. Please use a different one.',
+            _ when msg.contains('EMAIL_EXISTS') => 'This email is already registered. Please sign in instead.',
+            _ => 'Registration failed. Please check your details and try again.',
+          });
     } finally {
       setState(() => _loading = false);
     }
@@ -335,8 +368,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _stepTitle('About Your Business'),
-          _field(_businessNameCtrl, 'Business / Trading Name', required: true),
-          _field(_countryCtrl, 'Country', required: true),
+          _field(_businessNameCtrl, 'Business / Trading Company Name', required: true),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: DropdownButtonFormField<String>(
+              initialValue: _country,
+              decoration: const InputDecoration(labelText: 'Country'),
+              items: _countryOptions.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+              onChanged: (v) => setState(() => _country = v!),
+            ),
+          ),
           _field(_contactNameCtrl, 'Contact Person Name', required: true),
           _field(_emailCtrl, 'Email Address',
               required: true,
@@ -346,7 +387,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 if (!v.contains('@') || !v.contains('.')) return 'Enter a valid email';
                 return null;
               }),
-          _field(_phoneCtrl, 'Phone Number', keyboardType: TextInputType.phone),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  height: 56,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.textSecondary.withValues(alpha: 0.4)),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(_countryDialCodes[_country] ?? '', style: const TextStyle(fontSize: 15)),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextFormField(
+                    controller: _phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(labelText: 'Phone Number'),
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return null; // phone stays optional, matches today
+                      final expected = _countryPhoneDigits[_country];
+                      if (expected != null && v.length != expected) return 'Enter $expected digits for $_country';
+                      return null;
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -359,7 +432,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _stepTitle('Company Details'),
-          _field(_companyNameCtrl, 'Company Name', required: true),
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(8)),
+            child: Row(children: [
+              const Icon(Icons.business_outlined, size: 16, color: AppColors.textSecondary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('Business / Trading Company Name: ${_businessNameCtrl.text}',
+                    style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
+              ),
+              const Tooltip(
+                message: 'This is the overall business you registered on the previous step. '
+                    '"Company Name" below is a specific operating company under it — most '
+                    'businesses use the same name for both, but you can add more companies '
+                    'under the same business later.',
+                triggerMode: TooltipTriggerMode.tap,
+                child: Icon(Icons.info_outline, size: 16, color: AppColors.textSecondary),
+              ),
+            ]),
+          ),
+          _field(_companyNameCtrl, 'Company Name',
+              required: true,
+              helpText: 'This specific operating company under your business — you can add more companies under the same business later. Most businesses use the same name here.'),
           _field(_companyShortCtrl, 'Short Name (max 8 chars)',
               required: true,
               validator: (v) {
@@ -376,7 +472,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
           const SizedBox(height: 16),
           _dropdownField(
-            label: 'Local Currency (regional)',
+            label: 'Other Currency You Want to See Reports In',
             value: _localCurrency,
             items: _currencies,
             onChanged: _onLocalCurrencyChanged,
@@ -402,10 +498,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 return null;
               }),
           const SizedBox(height: 8),
-          _dropdownField(
-            label: 'Location Type',
-            value: _locationType,
-            items: _locationTypes,
+          DropdownButtonFormField<String>(
+            initialValue: _locationType,
+            decoration: const InputDecoration(labelText: 'Location Type'),
+            items: _locationTypes.entries.map((e) => DropdownMenuItem(value: e.value, child: Text(e.key))).toList(),
             onChanged: (v) => setState(() => _locationType = v!),
           ),
         ],
@@ -421,6 +517,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
         children: [
           _stepTitle('Administrator Account'),
           _field(_adminNameCtrl, 'Full Name', required: true),
+          _field(_adminEmailCtrl, 'Email Address',
+              required: true,
+              keyboardType: TextInputType.emailAddress,
+              helpText: 'The administrator\'s own sign-in email — this can be different from the business contact email on Step 1.',
+              validator: (v) {
+                if (v == null || v.isEmpty) return 'Email is required';
+                if (!v.contains('@') || !v.contains('.')) return 'Enter a valid email';
+                return null;
+              }),
           _field(_usernameCtrl, 'Username',
               required: true,
               validator: (v) {
@@ -556,8 +661,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Save this Client ID. Share it with your team — '
-                            'they will need it to sign in.',
+                            'Save this Client ID — you can sign in with just your '
+                            'email and password day to day, or use this Client ID '
+                            'with a username if you ever need to (e.g. a teammate '
+                            'sharing a login).',
                             style: TextStyle(
                                 fontSize: 13, color: Colors.white70),
                           ),
@@ -608,13 +715,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
     bool required = false,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
+    String? helpText,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
         controller: ctrl,
         keyboardType: keyboardType,
-        decoration: InputDecoration(labelText: label),
+        decoration: InputDecoration(
+          labelText: label,
+          suffixIcon: helpText == null
+              ? null
+              : Tooltip(
+                  message: helpText,
+                  triggerMode: TooltipTriggerMode.tap,
+                  child: const Icon(Icons.info_outline, size: 18, color: AppColors.textSecondary),
+                ),
+        ),
         validator: validator ??
             (required
                 ? (v) => (v == null || v.isEmpty) ? '$label is required' : null

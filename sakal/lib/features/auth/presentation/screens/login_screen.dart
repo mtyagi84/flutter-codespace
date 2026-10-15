@@ -10,6 +10,7 @@ import '../../../../core/config/app_constants.dart';
 import '../../../../core/models/menu_models.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/providers/session_provider.dart';
+import '../../../../core/router/app_router.dart' show setPendingPostLoginRoute;
 import '../../../../core/router/route_names.dart';
 import '../../../../core/services/local_storage.dart';
 import '../../../../core/services/offline_session_cache.dart';
@@ -32,6 +33,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   final _formKey      = GlobalKey<FormState>();
   final _clientNoCtrl = TextEditingController();
+  final _emailCtrl    = TextEditingController();
   final _usernameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   bool _obscure     = true;
@@ -39,6 +41,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _workOffline = false;
   bool _hasCache    = false;
   String? _error;
+
+  // Additive email-based login (migration 226) — default, no Client ID
+  // needed. The existing Client ID + Username + Password path stays fully
+  // available via the toggle below; never removed. Offline login always
+  // uses Username (OfflineSessionCache is keyed by it, and there's no
+  // server to resolve an email against with no connectivity anyway) — see
+  // the Work Offline toggle's own onTap, which forces this false whenever
+  // offline mode is turned on.
+  bool _loginByEmail = true;
 
   bool get _clientSaved => LocalStorage.clientNo != null;
 
@@ -56,6 +67,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   void dispose() {
     _clientNoCtrl.dispose();
+    _emailCtrl.dispose();
     _usernameCtrl.dispose();
     _passwordCtrl.dispose();
     super.dispose();
@@ -70,16 +82,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _submitOnline() async {
     setState(() { _loading = true; _error = null; });
 
-    final clientNo = _clientSaved
-        ? LocalStorage.clientNo!
-        : _clientNoCtrl.text.trim().toUpperCase();
-
     try {
-      final loginRes = await DioClient.instance.post('/rpc/fn_login', data: {
-        'p_client_no': clientNo,
-        'p_username':  _usernameCtrl.text.trim(),
-        'p_password':  _passwordCtrl.text,
-      });
+      final Response loginRes;
+      if (_loginByEmail) {
+        loginRes = await DioClient.instance.post('/rpc/fn_login_by_email', data: {
+          'p_email':    _emailCtrl.text.trim(),
+          'p_password': _passwordCtrl.text,
+        });
+      } else {
+        final clientNo = _clientSaved
+            ? LocalStorage.clientNo!
+            : _clientNoCtrl.text.trim().toUpperCase();
+        loginRes = await DioClient.instance.post('/rpc/fn_login', data: {
+          'p_client_no': clientNo,
+          'p_username':  _usernameCtrl.text.trim(),
+          'p_password':  _passwordCtrl.text,
+        });
+      }
       final d = loginRes.data as Map<String, dynamic>;
 
       final token = d['access_token'] as String?;
@@ -132,13 +151,54 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         numberFormat:     d['number_format']      as String? ?? 'INTERNATIONAL',
       );
 
-      // Cache credentials for future offline login
+      // Cache credentials for future offline login — always the REAL
+      // username from the login response, never the (possibly empty, on
+      // the email-login path) _usernameCtrl, since offline re-login is
+      // always username-based regardless of which path logged in online.
       await OfflineSessionCache.save(
-        username: _usernameCtrl.text.trim(),
+        username: d['username'] as String,
         password: _passwordCtrl.text,
         session:  session,
         menu:     menuList,
       );
+
+      // Route to sync screen if pending offline documents exist.
+      // On Flutter Web the SQLite WASM runtime is not loaded — skip the check.
+      int pending = 0;
+      if (!kIsWeb) {
+        try {
+          pending = await ref.read(syncEngineProvider).pendingCount();
+        } catch (_) {}
+      }
+      if (!mounted) return;
+
+      // Decide the post-login destination BEFORE assigning sessionProvider's
+      // state below — see setPendingPostLoginRoute's own doc comment
+      // (app_router.dart) for why: ref.listen(sessionProvider) in app.dart
+      // fires synchronously within the same call stack as that assignment,
+      // re-evaluating GoRouter's redirect immediately. An explicit
+      // context.go() called AFTER the assignment (even deferred to a
+      // post-frame callback) lost that race every time, live, 2026-10-15 —
+      // GoRouter's own default-to-/dashboard navigation ran first and
+      // disposed this screen before the deferred call ever got to run
+      // against a State that was already unmounted. Setting this flag first
+      // means the SAME redirect pass that would otherwise send a logged-in
+      // user to /dashboard sees the override instead — no second navigation
+      // racing against the first.
+      //
+      // First-login override (migration 225): a brand-new company's very
+      // first login lands on Company Setup instead, with a one-time
+      // informational popup there pointing at the handful of settings worth
+      // reviewing before transacting — never shown again once fn_login has
+      // returned `is_first_login: true` exactly once (the DB flag is claimed
+      // atomically inside fn_login itself, not tracked client-side). Checked
+      // ahead of the pending-sync redirect: a company this new realistically
+      // has nothing queued offline yet.
+      if (d['is_first_login'] == true) {
+        setPendingPostLoginRoute(RouteNames.company, firstLogin: true);
+      } else if (pending > 0) {
+        setPendingPostLoginRoute(RouteNames.sync);
+      }
 
       ref.read(sessionProvider.notifier).state = session;
       ref.read(menuProvider.notifier).state    = menuList;
@@ -152,24 +212,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!kIsWeb && LocalStorage.deviceOfflineEnabled) {
         unawaited(runBackgroundMasterDataSync(ref, session));
       }
-
-      // Route to sync screen if pending offline documents exist.
-      // On Flutter Web the SQLite WASM runtime is not loaded — skip the check.
-      int pending = 0;
-      if (!kIsWeb) {
-        try {
-          pending = await ref.read(syncEngineProvider).pendingCount();
-        } catch (_) {}
-      }
-      if (!mounted) return;
-      // Setting sessionProvider above already triggers GoRouter's redirect
-      // to navigate to /dashboard on its own (via sessionNotifier/
-      // refreshListenable) — only navigate explicitly here when overriding
-      // that default destination (pending offline docs -> /sync instead).
-      // An unconditional context.go() to the SAME destination the redirect
-      // was already navigating to raced against it and could crash with a
-      // "Duplicate GlobalKey"/Element-reactivation error.
-      if (pending > 0) context.go(RouteNames.sync);
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] as String? ?? '';
       setState(() => _error = _friendlyError(msg));
@@ -290,58 +332,95 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 28),
 
-              // Client ID — show pill if saved, input if not
-              if (_clientSaved) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(8),
+              // Email + Password is the default online sign-in path
+              // (migration 226, additive) — no Client ID needed. Offline
+              // mode always uses the existing Client ID + Username path
+              // instead (OfflineSessionCache is keyed by username, and
+              // there's no server to resolve an email against with no
+              // connectivity), so this branch is skipped whenever
+              // `_workOffline` is true, regardless of `_loginByEmail`.
+              if (!_workOffline && _loginByEmail) ...[
+                TextFormField(
+                  key: const Key('login_email'),
+                  controller: _emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    prefixIcon: Icon(Icons.alternate_email),
                   ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.business_outlined,
-                          size: 16, color: AppColors.textSecondary),
-                      const SizedBox(width: 8),
-                      Text('Client: ${LocalStorage.clientNo}',
-                          style: const TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.w500)),
-                    ],
-                  ),
+                  textInputAction: TextInputAction.next,
+                  validator: (v) => (v == null || v.isEmpty) ? 'Email is required' : null,
                 ),
                 const SizedBox(height: 16),
               ] else ...[
-                TextFormField(
-                  key: const Key('login_client_no'),
-                  controller: _clientNoCtrl,
-                  textCapitalization: TextCapitalization.characters,
-                  decoration: const InputDecoration(
-                    labelText: 'Client ID',
-                    hintText: 'e.g. SK-12345',
-                    prefixIcon: Icon(Icons.business_outlined),
+                // Client ID — show pill if saved, input if not
+                if (_clientSaved) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.business_outlined,
+                            size: 16, color: AppColors.textSecondary),
+                        const SizedBox(width: 8),
+                        Text('Client: ${LocalStorage.clientNo}',
+                            style: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500)),
+                      ],
+                    ),
                   ),
+                  const SizedBox(height: 16),
+                ] else ...[
+                  TextFormField(
+                    key: const Key('login_client_no'),
+                    controller: _clientNoCtrl,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: const InputDecoration(
+                      labelText: 'Client ID',
+                      hintText: 'e.g. SK-12345',
+                      prefixIcon: Icon(Icons.business_outlined),
+                    ),
+                    validator: (v) =>
+                        (v == null || v.isEmpty) ? 'Client ID is required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // Username
+                TextFormField(
+                  key: const Key('login_username'),
+                  controller: _usernameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Username',
+                    prefixIcon: Icon(Icons.person_outline),
+                  ),
+                  textInputAction: TextInputAction.next,
                   validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Client ID is required' : null,
+                      (v == null || v.isEmpty) ? 'Username is required' : null,
                 ),
                 const SizedBox(height: 16),
               ],
 
-              // Username
-              TextFormField(
-                key: const Key('login_username'),
-                controller: _usernameCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Username',
-                  prefixIcon: Icon(Icons.person_outline),
+              if (!_workOffline) ...[
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => setState(() => _loginByEmail = !_loginByEmail),
+                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                    child: Text(
+                      _loginByEmail ? 'Sign in with Client ID instead' : 'Sign in with Email instead',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ),
                 ),
-                textInputAction: TextInputAction.next,
-                validator: (v) =>
-                    (v == null || v.isEmpty) ? 'Username is required' : null,
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 8),
+              ],
 
               // Password
               TextFormField(
@@ -369,7 +448,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 16),
                 InkWell(
                   borderRadius: BorderRadius.circular(8),
-                  onTap: () => setState(() => _workOffline = !_workOffline),
+                  onTap: () => setState(() {
+                    _workOffline = !_workOffline;
+                    // Offline login is always Username-based (see the
+                    // Email-field branch's own doc comment above) — force
+                    // the toggle back whenever offline mode turns on.
+                    if (_workOffline) _loginByEmail = false;
+                  }),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 10),
@@ -475,9 +560,65 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       : Text(_workOffline ? 'Sign In Offline' : 'Sign In'),
                 ),
               ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Flexible(
+                    child: Text(
+                      "Don't have a registered business?",
+                      style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => context.go(RouteNames.register),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                    child: const Text('Register', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.help_outline, size: 16),
+                    color: AppColors.textSecondary,
+                    tooltip: 'What is registration?',
+                    constraints: const BoxConstraints(),
+                    padding: const EdgeInsets.all(4),
+                    onPressed: _showRegistrationHelp,
+                  ),
+                ],
+              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showRegistrationHelp() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Registering your business'),
+        content: const Text(
+          'Registration creates a brand-new, private account for your business — '
+          'your own company, your first store/office location, and an '
+          'administrator login — all in a few minutes. You\'ll get a Client ID '
+          'at the end, which identifies your business whenever you (or your '
+          'team) sign in. Use it if you\'re setting up SAKAL for your business '
+          'for the first time; if someone else already registered it, ask them '
+          'for your sign-in details instead.',
+          style: TextStyle(fontSize: 13.5, height: 1.5),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close')),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              context.go(RouteNames.register);
+            },
+            child: const Text('Register Now'),
+          ),
+        ],
       ),
     );
   }

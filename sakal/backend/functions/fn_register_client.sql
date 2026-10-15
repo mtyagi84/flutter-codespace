@@ -3,7 +3,20 @@
 -- Creates client + company + location + first admin in one
 -- transaction. Called from Flutter on first-time registration.
 -- PostgREST: POST /rest/v1/rpc/fn_register_client
+--
+-- 2026-10-15: added p_admin_email -- the admin user's own sign-in email,
+-- genuinely distinct from p_email (the business/registration contact
+-- email, written only to ric_clients.registration_email from here on).
+-- Previously this function reused p_email for BOTH purposes. Inserted
+-- mid-signature (not appended), so the OLD 15-arg overload is dropped
+-- explicitly below rather than left as a dead orphan -- see this
+-- project's own documented "appending a parameter creates a silent
+-- overload" gotcha.
 -- ============================================================
+
+drop function if exists fn_register_client(
+    text, text, text, text, text, text, text, text, text, text, text, text, text, text, text
+);
 
 create or replace function fn_register_client(
     p_business_name  text,
@@ -19,6 +32,7 @@ create or replace function fn_register_client(
     p_location_short text,
     p_location_type  text,
     p_admin_name     text,
+    p_admin_email    text,
     p_username       text,
     p_password       text
 ) returns json language plpgsql security definer as $$
@@ -29,13 +43,25 @@ declare
     v_user_id     uuid;
     v_client_no   text;
 begin
-    -- Reject duplicate email (case-insensitive)
+    -- Reject duplicate email (case-insensitive) -- business/registration
+    -- contact email, on ric_clients.
     if exists (
         select 1 from ric_clients
         where registration_email = lower(trim(p_email))
     ) then
         raise exception 'EMAIL_EXISTS'
             using hint = 'An account with this email already exists';
+    end if;
+
+    -- Reject duplicate admin email (case-insensitive) -- the actual login
+    -- identity on rim_users. Independent of the check above: the business
+    -- contact and the admin's own email are two different fields now.
+    if exists (
+        select 1 from rim_users
+        where is_deleted = false and lower(email) = lower(trim(p_admin_email))
+    ) then
+        raise exception 'ADMIN_EMAIL_EXISTS'
+            using hint = 'An administrator account with this email already exists';
     end if;
 
     -- Generate a unique client_no (SK-XXXXX)
@@ -96,7 +122,7 @@ begin
     ) values (
         v_client_id, v_company_id, v_location_id,
         lower(trim(p_username)), trim(p_admin_name),
-        lower(trim(p_email)), trim(p_phone),
+        lower(trim(p_admin_email)), trim(p_phone),
         crypt(p_password, gen_salt('bf')), false,
         now()
     ) returning id into v_user_id;

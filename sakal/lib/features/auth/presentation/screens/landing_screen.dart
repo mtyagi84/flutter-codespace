@@ -61,36 +61,14 @@ class LandingScreen extends StatelessWidget {
   }
 
   Widget _buildLogo() {
-    return Column(
-      children: [
-        Container(
-          width: 88,
-          height: 88,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-          ),
-          alignment: Alignment.center,
-          child: const Text(
-            'S',
-            style: TextStyle(
-              fontSize: 52,
-              fontWeight: FontWeight.w800,
-              color: AppColors.primary,
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        const Text(
-          AppConfig.appName,
-          style: TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.w800,
-            color: Colors.white,
-            letterSpacing: 4,
-          ),
-        ),
-      ],
+    return const Text(
+      AppConfig.appName,
+      style: TextStyle(
+        fontSize: 32,
+        fontWeight: FontWeight.w800,
+        color: Colors.white,
+        letterSpacing: 4,
+      ),
     );
   }
 }

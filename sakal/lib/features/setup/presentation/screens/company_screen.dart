@@ -11,7 +11,14 @@ import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/sakal_field_row.dart';
 
 class CompanyScreen extends ConsumerStatefulWidget {
-  const CompanyScreen({super.key});
+  // Threaded from login_screen.dart's first-login redirect (migration 225)
+  // — true only on the one login where fn_login itself atomically claimed
+  // `ric_companies.first_login_at`. Triggers the one-time informational
+  // popup in initState(); never persisted/re-checked here since fn_login
+  // itself is the single source of truth for "has this ever fired before".
+  final bool firstLogin;
+
+  const CompanyScreen({super.key, this.firstLogin = false});
 
   @override
   ConsumerState<CompanyScreen> createState() => _CompanyScreenState();
@@ -104,7 +111,62 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCompany());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCompany();
+      if (widget.firstLogin) _showFirstLoginHelp();
+    });
+  }
+
+  void _showFirstLoginHelp() {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Welcome — a few settings to review first'),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Before you start creating products and transactions, it\'s worth '
+                'reviewing these company settings — some of them become difficult '
+                'or impossible to change once real data exists:',
+                style: TextStyle(fontSize: 13.5, height: 1.4),
+              ),
+              SizedBox(height: 14),
+              _FirstLoginSettingTip(
+                title: 'Product Coding',
+                detail: 'Whether products use barcodes and/or part numbers. Locks once any product exists.',
+              ),
+              _FirstLoginSettingTip(
+                title: 'Inter-Location Model',
+                detail: 'Whether your locations share one set of books or act as separate entities. Locks once any transaction is posted.',
+              ),
+              _FirstLoginSettingTip(
+                title: 'Quantity Entry Mode',
+                detail: 'Whether staff enter quantities as Pack + Loose or Pack only. Can be changed later.',
+              ),
+              _FirstLoginSettingTip(
+                title: 'Number Format',
+                detail: 'How numbers are grouped on screen (e.g. 1,15,356 vs 115,356). Can be changed later.',
+              ),
+              _FirstLoginSettingTip(
+                title: 'Currency Decimal Places',
+                detail: 'How many decimal places each currency\'s rates show. Configured on Finance → Currencies.',
+              ),
+              _FirstLoginSettingTip(
+                title: 'Quick Invoice Setup',
+                detail: 'Per-cashier settings for fast point-of-sale invoicing. Its own screen, under Setup.',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Got it')),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1138,6 +1200,39 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen>
           );
         }),
       ],
+    );
+  }
+}
+
+// One row in the first-login help dialog's settings checklist.
+class _FirstLoginSettingTip extends StatelessWidget {
+  final String title;
+  final String detail;
+  const _FirstLoginSettingTip({required this.title, required this.detail});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 3),
+            child: Icon(Icons.circle, size: 6, color: AppColors.textSecondary),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                Text(detail, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.3)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

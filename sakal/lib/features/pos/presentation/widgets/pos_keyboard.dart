@@ -291,7 +291,15 @@ class _PosKeyboardFieldState extends State<PosKeyboardField> {
       style: const TextStyle(fontSize: 15, color: AppColors.textPrimary),
       decoration: InputDecoration(
         labelText: widget.label,
-        prefixIcon: const Icon(Icons.keyboard_outlined, size: 18, color: AppColors.textSecondary),
+        // Real UX bug found live 2026-10-15: this field used to ALSO carry
+        // a static `prefixIcon: Icons.keyboard_outlined` — a plain,
+        // non-interactive decoration that happened to look almost
+        // identical to the suffix button's own `keyboard_alt_outlined`
+        // glyph below, confusing users about which one was actually
+        // tappable. Removed: the label text already identifies the field,
+        // and the only keyboard-glyph icon left is the real, tappable
+        // action — matches `PosAmountField`'s own pattern (no prefixIcon,
+        // one action icon only).
         suffixIcon: widget.showTouchKeyboardButton
             ? IconButton(
                 icon: const Icon(Icons.keyboard_alt_outlined, size: 18),
