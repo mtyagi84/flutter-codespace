@@ -142,7 +142,16 @@ class PriceMasterRemoteDs {
       'order':      'is_base_uom.desc,sort_order.asc',
     });
     final rows = List<Map<String, dynamic>>.from(res.data as List);
-    if (rows.isNotEmpty) return rows;
+
+    // Real gap found live 2026-10-16: the original fallback (see
+    // feedback_product_uom_fallback_gap memory) only ran when rim_product_uom
+    // was EMPTY — but a product with a configured pack size (e.g. "Carton of
+    // 10") and NO row explicitly flagged is_base_uom=true would return ONLY
+    // that pack row, silently hiding the base unit as a selectable option
+    // entirely. Confirmed live: a product's own base unit (Piece/Kg/etc.)
+    // must always be pickable here, regardless of what additional pack
+    // sizes are or aren't configured, or aren't correctly flagged.
+    if (rows.any((r) => r['is_base_uom'] == true)) return rows;
 
     final productRes = await _dio.get('/rim_products', queryParameters: {
       'id':     'eq.$productId',
@@ -150,10 +159,10 @@ class PriceMasterRemoteDs {
       'limit':  '1',
     });
     final productList = productRes.data as List;
-    if (productList.isEmpty) return [];
+    if (productList.isEmpty) return rows;
     final product = productList.first as Map<String, dynamic>;
     final baseUomId = product['base_uom_id'] as String?;
-    if (baseUomId == null) return [];
+    if (baseUomId == null) return rows;
     return [
       {
         'uom_id': baseUomId,
@@ -161,6 +170,7 @@ class PriceMasterRemoteDs {
         'is_base_uom': true,
         'uom': product['uom'],
       },
+      ...rows,
     ];
   }
 
@@ -231,6 +241,37 @@ class PriceMasterRemoteDs {
           'matched_uom_label': uom?['description'],
         };
       }
+    }
+
+    // Real gap found live 2026-10-16: a product's own base barcode
+    // (rim_products.barcode — the field shown first and most prominently
+    // on Product Master) is a completely separate value from any
+    // rim_product_uom.barcode (a per-pack-size barcode, e.g. a carton).
+    // Most products never get a UOM-level barcode at all — scanning the
+    // product's own barcode found nothing, every time, for every tenant,
+    // since this lookup only ever queried rim_product_uom (falling through
+    // straight to part_number). Tried regardless of tryPartNumber, since
+    // this is still a barcode match, not a part-number one.
+    final bRes = await _dio.get('/rim_products', queryParameters: {
+      'client_id':  'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'barcode':    'eq.$code',
+      'is_deleted': 'eq.false',
+      'is_active':  'eq.true',
+      'select':     'id,product_code,product_name,base_uom_id,cost_currency_id,'
+          'uom:rim_common_masters!base_uom_id(description)',
+      'limit':      '1',
+    });
+    final bList = bRes.data as List;
+    if (bList.isNotEmpty) {
+      final product = bList.first as Map<String, dynamic>;
+      final uom = product['uom'] as Map<String, dynamic>?;
+      return {
+        ...product,
+        'matched_uom_id': product['base_uom_id'],
+        'matched_uom_conversion_factor': 1,
+        'matched_uom_label': uom?['description'],
+      };
     }
 
     if (!tryPartNumber) return null;

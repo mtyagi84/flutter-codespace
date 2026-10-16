@@ -144,14 +144,37 @@ class MaterialRequisitionRemoteDs {
       'limit':      '1',
     });
     final list = res.data as List;
-    if (list.isEmpty) return null;
-    final row = list.first as Map<String, dynamic>;
-    final product = row['product'] as Map<String, dynamic>?;
-    if (product == null || product['is_deleted'] == true || product['is_active'] == false) return null;
+    if (list.isNotEmpty) {
+      final row = list.first as Map<String, dynamic>;
+      final product = row['product'] as Map<String, dynamic>?;
+      if (product != null && product['is_deleted'] != true && product['is_active'] != false) {
+        return {
+          ...product,
+          'matched_uom_id': row['uom_id'],
+          'matched_uom_conversion_factor': row['conversion_factor'],
+        };
+      }
+    }
+    // See sales_quotation_remote_ds.dart's own getProductByBarcode for the
+    // full explanation — a product's own base barcode is a separate value
+    // from any rim_product_uom.barcode, and most products never get the
+    // latter configured at all.
+    final pRes = await _dio.get('/rim_products', queryParameters: {
+      'client_id':  'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'barcode':    'eq.$barcode',
+      'is_deleted': 'eq.false',
+      'is_active':  'eq.true',
+      'select':     'id,product_code,product_name,base_uom_id,tracking_type,is_active,is_deleted',
+      'limit':      '1',
+    });
+    final pList = pRes.data as List;
+    if (pList.isEmpty) return null;
+    final product = pList.first as Map<String, dynamic>;
     return {
       ...product,
-      'matched_uom_id': row['uom_id'],
-      'matched_uom_conversion_factor': row['conversion_factor'],
+      'matched_uom_id': product['base_uom_id'],
+      'matched_uom_conversion_factor': 1,
     };
   }
 

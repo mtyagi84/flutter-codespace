@@ -182,6 +182,30 @@ class _PosPinLoginScreenState extends ConsumerState<PosPinLoginScreen> {
     return raw;
   }
 
+  /// True when the current `_error` means this specific device genuinely
+  /// isn't set up (as opposed to a wrong PIN, a blocked till, etc.) — the
+  /// one case where the admin standing at this exact screen can actually
+  /// DO something about it themselves, rather than just being told to "ask
+  /// a manager" with no further action available.
+  bool get _deviceNeedsSetup =>
+      _error != null && (_error!.contains('isn\'t registered') || _error!.contains('isn\'t assigned to a till'));
+
+  /// Real gap found live 2026-10-16: PosDeviceStorage.forgetCachedTerminal()
+  /// already existed, with a doc comment describing it as "the escape hatch
+  /// on the PIN screen" — but nothing on this screen ever actually called
+  /// it. A device with a STALE cached terminal binding (e.g. left over from
+  /// testing a different tenant, or after that tenant's own data was
+  /// purged) would show this PIN screen with no empty-cache redirect
+  /// (`_init()` only redirects to Device Setup when NOTHING is cached at
+  /// all), then fail with DEVICE_NOT_REGISTERED on every PIN attempt with
+  /// no way to actually clear that stale cache and re-register — "ask a
+  /// manager" with literally no action available even for the manager
+  /// themselves, standing right there.
+  Future<void> _setUpThisDevice() async {
+    await PosDeviceStorage.forgetCachedTerminal();
+    if (mounted) context.go(RouteNames.posDeviceSetup);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -248,11 +272,22 @@ class _PosPinLoginScreenState extends ConsumerState<PosPinLoginScreen> {
                 if (_error != null) ...[
                   const SizedBox(height: 14),
                   Text(_error!, style: const TextStyle(color: AppColors.negative, fontSize: 12.5), textAlign: TextAlign.center),
+                  if (_deviceNeedsSetup) ...[
+                    const SizedBox(height: 10),
+                    FilledButton.tonal(
+                      onPressed: _setUpThisDevice,
+                      child: const Text('Set up this device now', style: TextStyle(fontSize: 13)),
+                    ),
+                  ],
                 ],
                 const SizedBox(height: 16),
                 TextButton(
                   onPressed: _submitting ? null : _showForgotPinSheet,
                   child: const Text('Forgot your PIN? Ask a manager to reset it', style: TextStyle(fontSize: 12.5)),
+                ),
+                TextButton(
+                  onPressed: _submitting ? null : _setUpThisDevice,
+                  child: const Text('This isn\'t my till — set up this device', style: TextStyle(fontSize: 12.5)),
                 ),
                 const Divider(height: 24),
                 const Row(
@@ -264,6 +299,11 @@ class _PosPinLoginScreenState extends ConsumerState<PosPinLoginScreen> {
                 ),
                 const SizedBox(height: 10),
                 const Text('🔒 No password is ever used at this till', style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: () => context.go(RouteNames.landing),
+                  child: const Text('Exit to main app', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                ),
               ],
             ),
           ),

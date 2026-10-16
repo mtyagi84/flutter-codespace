@@ -493,6 +493,78 @@ class SalesInvoiceRemoteDs {
     return list.isNotEmpty ? list.first as Map<String, dynamic> : null;
   }
 
+  /// POS non-cash tender settlement (`fn_settle_pos_non_cash_tenders`,
+  /// migration 218) silently soft-fails when a tender type's own clearing/
+  /// liability account link isn't configured — the sale itself still
+  /// completes with no GL posting at all for that money. Checked once up
+  /// front (New Sale, before opening Payment) so an unconfigured tender
+  /// option can be disabled entirely rather than let a cashier collect
+  /// money through a method with nowhere to post it. 'CASH' is always
+  /// included — it settles through the existing Quick Invoice Setup cash
+  /// account, not one of these 5 newer link types.
+  static const Map<String, String> _posTenderLinkKeys = {
+    'CARD_CLEARING_ACCOUNT': 'CARD',
+    'MOBILE_MONEY_CLEARING_ACCOUNT': 'MOBILE_MONEY',
+    'VOUCHER_CLEARING_ACCOUNT': 'VOUCHER',
+    'GIFT_CARD_LIABILITY_ACCOUNT': 'GIFT_CARD',
+    'STORE_CREDIT_LIABILITY_ACCOUNT': 'STORE_CREDIT',
+  };
+
+  Future<Set<String>> getConfiguredPosTenderTypes({
+    required String clientId,
+    required String companyId,
+  }) async {
+    final typesRes = await _dio.get('/rim_account_link_types', queryParameters: {
+      'link_key': 'in.(${_posTenderLinkKeys.keys.join(',')})',
+      'select': 'id,link_key',
+    });
+    final typeRows = (typesRes.data as List).cast<Map<String, dynamic>>();
+    if (typeRows.isEmpty) return {'CASH'};
+    final idToTender = {
+      for (final row in typeRows) row['id'] as String: _posTenderLinkKeys[row['link_key'] as String]!,
+    };
+
+    // Real bug found live (2026-10-12) while writing the first E2E test
+    // for this: a COMPANY-granularity link (the only granularity these 5
+    // POS tender link types ever use — there's no per-product resolution
+    // for a payment clearing account) stores its account on a row with
+    // `link_key_id IS NULL`, matched purely by `link_type_id` — confirmed
+    // directly from `fn_resolve_company_account_link`'s own SQL. Filtering
+    // by `link_key_id IN (...)` (as if it held the link type's own id)
+    // matches ZERO rows for a correctly-configured COMPANY link; also
+    // requires the companion `rim_account_link_setup` row (granularity
+    // marker) to exist with `link_type = 'COMPANY'`, same as the resolver
+    // function checks — a link configured without it is not really
+    // "configured" from the resolver's own point of view either.
+    final setupRes = await _dio.get('/rim_account_link_setup', queryParameters: {
+      'client_id': 'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'link_type_id': 'in.(${idToTender.keys.join(',')})',
+      'link_type': 'eq.COMPANY',
+      'select': 'link_type_id',
+    });
+    final companyGranularityIds = (setupRes.data as List).cast<Map<String, dynamic>>().map((r) => r['link_type_id'] as String).toSet();
+    if (companyGranularityIds.isEmpty) return {'CASH'};
+
+    final linksRes = await _dio.get('/rim_account_link_defaults', queryParameters: {
+      'client_id': 'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'is_active': 'eq.true',
+      'is_deleted': 'eq.false',
+      'link_key_id': 'is.null',
+      'link_type_id': 'in.(${companyGranularityIds.join(',')})',
+      'select': 'link_type_id',
+    });
+    final linkRows = (linksRes.data as List).cast<Map<String, dynamic>>();
+
+    final configured = <String>{'CASH'};
+    for (final row in linkRows) {
+      final tenderType = idToTender[row['link_type_id'] as String];
+      if (tenderType != null) configured.add(tenderType);
+    }
+    return configured;
+  }
+
   Future<Map<String, dynamic>?> getUserSalesControls({
     required String clientId,
     required String companyId,
@@ -770,6 +842,37 @@ class SalesInvoiceRemoteDs {
           'matched_uom_label': uom?['description'],
         };
       }
+    }
+
+    // Real gap found live 2026-10-16: a product's own base barcode
+    // (rim_products.barcode — the field shown first and most prominently
+    // on Product Master) is a completely separate value from any
+    // rim_product_uom.barcode (a per-pack-size barcode, e.g. a carton).
+    // Most products never get a UOM-level barcode at all — scanning the
+    // product's own barcode found nothing, every time, for every tenant,
+    // since this lookup only ever queried rim_product_uom (falling through
+    // straight to part_number). Tried regardless of tryPartNumber, since
+    // this is still a barcode match, not a part-number one.
+    final bRes = await _dio.get('/rim_products', queryParameters: {
+      'client_id':  'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'barcode':    'eq.$code',
+      'is_deleted': 'eq.false',
+      'is_active':  'eq.true',
+      'select':     'id,product_code,product_name,base_uom_id,tracking_type,sales_tax_group_id,'
+          'min_selling_price,flags,category_id,uom:rim_common_masters!base_uom_id(description)',
+      'limit':      '1',
+    });
+    final bList = bRes.data as List;
+    if (bList.isNotEmpty) {
+      final product = bList.first as Map<String, dynamic>;
+      final uom = product['uom'] as Map<String, dynamic>?;
+      return {
+        ...product,
+        'matched_uom_id': product['base_uom_id'],
+        'matched_uom_conversion_factor': 1,
+        'matched_uom_label': uom?['description'],
+      };
     }
 
     if (!tryPartNumber) return null;

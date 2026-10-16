@@ -436,6 +436,37 @@ class SalesOrderRemoteDs {
       }
     }
 
+    // Real gap found live 2026-10-16: a product's own base barcode
+    // (rim_products.barcode — the field shown first and most prominently
+    // on Product Master) is a completely separate value from any
+    // rim_product_uom.barcode (a per-pack-size barcode, e.g. a carton).
+    // Most products never get a UOM-level barcode at all — scanning the
+    // product's own barcode found nothing, every time, for every tenant,
+    // since this lookup only ever queried rim_product_uom (falling through
+    // straight to part_number). Tried regardless of tryPartNumber, since
+    // this is still a barcode match, not a part-number one.
+    final bRes = await _dio.get('/rim_products', queryParameters: {
+      'client_id':  'eq.$clientId',
+      'company_id': 'eq.$companyId',
+      'barcode':    'eq.$code',
+      'is_deleted': 'eq.false',
+      'is_active':  'eq.true',
+      'select':     'id,product_code,product_name,base_uom_id,tracking_type,sales_tax_group_id,'
+          'uom:rim_common_masters!base_uom_id(description)',
+      'limit':      '1',
+    });
+    final bList = bRes.data as List;
+    if (bList.isNotEmpty) {
+      final product = bList.first as Map<String, dynamic>;
+      final uom = product['uom'] as Map<String, dynamic>?;
+      return {
+        ...product,
+        'matched_uom_id': product['base_uom_id'],
+        'matched_uom_conversion_factor': 1,
+        'matched_uom_label': uom?['description'],
+      };
+    }
+
     if (!tryPartNumber) return null;
 
     final pRes = await _dio.get('/rim_products', queryParameters: {
