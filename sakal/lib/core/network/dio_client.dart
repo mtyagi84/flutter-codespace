@@ -9,6 +9,27 @@ class DioClient {
 
   static Dio get instance => _instance;
 
+  // RPCs that run with NO session yet (anon-role, pre-login/pre-tenant
+  // bootstrap calls) — a stale/expired stored JWT must never be injected
+  // into any of these, or PostgREST rejects the request with a 401 before
+  // the function body (which doesn't even need a JWT) ever runs. Real bug
+  // found live 2026-10-16: only '/rpc/fn_login' was ever exempted, so a
+  // browser carrying a leftover token from an earlier, unrelated session
+  // (e.g. testing a different tenant's login) made BOTH `fn_register_client`
+  // and `fn_complete_accounting_setup` fail with a confusing, unrelated-
+  // looking 401 on the FIRST attempt — the onError handler then deletes the
+  // bad token on that same 401, so a retry (with completely different form
+  // data) coincidentally succeeds, making the failure look data-dependent
+  // when it never was. `fn_login_by_email` (added migration 226) had the
+  // identical gap — a stale token broke email login the same way `fn_login`
+  // itself was already correctly protected against.
+  static const _bootstrapRpcPaths = {
+    '/rpc/fn_login',
+    '/rpc/fn_login_by_email',
+    '/rpc/fn_register_client',
+    '/rpc/fn_complete_accounting_setup',
+  };
+
   // Set once in main() to redirect to login when the JWT expires.
   static void Function()? onSessionExpired;
 
@@ -32,10 +53,11 @@ class DioClient {
     // Works on web (FlutterSecureStorage uses localStorage) and native.
     dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
-        // fn_login is fetching a NEW token — never inject a stale stored JWT.
-        // All other requests use the stored token (falls back to anon key from BaseOptions).
-        final isLoginRpc = options.path == '/rpc/fn_login';
-        if (!isLoginRpc) {
+        // Bootstrap RPCs run anon, with no session yet — never inject a
+        // stale stored JWT into them. All other requests use the stored
+        // token (falls back to anon key from BaseOptions).
+        final isBootstrapRpc = _bootstrapRpcPaths.contains(options.path);
+        if (!isBootstrapRpc) {
           try {
             final token = await _storage.read(key: AppConstants.keyAccessToken);
             if (token != null) {
@@ -77,10 +99,11 @@ class DioClient {
           try {
             await _storage.delete(key: AppConstants.keyAccessToken);
           } catch (_) {}
-          // Don't signal session-expired for the login call itself — the error
-          // is handled by the login screen's own catch block.
-          final isLoginRpc = error.requestOptions.path == '/rpc/fn_login';
-          if (!isLoginRpc) {
+          // Don't signal session-expired for a bootstrap call itself — a
+          // 401 there is handled by that screen's own catch block (login,
+          // registration, accounting setup), not by forcing a redirect.
+          final isBootstrapRpc = _bootstrapRpcPaths.contains(error.requestOptions.path);
+          if (!isBootstrapRpc) {
             onSessionExpired?.call();
           }
         }

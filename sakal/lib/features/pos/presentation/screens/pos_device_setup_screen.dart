@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -7,6 +8,7 @@ import '../../../../core/config/app_constants.dart';
 import '../../../../core/errors/error_presenter.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/router/route_names.dart';
+import '../../../../core/services/local_storage.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../../data/pos_auth_remote_ds.dart';
@@ -41,6 +43,8 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
   String? _error;
 
   // Admin login fields
+  bool _loginByEmail = true;
+  String _email = '';
   String _clientNo = '';
   String _username = '';
   String _password = '';
@@ -71,16 +75,37 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
   void initState() {
     super.initState();
     PosDeviceStorage.deviceUid().then((uid) => mounted ? setState(() => _deviceUid = uid) : null);
+    // Real gap found live 2026-10-16: this screen always asked for a bare
+    // Client No. with no memory of a prior back-office login on the SAME
+    // browser/device, even though LocalStorage.clientNo already caches it
+    // after any such login — and it never offered the email+password path
+    // the main app's own LoginScreen has had since the registration/login
+    // overhaul. Pre-fill + default to Client ID mode when a cached value
+    // exists (saves retyping); default to email mode otherwise, matching
+    // LoginScreen's own default for a genuinely fresh device/browser.
+    final cachedClientNo = LocalStorage.clientNo;
+    if (cachedClientNo != null && cachedClientNo.isNotEmpty) {
+      _clientNo = cachedClientNo;
+      _loginByEmail = false;
+    }
   }
 
   Future<void> _adminLogin() async {
     setState(() { _busy = true; _error = null; });
     try {
-      final res = await DioClient.instance.post('/rpc/fn_login', data: {
-        'p_client_no': _clientNo.trim().toUpperCase(),
-        'p_username': _username.trim(),
-        'p_password': _password,
-      });
+      final Response res;
+      if (_loginByEmail) {
+        res = await DioClient.instance.post('/rpc/fn_login_by_email', data: {
+          'p_email': _email.trim(),
+          'p_password': _password,
+        });
+      } else {
+        res = await DioClient.instance.post('/rpc/fn_login', data: {
+          'p_client_no': _clientNo.trim().toUpperCase(),
+          'p_username': _username.trim(),
+          'p_password': _password,
+        });
+      }
       final d = res.data as Map<String, dynamic>;
       // Admin tokens here are used only to fetch/create the terminal list
       // for setup — this screen never sets sessionProvider or routes into
@@ -158,31 +183,68 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
       String terminalName;
 
       if (_creatingNew) {
-        // Real bug found live 2026-10-15 (client SK-32130): a second setup
-        // attempt reusing an already-taken Till Code hit
-        // ric_pos_terminals's own `uq_pos_terminal_code UNIQUE (client_id,
-        // company_id, location_id, terminal_code)` constraint, surfacing
-        // only as a raw, unfriendly Postgres message via
-        // ErrorPresenter.format — `_terminals` is already loaded in memory
-        // (the same list the "Existing Till" dropdown uses, fetched by
-        // _onLocationChanged), so this is a free, no-extra-query check.
+        // Real bug found live 2026-10-15 (client SK-32130), partially fixed
+        // then, fully root-caused 2026-10-16 (client SK-87749): the original
+        // fix only checked the in-memory `_terminals` list (stale once this
+        // SAME attempt's own terminal creation succeeds but a LATER step —
+        // registerDevice/fn_bind_pos_device/the device-id lookup — fails,
+        // e.g. on a slow connection). A retry then re-ran this exact INSERT
+        // with the same code and hit the real `uq_pos_terminal_code`
+        // constraint for real — "the till was already there in POS Settings"
+        // was the giveaway: creation had actually succeeded the first time.
+        // Fix: re-query LIVE (not the stale list) for a terminal with this
+        // exact code at this location right before creating, and REUSE it
+        // if found instead of ever re-inserting — makes a retry after any
+        // partial failure self-healing by construction, no stale-cache
+        // class of bug possible, and still blocks a genuinely different
+        // user picking an already-taken code (same friendly message, now
+        // just backed by a live check instead of a stale one).
         final code = _newTerminalCode.trim();
-        final alreadyExists = _terminals.any((t) => (t['terminal_code'] as String).toUpperCase() == code.toUpperCase());
-        if (alreadyExists) {
-          setState(() => _error = 'Till code "$code" already exists at this location — pick "Existing Till" instead, or choose a different code.');
-          return;
-        }
-        final createRes = await DioClient.instance.post('/ric_pos_terminals', data: {
-          'id': const Uuid().v4(),
-          'client_id': _clientId,
-          'company_id': _companyId,
-          'location_id': _selectedLocationId,
-          'terminal_code': _newTerminalCode.trim(),
-          'terminal_name': _newTerminalName.trim(),
+        final existingRes = await DioClient.instance.get('/ric_pos_terminals', queryParameters: {
+          'client_id': 'eq.$_clientId',
+          'company_id': 'eq.$_companyId',
+          'location_id': 'eq.$_selectedLocationId',
+          'terminal_code': 'eq.$code',
+          'select': 'id,terminal_name',
         });
-        final row = (createRes.data as List).first as Map<String, dynamic>;
-        terminalId = row['id'] as String;
-        terminalName = _newTerminalName.trim();
+        final existingRows = (existingRes.data as List).cast<Map<String, dynamic>>();
+        if (existingRows.isNotEmpty) {
+          final existing = existingRows.first;
+          final existingId = existing['id'] as String;
+          // A genuine conflict is another DEVICE already bound to this
+          // terminal — never this own retry's own just-created, still-
+          // unbound row. Query bindings rather than is_active, since a
+          // freshly-created terminal from a prior partial attempt on THIS
+          // session is active by default but correctly has no device bound
+          // to it yet.
+          final boundRes = await DioClient.instance.get('/ric_pos_devices', queryParameters: {
+            'client_id': 'eq.$_clientId',
+            'company_id': 'eq.$_companyId',
+            'bound_terminal_id': 'eq.$existingId',
+            'select': 'id',
+          });
+          final alreadyBoundElsewhere = (boundRes.data as List).isNotEmpty;
+          if (alreadyBoundElsewhere) {
+            setState(() => _error = 'Till code "$code" already exists and is in use at this location — pick "Existing Till" instead, or choose a different code.');
+            return;
+          }
+          // Unbound — either a brand-new code nobody's claimed yet, or this
+          // same session's own prior partial attempt. Reuse it either way.
+          terminalId = existingId;
+          terminalName = _newTerminalName.trim();
+        } else {
+          final createRes = await DioClient.instance.post('/ric_pos_terminals', data: {
+            'id': const Uuid().v4(),
+            'client_id': _clientId,
+            'company_id': _companyId,
+            'location_id': _selectedLocationId,
+            'terminal_code': code,
+            'terminal_name': _newTerminalName.trim(),
+          });
+          final row = (createRes.data as List).first as Map<String, dynamic>;
+          terminalId = row['id'] as String;
+          terminalName = _newTerminalName.trim();
+        }
       } else {
         terminalId = _selectedTerminalId!;
         terminalName = _terminals.firstWhere((t) => t['id'] == terminalId)['terminal_name'] as String;
@@ -232,7 +294,25 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Till Setup'), backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+      appBar: AppBar(
+        title: const Text('Till Setup'),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        // Real gap found live 2026-10-16: nothing on this screen ever gave
+        // a way out of the flow at all — this device has no session/shell
+        // chrome of its own yet, so there's no sidebar/back-arrow target
+        // other than the regular app's own entry point. Always available,
+        // on every step, independent of the in-flow "Back to Sign-In"/
+        // "Cancel" buttons (those retry within the flow; this exits it).
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: 'Exit setup',
+          onPressed: () async {
+            await const FlutterSecureStorage().delete(key: AppConstants.keyAccessToken);
+            if (context.mounted) context.go(RouteNames.landing);
+          },
+        ),
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 440),
@@ -288,14 +368,27 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
           const SizedBox(height: 4),
           const Text('One-time only, to assign this till.', style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5)),
           const SizedBox(height: 16),
-          PosKeyboardField(label: 'Client No.', value: _clientNo, onChanged: (v) => setState(() => _clientNo = v)),
-          const SizedBox(height: 10),
-          PosKeyboardField(label: 'Username', value: _username, onChanged: (v) => setState(() => _username = v)),
-          const SizedBox(height: 10),
+          if (_loginByEmail) ...[
+            PosKeyboardField(label: 'Email', value: _email, onChanged: (v) => setState(() => _email = v)),
+          ] else ...[
+            PosKeyboardField(label: 'Client No.', value: _clientNo, onChanged: (v) => setState(() => _clientNo = v)),
+            const SizedBox(height: 10),
+            PosKeyboardField(label: 'Username', value: _username, onChanged: (v) => setState(() => _username = v)),
+          ],
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => setState(() => _loginByEmail = !_loginByEmail),
+              child: Text(_loginByEmail ? 'Sign in with Client ID instead' : 'Sign in with Email instead'),
+            ),
+          ),
+          const SizedBox(height: 4),
           PosKeyboardField(label: 'Password', value: _password, obscureText: true, onChanged: (v) => setState(() => _password = v)),
           if (_error != null) Padding(padding: const EdgeInsets.only(top: 10), child: Text(_error!, style: const TextStyle(color: AppColors.negative, fontSize: 12.5))),
           const SizedBox(height: 16),
           FilledButton(onPressed: _busy ? null : _adminLogin, child: _busy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Continue')),
+          const SizedBox(height: 8),
+          TextButton(onPressed: () => setState(() { _step = _Step.intro; _error = null; }), child: const Text('Cancel')),
         ]),
       ),
     );
@@ -340,6 +433,17 @@ class _PosDeviceSetupScreenState extends State<PosDeviceSetupScreen> {
           FilledButton(
             onPressed: (_busy || !_canFinish()) ? null : _finishSetup,
             child: _busy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Assign & Finish Setup'),
+          ),
+          const SizedBox(height: 8),
+          // Real gap found live 2026-10-16: a failure on this step left the
+          // user stuck with no way out of the flow at all — this screen has
+          // no other navigation chrome (no AppBar back arrow destination,
+          // no sidebar, since a brand-new till has no session yet).
+          TextButton(
+            onPressed: _busy ? null : () {
+              setState(() { _step = _Step.adminLogin; _error = null; });
+            },
+            child: const Text('Back to Sign-In'),
           ),
         ]),
       ),

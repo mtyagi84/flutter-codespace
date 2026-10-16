@@ -389,35 +389,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
               }),
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  height: 56,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.textSecondary.withValues(alpha: 0.4)),
-                    borderRadius: BorderRadius.circular(4),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.textSecondary.withValues(alpha: 0.4)),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(_countryDialCodes[_country] ?? '', style: const TextStyle(fontSize: 15)),
                   ),
-                  child: Text(_countryDialCodes[_country] ?? '', style: const TextStyle(fontSize: 15)),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextFormField(
-                    controller: _phoneCtrl,
-                    keyboardType: TextInputType.phone,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(labelText: 'Phone Number'),
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return null; // phone stays optional, matches today
-                      final expected = _countryPhoneDigits[_country];
-                      if (expected != null && v.length != expected) return 'Enter $expected digits for $_country';
-                      return null;
-                    },
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(labelText: 'Phone Number'),
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return null; // phone stays optional, matches today
+                        final expected = _countryPhoneDigits[_country];
+                        if (expected != null && v.length != expected) return 'Enter $expected digits for $_country';
+                        return null;
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],

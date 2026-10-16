@@ -14,13 +14,13 @@ create or replace function fn_grant_admin_access(
 begin
     insert into ric_user_menus (
         client_id, company_id, user_id, module_id, feature_code, serial_no,
-        view_allowed, edit_allowed, approve_allowed, copy_allowed, excel_upload_allowed
+        view_allowed, add_allowed, edit_allowed, approve_allowed, copy_allowed, excel_upload_allowed
     )
     select
         mm.client_id, mm.company_id,
         p_user_id,
         mm.module_id, mm.feature_code, mm.serial_no,
-        true, true,
+        true, true, true,
         mm.approve_allowed,
         mm.copy_allowed,
         mm.excel_upload_allowed
@@ -30,6 +30,7 @@ begin
       and mm.is_deleted = false
     on conflict (client_id, company_id, user_id, feature_code) do update
         set view_allowed         = true,
+            add_allowed          = true,
             edit_allowed         = true,
             approve_allowed      = excluded.approve_allowed,
             copy_allowed         = excluded.copy_allowed,
