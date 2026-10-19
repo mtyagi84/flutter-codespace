@@ -13,6 +13,8 @@ import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../../../../core/utils/barcode_scan_field_controller.dart';
+import '../../../../core/utils/product_barcode_search.dart';
 import '../../../../core/utils/deferred_row_disposal.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
@@ -106,6 +108,12 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
   final _rateToBaseCtrl  = TextEditingController(text: '1');
   final _rateToLocalCtrl = TextEditingController(text: '1');
   final _scanCtrl = TextEditingController();
+  final _scanFocusNode = FocusNode();
+  late final BarcodeScanFieldController _scan = BarcodeScanFieldController(
+    focusNode: _scanFocusNode,
+    controller: _scanCtrl,
+    onSubmit: _onHeaderScanSubmitted,
+  );
   final _remarksCtrl = TextEditingController();
 
   List<Map<String, dynamic>> _locations  = [];
@@ -141,7 +149,9 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
   void dispose() {
     _rateToBaseCtrl.dispose();
     _rateToLocalCtrl.dispose();
+    _scan.dispose();
     _scanCtrl.dispose();
+    _scanFocusNode.dispose();
     _remarksCtrl.dispose();
     for (final l in _lines) { l.dispose(); }
     disposeDeferredRows();
@@ -952,10 +962,10 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
     final scanField = SakalFieldCard(
       label: 'Scan Barcode / Part Number', editable: !locked,
       child: TextFormField(
-        controller: _scanCtrl, enabled: !locked,
+        controller: _scanCtrl, focusNode: _scanFocusNode, enabled: !locked,
         decoration: bare.copyWith(prefixIcon: const Icon(Icons.qr_code_scanner, size: 18)),
         style: style,
-        onFieldSubmitted: (v) => _onHeaderScanSubmitted(v),
+        onFieldSubmitted: _scan.handleFieldSubmitted,
       ),
     );
 
@@ -1060,9 +1070,7 @@ class _PriceMasterEntryScreenState extends ConsumerState<PriceMasterEntryScreen>
                     if (locked) return const [];
                     final q = v.text.toLowerCase().trim();
                     if (q.isEmpty) return _products;
-                    return _products.where((p) =>
-                        (p['product_code'] as String).toLowerCase().contains(q) ||
-                        (p['product_name'] as String).toLowerCase().contains(q));
+                    return _products.where((p) => productMatchesBarcodeQuery(p, q));
                   },
                   onSelected: (p) => _onProductSelected(row, p),
                   enabled: !locked,

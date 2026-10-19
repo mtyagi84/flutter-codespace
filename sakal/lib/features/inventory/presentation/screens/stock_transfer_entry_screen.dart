@@ -14,6 +14,7 @@ import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../../../../core/utils/barcode_scan_field_controller.dart';
 import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
@@ -61,6 +62,8 @@ class _TransferLineRow {
   final TextEditingController salesPriceCtrl = TextEditingController();
   final TextEditingController remarksCtrl = TextEditingController();
   final TextEditingController barcodeCtrl = TextEditingController();
+  final FocusNode barcodeFocusNode = FocusNode();
+  BarcodeScanFieldController? barcodeScan; // wired once _onBarcodeSubmitted is in scope
   String? matchedBarcode; // the exact barcode string that resolved this line's product/UOM (DIRECT mode only)
   num costPriceHint = 0;
   double chargeAmount = 0; // computed by apportionment, not user-editable
@@ -96,7 +99,9 @@ class _TransferLineRow {
     qtyLooseCtrl.dispose();
     salesPriceCtrl.dispose();
     remarksCtrl.dispose();
+    barcodeScan?.dispose();
     barcodeCtrl.dispose();
+    barcodeFocusNode.dispose();
     for (final b in batchCandidates) { b.dispose(); }
   }
 }
@@ -265,6 +270,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
               trackingType: product?['tracking_type'] as String? ?? 'NONE',
               initialQtyPack: (sl['qty_pack'] as num? ?? 0).toDouble(),
             );
+            _wireBarcodeScan(row);
             row.qtyLooseCtrl.text = (sl['qty_loose'] as num? ?? 0).toString();
             row.remarksCtrl.text = sl['remarks'] as String? ?? '';
             if (sl['sales_price'] != null) row.salesPriceCtrl.text = (sl['sales_price'] as num).toString();
@@ -436,6 +442,7 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
             trackingType: product?['tracking_type'] as String? ?? 'NONE',
             initialQtyPack: remaining,
           )..matchedBarcode = rl['barcode'] as String?;
+          _wireBarcodeScan(row);
           _lines.add(row);
           newRows.add(row);
         }
@@ -450,7 +457,22 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
     }
   }
 
-  void _addDirectLine() => setState(() => _lines.add(_TransferLineRow()));
+  /// Wires a row's barcode-scan Tab/Enter/no-op-on-unchanged behavior (see
+  /// BarcodeScanFieldController) — called right after every
+  /// `_TransferLineRow(...)` construction, never left unwired.
+  void _wireBarcodeScan(_TransferLineRow row) {
+    row.barcodeScan = BarcodeScanFieldController(
+      focusNode: row.barcodeFocusNode,
+      controller: row.barcodeCtrl,
+      onSubmit: (v) => _onBarcodeSubmitted(row, v),
+    );
+  }
+
+  void _addDirectLine() => setState(() {
+    final row = _TransferLineRow();
+    _wireBarcodeScan(row);
+    _lines.add(row);
+  });
 
   void _removeLine(_TransferLineRow row) {
     setState(() { _lines.remove(row); row.dispose(); });
@@ -1134,8 +1156,8 @@ class _StockTransferEntryScreenState extends ConsumerState<StockTransferEntryScr
       label: 'Scan/Enter Barcode', editable: !locked,
       showLabel: isMobile,
       child: TextFormField(
-        controller: row.barcodeCtrl, enabled: !locked, decoration: bare, style: style,
-        onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
+        controller: row.barcodeCtrl, focusNode: row.barcodeFocusNode, enabled: !locked, decoration: bare, style: style,
+        onFieldSubmitted: row.barcodeScan!.handleFieldSubmitted,
       ),
     );
     final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—', showLabel: isMobile);

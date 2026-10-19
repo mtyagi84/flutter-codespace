@@ -15,7 +15,9 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/app_number_format.dart';
+import '../../../../core/utils/barcode_scan_field_controller.dart';
 import '../../../../core/utils/local_id.dart';
+import '../../../../core/utils/product_barcode_search.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
 import '../../../../core/widgets/offline_banner.dart';
@@ -36,6 +38,8 @@ class _QuotationLineRow {
   String  productDisplay = '';
   final TextEditingController descCtrl = TextEditingController();
   final TextEditingController barcodeCtrl = TextEditingController();
+  final FocusNode barcodeFocusNode = FocusNode();
+  BarcodeScanFieldController? barcodeScan; // wired once onBarcodeSubmitted is in scope
   String? matchedBarcode; // exact barcode string that resolved this line's product/UOM
   String? uomId;
   String? uomLabel;
@@ -66,7 +70,9 @@ class _QuotationLineRow {
 
   void dispose() {
     descCtrl.dispose();
+    barcodeScan?.dispose();
     barcodeCtrl.dispose();
+    barcodeFocusNode.dispose();
     qtyPackCtrl.dispose();
     qtyLooseCtrl.dispose();
     rateCtrl.dispose();
@@ -361,7 +367,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
     for (final sl in savedLines) {
       final product = sl['product'] as Map<String, dynamic>?;
       final uom     = sl['uom'] as Map<String, dynamic>?;
-      final row = _QuotationLineRow()
+      final row = _newLineRow()
         ..productId = sl['product_id'] as String?
         ..productDisplay = product != null ? '[${product['product_code']}] ${product['product_name']}' : ''
         ..uomId = sl['uom_id'] as String?
@@ -490,7 +496,21 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
     }
   }
 
-  void _addLine() => setState(() => _lines.add(_QuotationLineRow()));
+  /// Constructs a fresh row with its barcode-scan Tab/Enter/no-op-on-
+  /// unchanged behavior already wired (see BarcodeScanFieldController) —
+  /// every creation site for a line row goes through this, never a bare
+  /// `_QuotationLineRow()`.
+  _QuotationLineRow _newLineRow() {
+    final row = _QuotationLineRow();
+    row.barcodeScan = BarcodeScanFieldController(
+      focusNode: row.barcodeFocusNode,
+      controller: row.barcodeCtrl,
+      onSubmit: (v) => _onBarcodeSubmitted(row, v),
+    );
+    return row;
+  }
+
+  void _addLine() => setState(() => _lines.add(_newLineRow()));
   void _removeLine(_QuotationLineRow row) => setState(() { _lines.remove(row); row.dispose(); });
   void _addCharge() => setState(() => _charges.add(_QuotationChargeRow()));
   void _removeCharge(_QuotationChargeRow row) => setState(() { _charges.remove(row); row.dispose(); });
@@ -1301,9 +1321,7 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
                     if (locked) return const [];
                     final q = v.text.toLowerCase().trim();
                     if (q.isEmpty) return _products;
-                    return _products.where((p) =>
-                        (p['product_code'] as String).toLowerCase().contains(q) ||
-                        (p['product_name'] as String).toLowerCase().contains(q));
+                    return _products.where((p) => productMatchesBarcodeQuery(p, q));
                   },
                   onSelected: (p) => _onProductSelected(row, p),
                   enabled: !locked,
@@ -1314,9 +1332,9 @@ class _SalesQuotationEntryScreenState extends ConsumerState<SalesQuotationEntryS
               final barcodeField = SakalFieldCard(
                 label: 'Barcode', editable: !locked, showLabel: isMobile,
                 child: TextFormField(
-                  controller: row.barcodeCtrl, enabled: !locked,
+                  controller: row.barcodeCtrl, focusNode: row.barcodeFocusNode, enabled: !locked,
                   decoration: bare, style: style,
-                  onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
+                  onFieldSubmitted: row.barcodeScan!.handleFieldSubmitted,
                 ),
               );
               final unitField = SakalFieldCard.readOnly(label: 'Unit', value: row.uomLabel ?? '—', showLabel: isMobile);

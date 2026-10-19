@@ -193,9 +193,13 @@ class PurchaseOrderRemoteDs {
       'company_id': 'eq.$companyId',
       'is_deleted': 'eq.false',
       'is_active':  'eq.true',
-      'select':     'id,product_code,product_name,base_uom_id,'
+      // barcode + uoms:barcode so the picker's own client-side search can
+      // match any of a product's barcodes, not just code/name — see
+      // project_barcode_feature_rework_2026_10_16 point 1.
+      'select':     'id,product_code,product_name,base_uom_id,barcode,'
           'last_purchase_cost,standard_cost,purchase_tax_group_id,'
-          'uom:rim_common_masters!base_uom_id(description)',
+          'uom:rim_common_masters!base_uom_id(description),'
+          'uoms:rim_product_uom(barcode)',
       'order':      'product_code.asc',
       'limit':      '500',
     };

@@ -158,13 +158,15 @@ class StockAdjustmentRemoteDs {
       'company_id': 'eq.$companyId',
       'is_deleted': 'eq.false',
       'is_active':  'eq.true',
-      'select':     'id,product_code,product_name,base_uom_id,tracking_type,'
+      'select':     'id,product_code,product_name,base_uom_id,tracking_type,barcode,'
           'uom:rim_common_masters!base_uom_id(description)',
       'order':      'product_code.asc',
       'limit':      '500',
     };
     if (search != null && search.isNotEmpty) {
-      params['or'] = '(product_code.ilike.*$search*,product_name.ilike.*$search*)';
+      // Matches the product's own base barcode too, not just code/name —
+      // see project_barcode_feature_rework_2026_10_16 point 1.
+      params['or'] = '(product_code.ilike.*$search*,product_name.ilike.*$search*,barcode.ilike.*$search*)';
     }
     final res = await _dio.get('/rim_products', queryParameters: params);
     return List<Map<String, dynamic>>.from(res.data as List);

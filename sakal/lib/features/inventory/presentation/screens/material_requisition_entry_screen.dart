@@ -14,6 +14,7 @@ import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../../../../core/utils/barcode_scan_field_controller.dart';
 import '../../../../core/utils/local_id.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
@@ -33,6 +34,8 @@ class _RequisitionLineRow {
   String? productId;
   String  productDisplay = '';
   final TextEditingController barcodeCtrl = TextEditingController();
+  final FocusNode barcodeFocusNode = FocusNode();
+  BarcodeScanFieldController? barcodeScan; // wired once _onBarcodeSubmitted is in scope
   String? matchedBarcode; // the exact barcode string that resolved this line's product/UOM
   String? uomId;
   String? uomLabel;
@@ -50,7 +53,9 @@ class _RequisitionLineRow {
   double get baseQty  => qtyPack * uomConversionFactor + qtyLoose;
 
   void dispose() {
+    barcodeScan?.dispose();
     barcodeCtrl.dispose();
+    barcodeFocusNode.dispose();
     qtyPackCtrl.dispose();
     qtyLooseCtrl.dispose();
     remarksCtrl.dispose();
@@ -170,7 +175,7 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
           for (final sl in savedLines) {
             final product = sl['product'] as Map<String, dynamic>?;
             final uom     = sl['uom'] as Map<String, dynamic>?;
-            final row = _RequisitionLineRow()
+            final row = _newLineRow()
               ..productId = sl['product_id'] as String?
               ..productDisplay = product != null ? '[${product['product_code']}] ${product['product_name']}' : ''
               ..uomId = sl['uom_id'] as String?
@@ -208,7 +213,21 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
     }
   }
 
-  void _addLine() => setState(() => _lines.add(_RequisitionLineRow()));
+  /// Constructs a fresh row with its barcode-scan Tab/Enter/no-op-on-
+  /// unchanged behavior already wired (see BarcodeScanFieldController) —
+  /// every creation site for a line row goes through this, never a bare
+  /// `_RequisitionLineRow()`.
+  _RequisitionLineRow _newLineRow() {
+    final row = _RequisitionLineRow();
+    row.barcodeScan = BarcodeScanFieldController(
+      focusNode: row.barcodeFocusNode,
+      controller: row.barcodeCtrl,
+      onSubmit: (v) => _onBarcodeSubmitted(row, v),
+    );
+    return row;
+  }
+
+  void _addLine() => setState(() => _lines.add(_newLineRow()));
 
   void _removeLine(_RequisitionLineRow row) {
     setState(() { _lines.remove(row); row.dispose(); });
@@ -685,8 +704,8 @@ class _MaterialRequisitionEntryScreenState extends ConsumerState<MaterialRequisi
       label: 'Scan/Enter Barcode', editable: !locked,
       showLabel: isMobile,
       child: TextFormField(
-        controller: row.barcodeCtrl, enabled: !locked, decoration: bare, style: style,
-        onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
+        controller: row.barcodeCtrl, focusNode: row.barcodeFocusNode, enabled: !locked, decoration: bare, style: style,
+        onFieldSubmitted: row.barcodeScan!.handleFieldSubmitted,
       ),
     );
     final productField = SakalFieldCard(

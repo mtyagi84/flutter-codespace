@@ -88,6 +88,17 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
   String? _itemSizeId;     String? _itemSizeDisplay;
   String? _itemColorId;    String? _itemColorDisplay;
   String? _baseUomId;
+  // Despite the name (kept to avoid touching every existing call site),
+  // this now gates every identity/pack field this product's own
+  // transaction history makes unsafe to silently change after the fact —
+  // Base UOM (original scope), plus (2026-10-19) the product-level
+  // Barcode field and every "Multiple Barcode" (rim_product_uom) row's
+  // own Edit/Delete actions. All driven by the SAME underlying check
+  // (fn_can_change_product_base_uom — "does this product have any
+  // ril_stock_ledger history at all") since the user's own framing for
+  // all three was the same blanket "if there is any transaction exists",
+  // not a narrower per-row check. Adding a NEW pack size/UOM row stays
+  // allowed regardless — only editing/deleting an EXISTING one locks.
   bool    _baseUomLocked = false;
   String? _costCurrencyId;
   String? _salesTaxId;
@@ -744,18 +755,23 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
         if (showBarcode || showPartNo) ...[
           SakalFieldRow(isMobile: mobile, children: [
             showBarcode
-                ? SakalFieldCard(
-                    label:    'Barcode',
-                    editable: true,
-                    child: TextFormField(
-                      controller: _barcodeCtrl,
-                      style: _fieldStyle,
-                      decoration: _bare(
-                        hint: 'Scan or type barcode',
-                        prefixIcon: const Icon(Icons.barcode_reader, size: 18),
-                      ),
-                    ),
-                  )
+                ? (_baseUomLocked
+                    ? SakalFieldCard.readOnly(
+                        label: 'Barcode',
+                        value: _barcodeCtrl.text.isEmpty ? '—' : _barcodeCtrl.text,
+                      )
+                    : SakalFieldCard(
+                        label:    'Barcode',
+                        editable: true,
+                        child: TextFormField(
+                          controller: _barcodeCtrl,
+                          style: _fieldStyle,
+                          decoration: _bare(
+                            hint: 'Scan or type barcode',
+                            prefixIcon: const Icon(Icons.barcode_reader, size: 18),
+                          ),
+                        ),
+                      ))
                 : const SizedBox.shrink(),
             showPartNo
                 ? SakalFieldCard(
@@ -1369,14 +1385,20 @@ class _ProductEntryScreenState extends ConsumerState<ProductEntryScreen>
                                   children: [
                                     IconButton(
                                       icon: const Icon(Icons.edit_outlined, size: 16),
-                                      onPressed: () => _addOrEditUomRow(existing: row, index: i),
-                                      tooltip: 'Edit',
+                                      onPressed: _baseUomLocked
+                                          ? null
+                                          : () => _addOrEditUomRow(existing: row, index: i),
+                                      tooltip: _baseUomLocked
+                                          ? 'This product has transaction history and this pack size can no longer be edited.'
+                                          : 'Edit',
                                     ),
                                     IconButton(
                                       icon: const Icon(Icons.delete_outline,
                                           size: 16, color: AppColors.negative),
-                                      onPressed: () => _confirmDeleteUomRow(i),
-                                      tooltip: 'Remove',
+                                      onPressed: _baseUomLocked ? null : () => _confirmDeleteUomRow(i),
+                                      tooltip: _baseUomLocked
+                                          ? 'This product has transaction history and this pack size can no longer be removed.'
+                                          : 'Remove',
                                     ),
                                   ],
                                 )

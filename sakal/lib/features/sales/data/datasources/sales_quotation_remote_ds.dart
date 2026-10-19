@@ -190,8 +190,13 @@ class SalesQuotationRemoteDs {
       'company_id': 'eq.$companyId',
       'is_deleted': 'eq.false',
       'is_active':  'eq.true',
-      'select':     'id,product_code,product_name,base_uom_id,tracking_type,sales_tax_group_id,'
-          'uom:rim_common_masters!base_uom_id(description)',
+      // barcode (the product's own) + uoms:barcode (every configured pack-
+      // level barcode) embedded so the picker's own optionsBuilder can
+      // search a product by ANY of its barcodes, not just code/name — see
+      // project_barcode_feature_rework_2026_10_16 point 1.
+      'select':     'id,product_code,product_name,base_uom_id,tracking_type,sales_tax_group_id,barcode,'
+          'uom:rim_common_masters!base_uom_id(description),'
+          'uoms:rim_product_uom(barcode)',
       'order':      'product_code.asc',
       'limit':      '500',
     };

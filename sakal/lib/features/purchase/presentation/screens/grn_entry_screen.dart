@@ -12,6 +12,8 @@ import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../../../../core/utils/barcode_scan_field_controller.dart';
+import '../../../../core/utils/product_barcode_search.dart';
 import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/utils/screen_permission_mixin.dart';
@@ -55,6 +57,8 @@ class _GrnLineRow {
   String  productDisplay = '';
   String  trackingType   = 'NONE'; // NONE / BATCH / SERIAL / BATCH_WITH_EXPIRY
   final TextEditingController barcodeCtrl = TextEditingController();
+  final FocusNode barcodeFocusNode = FocusNode();
+  BarcodeScanFieldController? barcodeScan; // wired once _onBarcodeSubmitted is in scope
   String? matchedBarcode; // the exact barcode string that resolved this line's product/UOM
   bool    descExpanded = false;
   final TextEditingController descCtrl = TextEditingController();
@@ -109,7 +113,9 @@ class _GrnLineRow {
   double get batchQtySum => batchRows.fold(0.0, (s, b) => s + b.qtyPack * convFactor + b.qtyLoose);
 
   void dispose() {
-    barcodeCtrl.dispose(); descCtrl.dispose(); convFactorCtrl.dispose(); qtyPackCtrl.dispose();
+    barcodeScan?.dispose();
+    barcodeCtrl.dispose(); barcodeFocusNode.dispose();
+    descCtrl.dispose(); convFactorCtrl.dispose(); qtyPackCtrl.dispose();
     qtyLooseCtrl.dispose(); rateCtrl.dispose(); discountPctCtrl.dispose();
     for (final b in batchRows) { b.dispose(); }
     for (final s in serialRows) { s.dispose(); }
@@ -364,7 +370,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
       _consolidatedPoOrderNos.clear();
 
       for (final l in lines) {
-        final row = _GrnLineRow()
+        final row = _newLineRow()
           ..productId       = l.productId
           ..productDisplay  = l.productCode != null ? '[${l.productCode}] ${l.productName}' : ''
           ..uomId           = l.uomId
@@ -466,7 +472,21 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
 
   // ── Lines / Charges management ───────────────────────────────────────────
 
-  void _addLine() => setState(() => _lines.add(_GrnLineRow()));
+  /// Constructs a fresh row with its barcode-scan Tab/Enter/no-op-on-
+  /// unchanged behavior already wired (see BarcodeScanFieldController) —
+  /// every creation site for a line row goes through this, never a bare
+  /// `_GrnLineRow()`.
+  _GrnLineRow _newLineRow() {
+    final row = _GrnLineRow();
+    row.barcodeScan = BarcodeScanFieldController(
+      focusNode: row.barcodeFocusNode,
+      controller: row.barcodeCtrl,
+      onSubmit: (v) => _onBarcodeSubmitted(row, v),
+    );
+    return row;
+  }
+
+  void _addLine() => setState(() => _lines.add(_newLineRow()));
 
   void _removeLine(_GrnLineRow row) => setState(() { row.dispose(); _lines.remove(row); });
 
@@ -916,7 +936,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
           final pending    = pl['pending_qty'] as double;
           final convFactor = (pl['uom_conversion_factor'] as num? ?? 1).toDouble();
 
-          final row = _GrnLineRow()
+          final row = _newLineRow()
             ..productId          = pl['product_id'] as String
             ..productDisplay     = product != null ? '[${product['product_code']}] ${product['product_name']}' : ''
             ..trackingType       = product?['tracking_type'] as String? ?? 'NONE'
@@ -1745,8 +1765,8 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
       label: 'Scan/Enter Barcode', editable: !locked,
       showLabel: isMobile,
       child: TextFormField(
-        controller: row.barcodeCtrl, enabled: !locked, decoration: bare, style: style,
-        onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v),
+        controller: row.barcodeCtrl, focusNode: row.barcodeFocusNode, enabled: !locked, decoration: bare, style: style,
+        onFieldSubmitted: row.barcodeScan!.handleFieldSubmitted,
       ),
     );
     final productField = row.isFromPo
@@ -1761,8 +1781,7 @@ class _GrnEntryScreenState extends ConsumerState<GrnEntryScreen>
                 initialText: row.productDisplay,
                 locked: locked,
                 displayString: (p) => '[${p['product_code']}] ${p['product_name']}',
-                matches: (p, q) => (p['product_code'] as String? ?? '').toLowerCase().contains(q) ||
-                    (p['product_name'] as String? ?? '').toLowerCase().contains(q),
+                matches: (p, q) => productMatchesBarcodeQuery(p, q),
                 onSelected: (p) => _onProductSelected(row, p),
                 onCleared: () => setState(() { row.productId = null; row.productDisplay = ''; row.convFactorLocked = false; row.uomOptions = []; row.uomId = null; }),
               ),

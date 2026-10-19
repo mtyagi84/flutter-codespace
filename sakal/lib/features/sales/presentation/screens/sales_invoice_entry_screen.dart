@@ -12,6 +12,7 @@ import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_presets.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../../../../core/utils/barcode_scan_field_controller.dart';
 import '../../../../core/utils/app_number_format.dart';
 import '../../../../core/utils/deferred_row_disposal.dart';
 import '../../../../core/utils/local_id.dart';
@@ -52,6 +53,8 @@ class _InvoiceLineRow {
   String  productDisplay = '';
   final TextEditingController descCtrl = TextEditingController();
   final TextEditingController barcodeCtrl = TextEditingController();
+  final FocusNode barcodeFocusNode = FocusNode();
+  BarcodeScanFieldController? barcodeScan; // wired once _onBarcodeSubmitted is in scope
   String? matchedBarcode;
   String? uomId;
   String? uomLabel;
@@ -111,7 +114,9 @@ class _InvoiceLineRow {
 
   void dispose() {
     descCtrl.dispose();
+    barcodeScan?.dispose();
     barcodeCtrl.dispose();
+    barcodeFocusNode.dispose();
     qtyPackCtrl.dispose();
     qtyLooseCtrl.dispose();
     rateCtrl.dispose();
@@ -989,12 +994,26 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
     }
   }
 
+  /// Constructs a fresh row with its barcode-scan Tab/Enter/no-op-on-
+  /// unchanged behavior already wired (see BarcodeScanFieldController) —
+  /// every creation site for a line row goes through this, never a bare
+  /// `_InvoiceLineRow()`.
+  _InvoiceLineRow _newLineRow() {
+    final row = _InvoiceLineRow();
+    row.barcodeScan = BarcodeScanFieldController(
+      focusNode: row.barcodeFocusNode,
+      controller: row.barcodeCtrl,
+      onSubmit: (v) => _onBarcodeSubmitted(row, v),
+    );
+    return row;
+  }
+
   _InvoiceLineRow _lineRowFromMap(Map<String, dynamic> m, {int? sourceQuotationSerial, int? sourceOrderSerial}) {
     final product = m['product'] as Map<String, dynamic>?;
     final uom = m['uom'] as Map<String, dynamic>?;
     final taxGroup = m['tax_group'] as Map<String, dynamic>?;
     final discountGiver = m['discount_giver'] as Map<String, dynamic>?;
-    final row = _InvoiceLineRow()
+    final row = _newLineRow()
       ..productId = m['product_id'] as String?
       ..productDisplay = product == null ? '' : '[${product['product_code']}] ${product['product_name']}'
       ..trackingType = product?['tracking_type'] as String? ?? 'NONE'
@@ -1035,7 +1054,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
   // then Enter/Space again on the now-focused (+) button adds the next
   // line with zero mouse use.
   void _addLine() {
-    final row = _InvoiceLineRow();
+    final row = _newLineRow();
     final headerDiscount = double.tryParse(_headerDiscountPctCtrl.text) ?? 0;
     if (headerDiscount > 0) row.discountPctCtrl.text = '$headerDiscount';
     setState(() => _lines.add(row));
@@ -1051,7 +1070,7 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
   void _removeLine(_InvoiceLineRow row) {
     setState(() {
       _lines.remove(row);
-      if (_lines.isEmpty && !_isAgainstSource) _lines.add(_InvoiceLineRow());
+      if (_lines.isEmpty && !_isAgainstSource) _lines.add(_newLineRow());
     });
     // See _pendingRowDisposal's own doc comment — never dispose a just-
     // removed row synchronously (or even in "the next frame"); defer all
@@ -2391,8 +2410,9 @@ class _SalesInvoiceEntryScreenState extends ConsumerState<SalesInvoiceEntryScree
       label: 'Scan',
       editable: true,
       showLabel: isMobile,
-      child: TextFormField(controller: row.barcodeCtrl, decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle,
-          onFieldSubmitted: (v) => _onBarcodeSubmitted(row, v)),
+      child: TextFormField(controller: row.barcodeCtrl, focusNode: row.barcodeFocusNode,
+          decoration: SakalFieldCard.bareDecoration, style: fieldTextStyle,
+          onFieldSubmitted: row.barcodeScan!.handleFieldSubmitted),
     );
     final qtyPackField = SakalFieldCard(
       label: showLooseQty ? 'Qty Pack' : 'Quantity', required: true, editable: !rowLocked, showLabel: isMobile,

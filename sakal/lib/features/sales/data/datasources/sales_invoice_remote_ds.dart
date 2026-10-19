@@ -801,13 +801,20 @@ class SalesInvoiceRemoteDs {
       'is_deleted': 'eq.false',
       'is_active':  'eq.true',
       'select':     'id,product_code,product_name,base_uom_id,tracking_type,sales_tax_group_id,'
-          'cost_currency_id,min_selling_price,flags,category_id,'
+          'cost_currency_id,min_selling_price,flags,category_id,barcode,'
           'uom:rim_common_masters!base_uom_id(description)',
       'order':      'product_code.asc',
       'limit':      '500',
     };
     if (search != null && search.isNotEmpty) {
-      params['or'] = '(product_code.ilike.*$search*,product_name.ilike.*$search*)';
+      // Matches the product's own base barcode too, not just code/name —
+      // see project_barcode_feature_rework_2026_10_16 point 1. This
+      // screen's picker searches server-side per keystroke (unlike Sales
+      // Quotation/Price Master's fetch-500-then-filter-client-side
+      // pattern), so a pack-level (rim_product_uom) barcode match isn't
+      // covered here without a second merged query — not yet built, base-
+      // barcode coverage (the common case) is.
+      params['or'] = '(product_code.ilike.*$search*,product_name.ilike.*$search*,barcode.ilike.*$search*)';
     }
     final res = await _dio.get('/rim_products', queryParameters: params);
     return List<Map<String, dynamic>>.from(res.data as List);
