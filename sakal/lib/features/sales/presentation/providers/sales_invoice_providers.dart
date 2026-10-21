@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/database/app_database.dart';
+import '../../../../core/database/datasources/pos_batch_serial_local_ds.dart';
 import '../../../../core/providers/session_provider.dart';
 import '../../data/datasources/sales_invoice_remote_ds.dart';
 import '../../data/datasources/sales_invoice_local_ds.dart';
@@ -17,6 +18,10 @@ final _salesInvoiceLocalDsProvider = Provider<SalesInvoiceLocalDs?>(
   (ref) => kIsWeb ? null : SalesInvoiceLocalDs(ref.watch(appDatabaseProvider)),
 );
 
+final _posBatchSerialLocalDsProvider = Provider<PosBatchSerialLocalDs?>(
+  (ref) => kIsWeb ? null : PosBatchSerialLocalDs(ref.watch(appDatabaseProvider)),
+);
+
 final salesInvoiceRepositoryProvider = Provider<SalesInvoiceRepository>((ref) {
   final session   = ref.watch(sessionProvider);
   final isOffline = session?.offlineMode ?? false;
@@ -24,5 +29,6 @@ final salesInvoiceRepositoryProvider = Provider<SalesInvoiceRepository>((ref) {
     ref.watch(_salesInvoiceRemoteDsProvider),
     ref.watch(_salesInvoiceLocalDsProvider),
     isOffline,
+    ref.watch(_posBatchSerialLocalDsProvider),
   );
 });

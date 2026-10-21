@@ -166,6 +166,15 @@ abstract class SalesInvoiceRepository {
     required String userId,
   });
 
+  /// Which POS tender types have a configured settlement account link —
+  /// 'CASH' always included, each of CARD/MOBILE_MONEY/VOUCHER/GIFT_CARD/
+  /// STORE_CREDIT only if its own clearing/liability account is set up in
+  /// Account Link Setup. See the datasource's own doc comment for why.
+  Future<Set<String>> getConfiguredPosTenderTypes({
+    required String clientId,
+    required String companyId,
+  });
+
   Future<Map<String, dynamic>?> getQuickInvoiceSetup({
     required String clientId,
     required String companyId,
@@ -211,6 +220,20 @@ abstract class SalesInvoiceRepository {
     required double qty,
     required double grossAmount,
     required String transDate,
+  });
+
+  /// Whole-bill BILL_THRESHOLD/COUPON resolution (migration 231) — sibling
+  /// to resolvePosSchemeForLine, but against the bill subtotal. Throws on an
+  /// invalid/expired/exhausted coupon code (never swallowed, unlike the
+  /// line-scheme preview above — see the remote datasource's own comment).
+  Future<Map<String, dynamic>?> resolvePosBillSchemes({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    String? customerId,
+    required double subtotal,
+    required String transDate,
+    String? couponCode,
   });
 
   Future<Map<String, dynamic>> getOrCreateLoyaltyProfile({

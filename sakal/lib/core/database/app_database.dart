@@ -31,6 +31,7 @@ import 'tables/sales_return_cache_tables.dart';
 import 'tables/sales_delivery_cache_tables.dart';
 import 'tables/cash_receipt_cache_tables.dart';
 import 'tables/expense_voucher_cache_tables.dart';
+import 'tables/pos_batch_serial_cache_tables.dart';
 
 part 'app_database.g.dart';
 
@@ -93,6 +94,8 @@ part 'app_database.g.dart';
   CashReceiptLinesCache,
   ExpenseVoucherHeadersCache,
   ExpenseVoucherLinesCache,
+  BatchStockBalanceCache,
+  SerialStockStatusCache,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'sakal_local'));
@@ -104,7 +107,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 26;
+  int get schemaVersion => 27;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -280,6 +283,15 @@ class AppDatabase extends _$AppDatabase {
           // plain stored value.
           if (from < 26) {
             await m.addColumn(exchangeRateCache, exchangeRateCache.exchangeRate);
+          }
+          // v27: POS offline batch/serial sale support — a local snapshot
+          // of v_batch_stock_balance/v_serial_stock_status, synced via the
+          // new "POS Batch/Serial Stock" MasterDataModule. Previously a
+          // batch/serial-tracked product was hard-blocked from being sold
+          // or held while offline; this is what removes that block.
+          if (from < 27) {
+            await m.createTable(batchStockBalanceCache);
+            await m.createTable(serialStockStatusCache);
           }
         },
       );

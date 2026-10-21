@@ -54913,6 +54913,848 @@ class ExpenseVoucherLinesCacheCompanion
   }
 }
 
+class $BatchStockBalanceCacheTable extends BatchStockBalanceCache
+    with TableInfo<$BatchStockBalanceCacheTable, BatchStockBalanceCacheEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BatchStockBalanceCacheTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _clientIdMeta =
+      const VerificationMeta('clientId');
+  @override
+  late final GeneratedColumn<String> clientId = GeneratedColumn<String>(
+      'client_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _companyIdMeta =
+      const VerificationMeta('companyId');
+  @override
+  late final GeneratedColumn<String> companyId = GeneratedColumn<String>(
+      'company_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _locationIdMeta =
+      const VerificationMeta('locationId');
+  @override
+  late final GeneratedColumn<String> locationId = GeneratedColumn<String>(
+      'location_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _productIdMeta =
+      const VerificationMeta('productId');
+  @override
+  late final GeneratedColumn<String> productId = GeneratedColumn<String>(
+      'product_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _batchNoMeta =
+      const VerificationMeta('batchNo');
+  @override
+  late final GeneratedColumn<String> batchNo = GeneratedColumn<String>(
+      'batch_no', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _expiryDateMeta =
+      const VerificationMeta('expiryDate');
+  @override
+  late final GeneratedColumn<String> expiryDate = GeneratedColumn<String>(
+      'expiry_date', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _availableBalanceMeta =
+      const VerificationMeta('availableBalance');
+  @override
+  late final GeneratedColumn<double> availableBalance = GeneratedColumn<double>(
+      'available_balance', aliasedName, false,
+      type: DriftSqlType.double,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _cachedAtMeta =
+      const VerificationMeta('cachedAt');
+  @override
+  late final GeneratedColumn<DateTime> cachedAt = GeneratedColumn<DateTime>(
+      'cached_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  @override
+  List<GeneratedColumn> get $columns => [
+        clientId,
+        companyId,
+        locationId,
+        productId,
+        batchNo,
+        expiryDate,
+        availableBalance,
+        cachedAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'batch_stock_balance_cache';
+  @override
+  VerificationContext validateIntegrity(
+      Insertable<BatchStockBalanceCacheEntry> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('client_id')) {
+      context.handle(_clientIdMeta,
+          clientId.isAcceptableOrUnknown(data['client_id']!, _clientIdMeta));
+    } else if (isInserting) {
+      context.missing(_clientIdMeta);
+    }
+    if (data.containsKey('company_id')) {
+      context.handle(_companyIdMeta,
+          companyId.isAcceptableOrUnknown(data['company_id']!, _companyIdMeta));
+    } else if (isInserting) {
+      context.missing(_companyIdMeta);
+    }
+    if (data.containsKey('location_id')) {
+      context.handle(
+          _locationIdMeta,
+          locationId.isAcceptableOrUnknown(
+              data['location_id']!, _locationIdMeta));
+    } else if (isInserting) {
+      context.missing(_locationIdMeta);
+    }
+    if (data.containsKey('product_id')) {
+      context.handle(_productIdMeta,
+          productId.isAcceptableOrUnknown(data['product_id']!, _productIdMeta));
+    } else if (isInserting) {
+      context.missing(_productIdMeta);
+    }
+    if (data.containsKey('batch_no')) {
+      context.handle(_batchNoMeta,
+          batchNo.isAcceptableOrUnknown(data['batch_no']!, _batchNoMeta));
+    } else if (isInserting) {
+      context.missing(_batchNoMeta);
+    }
+    if (data.containsKey('expiry_date')) {
+      context.handle(
+          _expiryDateMeta,
+          expiryDate.isAcceptableOrUnknown(
+              data['expiry_date']!, _expiryDateMeta));
+    }
+    if (data.containsKey('available_balance')) {
+      context.handle(
+          _availableBalanceMeta,
+          availableBalance.isAcceptableOrUnknown(
+              data['available_balance']!, _availableBalanceMeta));
+    }
+    if (data.containsKey('cached_at')) {
+      context.handle(_cachedAtMeta,
+          cachedAt.isAcceptableOrUnknown(data['cached_at']!, _cachedAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey =>
+      {clientId, companyId, locationId, productId, batchNo};
+  @override
+  BatchStockBalanceCacheEntry map(Map<String, dynamic> data,
+      {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return BatchStockBalanceCacheEntry(
+      clientId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}client_id'])!,
+      companyId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}company_id'])!,
+      locationId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}location_id'])!,
+      productId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}product_id'])!,
+      batchNo: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}batch_no'])!,
+      expiryDate: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}expiry_date']),
+      availableBalance: attachedDatabase.typeMapping.read(
+          DriftSqlType.double, data['${effectivePrefix}available_balance'])!,
+      cachedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}cached_at']),
+    );
+  }
+
+  @override
+  $BatchStockBalanceCacheTable createAlias(String alias) {
+    return $BatchStockBalanceCacheTable(attachedDatabase, alias);
+  }
+}
+
+class BatchStockBalanceCacheEntry extends DataClass
+    implements Insertable<BatchStockBalanceCacheEntry> {
+  final String clientId;
+  final String companyId;
+  final String locationId;
+  final String productId;
+  final String batchNo;
+  final String? expiryDate;
+  final double availableBalance;
+  final DateTime? cachedAt;
+  const BatchStockBalanceCacheEntry(
+      {required this.clientId,
+      required this.companyId,
+      required this.locationId,
+      required this.productId,
+      required this.batchNo,
+      this.expiryDate,
+      required this.availableBalance,
+      this.cachedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['client_id'] = Variable<String>(clientId);
+    map['company_id'] = Variable<String>(companyId);
+    map['location_id'] = Variable<String>(locationId);
+    map['product_id'] = Variable<String>(productId);
+    map['batch_no'] = Variable<String>(batchNo);
+    if (!nullToAbsent || expiryDate != null) {
+      map['expiry_date'] = Variable<String>(expiryDate);
+    }
+    map['available_balance'] = Variable<double>(availableBalance);
+    if (!nullToAbsent || cachedAt != null) {
+      map['cached_at'] = Variable<DateTime>(cachedAt);
+    }
+    return map;
+  }
+
+  BatchStockBalanceCacheCompanion toCompanion(bool nullToAbsent) {
+    return BatchStockBalanceCacheCompanion(
+      clientId: Value(clientId),
+      companyId: Value(companyId),
+      locationId: Value(locationId),
+      productId: Value(productId),
+      batchNo: Value(batchNo),
+      expiryDate: expiryDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(expiryDate),
+      availableBalance: Value(availableBalance),
+      cachedAt: cachedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cachedAt),
+    );
+  }
+
+  factory BatchStockBalanceCacheEntry.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return BatchStockBalanceCacheEntry(
+      clientId: serializer.fromJson<String>(json['clientId']),
+      companyId: serializer.fromJson<String>(json['companyId']),
+      locationId: serializer.fromJson<String>(json['locationId']),
+      productId: serializer.fromJson<String>(json['productId']),
+      batchNo: serializer.fromJson<String>(json['batchNo']),
+      expiryDate: serializer.fromJson<String?>(json['expiryDate']),
+      availableBalance: serializer.fromJson<double>(json['availableBalance']),
+      cachedAt: serializer.fromJson<DateTime?>(json['cachedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'clientId': serializer.toJson<String>(clientId),
+      'companyId': serializer.toJson<String>(companyId),
+      'locationId': serializer.toJson<String>(locationId),
+      'productId': serializer.toJson<String>(productId),
+      'batchNo': serializer.toJson<String>(batchNo),
+      'expiryDate': serializer.toJson<String?>(expiryDate),
+      'availableBalance': serializer.toJson<double>(availableBalance),
+      'cachedAt': serializer.toJson<DateTime?>(cachedAt),
+    };
+  }
+
+  BatchStockBalanceCacheEntry copyWith(
+          {String? clientId,
+          String? companyId,
+          String? locationId,
+          String? productId,
+          String? batchNo,
+          Value<String?> expiryDate = const Value.absent(),
+          double? availableBalance,
+          Value<DateTime?> cachedAt = const Value.absent()}) =>
+      BatchStockBalanceCacheEntry(
+        clientId: clientId ?? this.clientId,
+        companyId: companyId ?? this.companyId,
+        locationId: locationId ?? this.locationId,
+        productId: productId ?? this.productId,
+        batchNo: batchNo ?? this.batchNo,
+        expiryDate: expiryDate.present ? expiryDate.value : this.expiryDate,
+        availableBalance: availableBalance ?? this.availableBalance,
+        cachedAt: cachedAt.present ? cachedAt.value : this.cachedAt,
+      );
+  BatchStockBalanceCacheEntry copyWithCompanion(
+      BatchStockBalanceCacheCompanion data) {
+    return BatchStockBalanceCacheEntry(
+      clientId: data.clientId.present ? data.clientId.value : this.clientId,
+      companyId: data.companyId.present ? data.companyId.value : this.companyId,
+      locationId:
+          data.locationId.present ? data.locationId.value : this.locationId,
+      productId: data.productId.present ? data.productId.value : this.productId,
+      batchNo: data.batchNo.present ? data.batchNo.value : this.batchNo,
+      expiryDate:
+          data.expiryDate.present ? data.expiryDate.value : this.expiryDate,
+      availableBalance: data.availableBalance.present
+          ? data.availableBalance.value
+          : this.availableBalance,
+      cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BatchStockBalanceCacheEntry(')
+          ..write('clientId: $clientId, ')
+          ..write('companyId: $companyId, ')
+          ..write('locationId: $locationId, ')
+          ..write('productId: $productId, ')
+          ..write('batchNo: $batchNo, ')
+          ..write('expiryDate: $expiryDate, ')
+          ..write('availableBalance: $availableBalance, ')
+          ..write('cachedAt: $cachedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(clientId, companyId, locationId, productId,
+      batchNo, expiryDate, availableBalance, cachedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BatchStockBalanceCacheEntry &&
+          other.clientId == this.clientId &&
+          other.companyId == this.companyId &&
+          other.locationId == this.locationId &&
+          other.productId == this.productId &&
+          other.batchNo == this.batchNo &&
+          other.expiryDate == this.expiryDate &&
+          other.availableBalance == this.availableBalance &&
+          other.cachedAt == this.cachedAt);
+}
+
+class BatchStockBalanceCacheCompanion
+    extends UpdateCompanion<BatchStockBalanceCacheEntry> {
+  final Value<String> clientId;
+  final Value<String> companyId;
+  final Value<String> locationId;
+  final Value<String> productId;
+  final Value<String> batchNo;
+  final Value<String?> expiryDate;
+  final Value<double> availableBalance;
+  final Value<DateTime?> cachedAt;
+  final Value<int> rowid;
+  const BatchStockBalanceCacheCompanion({
+    this.clientId = const Value.absent(),
+    this.companyId = const Value.absent(),
+    this.locationId = const Value.absent(),
+    this.productId = const Value.absent(),
+    this.batchNo = const Value.absent(),
+    this.expiryDate = const Value.absent(),
+    this.availableBalance = const Value.absent(),
+    this.cachedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  BatchStockBalanceCacheCompanion.insert({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String productId,
+    required String batchNo,
+    this.expiryDate = const Value.absent(),
+    this.availableBalance = const Value.absent(),
+    this.cachedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  })  : clientId = Value(clientId),
+        companyId = Value(companyId),
+        locationId = Value(locationId),
+        productId = Value(productId),
+        batchNo = Value(batchNo);
+  static Insertable<BatchStockBalanceCacheEntry> custom({
+    Expression<String>? clientId,
+    Expression<String>? companyId,
+    Expression<String>? locationId,
+    Expression<String>? productId,
+    Expression<String>? batchNo,
+    Expression<String>? expiryDate,
+    Expression<double>? availableBalance,
+    Expression<DateTime>? cachedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (clientId != null) 'client_id': clientId,
+      if (companyId != null) 'company_id': companyId,
+      if (locationId != null) 'location_id': locationId,
+      if (productId != null) 'product_id': productId,
+      if (batchNo != null) 'batch_no': batchNo,
+      if (expiryDate != null) 'expiry_date': expiryDate,
+      if (availableBalance != null) 'available_balance': availableBalance,
+      if (cachedAt != null) 'cached_at': cachedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  BatchStockBalanceCacheCompanion copyWith(
+      {Value<String>? clientId,
+      Value<String>? companyId,
+      Value<String>? locationId,
+      Value<String>? productId,
+      Value<String>? batchNo,
+      Value<String?>? expiryDate,
+      Value<double>? availableBalance,
+      Value<DateTime?>? cachedAt,
+      Value<int>? rowid}) {
+    return BatchStockBalanceCacheCompanion(
+      clientId: clientId ?? this.clientId,
+      companyId: companyId ?? this.companyId,
+      locationId: locationId ?? this.locationId,
+      productId: productId ?? this.productId,
+      batchNo: batchNo ?? this.batchNo,
+      expiryDate: expiryDate ?? this.expiryDate,
+      availableBalance: availableBalance ?? this.availableBalance,
+      cachedAt: cachedAt ?? this.cachedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (clientId.present) {
+      map['client_id'] = Variable<String>(clientId.value);
+    }
+    if (companyId.present) {
+      map['company_id'] = Variable<String>(companyId.value);
+    }
+    if (locationId.present) {
+      map['location_id'] = Variable<String>(locationId.value);
+    }
+    if (productId.present) {
+      map['product_id'] = Variable<String>(productId.value);
+    }
+    if (batchNo.present) {
+      map['batch_no'] = Variable<String>(batchNo.value);
+    }
+    if (expiryDate.present) {
+      map['expiry_date'] = Variable<String>(expiryDate.value);
+    }
+    if (availableBalance.present) {
+      map['available_balance'] = Variable<double>(availableBalance.value);
+    }
+    if (cachedAt.present) {
+      map['cached_at'] = Variable<DateTime>(cachedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BatchStockBalanceCacheCompanion(')
+          ..write('clientId: $clientId, ')
+          ..write('companyId: $companyId, ')
+          ..write('locationId: $locationId, ')
+          ..write('productId: $productId, ')
+          ..write('batchNo: $batchNo, ')
+          ..write('expiryDate: $expiryDate, ')
+          ..write('availableBalance: $availableBalance, ')
+          ..write('cachedAt: $cachedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SerialStockStatusCacheTable extends SerialStockStatusCache
+    with TableInfo<$SerialStockStatusCacheTable, SerialStockStatusCacheEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SerialStockStatusCacheTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _clientIdMeta =
+      const VerificationMeta('clientId');
+  @override
+  late final GeneratedColumn<String> clientId = GeneratedColumn<String>(
+      'client_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _companyIdMeta =
+      const VerificationMeta('companyId');
+  @override
+  late final GeneratedColumn<String> companyId = GeneratedColumn<String>(
+      'company_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _locationIdMeta =
+      const VerificationMeta('locationId');
+  @override
+  late final GeneratedColumn<String> locationId = GeneratedColumn<String>(
+      'location_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _productIdMeta =
+      const VerificationMeta('productId');
+  @override
+  late final GeneratedColumn<String> productId = GeneratedColumn<String>(
+      'product_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _serialNoMeta =
+      const VerificationMeta('serialNo');
+  @override
+  late final GeneratedColumn<String> serialNo = GeneratedColumn<String>(
+      'serial_no', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+      'status', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('IN_STOCK'));
+  static const VerificationMeta _cachedAtMeta =
+      const VerificationMeta('cachedAt');
+  @override
+  late final GeneratedColumn<DateTime> cachedAt = GeneratedColumn<DateTime>(
+      'cached_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  @override
+  List<GeneratedColumn> get $columns =>
+      [clientId, companyId, locationId, productId, serialNo, status, cachedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'serial_stock_status_cache';
+  @override
+  VerificationContext validateIntegrity(
+      Insertable<SerialStockStatusCacheEntry> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('client_id')) {
+      context.handle(_clientIdMeta,
+          clientId.isAcceptableOrUnknown(data['client_id']!, _clientIdMeta));
+    } else if (isInserting) {
+      context.missing(_clientIdMeta);
+    }
+    if (data.containsKey('company_id')) {
+      context.handle(_companyIdMeta,
+          companyId.isAcceptableOrUnknown(data['company_id']!, _companyIdMeta));
+    } else if (isInserting) {
+      context.missing(_companyIdMeta);
+    }
+    if (data.containsKey('location_id')) {
+      context.handle(
+          _locationIdMeta,
+          locationId.isAcceptableOrUnknown(
+              data['location_id']!, _locationIdMeta));
+    } else if (isInserting) {
+      context.missing(_locationIdMeta);
+    }
+    if (data.containsKey('product_id')) {
+      context.handle(_productIdMeta,
+          productId.isAcceptableOrUnknown(data['product_id']!, _productIdMeta));
+    } else if (isInserting) {
+      context.missing(_productIdMeta);
+    }
+    if (data.containsKey('serial_no')) {
+      context.handle(_serialNoMeta,
+          serialNo.isAcceptableOrUnknown(data['serial_no']!, _serialNoMeta));
+    } else if (isInserting) {
+      context.missing(_serialNoMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(_statusMeta,
+          status.isAcceptableOrUnknown(data['status']!, _statusMeta));
+    }
+    if (data.containsKey('cached_at')) {
+      context.handle(_cachedAtMeta,
+          cachedAt.isAcceptableOrUnknown(data['cached_at']!, _cachedAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey =>
+      {clientId, companyId, locationId, productId, serialNo};
+  @override
+  SerialStockStatusCacheEntry map(Map<String, dynamic> data,
+      {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SerialStockStatusCacheEntry(
+      clientId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}client_id'])!,
+      companyId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}company_id'])!,
+      locationId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}location_id'])!,
+      productId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}product_id'])!,
+      serialNo: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}serial_no'])!,
+      status: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}status'])!,
+      cachedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}cached_at']),
+    );
+  }
+
+  @override
+  $SerialStockStatusCacheTable createAlias(String alias) {
+    return $SerialStockStatusCacheTable(attachedDatabase, alias);
+  }
+}
+
+class SerialStockStatusCacheEntry extends DataClass
+    implements Insertable<SerialStockStatusCacheEntry> {
+  final String clientId;
+  final String companyId;
+  final String locationId;
+  final String productId;
+  final String serialNo;
+  final String status;
+  final DateTime? cachedAt;
+  const SerialStockStatusCacheEntry(
+      {required this.clientId,
+      required this.companyId,
+      required this.locationId,
+      required this.productId,
+      required this.serialNo,
+      required this.status,
+      this.cachedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['client_id'] = Variable<String>(clientId);
+    map['company_id'] = Variable<String>(companyId);
+    map['location_id'] = Variable<String>(locationId);
+    map['product_id'] = Variable<String>(productId);
+    map['serial_no'] = Variable<String>(serialNo);
+    map['status'] = Variable<String>(status);
+    if (!nullToAbsent || cachedAt != null) {
+      map['cached_at'] = Variable<DateTime>(cachedAt);
+    }
+    return map;
+  }
+
+  SerialStockStatusCacheCompanion toCompanion(bool nullToAbsent) {
+    return SerialStockStatusCacheCompanion(
+      clientId: Value(clientId),
+      companyId: Value(companyId),
+      locationId: Value(locationId),
+      productId: Value(productId),
+      serialNo: Value(serialNo),
+      status: Value(status),
+      cachedAt: cachedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cachedAt),
+    );
+  }
+
+  factory SerialStockStatusCacheEntry.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SerialStockStatusCacheEntry(
+      clientId: serializer.fromJson<String>(json['clientId']),
+      companyId: serializer.fromJson<String>(json['companyId']),
+      locationId: serializer.fromJson<String>(json['locationId']),
+      productId: serializer.fromJson<String>(json['productId']),
+      serialNo: serializer.fromJson<String>(json['serialNo']),
+      status: serializer.fromJson<String>(json['status']),
+      cachedAt: serializer.fromJson<DateTime?>(json['cachedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'clientId': serializer.toJson<String>(clientId),
+      'companyId': serializer.toJson<String>(companyId),
+      'locationId': serializer.toJson<String>(locationId),
+      'productId': serializer.toJson<String>(productId),
+      'serialNo': serializer.toJson<String>(serialNo),
+      'status': serializer.toJson<String>(status),
+      'cachedAt': serializer.toJson<DateTime?>(cachedAt),
+    };
+  }
+
+  SerialStockStatusCacheEntry copyWith(
+          {String? clientId,
+          String? companyId,
+          String? locationId,
+          String? productId,
+          String? serialNo,
+          String? status,
+          Value<DateTime?> cachedAt = const Value.absent()}) =>
+      SerialStockStatusCacheEntry(
+        clientId: clientId ?? this.clientId,
+        companyId: companyId ?? this.companyId,
+        locationId: locationId ?? this.locationId,
+        productId: productId ?? this.productId,
+        serialNo: serialNo ?? this.serialNo,
+        status: status ?? this.status,
+        cachedAt: cachedAt.present ? cachedAt.value : this.cachedAt,
+      );
+  SerialStockStatusCacheEntry copyWithCompanion(
+      SerialStockStatusCacheCompanion data) {
+    return SerialStockStatusCacheEntry(
+      clientId: data.clientId.present ? data.clientId.value : this.clientId,
+      companyId: data.companyId.present ? data.companyId.value : this.companyId,
+      locationId:
+          data.locationId.present ? data.locationId.value : this.locationId,
+      productId: data.productId.present ? data.productId.value : this.productId,
+      serialNo: data.serialNo.present ? data.serialNo.value : this.serialNo,
+      status: data.status.present ? data.status.value : this.status,
+      cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SerialStockStatusCacheEntry(')
+          ..write('clientId: $clientId, ')
+          ..write('companyId: $companyId, ')
+          ..write('locationId: $locationId, ')
+          ..write('productId: $productId, ')
+          ..write('serialNo: $serialNo, ')
+          ..write('status: $status, ')
+          ..write('cachedAt: $cachedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      clientId, companyId, locationId, productId, serialNo, status, cachedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SerialStockStatusCacheEntry &&
+          other.clientId == this.clientId &&
+          other.companyId == this.companyId &&
+          other.locationId == this.locationId &&
+          other.productId == this.productId &&
+          other.serialNo == this.serialNo &&
+          other.status == this.status &&
+          other.cachedAt == this.cachedAt);
+}
+
+class SerialStockStatusCacheCompanion
+    extends UpdateCompanion<SerialStockStatusCacheEntry> {
+  final Value<String> clientId;
+  final Value<String> companyId;
+  final Value<String> locationId;
+  final Value<String> productId;
+  final Value<String> serialNo;
+  final Value<String> status;
+  final Value<DateTime?> cachedAt;
+  final Value<int> rowid;
+  const SerialStockStatusCacheCompanion({
+    this.clientId = const Value.absent(),
+    this.companyId = const Value.absent(),
+    this.locationId = const Value.absent(),
+    this.productId = const Value.absent(),
+    this.serialNo = const Value.absent(),
+    this.status = const Value.absent(),
+    this.cachedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SerialStockStatusCacheCompanion.insert({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    required String productId,
+    required String serialNo,
+    this.status = const Value.absent(),
+    this.cachedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  })  : clientId = Value(clientId),
+        companyId = Value(companyId),
+        locationId = Value(locationId),
+        productId = Value(productId),
+        serialNo = Value(serialNo);
+  static Insertable<SerialStockStatusCacheEntry> custom({
+    Expression<String>? clientId,
+    Expression<String>? companyId,
+    Expression<String>? locationId,
+    Expression<String>? productId,
+    Expression<String>? serialNo,
+    Expression<String>? status,
+    Expression<DateTime>? cachedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (clientId != null) 'client_id': clientId,
+      if (companyId != null) 'company_id': companyId,
+      if (locationId != null) 'location_id': locationId,
+      if (productId != null) 'product_id': productId,
+      if (serialNo != null) 'serial_no': serialNo,
+      if (status != null) 'status': status,
+      if (cachedAt != null) 'cached_at': cachedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SerialStockStatusCacheCompanion copyWith(
+      {Value<String>? clientId,
+      Value<String>? companyId,
+      Value<String>? locationId,
+      Value<String>? productId,
+      Value<String>? serialNo,
+      Value<String>? status,
+      Value<DateTime?>? cachedAt,
+      Value<int>? rowid}) {
+    return SerialStockStatusCacheCompanion(
+      clientId: clientId ?? this.clientId,
+      companyId: companyId ?? this.companyId,
+      locationId: locationId ?? this.locationId,
+      productId: productId ?? this.productId,
+      serialNo: serialNo ?? this.serialNo,
+      status: status ?? this.status,
+      cachedAt: cachedAt ?? this.cachedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (clientId.present) {
+      map['client_id'] = Variable<String>(clientId.value);
+    }
+    if (companyId.present) {
+      map['company_id'] = Variable<String>(companyId.value);
+    }
+    if (locationId.present) {
+      map['location_id'] = Variable<String>(locationId.value);
+    }
+    if (productId.present) {
+      map['product_id'] = Variable<String>(productId.value);
+    }
+    if (serialNo.present) {
+      map['serial_no'] = Variable<String>(serialNo.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (cachedAt.present) {
+      map['cached_at'] = Variable<DateTime>(cachedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SerialStockStatusCacheCompanion(')
+          ..write('clientId: $clientId, ')
+          ..write('companyId: $companyId, ')
+          ..write('locationId: $locationId, ')
+          ..write('productId: $productId, ')
+          ..write('serialNo: $serialNo, ')
+          ..write('status: $status, ')
+          ..write('cachedAt: $cachedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -55033,6 +55875,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $ExpenseVoucherHeadersCacheTable(this);
   late final $ExpenseVoucherLinesCacheTable expenseVoucherLinesCache =
       $ExpenseVoucherLinesCacheTable(this);
+  late final $BatchStockBalanceCacheTable batchStockBalanceCache =
+      $BatchStockBalanceCacheTable(this);
+  late final $SerialStockStatusCacheTable serialStockStatusCache =
+      $SerialStockStatusCacheTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -55095,7 +55941,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         cashReceiptHeadersCache,
         cashReceiptLinesCache,
         expenseVoucherHeadersCache,
-        expenseVoucherLinesCache
+        expenseVoucherLinesCache,
+        batchStockBalanceCache,
+        serialStockStatusCache
       ];
 }
 
@@ -79151,6 +79999,443 @@ typedef $$ExpenseVoucherLinesCacheTableProcessedTableManager
         ),
         ExpenseVoucherLineCacheEntry,
         PrefetchHooks Function()>;
+typedef $$BatchStockBalanceCacheTableCreateCompanionBuilder
+    = BatchStockBalanceCacheCompanion Function({
+  required String clientId,
+  required String companyId,
+  required String locationId,
+  required String productId,
+  required String batchNo,
+  Value<String?> expiryDate,
+  Value<double> availableBalance,
+  Value<DateTime?> cachedAt,
+  Value<int> rowid,
+});
+typedef $$BatchStockBalanceCacheTableUpdateCompanionBuilder
+    = BatchStockBalanceCacheCompanion Function({
+  Value<String> clientId,
+  Value<String> companyId,
+  Value<String> locationId,
+  Value<String> productId,
+  Value<String> batchNo,
+  Value<String?> expiryDate,
+  Value<double> availableBalance,
+  Value<DateTime?> cachedAt,
+  Value<int> rowid,
+});
+
+class $$BatchStockBalanceCacheTableFilterComposer
+    extends Composer<_$AppDatabase, $BatchStockBalanceCacheTable> {
+  $$BatchStockBalanceCacheTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get clientId => $composableBuilder(
+      column: $table.clientId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get companyId => $composableBuilder(
+      column: $table.companyId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get locationId => $composableBuilder(
+      column: $table.locationId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get productId => $composableBuilder(
+      column: $table.productId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get batchNo => $composableBuilder(
+      column: $table.batchNo, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get expiryDate => $composableBuilder(
+      column: $table.expiryDate, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get availableBalance => $composableBuilder(
+      column: $table.availableBalance,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get cachedAt => $composableBuilder(
+      column: $table.cachedAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$BatchStockBalanceCacheTableOrderingComposer
+    extends Composer<_$AppDatabase, $BatchStockBalanceCacheTable> {
+  $$BatchStockBalanceCacheTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get clientId => $composableBuilder(
+      column: $table.clientId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get companyId => $composableBuilder(
+      column: $table.companyId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get locationId => $composableBuilder(
+      column: $table.locationId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get productId => $composableBuilder(
+      column: $table.productId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get batchNo => $composableBuilder(
+      column: $table.batchNo, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get expiryDate => $composableBuilder(
+      column: $table.expiryDate, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<double> get availableBalance => $composableBuilder(
+      column: $table.availableBalance,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get cachedAt => $composableBuilder(
+      column: $table.cachedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$BatchStockBalanceCacheTableAnnotationComposer
+    extends Composer<_$AppDatabase, $BatchStockBalanceCacheTable> {
+  $$BatchStockBalanceCacheTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get clientId =>
+      $composableBuilder(column: $table.clientId, builder: (column) => column);
+
+  GeneratedColumn<String> get companyId =>
+      $composableBuilder(column: $table.companyId, builder: (column) => column);
+
+  GeneratedColumn<String> get locationId => $composableBuilder(
+      column: $table.locationId, builder: (column) => column);
+
+  GeneratedColumn<String> get productId =>
+      $composableBuilder(column: $table.productId, builder: (column) => column);
+
+  GeneratedColumn<String> get batchNo =>
+      $composableBuilder(column: $table.batchNo, builder: (column) => column);
+
+  GeneratedColumn<String> get expiryDate => $composableBuilder(
+      column: $table.expiryDate, builder: (column) => column);
+
+  GeneratedColumn<double> get availableBalance => $composableBuilder(
+      column: $table.availableBalance, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get cachedAt =>
+      $composableBuilder(column: $table.cachedAt, builder: (column) => column);
+}
+
+class $$BatchStockBalanceCacheTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $BatchStockBalanceCacheTable,
+    BatchStockBalanceCacheEntry,
+    $$BatchStockBalanceCacheTableFilterComposer,
+    $$BatchStockBalanceCacheTableOrderingComposer,
+    $$BatchStockBalanceCacheTableAnnotationComposer,
+    $$BatchStockBalanceCacheTableCreateCompanionBuilder,
+    $$BatchStockBalanceCacheTableUpdateCompanionBuilder,
+    (
+      BatchStockBalanceCacheEntry,
+      BaseReferences<_$AppDatabase, $BatchStockBalanceCacheTable,
+          BatchStockBalanceCacheEntry>
+    ),
+    BatchStockBalanceCacheEntry,
+    PrefetchHooks Function()> {
+  $$BatchStockBalanceCacheTableTableManager(
+      _$AppDatabase db, $BatchStockBalanceCacheTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BatchStockBalanceCacheTableFilterComposer(
+                  $db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BatchStockBalanceCacheTableOrderingComposer(
+                  $db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BatchStockBalanceCacheTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> clientId = const Value.absent(),
+            Value<String> companyId = const Value.absent(),
+            Value<String> locationId = const Value.absent(),
+            Value<String> productId = const Value.absent(),
+            Value<String> batchNo = const Value.absent(),
+            Value<String?> expiryDate = const Value.absent(),
+            Value<double> availableBalance = const Value.absent(),
+            Value<DateTime?> cachedAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              BatchStockBalanceCacheCompanion(
+            clientId: clientId,
+            companyId: companyId,
+            locationId: locationId,
+            productId: productId,
+            batchNo: batchNo,
+            expiryDate: expiryDate,
+            availableBalance: availableBalance,
+            cachedAt: cachedAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String clientId,
+            required String companyId,
+            required String locationId,
+            required String productId,
+            required String batchNo,
+            Value<String?> expiryDate = const Value.absent(),
+            Value<double> availableBalance = const Value.absent(),
+            Value<DateTime?> cachedAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              BatchStockBalanceCacheCompanion.insert(
+            clientId: clientId,
+            companyId: companyId,
+            locationId: locationId,
+            productId: productId,
+            batchNo: batchNo,
+            expiryDate: expiryDate,
+            availableBalance: availableBalance,
+            cachedAt: cachedAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$BatchStockBalanceCacheTableProcessedTableManager
+    = ProcessedTableManager<
+        _$AppDatabase,
+        $BatchStockBalanceCacheTable,
+        BatchStockBalanceCacheEntry,
+        $$BatchStockBalanceCacheTableFilterComposer,
+        $$BatchStockBalanceCacheTableOrderingComposer,
+        $$BatchStockBalanceCacheTableAnnotationComposer,
+        $$BatchStockBalanceCacheTableCreateCompanionBuilder,
+        $$BatchStockBalanceCacheTableUpdateCompanionBuilder,
+        (
+          BatchStockBalanceCacheEntry,
+          BaseReferences<_$AppDatabase, $BatchStockBalanceCacheTable,
+              BatchStockBalanceCacheEntry>
+        ),
+        BatchStockBalanceCacheEntry,
+        PrefetchHooks Function()>;
+typedef $$SerialStockStatusCacheTableCreateCompanionBuilder
+    = SerialStockStatusCacheCompanion Function({
+  required String clientId,
+  required String companyId,
+  required String locationId,
+  required String productId,
+  required String serialNo,
+  Value<String> status,
+  Value<DateTime?> cachedAt,
+  Value<int> rowid,
+});
+typedef $$SerialStockStatusCacheTableUpdateCompanionBuilder
+    = SerialStockStatusCacheCompanion Function({
+  Value<String> clientId,
+  Value<String> companyId,
+  Value<String> locationId,
+  Value<String> productId,
+  Value<String> serialNo,
+  Value<String> status,
+  Value<DateTime?> cachedAt,
+  Value<int> rowid,
+});
+
+class $$SerialStockStatusCacheTableFilterComposer
+    extends Composer<_$AppDatabase, $SerialStockStatusCacheTable> {
+  $$SerialStockStatusCacheTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get clientId => $composableBuilder(
+      column: $table.clientId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get companyId => $composableBuilder(
+      column: $table.companyId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get locationId => $composableBuilder(
+      column: $table.locationId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get productId => $composableBuilder(
+      column: $table.productId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get serialNo => $composableBuilder(
+      column: $table.serialNo, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get cachedAt => $composableBuilder(
+      column: $table.cachedAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$SerialStockStatusCacheTableOrderingComposer
+    extends Composer<_$AppDatabase, $SerialStockStatusCacheTable> {
+  $$SerialStockStatusCacheTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get clientId => $composableBuilder(
+      column: $table.clientId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get companyId => $composableBuilder(
+      column: $table.companyId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get locationId => $composableBuilder(
+      column: $table.locationId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get productId => $composableBuilder(
+      column: $table.productId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get serialNo => $composableBuilder(
+      column: $table.serialNo, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get cachedAt => $composableBuilder(
+      column: $table.cachedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$SerialStockStatusCacheTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SerialStockStatusCacheTable> {
+  $$SerialStockStatusCacheTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get clientId =>
+      $composableBuilder(column: $table.clientId, builder: (column) => column);
+
+  GeneratedColumn<String> get companyId =>
+      $composableBuilder(column: $table.companyId, builder: (column) => column);
+
+  GeneratedColumn<String> get locationId => $composableBuilder(
+      column: $table.locationId, builder: (column) => column);
+
+  GeneratedColumn<String> get productId =>
+      $composableBuilder(column: $table.productId, builder: (column) => column);
+
+  GeneratedColumn<String> get serialNo =>
+      $composableBuilder(column: $table.serialNo, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get cachedAt =>
+      $composableBuilder(column: $table.cachedAt, builder: (column) => column);
+}
+
+class $$SerialStockStatusCacheTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $SerialStockStatusCacheTable,
+    SerialStockStatusCacheEntry,
+    $$SerialStockStatusCacheTableFilterComposer,
+    $$SerialStockStatusCacheTableOrderingComposer,
+    $$SerialStockStatusCacheTableAnnotationComposer,
+    $$SerialStockStatusCacheTableCreateCompanionBuilder,
+    $$SerialStockStatusCacheTableUpdateCompanionBuilder,
+    (
+      SerialStockStatusCacheEntry,
+      BaseReferences<_$AppDatabase, $SerialStockStatusCacheTable,
+          SerialStockStatusCacheEntry>
+    ),
+    SerialStockStatusCacheEntry,
+    PrefetchHooks Function()> {
+  $$SerialStockStatusCacheTableTableManager(
+      _$AppDatabase db, $SerialStockStatusCacheTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SerialStockStatusCacheTableFilterComposer(
+                  $db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SerialStockStatusCacheTableOrderingComposer(
+                  $db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SerialStockStatusCacheTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> clientId = const Value.absent(),
+            Value<String> companyId = const Value.absent(),
+            Value<String> locationId = const Value.absent(),
+            Value<String> productId = const Value.absent(),
+            Value<String> serialNo = const Value.absent(),
+            Value<String> status = const Value.absent(),
+            Value<DateTime?> cachedAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              SerialStockStatusCacheCompanion(
+            clientId: clientId,
+            companyId: companyId,
+            locationId: locationId,
+            productId: productId,
+            serialNo: serialNo,
+            status: status,
+            cachedAt: cachedAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String clientId,
+            required String companyId,
+            required String locationId,
+            required String productId,
+            required String serialNo,
+            Value<String> status = const Value.absent(),
+            Value<DateTime?> cachedAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              SerialStockStatusCacheCompanion.insert(
+            clientId: clientId,
+            companyId: companyId,
+            locationId: locationId,
+            productId: productId,
+            serialNo: serialNo,
+            status: status,
+            cachedAt: cachedAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$SerialStockStatusCacheTableProcessedTableManager
+    = ProcessedTableManager<
+        _$AppDatabase,
+        $SerialStockStatusCacheTable,
+        SerialStockStatusCacheEntry,
+        $$SerialStockStatusCacheTableFilterComposer,
+        $$SerialStockStatusCacheTableOrderingComposer,
+        $$SerialStockStatusCacheTableAnnotationComposer,
+        $$SerialStockStatusCacheTableCreateCompanionBuilder,
+        $$SerialStockStatusCacheTableUpdateCompanionBuilder,
+        (
+          SerialStockStatusCacheEntry,
+          BaseReferences<_$AppDatabase, $SerialStockStatusCacheTable,
+              SerialStockStatusCacheEntry>
+        ),
+        SerialStockStatusCacheEntry,
+        PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -79316,4 +80601,10 @@ class $AppDatabaseManager {
   $$ExpenseVoucherLinesCacheTableTableManager get expenseVoucherLinesCache =>
       $$ExpenseVoucherLinesCacheTableTableManager(
           _db, _db.expenseVoucherLinesCache);
+  $$BatchStockBalanceCacheTableTableManager get batchStockBalanceCache =>
+      $$BatchStockBalanceCacheTableTableManager(
+          _db, _db.batchStockBalanceCache);
+  $$SerialStockStatusCacheTableTableManager get serialStockStatusCache =>
+      $$SerialStockStatusCacheTableTableManager(
+          _db, _db.serialStockStatusCache);
 }

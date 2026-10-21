@@ -690,6 +690,36 @@ class SalesInvoiceRemoteDs {
     return list.first as Map<String, dynamic>;
   }
 
+  // Whole-bill BILL_THRESHOLD/COUPON scheme resolution (migration 231) —
+  // sibling to resolvePosSchemeForLine above, but against the bill subtotal
+  // rather than one line. An invalid/expired/exhausted coupon code raises a
+  // real exception here (COUPON_INVALID/COUPON_EXPIRED/
+  // COUPON_USAGE_LIMIT_REACHED) — this call is never swallowed the way a
+  // line-scheme lookup is, since a cashier who typed a code expects to know
+  // why it was rejected.
+  Future<Map<String, dynamic>?> resolvePosBillSchemes({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    String? customerId,
+    required double subtotal,
+    required String transDate,
+    String? couponCode,
+  }) async {
+    final res = await _dio.post('/rpc/fn_resolve_pos_bill_schemes', data: {
+      'p_client_id': clientId,
+      'p_company_id': companyId,
+      'p_location_id': locationId,
+      'p_customer_id': customerId,
+      'p_subtotal': subtotal,
+      'p_trans_date': transDate,
+      'p_coupon_code': couponCode,
+    });
+    final list = res.data as List;
+    if (list.isEmpty) return null;
+    return list.first as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> getOrCreateLoyaltyProfile({
     required String clientId,
     required String companyId,

@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../../../core/database/datasources/pos_batch_serial_local_ds.dart';
 import '../../domain/repositories/sales_invoice_repository.dart';
 import '../datasources/sales_invoice_remote_ds.dart';
 import '../datasources/sales_invoice_local_ds.dart';
@@ -8,8 +9,9 @@ class SalesInvoiceRepositoryImpl implements SalesInvoiceRepository {
   final SalesInvoiceRemoteDs _remote;
   final SalesInvoiceLocalDs? _local; // null on Flutter Web (no Drift)
   final bool _isOffline;
+  final PosBatchSerialLocalDs? _batchSerialLocal; // null on Flutter Web (no Drift)
 
-  SalesInvoiceRepositoryImpl(this._remote, this._local, this._isOffline);
+  SalesInvoiceRepositoryImpl(this._remote, this._local, this._isOffline, [this._batchSerialLocal]);
 
   @override
   Future<List<SalesInvoiceHeader>> listInvoices({
@@ -146,13 +148,23 @@ class SalesInvoiceRepositoryImpl implements SalesInvoiceRepository {
     required String productId,
   }) => _remote.getStockPreview(clientId: clientId, companyId: companyId, locationId: locationId, productId: productId);
 
+  // Offline support added 2026-10-20 — previously remote-only, which is
+  // what hard-blocked every batch/serial-tracked product from being sold
+  // or held offline (pos_new_sale_screen.dart's own `_charge()`/`_hold()`
+  // guards against exactly this). See PosBatchSerialLocalDs's own doc
+  // comment for the staleness/reconciliation reasoning.
   @override
   Future<List<Map<String, dynamic>>> getBatchStockBalance({
     required String clientId,
     required String companyId,
     required String locationId,
     required String productId,
-  }) => _remote.getBatchStockBalance(clientId: clientId, companyId: companyId, locationId: locationId, productId: productId);
+  }) {
+    if (_isOffline && _batchSerialLocal != null) {
+      return _batchSerialLocal.getBatchStockBalance(clientId: clientId, companyId: companyId, locationId: locationId, productId: productId);
+    }
+    return _remote.getBatchStockBalance(clientId: clientId, companyId: companyId, locationId: locationId, productId: productId);
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getSerialStockStatus({
@@ -160,7 +172,12 @@ class SalesInvoiceRepositoryImpl implements SalesInvoiceRepository {
     required String companyId,
     required String locationId,
     required String productId,
-  }) => _remote.getSerialStockStatus(clientId: clientId, companyId: companyId, locationId: locationId, productId: productId);
+  }) {
+    if (_isOffline && _batchSerialLocal != null) {
+      return _batchSerialLocal.getSerialStockStatus(clientId: clientId, companyId: companyId, locationId: locationId, productId: productId);
+    }
+    return _remote.getSerialStockStatus(clientId: clientId, companyId: companyId, locationId: locationId, productId: productId);
+  }
 
   // ── Against-Quotation / Against-Order — online-only ───────────────────────
 
@@ -245,6 +262,18 @@ class SalesInvoiceRepositoryImpl implements SalesInvoiceRepository {
   }
 
   @override
+  Future<Set<String>> getConfiguredPosTenderTypes({
+    required String clientId,
+    required String companyId,
+  }) async {
+    // Non-cash tenders are an online-only concept to begin with (offline
+    // POS sales are Cash/Credit only, per this module's own documented
+    // scope) — no local cache needed, just CASH when offline.
+    if (_isOffline) return {'CASH'};
+    return _remote.getConfiguredPosTenderTypes(clientId: clientId, companyId: companyId);
+  }
+
+  @override
   Future<Map<String, dynamic>?> getQuickInvoiceSetup({
     required String clientId,
     required String companyId,
@@ -306,6 +335,20 @@ class SalesInvoiceRepositoryImpl implements SalesInvoiceRepository {
         clientId: clientId, companyId: companyId, locationId: locationId,
         productId: productId, categoryId: categoryId, qty: qty,
         grossAmount: grossAmount, transDate: transDate,
+      );
+
+  @override
+  Future<Map<String, dynamic>?> resolvePosBillSchemes({
+    required String clientId,
+    required String companyId,
+    required String locationId,
+    String? customerId,
+    required double subtotal,
+    required String transDate,
+    String? couponCode,
+  }) => _remote.resolvePosBillSchemes(
+        clientId: clientId, companyId: companyId, locationId: locationId,
+        customerId: customerId, subtotal: subtotal, transDate: transDate, couponCode: couponCode,
       );
 
   @override

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../database/app_database.dart';
 import '../database/datasources/generic_lookup_local_ds.dart';
 import '../database/datasources/accounts_local_ds.dart';
+import '../database/datasources/pos_batch_serial_local_ds.dart';
 import '../database/datasources/product_uom_local_ds.dart';
 import '../database/datasources/tax_group_members_local_ds.dart';
 import '../database/datasources/tax_rates_local_ds.dart';
@@ -323,10 +324,47 @@ Future<int> _syncSalesInvoiceSetup(AppDatabase db, UserSession session) async {
   return count;
 }
 
+/// Snapshots `v_batch_stock_balance`/`v_serial_stock_status` for THIS
+/// user's own location — the piece that lets a batch/serial-tracked
+/// product be sold/held while offline at the POS till (previously hard-
+/// blocked, see pos_new_sale_screen.dart's `_charge()`/`_hold()`). Fetched
+/// in bulk (no product_id filter — both views already only return rows
+/// with real remaining stock) rather than per-product, since a till-side
+/// sync has no practical way to know in advance which of its products a
+/// cashier might scan next.
+Future<int> _syncPosBatchSerialBalances(AppDatabase db, UserSession session) async {
+  final locationId = session.locationId;
+  if (locationId == null || locationId.isEmpty) return 0;
+  final ds = PosBatchSerialLocalDs(db);
+
+  final batchRes = await _dio.get('/v_batch_stock_balance', queryParameters: {
+    'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
+    'location_id': 'eq.$locationId', 'balance': 'gt.0',
+  });
+  final batchRows = List<Map<String, dynamic>>.from(batchRes.data as List)
+      .map((r) => {...r, 'client_id': session.clientId, 'company_id': session.companyId, 'location_id': locationId})
+      .toList();
+
+  final serialRes = await _dio.get('/v_serial_stock_status', queryParameters: {
+    'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
+    'location_id': 'eq.$locationId', 'status': 'eq.IN_STOCK',
+  });
+  final serialRows = List<Map<String, dynamic>>.from(serialRes.data as List)
+      .map((r) => {...r, 'client_id': session.clientId, 'company_id': session.companyId, 'location_id': locationId})
+      .toList();
+
+  await ds.replaceForLocation(
+    clientId: session.clientId, companyId: session.companyId, locationId: locationId,
+    batchRows: batchRows, serialRows: serialRows,
+  );
+  return batchRows.length + serialRows.length;
+}
+
 final List<MasterDataModule> masterDataModules = [
   const MasterDataModule(key: 'PRODUCTS_PRICING', label: 'Products & Pricing', icon: Icons.inventory_2_outlined, sync: _syncProductsAndPricing),
   const MasterDataModule(key: 'CUSTOMERS_SUPPLIERS', label: 'Customers & Suppliers', icon: Icons.people_outline, sync: _syncCustomersSuppliers),
   const MasterDataModule(key: 'LOCATIONS_CURRENCIES', label: 'Locations & Currencies', icon: Icons.place_outlined, sync: _syncLocationsAndCurrencies),
   const MasterDataModule(key: 'OPERATIONAL_REFERENCE_DATA', label: 'Operational Reference Data', icon: Icons.tune, sync: _syncOperationalReferenceData),
   const MasterDataModule(key: 'SALES_INVOICE_SETUP', label: 'Sales Invoice Setup', icon: Icons.point_of_sale_outlined, sync: _syncSalesInvoiceSetup),
+  const MasterDataModule(key: 'POS_BATCH_SERIAL_STOCK', label: 'POS Batch/Serial Stock', icon: Icons.qr_code_2_outlined, sync: _syncPosBatchSerialBalances),
 ];
