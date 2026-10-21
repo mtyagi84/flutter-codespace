@@ -107,7 +107,21 @@ class _PosReturnScreenState extends ConsumerState<PosReturnScreen> {
 
   bool get _showRefund => _invoice != null && _invoice!['sale_type'] == 'CASH' && _invoice!['cash_collection_mode'] == 'IMMEDIATE';
 
-  double get _taxableTotal => _lines.fold(0, (s, l) => s + l.grossAmount);
+  // NOT l.grossAmount — that's the RAW pre-discount line total. A POS sale
+  // can carry a BILL-level scheme discount (BILL_THRESHOLD/COUPON,
+  // migration 231) that's apportioned down into each line's own saved
+  // `final_amount`/`tax_amount` at sale time but never touches `gross_
+  // amount`, which stays the pre-discount figure by design (same
+  // gross-vs-final split this schema already uses everywhere else). Using
+  // grossAmount here silently over-refunds by the bill-discount's own
+  // share whenever one applied — real bug found live 2026-10-20: a 112.00
+  // line sold for 106.40 after a 5% bill-threshold discount refunded
+  // 112.00, which `fn_approve_sales_return` then correctly rejected
+  // ("exceeds what remains collected"), leaving the return stuck in DRAFT
+  // with no on-screen explanation. `finalAmount` is already net of every
+  // discount layer (manual, scheme, bill-level) — `finalAmount - taxAmount`
+  // recovers the correctly-discounted taxable base.
+  double get _taxableTotal => _lines.fold(0, (s, l) => s + (l.finalAmount - l.taxAmount));
   double get _taxTotal => _lines.fold(0, (s, l) => s + l.taxAmount);
   double get _returnTotal => _taxableTotal + _taxTotal;
 
