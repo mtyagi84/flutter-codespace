@@ -98,7 +98,8 @@ class _PosSetupScreenState extends ConsumerState<PosSetupScreen>
           'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',
           'is_deleted': 'eq.false',
           'select': 'id,scheme_code,scheme_name,scheme_type,scope,priority,is_stackable,is_active,'
-              'rim_pos_scheme_rules(id,applies_to_product_id,applies_to_category_id,min_qty,max_qty,benefit_type,benefit_value,free_product_id,'
+              'coupon_code,usage_limit_total,usage_limit_per_customer,'
+              'rim_pos_scheme_rules(id,applies_to_product_id,applies_to_category_id,min_qty,max_qty,min_bill_amount,benefit_type,benefit_value,free_product_id,'
               'rim_products!applies_to_product_id(product_name))',
           // Real bug fixed 2026-10-11: with no filter on the embedded
           // resource, PostgREST returned EVERY rule row regardless of
@@ -768,15 +769,13 @@ class _SetPinDialogState extends State<_SetPinDialog> {
 /// different qty-band/benefit-type combinations under the hood, and this
 /// editor can expose all of them with zero backend change.
 ///
-/// BILL_THRESHOLD and COUPON are deliberately EXCLUDED from the type
-/// dropdown — fn_resolve_pos_schemes_for_line explicitly filters them out
-/// (`scheme_type NOT IN ('BILL_THRESHOLD','COUPON')`) because they need a
-/// HEADER-level resolution pass (whole-bill total, or an explicit typed
-/// code) that was never built, only ever planned as "213's own header-
-/// level pass, not here" in a code comment. Offering them in the UI would
-/// let an admin configure a scheme that silently never applies — a real
-/// trap, not just an unfinished feature. Left as a clearly flagged future
-/// item, not a silent gap.
+/// BILL_THRESHOLD and COUPON (migration 231) — resolved by the separate
+/// fn_resolve_pos_bill_schemes against the WHOLE BILL subtotal, called from
+/// fn_save_sales_invoice right after its per-line loop, never from
+/// fn_resolve_pos_schemes_for_line (which still correctly excludes them —
+/// that function is line-scoped, these are bill-scoped). Both force
+/// scope='BILL' (no product/category picker — see `_isBillScheme` below),
+/// and COUPON additionally needs its own code + optional usage limits.
 class _SchemesTab extends StatelessWidget {
   final List<Map<String, dynamic>> schemes;
   final bool canEdit;
@@ -848,7 +847,7 @@ class _SchemeEditorDialog extends ConsumerStatefulWidget {
   ConsumerState<_SchemeEditorDialog> createState() => _SchemeEditorDialogState();
 }
 
-const _posSchemeTypes = ['PERCENT_OFF', 'AMOUNT_OFF', 'BUY_X_GET_Y', 'BUY_X_GET_DISCOUNT', 'FIXED_PRICE_QTY', 'MIX_AND_MATCH', 'SLAB_QUANTITY', 'FREE_ITEM'];
+const _posSchemeTypes = ['PERCENT_OFF', 'AMOUNT_OFF', 'BUY_X_GET_Y', 'BUY_X_GET_DISCOUNT', 'FIXED_PRICE_QTY', 'MIX_AND_MATCH', 'SLAB_QUANTITY', 'FREE_ITEM', 'BILL_THRESHOLD', 'COUPON'];
 String _schemeTypeLabel(String t) => switch (t) {
       'PERCENT_OFF' => '% Off',
       'AMOUNT_OFF' => 'Amount Off',
@@ -858,22 +857,30 @@ String _schemeTypeLabel(String t) => switch (t) {
       'MIX_AND_MATCH' => 'Mix & Match',
       'SLAB_QUANTITY' => 'Slab / Tiered Quantity',
       'FREE_ITEM' => 'Free Item',
+      'BILL_THRESHOLD' => 'Bill Threshold (whole-bill)',
+      'COUPON' => 'Coupon Code',
       _ => t,
     };
+
+// scope is always 'BILL' for these two (no single product/category to pick
+// — the whole bill is the scope), same reasoning the backend resolver uses.
+bool _isBillScheme(String schemeType) => schemeType == 'BILL_THRESHOLD' || schemeType == 'COUPON';
 
 /// One editable rule row — a scheme can have several (e.g. SLAB_QUANTITY's
 /// 1-2/3-5/6+ bands). Mirrors rim_pos_scheme_rules' own columns.
 class _SchemeRuleDraft {
   double minQty;
   double? maxQty;
+  double? minBillAmount; // BILL_THRESHOLD only — currency amount, not a qty
   String benefitType; // PERCENT | FIXED_AMOUNT | FIXED_PRICE | FREE_QTY
   double benefitValue;
   String? freeProductId;
-  _SchemeRuleDraft({this.minQty = 0, this.maxQty, this.benefitType = 'PERCENT', this.benefitValue = 0, this.freeProductId});
+  _SchemeRuleDraft({this.minQty = 0, this.maxQty, this.minBillAmount, this.benefitType = 'PERCENT', this.benefitValue = 0, this.freeProductId});
 
   factory _SchemeRuleDraft.fromJson(Map<String, dynamic> j) => _SchemeRuleDraft(
         minQty: (j['min_qty'] as num?)?.toDouble() ?? 0,
         maxQty: (j['max_qty'] as num?)?.toDouble(),
+        minBillAmount: (j['min_bill_amount'] as num?)?.toDouble(),
         benefitType: j['benefit_type'] as String? ?? 'PERCENT',
         benefitValue: (j['benefit_value'] as num?)?.toDouble() ?? 0,
         freeProductId: j['free_product_id'] as String?,
@@ -905,6 +912,9 @@ class _SchemeEditorDialogState extends ConsumerState<_SchemeEditorDialog> {
     text: widget.existing?['scheme_code'] as String? ?? _nextSchemeCode(widget.existingCodes),
   );
   late final _nameCtrl = TextEditingController(text: widget.existing?['scheme_name'] as String? ?? '');
+  late final _couponCodeCtrl = TextEditingController(text: widget.existing?['coupon_code'] as String? ?? '');
+  late final _usageLimitTotalCtrl = TextEditingController(text: (widget.existing?['usage_limit_total'] as num?)?.toString() ?? '');
+  late final _usageLimitPerCustomerCtrl = TextEditingController(text: (widget.existing?['usage_limit_per_customer'] as num?)?.toString() ?? '');
   String _schemeType = 'PERCENT_OFF';
   String _scope = 'PRODUCT';
   int _priority = 100;
@@ -968,6 +978,9 @@ class _SchemeEditorDialogState extends ConsumerState<_SchemeEditorDialog> {
   void dispose() {
     _codeCtrl.dispose();
     _nameCtrl.dispose();
+    _couponCodeCtrl.dispose();
+    _usageLimitTotalCtrl.dispose();
+    _usageLimitPerCustomerCtrl.dispose();
     super.dispose();
   }
 
@@ -976,12 +989,21 @@ class _SchemeEditorDialogState extends ConsumerState<_SchemeEditorDialog> {
       widget.showMsg('Code and name are both required.', color: AppColors.negative);
       return;
     }
-    if (_scope == 'PRODUCT' && _productId == null) {
+    final isBillScheme = _isBillScheme(_schemeType);
+    if (!isBillScheme && _scope == 'PRODUCT' && _productId == null) {
       widget.showMsg('Select which product this scheme applies to.', color: AppColors.negative);
       return;
     }
-    if (_scope == 'CATEGORY' && _categoryId == null) {
+    if (!isBillScheme && _scope == 'CATEGORY' && _categoryId == null) {
       widget.showMsg('Select which category this scheme applies to.', color: AppColors.negative);
+      return;
+    }
+    if (_schemeType == 'COUPON' && _couponCodeCtrl.text.trim().isEmpty) {
+      widget.showMsg('Enter the coupon code a cashier will type at the till.', color: AppColors.negative);
+      return;
+    }
+    if (_schemeType == 'BILL_THRESHOLD' && _rules.any((r) => r.minBillAmount == null || r.minBillAmount! <= 0)) {
+      widget.showMsg('Every rule needs a positive minimum bill amount.', color: AppColors.negative);
       return;
     }
     if (_rules.any((r) => r.benefitType != 'FREE_QTY' && r.benefitValue <= 0)) {
@@ -1001,9 +1023,12 @@ class _SchemeEditorDialogState extends ConsumerState<_SchemeEditorDialog> {
           'scheme_code': _codeCtrl.text.trim(),
           'scheme_name': _nameCtrl.text.trim(),
           'scheme_type': _schemeType,
-          'scope': _scope,
+          'scope': isBillScheme ? 'BILL' : _scope,
           'priority': _priority,
           'is_stackable': _stackable,
+          if (_schemeType == 'COUPON') 'coupon_code': _couponCodeCtrl.text.trim().toUpperCase(),
+          if (_schemeType == 'COUPON') 'usage_limit_total': int.tryParse(_usageLimitTotalCtrl.text.trim()),
+          if (_schemeType == 'COUPON') 'usage_limit_per_customer': int.tryParse(_usageLimitPerCustomerCtrl.text.trim()),
         });
       } else {
         schemeId = widget.existing!['id'] as String;
@@ -1011,10 +1036,13 @@ class _SchemeEditorDialogState extends ConsumerState<_SchemeEditorDialog> {
           'scheme_code': _codeCtrl.text.trim(),
           'scheme_name': _nameCtrl.text.trim(),
           'scheme_type': _schemeType,
-          'scope': _scope,
+          'scope': isBillScheme ? 'BILL' : _scope,
           'priority': _priority,
           'is_stackable': _stackable,
           'is_active': _active,
+          'coupon_code': _schemeType == 'COUPON' ? _couponCodeCtrl.text.trim().toUpperCase() : null,
+          'usage_limit_total': _schemeType == 'COUPON' ? int.tryParse(_usageLimitTotalCtrl.text.trim()) : null,
+          'usage_limit_per_customer': _schemeType == 'COUPON' ? int.tryParse(_usageLimitPerCustomerCtrl.text.trim()) : null,
         });
         // Full-replace every rule row, same "reseed" convention used
         // elsewhere in this app for a small child set — simpler than
@@ -1026,10 +1054,11 @@ class _SchemeEditorDialogState extends ConsumerState<_SchemeEditorDialog> {
             'client_id': session.clientId,
             'company_id': session.companyId,
             'scheme_id': schemeId,
-            'applies_to_product_id': _scope == 'PRODUCT' ? _productId : null,
-            'applies_to_category_id': _scope == 'CATEGORY' ? _categoryId : null,
+            'applies_to_product_id': (!isBillScheme && _scope == 'PRODUCT') ? _productId : null,
+            'applies_to_category_id': (!isBillScheme && _scope == 'CATEGORY') ? _categoryId : null,
             'min_qty': r.minQty,
             'max_qty': r.maxQty,
+            'min_bill_amount': _schemeType == 'BILL_THRESHOLD' ? r.minBillAmount : null,
             'benefit_type': r.benefitType,
             'benefit_value': r.benefitValue,
             'free_product_id': r.benefitType == 'FREE_QTY' ? r.freeProductId : null,
@@ -1057,23 +1086,35 @@ class _SchemeEditorDialogState extends ConsumerState<_SchemeEditorDialog> {
       decoration: BoxDecoration(border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(6)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
-          Expanded(
-            child: TextField(
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(isDense: true, labelText: 'Min Qty'),
-              controller: TextEditingController(text: r.minQty.toString()),
-              onChanged: (v) => r.minQty = double.tryParse(v) ?? r.minQty,
+          if (_schemeType == 'BILL_THRESHOLD')
+            Expanded(
+              child: TextField(
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(isDense: true, labelText: 'Min Bill Amount'),
+                controller: TextEditingController(text: r.minBillAmount?.toString() ?? ''),
+                onChanged: (v) => r.minBillAmount = double.tryParse(v),
+              ),
+            )
+          else if (_schemeType != 'COUPON') ...[
+            Expanded(
+              child: TextField(
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(isDense: true, labelText: 'Min Qty'),
+                controller: TextEditingController(text: r.minQty.toString()),
+                onChanged: (v) => r.minQty = double.tryParse(v) ?? r.minQty,
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(isDense: true, labelText: 'Max Qty (optional)'),
-              controller: TextEditingController(text: r.maxQty?.toString() ?? ''),
-              onChanged: (v) => r.maxQty = double.tryParse(v),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(isDense: true, labelText: 'Max Qty (optional)'),
+                controller: TextEditingController(text: r.maxQty?.toString() ?? ''),
+                onChanged: (v) => r.maxQty = double.tryParse(v),
+              ),
             ),
-          ),
+          ] else
+            const Expanded(child: Text('A coupon applies once per bill — no quantity band needed.', style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary))),
           IconButton(
             onPressed: _rules.length <= 1 ? null : () => setState(() => _rules.remove(r)),
             icon: const Icon(Icons.close, size: 18, color: AppColors.negative),
@@ -1083,10 +1124,10 @@ class _SchemeEditorDialogState extends ConsumerState<_SchemeEditorDialog> {
         Row(children: [
           Expanded(
             child: DropdownButtonFormField<String>(
-              initialValue: r.benefitType,
+              initialValue: _isBillScheme(_schemeType) && r.benefitType != 'PERCENT' && r.benefitType != 'FIXED_AMOUNT' ? 'PERCENT' : r.benefitType,
               isExpanded: true, isDense: true, itemHeight: null,
               decoration: const InputDecoration(labelText: 'Benefit'),
-              items: const ['PERCENT', 'FIXED_AMOUNT', 'FIXED_PRICE', 'FREE_QTY']
+              items: (_isBillScheme(_schemeType) ? const ['PERCENT', 'FIXED_AMOUNT'] : const ['PERCENT', 'FIXED_AMOUNT', 'FIXED_PRICE', 'FREE_QTY'])
                   .map((b) => DropdownMenuItem(value: b, child: Text(_ruleBenefitTypeLabel(b))))
                   .toList(),
               onChanged: (v) => setState(() => r.benefitType = v!),
@@ -1145,47 +1186,85 @@ class _SchemeEditorDialogState extends ConsumerState<_SchemeEditorDialog> {
               isExpanded: true, isDense: true, itemHeight: null,
               decoration: const InputDecoration(labelText: 'Scheme Type'),
               items: _posSchemeTypes.map((t) => DropdownMenuItem(value: t, child: Text(_schemeTypeLabel(t)))).toList(),
-              onChanged: (v) => setState(() => _schemeType = v!),
+              onChanged: (v) => setState(() {
+                _schemeType = v!;
+                // A bill-wide scheme has no single product/category to pick
+                // — force the scope accordingly; switching back away from
+                // one restores the ordinary PRODUCT default.
+                _scope = _isBillScheme(_schemeType) ? 'BILL' : (_scope == 'BILL' ? 'PRODUCT' : _scope);
+              }),
             ),
             const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              initialValue: _scope,
-              isExpanded: true, isDense: true, itemHeight: null,
-              decoration: const InputDecoration(labelText: 'Applies To'),
-              items: const [
-                DropdownMenuItem(value: 'PRODUCT', child: Text('One Product')),
-                DropdownMenuItem(value: 'CATEGORY', child: Text('A Category')),
-              ],
-              onChanged: (v) => setState(() => _scope = v!),
-            ),
-            const SizedBox(height: 10),
-            if (_loadingPickers)
-              const Padding(padding: EdgeInsets.all(8), child: LinearProgressIndicator())
-            else if (_scope == 'PRODUCT')
-              Builder(builder: (context) {
-                final selected = _products.where((p) => p['id'] == _productId).toList();
-                return SakalAutocomplete<Map<String, dynamic>>(
-                  key: ValueKey(_productId),
-                  initialValue: TextEditingValue(text: selected.isNotEmpty ? _productDisplay(selected.first) : ''),
-                  displayStringForOption: _productDisplay,
-                  optionsBuilder: (v) {
-                    final q = v.text.toLowerCase().trim();
-                    return q.isEmpty ? _products : _products.where((p) => _productDisplay(p).toLowerCase().contains(q));
-                  },
-                  onSelected: (p) => setState(() => _productId = p['id'] as String),
-                  onChanged: (v) { if (v.isEmpty && _productId != null) setState(() => _productId = null); },
-                  decoration: const InputDecoration(labelText: 'Product'),
-                );
-              })
-            else
-              DropdownButtonFormField<String>(
-                initialValue: _categories.any((c) => c['id'] == _categoryId) ? _categoryId : null,
-                isExpanded: true, isDense: true, itemHeight: null,
-                decoration: const InputDecoration(labelText: 'Category'),
-                items: _categories.map((c) => DropdownMenuItem(value: c['id'] as String, child: Text(c['category_name'] as String, overflow: TextOverflow.ellipsis))).toList(),
-                onChanged: (v) => setState(() => _categoryId = v),
+            if (_schemeType == 'COUPON') ...[
+              TextField(
+                controller: _couponCodeCtrl,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(labelText: 'Coupon Code (what the cashier types)'),
               ),
-            const SizedBox(height: 14),
+              const SizedBox(height: 10),
+              Row(children: [
+                Expanded(
+                  child: TextField(
+                    keyboardType: TextInputType.number,
+                    controller: _usageLimitTotalCtrl,
+                    decoration: const InputDecoration(isDense: true, labelText: 'Total Use Limit (optional)'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    keyboardType: TextInputType.number,
+                    controller: _usageLimitPerCustomerCtrl,
+                    decoration: const InputDecoration(isDense: true, labelText: 'Per-Customer Limit (optional)'),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 10),
+            ] else if (!_isBillScheme(_schemeType)) ...[
+              DropdownButtonFormField<String>(
+                initialValue: _scope,
+                isExpanded: true, isDense: true, itemHeight: null,
+                decoration: const InputDecoration(labelText: 'Applies To'),
+                items: const [
+                  DropdownMenuItem(value: 'PRODUCT', child: Text('One Product')),
+                  DropdownMenuItem(value: 'CATEGORY', child: Text('A Category')),
+                ],
+                onChanged: (v) => setState(() => _scope = v!),
+              ),
+              const SizedBox(height: 10),
+              if (_loadingPickers)
+                const Padding(padding: EdgeInsets.all(8), child: LinearProgressIndicator())
+              else if (_scope == 'PRODUCT')
+                Builder(builder: (context) {
+                  final selected = _products.where((p) => p['id'] == _productId).toList();
+                  return SakalAutocomplete<Map<String, dynamic>>(
+                    key: ValueKey(_productId),
+                    initialValue: TextEditingValue(text: selected.isNotEmpty ? _productDisplay(selected.first) : ''),
+                    displayStringForOption: _productDisplay,
+                    optionsBuilder: (v) {
+                      final q = v.text.toLowerCase().trim();
+                      return q.isEmpty ? _products : _products.where((p) => _productDisplay(p).toLowerCase().contains(q));
+                    },
+                    onSelected: (p) => setState(() => _productId = p['id'] as String),
+                    onChanged: (v) { if (v.isEmpty && _productId != null) setState(() => _productId = null); },
+                    decoration: const InputDecoration(labelText: 'Product'),
+                  );
+                })
+              else
+                DropdownButtonFormField<String>(
+                  initialValue: _categories.any((c) => c['id'] == _categoryId) ? _categoryId : null,
+                  isExpanded: true, isDense: true, itemHeight: null,
+                  decoration: const InputDecoration(labelText: 'Category'),
+                  items: _categories.map((c) => DropdownMenuItem(value: c['id'] as String, child: Text(c['category_name'] as String, overflow: TextOverflow.ellipsis))).toList(),
+                  onChanged: (v) => setState(() => _categoryId = v),
+                ),
+              const SizedBox(height: 10),
+            ] else
+              const Padding(
+                padding: EdgeInsets.only(bottom: 10),
+                child: Text('Applies to the whole bill — no product/category to pick.', style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+              ),
+            const SizedBox(height: 4),
             const Text('Rules', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
             const SizedBox(height: 6),
             ..._rules.map(_buildRuleRow),

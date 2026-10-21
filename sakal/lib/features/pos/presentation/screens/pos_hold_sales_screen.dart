@@ -7,6 +7,7 @@ import '../../../../core/providers/session_provider.dart';
 import '../../../../core/router/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/app_logger.dart';
+import '../../../sales/presentation/providers/sales_invoice_providers.dart';
 import '../widgets/pos_keyboard.dart';
 import '../widgets/pos_session_guard.dart';
 
@@ -16,6 +17,14 @@ import '../widgets/pos_session_guard.dart';
 /// filtered list of `rih_sales_invoices` with `status='DRAFT'` and
 /// `pos_shift_id` = this terminal's open shift, scoped the same way a real
 /// till would only ever show its OWN parked baskets, not another till's.
+///
+/// Offline (migration-free fix, 2026-10-20): `_load()` reads the local
+/// SalesInvoicesCache via the repository's own already-offline-aware
+/// `listInvoices()` instead of a raw online-only DioClient call, so a sale
+/// held while offline (`_hold()`'s existing SyncEngine-queued path) is
+/// actually recoverable before the queue drains — not shift-scoped there
+/// (the cache has no pos_shift_id column; an offline till only ever has its
+/// own single local shift anyway).
 class PosHoldSalesScreen extends ConsumerStatefulWidget {
   const PosHoldSalesScreen({super.key});
 
@@ -52,6 +61,42 @@ class _PosHoldSalesScreenState extends ConsumerState<PosHoldSalesScreen> {
       return;
     }
     setState(() { _loading = true; _error = null; });
+
+    // Real gap fixed 2026-10-20: `_hold()` (pos_new_sale_screen.dart) has
+    // always correctly queued a held sale offline via SyncEngine +
+    // cacheInvoiceLocally — this screen just never had an offline read path
+    // at all, so an offline-held basket was genuinely unrecoverable until
+    // the sync queue drained. `listInvoices()` already branches on
+    // `session.offlineMode` at the repository layer (reading
+    // SalesInvoicesCache via SalesInvoiceLocalDs) — no new datasource code
+    // needed, just routing through it here instead of a raw online-only
+    // DioClient call. Deliberately NOT shift-scoped while offline (the
+    // cache has no pos_shift_id column, and an offline till only ever has
+    // its own single local shift context anyway — see the online branch
+    // below for the real shift-scoped query, unchanged).
+    if (session.offlineMode) {
+      try {
+        final ds = ref.read(salesInvoiceRepositoryProvider);
+        final headers = await ds.listInvoices(
+          clientId: session.clientId, companyId: session.companyId, status: 'DRAFT', limit: 200,
+        );
+        if (mounted) {
+          setState(() {
+            _held = headers.map((h) => {
+                  'invoice_no': h.invoiceNo, 'invoice_date': h.invoiceDate, 'sale_type': h.saleType,
+                  'party_name': h.partyName, 'grand_total': h.grandTotal,
+                  'customer': {'account_name': h.customerName},
+                }).toList();
+            _loading = false;
+          });
+        }
+      } catch (e, st) {
+        AppLogger.error('PosHoldSalesLoad', e, st);
+        if (mounted) setState(() { _loading = false; _error = ErrorPresenter.format(e, action: 'load held sales'); });
+      }
+      return;
+    }
+
     try {
       final shiftRes = await DioClient.instance.get('/rih_pos_shifts', queryParameters: {
         'client_id': 'eq.${session.clientId}', 'company_id': 'eq.${session.companyId}',

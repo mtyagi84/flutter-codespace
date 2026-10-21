@@ -124,6 +124,10 @@ class _PosLineRow {
   // (the server never needs to know the apportionment, only the final
   // per-line amounts it already trusts).
   double loyaltyRedeemShare = 0;
+  // This line's own apportioned share of a whole-bill BILL_THRESHOLD/COUPON
+  // scheme discount (migration 231) — same display-only apportionment
+  // treatment as loyaltyRedeemShare above.
+  double billSchemeShare = 0;
 
   bool get isBatchTracked => trackingType == 'BATCH' || trackingType == 'BATCH_WITH_EXPIRY';
   bool get isSerialTracked => trackingType == 'SERIAL';
@@ -192,6 +196,14 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   bool _canOverridePrice = false;
   bool _canGiveDiscount = false;
   double? _maxDiscountPercent;
+  // Which POS tender types actually have a settlement account configured
+  // (Account Link Setup) — 'CASH' always included. Fetched once at init so
+  // the Payment screen can disable an unconfigured non-cash tender option
+  // entirely, rather than let a cashier collect money through a method
+  // with nowhere to post it (fn_settle_pos_non_cash_tenders otherwise
+  // soft-fails silently — see getConfiguredPosTenderTypes's own doc
+  // comment).
+  Set<String> _configuredTenderTypes = {'CASH'};
 
   String _baseCcy = '';
   String _localCcy = '';
@@ -246,6 +258,18 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   double get _taxTotal => _lines.fold(0, (s, l) => s + l.taxAmount);
   double get _grandTotal => _lines.fold(0, (s, l) => s + l.finalAmount);
   double get _loyaltyRedeemTotal => _lines.fold(0.0, (s, l) => s + l.loyaltyRedeemShare);
+  double get _billSchemeDiscountTotal => _lines.fold(0.0, (s, l) => s + l.billSchemeShare);
+
+  // Bill-level scheme (migration 231) — BILL_THRESHOLD resolves silently
+  // and automatically, same as a line scheme; COUPON needs the cashier to
+  // type a code first. Both share one resolved-discount slot since the
+  // backend only ever returns one winning bill-level scheme at a time.
+  double _billSchemeDiscountAmount = 0;
+  String? _billSchemeName;
+  String? _appliedBillSchemeId;
+  final _couponCtrl = TextEditingController();
+  String? _couponError;
+  bool _resolvingCoupon = false;
   // Only a DEFAULT for the Collected field — the real cash handled in an
   // exchange (give some back vs. collect more) is always whatever the
   // cashier actually counts, which the field stays fully editable for.
@@ -321,6 +345,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     _searchCtrl.dispose();
     _searchFocus.dispose();
     _loyaltyMobileCtrl.dispose();
+    _couponCtrl.dispose();
     super.dispose();
   }
 
@@ -443,12 +468,22 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
         _loyaltyMaxRedemptionPercentOfBill = (p['max_redemption_percent_of_bill'] as num?)?.toDouble();
       }
 
+      // Real bug found live 2026-10-19/20: navigating away from this screen
+      // (e.g. to Shift & Cash to open a shift) while this still-sequential
+      // await chain is in flight disposes this State; the next `ref.read`
+      // below then throws "Cannot use ref after the widget was disposed",
+      // which silently aborted init — the search field never appeared, with
+      // no visible error, looking like a product-search timing race until
+      // traced to this. `mounted` must be rechecked after every await that
+      // precedes a `ref.read` call, not just before the final `setState`.
+      if (!mounted) return;
       final ds = ref.read(salesInvoiceRepositoryProvider);
       _quickSetup = await ds.getQuickInvoiceSetup(clientId: session.clientId, companyId: session.companyId, userId: session.userId);
       final controls = await ds.getUserSalesControls(clientId: session.clientId, companyId: session.companyId, userId: session.userId);
       _canOverridePrice = controls?['can_override_price'] as bool? ?? false;
       _canGiveDiscount = controls?['can_give_discount'] as bool? ?? false;
       _maxDiscountPercent = (controls?['max_discount_percent'] as num?)?.toDouble();
+      _configuredTenderTypes = await ds.getConfiguredPosTenderTypes(clientId: session.clientId, companyId: session.companyId);
 
       _taxGroups = await ds.getTaxGroups(clientId: session.clientId, companyId: session.companyId);
       final groupIds = _taxGroups.map((g) => g['id'] as String).toList();
@@ -480,6 +515,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   /// there is nothing to restore here — consistent with this screen's own
   /// scope cut, not an oversight specific to resume).
   Future<void> _loadExisting(UserSession session, String invoiceNo, String? invoiceDate) async {
+    if (!mounted) return;
     final ds = ref.read(salesInvoiceRepositoryProvider);
     final header = await ds.getHeader(clientId: session.clientId, companyId: session.companyId, invoiceNo: invoiceNo, invoiceDate: invoiceDate);
     if (header == null) {
@@ -595,6 +631,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
   Future<double?> _lookupRate(UserSession session, String from, String to) async {
     final locationId = session.locationId;
     if (locationId == null || locationId.isEmpty) return null;
+    if (!mounted) return null;
     final ds = ref.read(salesInvoiceRepositoryProvider);
     return ds.getExchangeRate(companyId: session.companyId, locationId: locationId, fromCurrency: from, toCurrency: to, rateDate: _fmtDate(DateTime.now()));
   }
@@ -676,6 +713,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
           currencies: _currencies,
           rateToLocal: Map<String, double>.from(_tenderRateToLocal),
           initialLines: initialLines,
+          configuredTenderTypes: _configuredTenderTypes,
         ),
       ),
     );
@@ -884,6 +922,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       _recompute();
     });
     unawaited(_refreshLineScheme(row));
+    unawaited(_refreshBillThreshold());
     if (isTracked) {
       await _loadCandidates(row);
       _autoAllocateBatchSerial(row);
@@ -1047,15 +1086,89 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     // re-derives them from a header-level total.
     final preRedeemSubtotal = _lines.fold(0.0, (s, l) => s + l.taxableAmount);
     final redeem = _loyaltyRedeemValueInvoiceCcy.clamp(0, preRedeemSubtotal);
+    // Pass 3 — the whole-bill scheme discount (migration 231) is apportioned
+    // the same way, on top of whatever's left after the loyalty redemption,
+    // so tax is always computed on the fully-net taxable amount — same
+    // "server trusts the client's own final per-line amounts" reasoning as
+    // every other discount layer in this screen.
+    final preBillSchemeSubtotal = preRedeemSubtotal - redeem;
+    final billDiscount = _billSchemeDiscountAmount.clamp(0, preBillSchemeSubtotal < 0 ? 0 : preBillSchemeSubtotal);
     for (final l in _lines) {
-      final share = preRedeemSubtotal > 0 ? l.taxableAmount / preRedeemSubtotal : 0.0;
-      l.loyaltyRedeemShare = redeem * share;
+      final redeemShare = preRedeemSubtotal > 0 ? l.taxableAmount / preRedeemSubtotal : 0.0;
+      l.loyaltyRedeemShare = redeem * redeemShare;
       final taxableAfterRedeem = (l.taxableAmount - l.loyaltyRedeemShare).clamp(0, l.taxableAmount);
+      final billShare = preBillSchemeSubtotal > 0 ? taxableAfterRedeem / preBillSchemeSubtotal : 0.0;
+      l.billSchemeShare = billDiscount * billShare;
+      final taxableAfterBillScheme = (taxableAfterRedeem - l.billSchemeShare).clamp(0, taxableAfterRedeem);
       final ratePct = l.taxGroupId != null ? (_taxGroupRatePct[l.taxGroupId] ?? 0) : 0;
-      l.taxAmount = taxableAfterRedeem * ratePct / 100;
-      l.finalAmount = taxableAfterRedeem + l.taxAmount;
+      l.taxAmount = taxableAfterBillScheme * ratePct / 100;
+      l.finalAmount = taxableAfterBillScheme + l.taxAmount;
     }
     setState(() {});
+  }
+
+  /// Auto-resolves a BILL_THRESHOLD scheme against the current subtotal,
+  /// fire-and-forget, mirroring `_refreshLineScheme`'s own existing
+  /// preview-RPC pattern exactly — called from the SAME explicit call sites
+  /// (`_addProduct`, the qty stepper's `onChanged`), never from inside
+  /// `_recompute()` itself. A first version did call it from `_recompute()`
+  /// and produced a genuine infinite loop (`_recompute` -> this -> its own
+  /// `_recompute()` call -> this again, forever) — confirmed live via a
+  /// runaway hundreds-of-calls-per-second RPC flood during testing before
+  /// this fix. Never called with a coupon code — that path is
+  /// `_applyCoupon()`'s own explicit, cashier-triggered action, and must not
+  /// be silently overwritten by this automatic background check.
+  Future<void> _refreshBillThreshold() async {
+    if (_couponCtrl.text.trim().isNotEmpty && _appliedBillSchemeId != null) return;
+    final session = ref.read(sessionProvider)!;
+    final locationId = session.locationId;
+    if (locationId == null || locationId.isEmpty) return;
+    try {
+      final ds = ref.read(salesInvoiceRepositoryProvider);
+      final result = await ds.resolvePosBillSchemes(
+        clientId: session.clientId, companyId: session.companyId, locationId: locationId,
+        customerId: _customerId, subtotal: _subtotal, transDate: _fmtDate(DateTime.now()),
+      );
+      if (!mounted) return;
+      setState(() {
+        _billSchemeDiscountAmount = (result?['discount_amount'] as num?)?.toDouble() ?? 0;
+        _billSchemeName = result?['scheme_name'] as String?;
+        _appliedBillSchemeId = result?['scheme_id'] as String?;
+      });
+      _recompute();
+    } catch (_) {
+      // A background auto-check never surfaces an error to the cashier —
+      // only an explicit coupon Apply does (see _applyCoupon).
+    }
+  }
+
+  Future<void> _applyCoupon() async {
+    final code = _couponCtrl.text.trim();
+    if (code.isEmpty) return;
+    final session = ref.read(sessionProvider)!;
+    final locationId = session.locationId;
+    if (locationId == null || locationId.isEmpty) return;
+    setState(() { _resolvingCoupon = true; _couponError = null; });
+    try {
+      final ds = ref.read(salesInvoiceRepositoryProvider);
+      final result = await ds.resolvePosBillSchemes(
+        clientId: session.clientId, companyId: session.companyId, locationId: locationId,
+        customerId: _customerId, subtotal: _subtotal, transDate: _fmtDate(DateTime.now()),
+        couponCode: code,
+      );
+      if (!mounted) return;
+      setState(() {
+        _billSchemeDiscountAmount = (result?['discount_amount'] as num?)?.toDouble() ?? 0;
+        _billSchemeName = result?['scheme_name'] as String?;
+        _appliedBillSchemeId = result?['scheme_id'] as String?;
+      });
+      _recompute();
+    } catch (e, st) {
+      AppLogger.error('PosApplyCoupon', e, st);
+      if (mounted) setState(() => _couponError = ErrorPresenter.format(e, action: 'apply this coupon'));
+    } finally {
+      if (mounted) setState(() => _resolvingCoupon = false);
+    }
   }
 
   Future<void> _onDiscountChanged(_PosLineRow row, double pct) async {
@@ -1343,15 +1456,16 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     if (_saleType == 'CASH' && _splitTender) _collectedAmount = _tenderTotalLocal;
     final session = ref.read(sessionProvider)!;
 
-    // A tracked product's batch/serial candidates come from a live
-    // v_batch_stock_balance/v_serial_stock_status query — there is no
-    // offline candidate source, so a tracked line can never be sold
-    // offline in this build. Caught here, before attempting the queue,
-    // with a clear message rather than a confusing failure deeper down.
-    if (session.offlineMode && _lines.any((l) => l.isBatchTracked || l.isSerialTracked)) {
-      _showMsg('This sale has a batch/serial-tracked item — those cannot be sold while offline. Remove it or reconnect.', color: AppColors.negative);
-      return;
-    }
+    // Real gap fixed 2026-10-20: a tracked product's batch/serial candidates
+    // used to come from a live-only v_batch_stock_balance/v_serial_stock_
+    // status query with no offline fallback, so a tracked line could never
+    // be sold offline. `getBatchStockBalance`/`getSerialStockStatus` now
+    // branch to a local Drift snapshot (BatchStockBalanceCache/
+    // SerialStockStatusCache, synced via the "POS Batch/Serial Stock"
+    // MasterDataModule) when offline — this guard is no longer needed.
+    // `fn_post_stock_movement`'s own strict batch/serial negative-stock
+    // check is what still guarantees correctness at sync time if the
+    // cached snapshot was stale (see PosBatchSerialLocalDs's doc comment).
 
     setState(() { _saving = true; _actionError = null; });
     try {
@@ -1459,6 +1573,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
       'collected_amount_base': null,
       'remarks': '',
       'pos_shift_id': _shift?['id'],
+      'coupon_code_entered': _couponCtrl.text.trim().isEmpty ? null : _couponCtrl.text.trim(),
     };
   }
 
@@ -1531,10 +1646,9 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     }
     final session = ref.read(sessionProvider)!;
 
-    if (session.offlineMode && _lines.any((l) => l.isBatchTracked || l.isSerialTracked)) {
-      _showMsg('This sale has a batch/serial-tracked item — those cannot be held offline. Remove it or reconnect.', color: AppColors.negative);
-      return;
-    }
+    // See the matching comment in `_charge()` — offline batch/serial
+    // candidates now resolve from a local cache, so this is no longer
+    // blocked (fixed 2026-10-20).
 
     setState(() { _holding = true; _actionError = null; });
     try {
@@ -1585,6 +1699,11 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
     _invoiceNo = null;
     _invoiceDate = null;
     _clearLoyalty();
+    _couponCtrl.clear();
+    _couponError = null;
+    _billSchemeDiscountAmount = 0;
+    _billSchemeName = null;
+    _appliedBillSchemeId = null;
     // Every sale is cash by default — without this, a sale right after a
     // Credit checkout would stay stuck in CREDIT mode (wrong customer, no
     // cash customer re-applied) since _saleType is only ever set to
@@ -1824,7 +1943,7 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
                     Text('${l.productCode} · ${l.uomLabel}', style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary)),
                   ]),
                 ),
-                SizedBox(width: 120, child: PosQtyStepper(value: l.qty, min: 0, buttonSize: 32, onChanged: (v) { l.qty = v; _recompute(); _autoAllocateBatchSerial(l); unawaited(_refreshLineScheme(l)); })),
+                SizedBox(width: 120, child: PosQtyStepper(value: l.qty, min: 0, buttonSize: 32, onChanged: (v) { l.qty = v; _recompute(); _autoAllocateBatchSerial(l); unawaited(_refreshLineScheme(l)); unawaited(_refreshBillThreshold()); })),
                 const SizedBox(width: 6),
                 SizedBox(width: 88, child: PosAmountField(label: 'Rate', value: l.rate, enabled: _canOverridePrice, compact: true, onChanged: (v) { l.rate = v; _recompute(); })),
                 const SizedBox(width: 6),
@@ -1913,9 +2032,12 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               _buildLoyaltySection(),
               const SizedBox(height: 10),
+              _buildCouponSection(),
+              const SizedBox(height: 10),
               _totalRow('Subtotal', _subtotal + _discountTotal),
               _totalRow('Discount', -_discountTotal),
               if (_loyaltyRedeemTotal > 0.001) _totalRow('Loyalty Redeemed', -_loyaltyRedeemTotal),
+              if (_billSchemeDiscountTotal > 0.001) _totalRow(_billSchemeName ?? 'Bill Discount', -_billSchemeDiscountTotal),
               _totalRow('Tax', _taxTotal),
               const Divider(),
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -2022,6 +2144,63 @@ class _PosNewSaleScreenState extends ConsumerState<PosNewSaleScreen> {
           child: _loyaltyLookingUp ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Add'),
         ),
       ),
+    ]);
+  }
+
+  /// Coupon code entry (migration 231) — a BILL_THRESHOLD never needs this
+  /// UI at all (it auto-applies via `_refreshBillThreshold()`'s own
+  /// background check); this is purely the cashier-typed-code path for a
+  /// COUPON scheme. Once a coupon is applied, shows a chip with a clear
+  /// action instead of the input field, same shape as the loyalty section
+  /// above once a profile is attached.
+  Widget _buildCouponSection() {
+    if (_appliedBillSchemeId != null && _couponCtrl.text.trim().isNotEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(color: AppColors.positive.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+        child: Row(children: [
+          const Icon(Icons.local_offer, size: 16, color: AppColors.positive),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(_billSchemeName ?? _couponCtrl.text.trim(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
+          ),
+          IconButton(
+            onPressed: () => setState(() {
+              _couponCtrl.clear();
+              _billSchemeDiscountAmount = 0;
+              _billSchemeName = null;
+              _appliedBillSchemeId = null;
+              _recompute();
+            }),
+            icon: const Icon(Icons.close, size: 16), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          ),
+        ]),
+      );
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(children: [
+        Expanded(
+          child: TextField(
+            controller: _couponCtrl,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(labelText: 'Coupon code (optional)', isDense: true, border: OutlineInputBorder()),
+            onSubmitted: (_) => _applyCoupon(),
+          ),
+        ),
+        const SizedBox(width: 6),
+        SizedBox(
+          height: 40,
+          child: OutlinedButton(
+            onPressed: _resolvingCoupon ? null : _applyCoupon,
+            child: _resolvingCoupon ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Apply'),
+          ),
+        ),
+      ]),
+      if (_couponError != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(_couponError!, style: const TextStyle(fontSize: 11.5, color: AppColors.negative)),
+        ),
     ]);
   }
 

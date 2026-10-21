@@ -63,6 +63,13 @@ class PosPaymentCheckoutScreen extends StatefulWidget {
   final List<Map<String, dynamic>> currencies; // [{'currency_id': 'USD'}, ...]
   final Map<String, double> rateToLocal; // currencyId -> local units per 1 unit of that currency
   final List<Map<String, dynamic>> initialLines;
+  // Which tender types actually have a settlement account configured
+  // (Account Link Setup) — 'CASH' always included. A tender type NOT in
+  // this set is shown disabled, with no way to select it: settling it
+  // would otherwise soft-fail silently server-side (see
+  // fn_settle_pos_non_cash_tenders's own doc comment, migration 218) and
+  // the sale would complete with no GL posting at all for that money.
+  final Set<String> configuredTenderTypes;
 
   const PosPaymentCheckoutScreen({
     super.key,
@@ -76,6 +83,7 @@ class PosPaymentCheckoutScreen extends StatefulWidget {
     required this.currencies,
     required this.rateToLocal,
     required this.initialLines,
+    required this.configuredTenderTypes,
   });
 
   @override
@@ -240,22 +248,31 @@ class _PosPaymentCheckoutScreenState extends State<PosPaymentCheckoutScreen> {
             const SizedBox(height: 6),
             Wrap(spacing: 8, runSpacing: 8, children: _posTenderTypesForPayment.map((t) {
               final sel = line.tenderType == t;
+              final configured = widget.configuredTenderTypes.contains(t);
+              final chip = Container(
+                width: 92, height: 54,
+                decoration: BoxDecoration(
+                  color: !configured ? AppColors.background : (sel ? AppColors.secondary.withValues(alpha: 0.15) : AppColors.background),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: sel && configured ? AppColors.secondary : AppColors.border, width: sel && configured ? 1.5 : 1),
+                ),
+                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(_tenderIconsForPayment[t], size: 18, color: !configured ? AppColors.border : (sel ? AppColors.secondary : AppColors.textSecondary)),
+                  const SizedBox(height: 3),
+                  Text(_tenderTypeLabelForPayment(t), textAlign: TextAlign.center, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: !configured ? AppColors.border : (sel ? AppColors.secondary : AppColors.textPrimary))),
+                  if (!configured) const Text('Not set up', style: TextStyle(fontSize: 8, color: AppColors.negative)),
+                ]),
+              );
+              if (!configured) {
+                return Tooltip(
+                  message: '${_tenderTypeLabelForPayment(t)} has no settlement account configured — ask an admin to set it up in Account Link Setup.',
+                  child: chip,
+                );
+              }
               return InkWell(
                 borderRadius: BorderRadius.circular(10),
                 onTap: () => setState(() => line.tenderType = t),
-                child: Container(
-                  width: 92, height: 54,
-                  decoration: BoxDecoration(
-                    color: sel ? AppColors.secondary.withValues(alpha: 0.15) : AppColors.background,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: sel ? AppColors.secondary : AppColors.border, width: sel ? 1.5 : 1),
-                  ),
-                  child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Icon(_tenderIconsForPayment[t], size: 18, color: sel ? AppColors.secondary : AppColors.textSecondary),
-                    const SizedBox(height: 3),
-                    Text(_tenderTypeLabelForPayment(t), textAlign: TextAlign.center, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: sel ? AppColors.secondary : AppColors.textPrimary)),
-                  ]),
-                ),
+                child: chip,
               );
             }).toList()),
           ]);
