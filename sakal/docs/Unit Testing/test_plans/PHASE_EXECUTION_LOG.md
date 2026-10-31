@@ -600,6 +600,78 @@ This closes out AD — User Management (4 of 4 screens) for Phase 1, leaving
 only Master Reports (13) and the remainder of System Setup/Sales Masters
 open in Phase 1.
 
+### Phase 1 resumed, 2026-10-31 (cont. 2) — Cities, Print Templates, Sales Masters (Price Master + Sales Executives)
+
+**GEO-03 (Cities)**: screen requires a Country picked first via a free-text
+autocomplete ("Congo" correctly matched both "Democratic Republic of Congo"
+and "Republic of Congo" — unlike GEO-02's Divisions screen, this Country
+field accepted typed input normally, confirming that blocker is specific to
+the Divisions screen, not a general picker-widget issue). Once a country is
+picked, "Add City" opens a clean dialog (Country pre-filled, Division
+optional, City Name, Active toggle). Created "QA Test City Goma" under DRC
+with no division — list correctly updated to "1 of 1 active", DB-verified
+`rim_cities` row exact (`country_code='CD'`, `is_active=true`). Left in
+place as real, harmless master data (not cleaned up, unlike throwaway
+config rows elsewhere this session).
+
+**AD-PDT (Print Templates)**: empty state correctly reads "No print
+templates yet — every document type prints using a built-in default until
+you create one." "New Template" opens the Template Designer pre-loaded
+with Sales Quotation's real default template — Row 1 is logo + 2 Info
+Blocks matching CLAUDE.md's documented `company_block`/`title_block`
+letterhead redesign exactly; clicking into the title_block correctly shows
+"3 lines — built from the document's default template; not yet editable
+here" (Width/Font/Align/Color are editable, per-line content isn't — this
+is accurate Phase-2-deferred scope, not a bug). Scrolled to Row 19 and
+found `Field: Prepared By` / `Field: Authorised By` already on the default
+template, bound via `Bind To: Prepared By` (never static text) — confirms
+the signature-fields fix CLAUDE.md documents as shipped 2026-07-18. Saved
+a renamed copy ("QA Test Quotation Template") — "Template saved.", Document
+Type field correctly locked after save, DB-verified. The list row's kebab
+menu has Edit/Set as Default/**Duplicate**/Deactivate — clicked Duplicate,
+got an independent "(copy)" row with its own `id`, same `document_type`.
+Both test templates deleted after the test (a custom template actively
+overrides the built-in default for real document printing, so leaving test
+rows around isn't safe the way the test city was).
+
+**SL-EXE (Sales Executives)**: clean empty state, "New Sales Executive"
+dialog (Employee Code*/Full Name*/Phone/Email/Link to System User). Created
+`QASE02` / "QA Test Sales Exec 2" / phone / email, no linked user — DB-
+verified exact. One real automation-only lesson, not a product bug: a
+first attempt typing immediately after each field click (no settle wait)
+dropped the first 2-4 characters of Name/Phone/Email fields (but never
+Employee Code) — re-run with a ~400ms wait after each click filled every
+field completely, proving it was test-script timing, not an app defect.
+
+**SL-PRC (Price Master)**: "New Batch" opens a header (Entry No auto-on-
+save, Entry/Effective Date, Location, Currency, Rate to Base) + Generic/
+Customer-Specific toggle + a Lines grid. Added a line for an existing test
+product — Cost Price auto-populated 50.00 from the product master, typing
+Margin%=20 live-recalculated Selling Price to 60.0000 (confirms the
+reactive cost×margin math). Saved Draft → `PRC/MAIN/2026/00001`, reopened
+cleanly with everything persisted. Clicked Approve — confirmation dialog
+("Once approved, these prices become eligible for use... this batch can no
+longer be edited. Continue?"), confirmed — status flipped to `APPROVED`,
+Save/Approve buttons disappeared (correctly immutable). Called
+`fn_get_active_price` directly via SQL for this exact product/location/
+currency — the SAME RPC Sales Order/Invoice call — and got back
+`selling_price=60.0000`, `entry_no='PRC/MAIN/2026/00001'` — proves the
+whole chain (create→approve→resolve) end to end without needing a full
+Sales Order click-through. Test batch deleted after. **Automation-only
+false alarm along the way**: an early attempt used `click`+`Ctrl+A` to
+clear the Cost Price field before typing, but the click missed the actual
+input box and `Ctrl+A` selected the whole page instead (visible as a blue
+full-page highlight in the screenshot) — producing garbage values like a
+`-100.2000` margin. Fixed by triple-clicking the field to select its
+content precisely before typing — not a product bug, purely a targeting
+fix in the test script.
+
+This closes out Sales Masters (3 of 3) for Phase 1, and brings System Setup
+to 9 of 13. Remaining Phase 1 gaps: Company/Currency/Accounting Setup/
+Common Masters (not independently re-scored this session, though largely
+proven via other paths), Divisions (blocked by automation), and the 13
+Master Reports (not started).
+
 ---
 
 ## Phase 2 — Finance Core
