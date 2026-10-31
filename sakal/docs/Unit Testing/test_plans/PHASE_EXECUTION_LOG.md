@@ -535,6 +535,71 @@ before ever reaching the server. `PDC-02` (Reopen) and `PDC-03`
 ready for a follow-up pass, deliberately not clicked this session to
 avoid undoing the lock just established.
 
+### Phase 1 resumed, 2026-10-31 (cont.) — Permissions, User Location Setup, Master Menu
+
+**AD-PRM (User Permissions)**: on `QA Test User 56371`, clicked "Add" on
+Contra Voucher (`FN-CTR`, a feature starting fully unchecked) — UI
+immediately checked both Add AND View (the documented cascade), auto-saved
+with no explicit Save button, DB-verified `ric_user_menus` row exact.
+Unchecked View on Journal Entry (`FN-JRN`, which started with
+`view/add/edit=true, approve=false`, set via direct SQL during an earlier
+CCC#6 test) — the screen correctly displayed that pre-existing state live
+before the click (a nice incidental downstream-usage proof), and after
+unchecking, DB-verified all 4 flags cleared to `false`. PRM-04
+(server-side re-check) was already proven directly in an earlier session
+via `finance/journal_entry.md`'s JRN-A03 (a direct `fn_post_finance_voucher`
+RPC call bypassing the UI, correctly rejected with `APPROVE_NOT_PERMITTED`)
+— not re-run this pass, just cross-referenced. PRM-03 (missing row = fully
+denied) left as proven-by-convention only, not independently re-verified
+as its own scenario.
+
+**AD-ULS (User Location Setup)**: screen loads cleanly at
+`/setup/user-location-access` — a single "Select User" autocomplete, and
+once a user is picked, an "Assigned Locations" checklist with a star icon
+per row marking the default. Searched "QA Test User", selected
+`QA Test User 56371` from the dropdown — pre-existing state matched the DB
+exactly (Main Store checked + starred/default, QA Second Store unchecked).
+Checked the second location (`QA Second Store 70705`) and clicked Save —
+"Location access saved." snackbar shown, DB-verified `ric_user_location_access`
+exact (2 active rows, Main Store still `is_default=true`). Read the live
+`v_user_accessible_locations` view definition directly (migration 127) to
+confirm the actual restriction mechanism: zero active access rows for a
+user = every company location visible; any active rows = restricted to
+exactly that set — this is the real enforcement both ULS-01 and ULS-02
+describe. **Scope caveat worth flagging**: this view is currently wired
+into only two Flutter consumers (`accessibleLocationsProvider` on Credit
+Sales Invoice's Location picker, `userAccessibleLocationsProvider` on the
+Sales Register report filter) — not into every transaction screen's
+Location picker app-wide, so ULS-01's own scenario wording ("cannot select
+Location B in any transaction screen") is narrower in practice than
+stated. Not a bug found this session — just an accurate scope note for
+whoever reads the test plan later.
+
+**AD-MST (Master Menu)**: screen loads at `/setup/master-menu` showing a
+flat table (150 entries, 6 modules: Module/Feature Code/Feature Name/
+Screen Name/Group/Ser./Active/edit-pencil) with an "Add Menu Entry" button
+top-right. Opened the Add dialog (Module dropdown, Feature Code, Feature
+Name, Screen Route, optional Group Code/Display Name, Group Order, Feature
+Order, and Approve/Copy/Excel-Upload permission checkboxes) and created a
+throwaway test entry (`AD-QATEST`, module Settings, routed at the real,
+already-registered `/setup/user-location-access`) — entry count correctly
+went 150→151, DB-verified the new `ric_master_menus` row matched every
+field exactly (MST-01). Opened Edit on that same row — Feature Code field
+correctly locked/greyed with "Unique. Cannot change after creation.",
+every other field editable — changed the Screen Route to a second real
+route (`/setup/master-menu`) and saved; DB-verified `screen_name` updated
+exactly (MST-03). Hard-deleted the test row (`ric_master_menus` +
+`ric_user_menus`) immediately after, since this table is shared, tenant-
+wide configuration, not per-test-user sandbox data. MST-02 (`copy_allowed`)
+left open — a Copy permission checkbox is visible on the entry itself, but
+no explicit "duplicate this menu structure" action was found or exercised
+this pass; needs a follow-up to confirm what that flag actually gates
+downstream.
+
+This closes out AD — User Management (4 of 4 screens) for Phase 1, leaving
+only Master Reports (13) and the remainder of System Setup/Sales Masters
+open in Phase 1.
+
 ---
 
 ## Phase 2 — Finance Core
