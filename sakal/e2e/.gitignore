@@ -3,3 +3,5 @@ node_modules/
 test-results/
 playwright-report/
 .env
+.test_tenant.json
+screenshots/

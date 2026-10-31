@@ -101,4 +101,22 @@ async function typeInto(page, label, value) {
   await page.keyboard.type(value, { delay: 30 });
 }
 
-module.exports = { enableSemantics, textVisible, typeInto };
+// A brand-new tenant's very first login shows a one-time "Welcome — a few
+// settings to review first" dialog (company_screen.dart) — it can appear
+// on whatever screen the first post-login navigation lands on, not just
+// Company Setup, and blocks interaction with everything underneath until
+// dismissed. Every Phase 1+ full-app-E2E script against a fresh tenant
+// should call this once, right after login, before touching anything else
+// — found live 2026-10-24 blocking the Exchange Rates screen.
+async function dismissFirstLoginWelcomeIfPresent(page, { timeout = 3000 } = {}) {
+  const gotIt = page.getByRole('button', { name: 'Got it', exact: true });
+  const shown = await gotIt.isVisible({ timeout }).catch(() => false);
+  if (shown) {
+    await gotIt.click();
+    await page.waitForTimeout(300);
+    return true;
+  }
+  return false;
+}
+
+module.exports = { enableSemantics, textVisible, typeInto, dismissFirstLoginWelcomeIfPresent };

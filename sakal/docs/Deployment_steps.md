@@ -11,6 +11,7 @@ Config lives in `sakal/wrangler.jsonc`:
 }
 ```
 
+flutter run -d web-server --web-port 8080 --web-hostname 0.0.0.0
 Live at `https://sakal-erp.mtyagi84.workers.dev` (plus one custom domain bound in the dashboard).
 Always use `wrangler deploy` — never `wrangler pages deploy`, which targets a different
 Cloudflare product and will try to create an unrelated new Pages project instead of
@@ -99,7 +100,7 @@ Next-time deployment steps (clean version)
 cd /workspaces/flutter-codespace/sakal
 git pull
 flutter clean && flutter pub get
-flutter build web --release
+flutter build web --release --no-wasm-dry-run
 wrangler deploy
 That's it — no wrangler login, no exporting tokens (Codespaces secret handles that), no --project-name flag (already in wrangler.jsonc). Then hard-refresh the live URL and spot-check it once.
 

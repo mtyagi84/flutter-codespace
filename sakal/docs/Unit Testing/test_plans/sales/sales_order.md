@@ -8,7 +8,7 @@ Existing informal notes: `docs/Unit Testing/Sales Quotation.md` has 19 free-text
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
 |---|---|---|---|---|---|---|
 | SO-C01 | DIRECT mode, priced live | Create fresh, pick product, price auto-fills from `fn_get_active_price` | Correct currency-converted price used | High | Not Started | |
-| SO-C02 | AGAINST_QUOTATION mode | Convert a quotation | Every priced field frozen server-side; client-supplied rate/discount ignored even if sent | High | Not Started | |
+| SO-C02 | AGAINST_QUOTATION mode | Convert a quotation | Every priced field frozen server-side; client-supplied rate/discount ignored even if sent | High | Passed | E2E `2026-10-25`: picked `SQ/MAIN/2026/00001` (APPROVED) from the "Against Quotation" mode picker — line auto-filled Qty 5, Rate (Frozen) 100.00, Amount 500.00, matching the source quotation exactly. |
 | SO-C03 | Price override with governance | As a user with `can_override_price` + `max_discount_percent`, exceed the cap | Blocked server-side even if UI somehow allowed it | High | Not Started | |
 | SO-C04 | Available-stock hint shown ungated | Add a line | Available qty shown regardless of `can_view_cost_price` (it's operational, not sensitive) | Low | Not Started | |
 | SO-C05 | Cost price gated | As a user without `can_view_cost_price` | Cost price hidden on the line | Med | Not Started | |
@@ -37,7 +37,7 @@ Existing informal notes: `docs/Unit Testing/Sales Quotation.md` has 19 free-text
 ## Approve
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
 |---|---|---|---|---|---|---|
-| SO-A01 | Button state after Approve (CCC #4) | Approve | Buttons disable correctly | High | Not Started | |
+| SO-A01 | Button state after Approve (CCC #4) | Approve | Buttons disable correctly | High | Passed | `SO/MAIN/2026/00001` approved — "Save Draft"/"Approve" replaced by "Cancel Order"/"Print", status badge APPROVED. DB-verified: `order_mode='AGAINST_QUOTATION'`, `source_quotation_no='SQ/MAIN/2026/00001'`, `grand_total=500.00`, no stock effect (pure intent, confirmed `rim_product_location.current_stock` unchanged). |
 | SO-A02 | Permission gating (CCC #6, `SL-SO`) | Approve without the right | Denied | High | Not Started | |
 
 ## Cancel

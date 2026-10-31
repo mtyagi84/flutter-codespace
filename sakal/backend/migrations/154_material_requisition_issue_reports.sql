@@ -61,8 +61,8 @@ CREATE OR REPLACE VIEW v_material_requisition_requesters AS
 SELECT DISTINCT
     h.client_id,
     h.company_id,
-    h.requested_by AS id,
-    h.requested_by AS requester_name
+    upper(h.requested_by) AS id,
+    upper(h.requested_by) AS requester_name
 FROM rih_material_requisition_headers h
 WHERE h.requested_by IS NOT NULL AND h.is_deleted = false;
 

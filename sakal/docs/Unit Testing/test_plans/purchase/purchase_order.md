@@ -8,7 +8,7 @@ fixed; confirm the List→Entry navigation still works correctly.
 ## Create
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
 |---|---|---|---|---|---|---|
-| PO-C01 | Create with a supplier + lines | Pick supplier, add lines, Save | Saves as DRAFT | High | Not Started | |
+| PO-C01 | Create with a supplier + lines | Pick supplier, add lines, Save | Saves as DRAFT | High | Passed | E2E `test_purchase_order.js` 10/10: Supplier [4010001] QA Test Supplier, Product PRD-00001, Qty Pack 10 x Rate 50 USD = 500, Save Draft then Approve, DB-verified exactly. Confirmed no GL/stock posting occurs at PO Approve (pure intent, as documented) — correctly deferred to GRN. |
 | PO-C02 | Landed cost estimate | Add a charge | Landed cost per line computed as an estimate (not final costing) | Med | Not Started | |
 | PO-C03 | Batch/serial product line | Add a tracked product | Free-text new-lot entry available (batch/serial not mandatory at DRAFT for PO) | Med | Not Started | |
 | PO-C04 | Barcode scan | Scan a barcode | Product resolves, `matchedBarcode` saved onto the line correctly (a past bug: it was cleared before save) | Med | Not Started | |

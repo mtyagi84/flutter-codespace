@@ -5,7 +5,7 @@ Module: AD — Settings | Group: User Management | See `00_INDEX.md` for the Cro
 ## AD-USR — User Management (`/setup/users`)
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
 |---|---|---|---|---|---|---|
-| USR-01 | Create a new user | Fill required fields, set default location, Save | User appears in list; can log in with `must_change_password` forcing a reset on first login | High | Not Started | |
+| USR-01 | Create a new user | Fill required fields, set default location, Save | User appears in list; can log in with `must_change_password` forcing a reset on first login | High | **Passed (browser E2E, 2026-10-24, partial)** | `e2e/test_setup_users.js`, 5/5 green on SK-98262. User `qauser56371` created with Full Name/Username/Password/Confirm Password, DB-verified active. Default location assignment and the actual `must_change_password`-forced-reset login flow not exercised this pass — real finding: `typeInto`'s `getByLabel` substring-matches "Password *" against BOTH Password and Confirm Password fields (a strict-mode violation caught live), fixed with `exact:true` — worth using `exact:true` by default on any future label pair with one label a substring of another |
 | USR-02 | Deactivate a user | Deactivate an active user | User can no longer log in; historical records still show their name | High | Not Started | |
 | USR-03 | Duplicate username blocked | Create a user with an existing username | Blocked with a clear message | Med | Not Started | |
 | USR-04 | Reset a user's password (admin) | Admin resets another user's password | User can log in with the new password | High | Not Started | |

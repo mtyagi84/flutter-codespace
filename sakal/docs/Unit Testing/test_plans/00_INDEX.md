@@ -54,6 +54,27 @@ one-condition broadening, not the multi-table join originally feared (the
 initial analysis had read a stale, superseded version of the function).
 See `AUTOMATED_RUN_LOG.md`'s own dedicated section for the full trace.
 
+## UPDATE 2026-10-24 — Browser-E2E execution begins (Phase C, superseded/broadened)
+
+Per the approved plan (see `PHASE_CHECKLIST.md` for progress,
+`PHASE_EXECUTION_LOG.md` for narrative detail), this plan's own Phase C
+(the never-executed `PHASE_C_MANUAL_WALKTHROUGH.md`, 18 screens, manual-
+click only) is superseded and broadened: every one of the 141 real screens
++ 79 reports now gets a real, automated browser pass (headless Playwright
++ direct DB verification — the exact methodology proven on the POS module
+this past week), not just the 18 highest-traffic ones, and not manual
+clicking. A six-dimension rubric (CRUD baseline / Currency Base-Local-
+Other / GL effect / Stock effect / Document chain-conversion / Downstream
+usage-report reflection) decides which checks genuinely apply to each
+screen — see the approved plan file for the full rubric and worked
+examples. Where the rubric calls for a check this file's existing test
+case table doesn't already have as its own row (most screens don't yet
+have an explicit ×3-currency row, for instance), the row is added to that
+screen's own detail file before being executed. The `Status` column below
+keeps its existing `Passed (backend)`-style values (that proof is never
+lost) and gains a second, explicit Browser-E2E status as each screen's
+pass completes.
+
 **Last updated:** 2026-09-14
 **How to use this document:** every screen in the app has one row below, linking to
 its detail file. Update the **Status** column as you test. When you find a bug,

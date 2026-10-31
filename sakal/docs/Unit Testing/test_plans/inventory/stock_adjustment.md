@@ -6,12 +6,12 @@ See `00_INDEX.md` for the Cross-Cutting Checklist ("CCC #N").
 ## Create
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
 |---|---|---|---|---|---|---|
-| ADJ-C01 | `+` line, cost auto-fetched | Add an increase line | Cost is NEVER user-entered — pulled from `rim_product_location.cost_price` at Approve time | High | Not Started | |
+| ADJ-C01 | `+` line, cost auto-fetched | Add an increase line | Cost is NEVER user-entered — pulled from `rim_product_location.cost_price` at Approve time | High | Passed | E2E `test_stock_adjustment.js` 11/11: PRD-00002 (cost already established at 25 via Opening Stock), + 5 units. No cost field anywhere in the line UI — DB-verified Dr Stock 125 = 5 x the EXISTING `cost_price` (25), not any user input. Posted as `ADJV/MAIN/2026/00001`: Dr Stock Account 125 / Cr "Internal Transfers" (the `STOCK_ADJUSTMENT_ACCOUNT` configured in Phase 1's Account Link Setup test, ALS-04 — confirms that config carries through correctly end-to-end). `rim_product_location.current_stock=25` (20 opening + 5), `ril_stock_ledger` row `trans_type=ADJUSTMENT_IN, qty_change=+5`. |
 | ADJ-C02 | `+` line, no established cost | Add a `+` line for a product never received via GRN | Hard-blocked `COST_NOT_ESTABLISHED`, never silently zero | High | Not Started | |
 | ADJ-C03 | `-` line | Add a decrease line | Records whatever cost is currently there | High | Not Started | |
 | ADJ-C04 | `+` batch/serial: new-lot entry | Add a tracked product on a `+` line | GRN-style fresh entry UI (CCC #10) | High | Not Started | |
 | ADJ-C05 | `-` batch/serial: existing-lot picker | Add a tracked product on a `-` line | Material-Issue-style candidate picker (CCC #10) | High | Not Started | |
-| ADJ-C06 | Reason from Common Masters | Pick a Stock Adjustment Reason | Default values present on a fresh tenant (2026-09-13 fix) | Med | Not Started | |
+| ADJ-C06 | Reason from Common Masters | Pick a Stock Adjustment Reason | Default values present on a fresh tenant (2026-09-13 fix) | Med | Passed | Confirmed live: 6 default reasons pre-seeded on fresh tenant SK-98262 (Damage, Expiry, Theft / Shrinkage, Physical Count Variance, Data Entry Correction, Other) — used "Physical Count Variance". |
 
 ## Edit / View / List / Print
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |

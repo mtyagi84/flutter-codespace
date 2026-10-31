@@ -5,11 +5,18 @@ Report template: **Load with no filters (smoke) / Every filter individually / Da
 accuracy vs. a real transaction / Currency & Dr-Cr display (CCC #1/#2) / Export &
 Print / Permission-denied / CCC**.
 
+**2026-10-25 smoke pass**: all 13 `SL-RPT-*` reports navigated directly and Run
+Report clicked, with every resulting network response traced for 400/404s (the
+discipline that caught 4 real bugs across Finance/Purchase Reports earlier this
+session) — all 13 loaded and ran with zero error responses. Two spot-checked
+for real data accuracy against this session's own DB-verified Sales Cycle
+transactions (see below).
+
 ---
 ## SL-RPT-REG — Sales Register
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
 |---|---|---|---|---|---|---|
-| REG-01 | Every approved Sales Invoice appears | Approve a Sales Invoice, run register for that date range | Appears with correct amount, customer, currency (CCC #2) | High | Not Started | |
+| REG-01 | Every approved Sales Invoice appears | Approve a Sales Invoice, run register for that date range | Appears with correct amount, customer, currency (CCC #2) | High | Passed | E2E `2026-10-25`: default load (Status=Approved, USD) showed all 3 approved invoices from this session's Sales Cycle chain, every QTY/RATE/GROSS/COST/PROFIT column matching the DB-verified transactions exactly — `SI/MAIN/2026/00002` (Qty 1, Rate 70.80, Cost 50.00, Profit 20.80), `SI/MAIN/2026/00003` (Qty 1, Rate 35.40, Cost 25.00, Profit 10.40), `SI/MAIN/2026/00001` (Qty 5, Rate 100.00, Cost 125.00, Profit 375.00) — plus the Sales Return correctly shown as its own negative row (`SRET/MAIN/2026/00001`, Qty -2, Gross -200.00, Cost -50.00, Profit -150.00, Type "R"). |
 | REG-02 | Base/Local currency toggle | Toggle Base/Local | Amounts recompute correctly | Med | Not Started | |
 | REG-03 | DRAFT invoices excluded | Leave one invoice as DRAFT | Does not appear | High | Not Started | |
 
@@ -27,7 +34,7 @@ Print / Permission-denied / CCC**.
 ## SL-RPT-RET — Sales Return Register
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
 |---|---|---|---|---|---|---|
-| RETR-01 | Approved return appears | Approve a Sales Return | Appears with correct reversal amount | High | Not Started | |
+| RETR-01 | Approved return appears | Approve a Sales Return | Appears with correct reversal amount | High | Passed | `SRET/MAIN/2026/00001` appears as a GROUPED header row (expand to see line detail — same pattern as Day Book/Stock Adjustment Register elsewhere in the app). Expanded line: Return Total -200.00, Reversed Gross Profit -150.00, `PRD-00002` — matches the DB-verified return exactly (2 units × 100 rate, 2 × 25 cost). Minor, not chased further: the header row's own aggregate columns (Return Total, Reversed Gross Profit, Item Code/Name) and the report's own Total footer both show `—`/0.00 rather than the summed child value — consistent with this being a collapsed-by-default GROUPED report, not confirmed to be a bug. |
 
 ## SL-RPT-SQR / SOR — Sales Quotation / Order Register
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |

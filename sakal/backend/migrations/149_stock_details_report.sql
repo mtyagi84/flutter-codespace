@@ -107,10 +107,12 @@ CREATE OR REPLACE FUNCTION fn_stock_details(
         FROM rim_products p
         LEFT JOIN ril_stock_ledger sl
                ON sl.product_id = p.id
-              AND sl.client_id = p_client_id AND sl.company_id = p_company_id
+              AND sl.client_id = p_client_id 
+              AND sl.company_id = p_company_id
               AND sl.location_id IN (SELECT id FROM accessible_locations)
         LEFT JOIN rim_common_masters u ON u.id = p.base_uom_id
-        WHERE p.client_id = p_client_id AND p.company_id = p_company_id
+        WHERE p.client_id = p_client_id 
+        AND p.company_id = p_company_id
           AND p.is_deleted = false
           AND p.tracking_type != 'SERIAL'
           AND (p_category_id IS NULL OR p.category_id IN (SELECT id FROM fn_category_subtree(p_category_id)))

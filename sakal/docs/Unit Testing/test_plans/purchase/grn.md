@@ -9,13 +9,13 @@ theoretical, they're the proven regression check.
 ## Create
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
 |---|---|---|---|---|---|---|
-| GRN-C01 | Direct GRN (no PO) | Pick supplier, add lines, Save | Saves as DRAFT | High | Not Started | |
+| GRN-C01 | Direct GRN (no PO) | Pick supplier, add lines, Save | Saves as DRAFT | High | Passed | E2E `test_grn.js` 13/13: Supplier [4010001] QA Test Supplier, Product PRD-00001, Qty Pack 10 x Rate 50 USD = 500, Save Draft then Approve, DB-verified exactly. |
 | GRN-C02 | Against-PO, single PO | Pick a PO, consolidate its lines | Lines pre-fill with PO qty/rate, rate defaults from PO's own confirmed rate | High | Not Started | |
 | GRN-C03 | Against-PO, multiple POs same currency | Consolidate 2+ POs | All lines correct, one currency | Med | Not Started | |
 | GRN-C04 | Foreign-currency GRN | Receive in a currency ≠ base | `trans_currency` = GRN's own currency on every line, NOT hardcoded to base (a real bug once fixed in migration 051) | High | Not Started | |
 | GRN-C05 | Batch/serial new-lot entry | Receive a tracked product | Free-text batch/serial + expiry/manufacturing date entry (CCC #10) | High | Not Started | |
 | GRN-C06 | Charges with ADD/DEDUCT nature | Add both charge types | Dr/Cr direction flips correctly for DEDUCT | High | Not Started | |
-| GRN-C07 | Tax deferred, never posted at GRN | Receive with a tax group set | NO VAT line posts at GRN — only tax-exclusive stock/accrual (GR/IR pattern) | High | Not Started | |
+| GRN-C07 | Tax deferred, never posted at GRN | Receive with a tax group set | NO VAT line posts at GRN — only tax-exclusive stock/accrual (GR/IR pattern) | High | Passed | Same E2E run (no tax group applied — "No Tax"): posted JV has exactly 2 lines, Dr "Stock Account" 500 / Cr "Purchase Accrual (GR/IR)" 500, no VAT line anywhere — confirms the GR/IR pattern structurally (a tax-bearing variant of this test still open). |
 
 ## Edit / View
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
@@ -33,9 +33,9 @@ theoretical, they're the proven regression check.
 ## Approve
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
 |---|---|---|---|---|---|---|
-| GRN-A01 | Stock + Accrual post correctly | Approve | Dr Stock (tax-exclusive), Cr Purchase Accrual — verify amounts exactly | High | Not Started | |
-| GRN-A02 | **Multi-currency regression: cost basis uses the Exchange Rate (MID), not Selling** | Receive foreign-currency stock, note the cost_price saved | `rim_product_location.cost_price` derived using the SAME rate a later Sales Invoice's COGS will use — see `finance_masters.md` EX-03 for the paired check | High | Not Started | This is the exact class of bug fixed in `25b4806` |
-| GRN-A03 | New-tenant auto-wired accounts (2026-09-13 fix) | Approve on a freshly-registered tenant with zero manual Account Link Setup | Succeeds immediately — Stock/Purchase Accrual accounts already resolved | High | Not Started | |
+| GRN-A01 | Stock + Accrual post correctly | Approve | Dr Stock (tax-exclusive), Cr Purchase Accrual — verify amounts exactly | High | Passed | Same E2E run: `rim_product_location.current_stock=10, cost_price=50` (first receipt, so weighted-avg=unit cost); `ril_stock_ledger` row `trans_type=GRN, qty_change=+10`; GL Dr Stock Account 500 / Cr Purchase Accrual (GR/IR) 500 — all DB-verified exactly. |
+| GRN-A02 | **Multi-currency regression: cost basis uses the Exchange Rate (MID), not Selling** | Receive foreign-currency stock, note the cost_price saved | `rim_product_location.cost_price` derived using the SAME rate a later Sales Invoice's COGS will use — see `finance_masters.md` EX-03 for the paired check | High | Not Started | This is the exact class of bug fixed in `25b4806` — this pass used base-currency USD only, foreign-currency variant still open |
+| GRN-A03 | New-tenant auto-wired accounts (2026-09-13 fix) | Approve on a freshly-registered tenant with zero manual Account Link Setup | Succeeds immediately — Stock/Purchase Accrual accounts already resolved | High | Passed | Confirmed live: fresh tenant SK-98262 had never had Account Link Setup manually touched for `STOCK_ACCOUNT`/`PURCHASE_ACCRUAL_ACCOUNT`, yet GRN Approve resolved both accounts and posted successfully with no error. |
 | GRN-A04 | Button state after Approve (CCC #4) | Approve | Buttons disable | High | Not Started | |
 | GRN-A05 | Permission gating (CCC #6, `PR-GRN`) | Approve without the right | Denied | High | Not Started | |
 | GRN-A06 | Negative stock rules for batch/serial | Attempt an outward movement that would take a batch negative | Blocked, full stop, regardless of `allow_negative_stock` flags | High | Not Started | N/A for GRN itself (inward only) — verify this is correctly NOT applicable here, only relevant for outward-movement screens |

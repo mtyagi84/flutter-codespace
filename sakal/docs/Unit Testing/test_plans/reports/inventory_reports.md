@@ -5,6 +5,17 @@ Report template: **Load with no filters (smoke) / Every filter individually / Da
 accuracy vs. `ril_stock_ledger` (the one source of truth) / Export & Print /
 Permission-denied / CCC**.
 
+**2026-10-25 smoke pass**: all 15 reports (`IN-RPT-*`) navigated to directly via
+their `/reports/<reportKey>` route on the real Kivu Trading QA tenant and
+confirmed to render with no `GoException`/crash, both before and after
+clicking "Run Report" (the engine-wide auto_load gate) — see
+`PHASE_EXECUTION_LOG.md` for the full list. Two were spot-checked for real
+data accuracy beyond the smoke pass (see SDL-01 and the Stock Adjustment
+Register note below); the remaining per-scenario rows below (weighted-avg
+cost, category subtotals, cascading filters, permission-denial variants,
+the Product Movement Analysis job queue) were not individually exercised
+this pass and remain `Not Started`.
+
 ---
 ## IN-RPT-SBM / SVL — Stock Balance / Value by Location
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
@@ -22,7 +33,7 @@ Permission-denied / CCC**.
 ## IN-RPT-SDL — Stock Ledger
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
 |---|---|---|---|---|---|---|
-| SDL-01 | Running balance correct | Run for a product with multiple movements | Running balance matches at every row | High | Not Started | |
+| SDL-01 | Running balance correct | Run for a product with multiple movements | Running balance matches at every row | High | Passed | E2E: with Product=All, the report shows only a 0.00 "Opening Balance" row and a 0.00 Total — confirms the **already-documented "unenforced-required-filter gotcha"**: Product is effectively mandatory for a meaningful per-product running-balance ledger, but the UI doesn't block "All" or warn about it (pre-existing, known gap, not newly introduced). With Product explicitly set to PRD-00001 (QA Test Widget 48042), the ledger correctly showed: Opening Balance 0.00 → GRN +10.00 (running balance 10.00) → Purchase Return −10.00 (running balance 0.00) → Total Inward 10.00 / Outward 10.00 — matches that product's real transaction history exactly. |
 | SDL-02 | Remarks resolve correctly | Check a GRN-sourced and a Sales-sourced line | `fn_resolve_transaction_remarks` shows the right document reference for each | Med | Not Started | |
 | SDL-03 | This is the regression check for the SELLING/MID exchange-rate bug (fixed `25b4806`) | Buy and sell 100% of a foreign-currency product's stock | Net qty_change = 0 exactly | High | Not Started | |
 
@@ -40,7 +51,7 @@ Permission-denied / CCC**.
 ## IN-RPT-SAD / SAV — Stock Adjustment Register (+with Value)
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
 |---|---|---|---|---|---|---|
-| SAD-01 | Qty-only variant, no cost shown | Run as a user without cost-visibility permission | Values correctly hidden, qty still shown | High | Not Started | |
+| SAD-01 | Qty-only variant, no cost shown | Run as a user without cost-visibility permission | Values correctly hidden, qty still shown | High | Not Started | Smoke-only: default load (Status=Approved) correctly listed both this session's approved adjustments — `ADJ/MAIN/2026/00001` (direct entry) and `ADJ/MAIN/2026/00002` (Remarks: "Auto-posted from Stock Count Review...", confirming the Stock Count Review composition traces through to this report) as expandable drill-down rows. Permission-denial variant not exercised (QA Administrator holds every permission). |
 | SAV-01 | With-Value variant requires separate permission | Run as a user with only the Qty-only report granted | With-Value report is denied/inaccessible | High | Not Started | |
 
 ## IN-RPT-MRQ / MIS — Material Requisition / Issue Register

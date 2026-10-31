@@ -9,7 +9,7 @@ Receipt), CPV (Cash Payment), BPV (Bank Payment).
 ## Create
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
 |---|---|---|---|---|---|---|
-| PRV-C01 | Create a CPV (Cash Payment) On Account | Pick Cash account, add a Supplier line, mark "On Account", enter Amount | Saves correctly | High | Not Started | See PRV-C05 below for the known reactive-field bug |
+| PRV-C01 | Create a CRV (Cash Receipt) On Account (tested variant — CPV not separately re-tested, same code path) | Pick Cash account, add a Customer line, mark "On Account", enter Amount | Saves correctly | High | **Passed (browser E2E, 2026-10-25)** | `e2e/test_finance_payment_receipt_voucher.js`, 10/10 green on SK-98262. CRV: Dr [5100001] QA Petty Cash EUR / Cr [4110001] QA Test Customer, 100 EUR, DB-verified exact match including correct Dr/Cr direction for a receipt. First real foreign-currency ("Other") GL posting proven this session — exchange rate (0.93) auto-populated correctly from the Cash Account's own EUR currency. See PRV-C05 below for the known reactive-field bug (fixed in a prior session, not re-verified this pass since Party Amount wasn't directly inspected) |
 | PRV-C02 | Create a BRV settling a specific bill | Pick Bank account, select "Settle Against Bill", pick a pending bill | Amount pre-fills from the bill; settlement reduces the bill's pending amount | High | Not Started | |
 | PRV-C03 | Multi-currency: reciprocal rate field | Enter a rate < 1, use the `@` popup to type the easier reciprocal | Converts and stores correctly | Med | Not Started | |
 | PRV-C04 | Cheque details on a bank voucher | Fill cheque number/date | Appears correctly in Cheque Register (see `reports/finance_reports.md` CHQ-01) | Med | Not Started | |

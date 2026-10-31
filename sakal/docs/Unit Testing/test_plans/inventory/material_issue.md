@@ -7,9 +7,9 @@ See `00_INDEX.md` for the Cross-Cutting Checklist ("CCC #N").
 ## Create
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
 |---|---|---|---|---|---|---|
-| MIS-C01 | Consolidate 1+ requisitions, same From Location | Pick requisitions, Save | Lines carry forward correctly | High | Not Started | |
+| MIS-C01 | Consolidate 1+ requisitions, same From Location | Pick requisitions, Save | Lines carry forward correctly | High | Passed | E2E `test_material_issue.js` 9/9: consolidated `MREQ/MAIN/2026/00001`, line correctly carried PRD-00002/3 PCS/Department+Area. Posted as `MISS/MAIN/2026/00001` → GL `MIC/MAIN/2026/00001`: Dr "Internal Transfers" (the Consumption Area's linked expense account) 75 / Cr "Stock Account" 75 (3 x `cost_price` 25). Stock: `current_stock=22` (25-3), `ril_stock_ledger` row `trans_type=MATERIAL_ISSUE, qty_change=-3`. **Real finding**: the Issue Qty Pack field shows the SAME "pre-filled value not bound to form state until touched" gap already confirmed on Purchase Return (`PRET-UI01`) — worked around identically (click, re-type same value, tab out, before Save). This is the SECOND screen with this exact symptom, raising the likelihood it's a shared component/pattern bug rather than two independent issues — worth checking both screens' line-grid widgets for a common root cause in a follow-up session. |
 | MIS-C02 | Batch/serial existing-lot picker | Add a tracked product | Candidates come from what's CURRENTLY in stock (no originating-GRN-line scoping, unlike Purchase Return) | High | Not Started | |
-| MIS-C03 | No document currency — always base | Create an issue | `trans_currency`=base, `base_rate`=1 on every line | Med | Not Started | |
+| MIS-C03 | No document currency — always base | Create an issue | `trans_currency`=base, `base_rate`=1 on every line | Med | Passed | DB-verified: both GL lines show `trans_currency='USD'` (the company's base currency) despite this screen having no currency field at all — matches the documented always-base design. |
 
 ## Edit / View / List / Print
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |

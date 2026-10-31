@@ -523,9 +523,18 @@ Never `CREATE POLICY ... FOR ALL USING (true) WITH CHECK (true)` on a real migra
 ```sql
 CREATE OR REPLACE VIEW v_my_report AS
 SELECT ...
-FROM ...
-WITH (security_invoker = true);   -- MANDATORY on every view, no exceptions
+FROM ...;
+
+ALTER VIEW v_my_report SET (security_invoker = true);   -- MANDATORY on every view, no exceptions
 ```
+**Correction (2026-10-25, found live)**: the inline `CREATE VIEW ... AS <query> WITH (security_invoker = true);`
+form shown in earlier revisions of this doc does **not** parse — PostgreSQL's real grammar places a view's
+`WITH (options)` clause before `AS query`, not after it; `ALTER VIEW ... SET (...)` as a second statement
+(exactly migration 194's own pattern, e.g. `v_product_master_report`) is the only form that actually deploys.
+Hit live while writing migration 235 — the single-statement form failed with a plain `syntax error at or near "("`
+with no indication the cause was the trailing `WITH`, costing real debugging time before the two-statement form
+was found by grepping this project's own already-working migrations instead of trusting this doc's own snippet.
+**Always verify a security_invoker fix against a real working example in this repo before trusting this snippet.**
 Fixed app-wide in migration 185 (`ALTER VIEW ... SET (security_invoker = true)` on all 73 existing views, metadata-only, no recreation needed) — verified directly by querying a view as the `authenticated` role with a real tenant's JWT claims set and confirming only that tenant's rows come back. **Any future `CREATE VIEW`/`CREATE OR REPLACE VIEW` that omits this clause reintroduces a cross-tenant data leak** — this applies to every reporting-engine view (Sales/Purchase/Inventory/Finance/Master Data reports) and any future view of any kind. Functions (`SECURITY DEFINER`/`SECURITY INVOKER`, e.g. Account Ledger, Trial Balance) are a separate, already-correct mechanism and are not affected by this specific issue — this rule is about `CREATE VIEW` specifically.
 
 ### The three root tenancy tables are RLS-critical too, not just leaf tables
