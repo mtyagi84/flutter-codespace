@@ -672,6 +672,67 @@ Common Masters (not independently re-scored this session, though largely
 proven via other paths), Divisions (blocked by automation), and the 13
 Master Reports (not started).
 
+### Phase 1 resumed, 2026-10-31 (cont. 3) — all 13 Master Reports, one real bug found+fixed
+
+Smoke-tested all 13 reports in one batched script
+(`e2e/test_mstrpt_smoke.js`): navigate each `/reports/<KEY>` route, capture
+a screenshot, watch for any HTTP >=400 response. All 13 loaded cleanly,
+zero errors — Product, Customer, Supplier, Chart of Accounts, Chart of
+Groups, Item Category, Common Masters, Tax Master, Tax Group, Payment
+Terms, Sales Executives, Additional Charges, Price List.
+
+Reviewed each screenshot against known fixture data from earlier in this
+session (the 2 test products, the test customer/supplier, `QASE02`, the
+`QAF83686`/`QAR83686` charges, the 2 payment terms, the OHADA default
+VAT_STD/VAT_ZERO tax+group, the Common Masters starter values) — every
+report's row count and field values matched exactly, confirmed via direct
+DB counts/queries alongside the UI screenshots.
+
+**Real bug found and fixed**: the Customer Master Report showed an extra
+row — `4110 — Customers` — with every detail column blank, sitting next to
+the one real test customer. Same defect on the Supplier Master Report
+(`4010 — Suppliers`). Root-caused by reading `v_party_master_report`'s live
+definition: it filters only `account_nature IN ('Customer','Supplier')`
+and `is_deleted=false`, with no `posting_allowed` check at all — so the
+non-posting GROUP header account that real customer/supplier leaves are
+filed under (confirmed via direct query: `account_code='4110'`,
+`posting_allowed=false`, `account_nature='Customer'`) leaks into the
+report as if it were a real party. **Fixed in migration 236**
+(`party_master_report_exclude_group_accounts.sql`): added
+`AND a.posting_allowed = true` to the view, re-stated `security_invoker =
+true` explicitly (verified it was already set, per this project's own
+"never trust it silently" rule for `CREATE OR REPLACE VIEW`). Deployed
+directly to the dev DB via the same `pg` Client script pattern used all
+session, re-verified immediately both server-side (`SELECT * FROM
+v_customer_master_report`/`v_supplier_master_report` now each return
+exactly the one real row) and live in the browser (both reports show only
+the real party, Ledger Currency correctly displayed as USD on the
+customer — also closes out PARTYR-02/CCC#2 for this pass).
+
+**A second, related observation was raised but NOT treated as a confirmed
+bug**: `CHART_OF_ACCOUNTS_REPORT` and `CHART_OF_GROUPS_REPORT` both read
+the identical `v_chart_of_accounts_tree` view with no distinguishing
+filter either (confirmed via `ric_report_definitions` — both rows list the
+same `source_object`), so "Chart of Groups Report" shows every account in
+the tree, including real postable leaves like `3600001 Stock Account`, not
+just the group/header rows its name implies. This LOOKS like the exact
+same defect class just fixed for Customer/Supplier — but unlike that case,
+there's no blank-detail-row smoking gun (every row here has real, non-
+blank data), and showing the full tree may be the deliberate design intent
+(COA emphasizes Nature/Standard/Active columns, Groups emphasizes Parent/
+Level columns — two views of one tree, not "groups only" vs "everything").
+Flagged in the test plan for the user to confirm intent before touching
+it — deliberately NOT changed this session, since fixing a report's scope
+based on its name alone (rather than confirmed user intent) risks solving
+a problem that was never actually a problem.
+
+This completes Phase 1's Master Reports group (13 of 13). Remaining Phase
+1 gaps going into Phase 2: Company/Currency/Accounting Setup/Common
+Masters screens (not independently re-scored this session, though largely
+proven correct via other paths this same session exercised), and Divisions
+(blocked by an automation-only Country-filter quirk, not a confirmed
+product bug).
+
 ---
 
 ## Phase 2 — Finance Core

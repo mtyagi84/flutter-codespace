@@ -17,7 +17,7 @@ and `00_INDEX.md` for the per-screen test case tables themselves.
 - [x] Purchase Masters (1 of 1): **Supplier Master** (minimal)
 - [x] Inventory Masters (5, minimal coverage — fuller batteries still open, see log): **Product Master** (1 product), **Item Categories**, **Category Levels**, **Product Flag Types**, **Consumption Area Setup**
 - [x] Finance Masters (7 of 8 — Item Account Links blocked on automation, see log): **Chart of Accounts**, **Tax Master**, **Tax Groups**, **Account Link Setup**, **Additional Charges**, **Exchange Rates** (Other=EUR established), **Opening Balances**
-- [ ] Master Reports (13)
+- [x] Master Reports (13 of 13 smoke-tested, 1 real bug found+fixed): all 13 load with zero HTTP errors; Product/Item Category/Common Masters/Tax Master+Group/Payment Terms/Sales Executives/Additional Charges/Chart of Accounts reports all data-verified accurate against known fixtures. **Real bug found+fixed**: Customer/Supplier Master Reports leaked their own parent GROUP header account (blank detail row) — `v_party_master_report` never filtered `posting_allowed=true`; fixed in migration 236, re-verified server-side and live. Chart of Groups Report flagged as a design question (same view as Chart of Accounts, not confirmed as a bug). Export/multi-currency/rate-history/filter-by-category sub-scenarios mostly not independently exercised — see `reports/master_data_reports.md` for full detail.
 
 ## Phase 2 — Finance Core (FN transactions — 5 screens + 21 Finance Reports)
 - [x] Payment/Receipt Voucher
