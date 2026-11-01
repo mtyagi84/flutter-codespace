@@ -28,9 +28,9 @@ and `00_INDEX.md` for the per-screen test case tables themselves.
 
 ## Phase 3 — Purchase Cycle (PR — 18 screens + 13 Purchase Reports)
 - [x] Purchase Order
-- [x] GRN (Goods Receipt) (DIRECT mode + **AGAINST_PO mode now done** — PO's own tax group/rate correctly consolidated, locked rate from PO; foreign-currency/batch-serial variants still open)
-- [x] Purchase Invoice (no-VAT GL path + **tax-bearing variant now done**: real VAT entered against a GRN's deferred estimated tax, 3-way balance Accrual+VAT=Supplier DB-verified exact on a fresh PO→GRN→Invoice chain built this session)
-- [x] Purchase Return (billed branch done, PRET-UI01 found; unbilled branch open)
+- [x] GRN (Goods Receipt) — **all variants now done**: DIRECT, AGAINST_PO (PO's own tax group/rate correctly consolidated, locked rate from PO), foreign-currency (`trans_currency` correctly stays the GRN's own currency, not hardcoded to base — migration 051's fix re-confirmed), and batch/serial new-lot entry (allocation-progress UI, mandatory full allocation)
+- [x] Purchase Invoice (no-VAT GL path + tax-bearing variant: real VAT entered against a GRN's deferred estimated tax, 3-way balance Accrual+VAT=Supplier DB-verified exact)
+- [x] Purchase Return — **all variants now done**: billed branch (SDN posting, PRET-UI01 found), unbilled branch (JV reversal of provisional accrual, DB-verified exact), mandatory batch allocation scoped to the specific GRN line's own receipt, default Reason values confirmed present
 - [x] Purchase Reports (13/13 smoke pass w/ network-error tracing; 2 real bugs found+fixed — Vendor On-Time Delivery + Reorder/Replenishment, migration 235; Item-wise Purchase History has an unenforced-required-filter gap, documented not fixed; per-scenario depth mostly still open)
 
 ## Phase 4 — Inventory (IN — 25 screens + 15 Inventory Reports)

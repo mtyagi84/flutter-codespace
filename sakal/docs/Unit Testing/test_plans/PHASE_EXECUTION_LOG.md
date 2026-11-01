@@ -1392,6 +1392,66 @@ auto-default from the product master) to `purchase_order.md`. No bugs
 found this pass — every step of the chain behaved exactly as CLAUDE.md's
 own documented GR/IR design specifies.
 
+### Phase 3 resumed, 2026-11-01 (cont.) — foreign-currency/batch-tracked GRN, unbilled Purchase Return
+
+Closed the remaining three Phase 3 gaps (foreign-currency GRN, batch/serial
+GRN new-lot entry, unbilled Purchase Return branch) in one more chained
+session, reusing the still-unbilled `GRN/MAIN/2026/00003` created for this
+purpose.
+
+**Foreign-currency GRN (GRN-C04)**: created a fresh Direct GRN in EUR
+(no PO). The header correctly auto-resolved Rate→Base=1.0753 USD/EUR and
+Rate→Local=3037.63 CDF/EUR the instant EUR was picked. After approval, DB-
+verified the posted `JV/MAIN/2026/00007`: both lines (`Stock Account` Dr /
+`Purchase Accrual` Cr) correctly show `trans_currency='EUR'` — NOT
+hardcoded to base — with `base_amount=215.0538` (200 × 1.07526882, exact).
+Confirms migration 051's historical fix still holds.
+
+**Batch/serial new-lot entry (GRN-C05)**: no batch-tracked product existed
+in this tenant yet, so created one first (`[PRD-00003] QA Test Batch
+Widget 71234`, Tracking Type=Batch/Lot, via Product Master). Adding it to
+the same EUR GRN (20 PCS @ 10 EUR) made a "Batches 0.00/20.00" allocation-
+progress indicator appear automatically (red = under-allocated). The
+"Add Batch" button (found after scrolling the line-items table
+horizontally — it sits past the Consumption Area column, not immediately
+visible) revealed a clean new-lot entry form: Batch No, Manufacturing
+Date, Qty Pack, Qty Loose. Filled Batch No=`BATCH-001`, Qty Pack=20 —
+progress flipped to "20.00/20.00" (green). Approved as
+`GRN/MAIN/2026/00003`; DB-verified `rid_transaction_line_batches`
+(`batch_no='BATCH-001'`, `base_qty=20.0000`) and `ril_stock_ledger`
+(`trans_type='GRN'`, `qty_change=20.0000`, same batch tag) both exact.
+
+**Unbilled Purchase Return (PRET-C01/C05, PRET-A01)**: this same GRN,
+left deliberately unbilled, was the perfect fixture. The Purchase Return
+screen's Approved GRNs list correctly showed it tagged "Not Billed"
+(visually distinct from the already-billed GRNs also listed). Selecting
+it pre-filled the return line (20 PCS, 200.00) and displayed "Not yet
+billed — VAT deferred" — confirms the screen recognizes the unbilled
+branch explicitly, not just by absence of a VAT amount. The batch-tracked
+line forced mandatory allocation scoped to exactly what this GRN line
+received (`BATCH-001 (AVAIL 20)`, the only candidate) — allocating 20
+flipped "Select Batches to Return" from red "0.00/20.00" to green
+"20.00/20.00"; Save Draft was blocked until fully allocated. The Reason
+dropdown showed all 6 expected Common-Masters default values (Defective/
+Wrong Item Supplied/Excess Delivery/Quality Issue/Data Entry Correction/
+Other) — confirms PRET-C04's "defaults present on a fresh tenant" claim
+directly. Approved `PRET/MAIN/2026/00002` — confirmation dialog correctly
+worded "stock will be reduced and the Accrual/Supplier/VAT reversal will
+be posted." Posted `JV/MAIN/2026/00008`: Dr Purchase Accrual 200.00 / Cr
+Stock Account 200.00 — an exact reversal of the GRN's own original
+postings (same EUR currency, same base_amount). DB-verified
+`ril_stock_ledger` shows `trans_type='PURCHASE_RETURN'`,
+`qty_change=-20.0000`, tagged to `BATCH-001` — and the batch candidate's
+own "AVAIL" count correctly dropped to 0 in the UI immediately after.
+
+This closes every remaining Phase 3 gap flagged at the end of the previous
+session (GRN-C04, GRN-C05, PRET-C01, PRET-C04, PRET-C05, PRET-A01) with
+zero new bugs found — every mechanism (currency handling, batch
+allocation, GR/IR reversal) behaved exactly as documented. Phase 3's only
+remaining open items are now the 13 Purchase Reports' per-scenario depth
+and a handful of lower-priority rows (PRET-C02/C03/C06, PO-C02/C03/C04,
+edit/view/list/print screens) not exercised this pass.
+
 ---
 
 ## Phase 4 — Inventory
