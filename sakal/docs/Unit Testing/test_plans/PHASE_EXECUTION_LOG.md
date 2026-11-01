@@ -1341,6 +1341,57 @@ UI finding (PRET-UI01, workaround confirmed, fix deferred). 13 Purchase
 Reports remain open for a dedicated follow-up pass, same as Phase 2's own
 remaining 16 Finance Reports.
 
+### Phase 3 resumed, 2026-11-01 — closing the tax-bearing GRN/Purchase Invoice variant gap
+
+Both `purchase_order.md`/`grn.md`/`purchase_invoice.md` had flagged the
+same underlying gap from different angles: this tenant's only existing GRN
+used "No Tax," so the Against-PO GRN mode, the GR/IR tax-deferral pattern
+under a REAL tax group, and Purchase Invoice's real-VAT-apportionment path
+(PINV-C04) were all still unverified. Closed all three in one fresh,
+real, end-to-end chain through the actual UI.
+
+First assigned `TVA Standard 16%` as `[PRD-00001]`'s Purchase Tax Group
+via Product Master (Taxation & Supplier section) — "Product saved."
+confirmed. Created and approved `PO/2026/00003` (Supplier
+`[4010001]`, 10 PCS @ 100 USD) — the line's Tax Group correctly
+auto-defaulted to "TVA Standard 16%" the moment the product was picked,
+computing Item Tax=160.00, Grand Total=1,160.00 (new finding, PO-C05).
+
+Switched GRN Receipt Mode to "Against PO" — this triggers an automatic
+Select Supplier → Select Purchase Order(s) wizard; picked `PO/2026/00003`,
+and the line consolidated exactly: Qty=10, Rate=100 shown locked/read-only
+(a padlock icon — correctly non-editable, since it comes FROM the approved
+PO), Tax Group carried over, Landed=1,160.00. Saved as
+`GRN/MAIN/2026/00002`, approved — confirmation dialog correctly warned
+"stock and cost will be posted." DB-verified the GRN's own posted journal
+(`JV/MAIN/2026/00006`): exactly 2 lines, Dr Stock 1,000.00 / Cr Purchase
+Accrual 1,000.00 — **no VAT line**, confirming the GR/IR tax-deferral
+design holds even with a real 16%-tax-group line, not just the "No Tax"
+case already proven earlier.
+
+Created a Purchase Bill against that GRN (`/purchase/invoice-entry`,
+Against-PO-style GRN picker) — selecting `GRN/MAIN/2026/00002` auto-filled
+Taxable Amount=1,000.00 and VAT/Tax Amount=160.00 directly from the GRN's
+own deferred estimated tax, exactly as the GR/IR design specifies. Filled
+the required Supplier Invoice No (`SUP-INV-002`) and Date, saved as
+`PINV/MAIN/2026/00003`, approved — confirmation dialog correctly named
+"Purchase Accrual clearing, Input VAT and Supplier payable." The resulting
+`PUR/MAIN/2026/00002` voucher, shown inline on the approved bill's own
+"Posted Journal Entries" panel and independently DB-verified via
+`rid_finance_lines`: Dr `[4000401] Purchase Accrual (GR/IR)` 1,000.00, Dr
+`[4400001] QA Input VAT Receivable` 160.00, Cr `[4010001] QA Test
+Supplier` 1,160.00 (Total Dr=Total Cr=1,160.00, balanced exactly),
+`inv_bill_no='SUP-INV-002'` (the supplier's own invoice number, not the
+internal `PINV` document number) correctly tagged on the Supplier line
+only.
+
+This closes PINV-C04 (previously the one deferred row in
+`purchase_invoice.md`), confirms GRN-C02/GRN-C07's tax-bearing variant and
+GRN-CV01 in `grn.md`, and adds a new confirmed finding (PO-C05, tax group
+auto-default from the product master) to `purchase_order.md`. No bugs
+found this pass — every step of the chain behaved exactly as CLAUDE.md's
+own documented GR/IR design specifies.
+
 ---
 
 ## Phase 4 — Inventory

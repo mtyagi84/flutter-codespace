@@ -12,6 +12,7 @@ fixed; confirm the List→Entry navigation still works correctly.
 | PO-C02 | Landed cost estimate | Add a charge | Landed cost per line computed as an estimate (not final costing) | Med | Not Started | |
 | PO-C03 | Batch/serial product line | Add a tracked product | Free-text new-lot entry available (batch/serial not mandatory at DRAFT for PO) | Med | Not Started | |
 | PO-C04 | Barcode scan | Scan a barcode | Product resolves, `matchedBarcode` saved onto the line correctly (a past bug: it was cleared before save) | Med | Not Started | |
+| PO-C05 (new) | Tax Group auto-defaults from the product's own Purchase Tax Group | Pick a product with a Purchase Tax Group configured (Product Master) | Line's Tax Group field auto-populates, no manual selection needed | Med | Passed | E2E `2026-11-01`: assigned `TVA Standard 16%` as `[PRD-00001]`'s Purchase Tax Group via Product Master, then created `PO/2026/00003` (10 PCS @ 100 USD) — the line's Tax Group auto-defaulted to "TVA Standard 16%" the moment the product was selected, correctly computing Item Tax=160.00 (16% of 1,000 Gross), Grand Total=1,160.00. This PO/GRN/Purchase-Invoice chain is what unblocked `purchase_invoice.md`'s own previously-deferred PINV-C04 (real VAT apportionment). |
 
 ## Edit / View
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |

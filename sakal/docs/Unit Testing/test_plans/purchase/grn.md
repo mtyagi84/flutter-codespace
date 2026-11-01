@@ -10,12 +10,12 @@ theoretical, they're the proven regression check.
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
 |---|---|---|---|---|---|---|
 | GRN-C01 | Direct GRN (no PO) | Pick supplier, add lines, Save | Saves as DRAFT | High | Passed | E2E `test_grn.js` 13/13: Supplier [4010001] QA Test Supplier, Product PRD-00001, Qty Pack 10 x Rate 50 USD = 500, Save Draft then Approve, DB-verified exactly. |
-| GRN-C02 | Against-PO, single PO | Pick a PO, consolidate its lines | Lines pre-fill with PO qty/rate, rate defaults from PO's own confirmed rate | High | Not Started | |
+| GRN-C02 | Against-PO, single PO | Pick a PO, consolidate its lines | Lines pre-fill with PO qty/rate, rate defaults from PO's own confirmed rate | High | Passed | E2E `2026-11-01`: switched Receipt Mode to "Against PO" — a Select Supplier wizard opens automatically, then a Select Purchase Order(s) picker listing all approved POs for that supplier. Picked `PO/2026/00003` (10 PCS @ 100 USD, TVA Standard 16%) — line consolidated exactly: Qty Pack=10.0000, Rate=100 (correctly locked/read-only, shown with a lock icon — rate comes FROM the PO, not editable here), Tax Group="TVA Standard 16%" carried over, Landed=1,160.00. Saved as `GRN/MAIN/2026/00002`, approved successfully. |
 | GRN-C03 | Against-PO, multiple POs same currency | Consolidate 2+ POs | All lines correct, one currency | Med | Not Started | |
 | GRN-C04 | Foreign-currency GRN | Receive in a currency ≠ base | `trans_currency` = GRN's own currency on every line, NOT hardcoded to base (a real bug once fixed in migration 051) | High | Not Started | |
 | GRN-C05 | Batch/serial new-lot entry | Receive a tracked product | Free-text batch/serial + expiry/manufacturing date entry (CCC #10) | High | Not Started | |
 | GRN-C06 | Charges with ADD/DEDUCT nature | Add both charge types | Dr/Cr direction flips correctly for DEDUCT | High | Not Started | |
-| GRN-C07 | Tax deferred, never posted at GRN | Receive with a tax group set | NO VAT line posts at GRN — only tax-exclusive stock/accrual (GR/IR pattern) | High | Passed | Same E2E run (no tax group applied — "No Tax"): posted JV has exactly 2 lines, Dr "Stock Account" 500 / Cr "Purchase Accrual (GR/IR)" 500, no VAT line anywhere — confirms the GR/IR pattern structurally (a tax-bearing variant of this test still open). |
+| GRN-C07 | Tax deferred, never posted at GRN | Receive with a tax group set | NO VAT line posts at GRN — only tax-exclusive stock/accrual (GR/IR pattern) | High | Passed | Original E2E run (no tax group applied — "No Tax"): posted JV has exactly 2 lines, Dr "Stock Account" 500 / Cr "Purchase Accrual (GR/IR)" 500, no VAT line anywhere — confirms the GR/IR pattern structurally. **Tax-bearing variant now also confirmed** (`2026-11-01`, via `PO/2026/00003`→`GRN/MAIN/2026/00002`, a real 16%-tax-group line): the GRN's own posted JV still carries no VAT line (tax-exclusive accrual only) — the 160.00 VAT only appears later, correctly, at Purchase Invoice approval (see `purchase_invoice.md` PINV-C04) exactly as the GR/IR design requires. |
 
 ## Edit / View
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
@@ -50,7 +50,7 @@ theoretical, they're the proven regression check.
 ## Convert-to-Purchase Invoice (billing)
 | ID | Scenario | Steps | Expected Result | Priority | Status | Bug Ref |
 |---|---|---|---|---|---|---|
-| GRN-CV01 | Bill a single GRN | Create a Purchase Invoice against this GRN | GR/IR loop closes correctly — see `purchase_invoice.md` | High | Not Started | |
+| GRN-CV01 | Bill a single GRN | Create a Purchase Invoice against this GRN | GR/IR loop closes correctly — see `purchase_invoice.md` | High | Passed | E2E `2026-11-01`: `GRN/MAIN/2026/00002` billed via `PINV/MAIN/2026/00003` — the GRN's own deferred estimated tax (160.00, from its 16% tax-group line) correctly pre-filled as the Purchase Invoice's VAT/Tax Amount, approved cleanly posting the full 3-way balance (Accrual+VAT=Supplier). Full detail in `purchase_invoice.md` PINV-C04/PINV-A01. |
 | GRN-CV02 | Reservation prevents double-billing | Attempt to bill the same GRN twice (two draft invoices) | Second attempt blocked | High | Not Started | |
 
 ## Cross-Cutting Checklist

@@ -28,8 +28,8 @@ and `00_INDEX.md` for the per-screen test case tables themselves.
 
 ## Phase 3 — Purchase Cycle (PR — 18 screens + 13 Purchase Reports)
 - [x] Purchase Order
-- [x] GRN (Goods Receipt) (DIRECT mode; AGAINST_PO/foreign-currency/batch-serial variants open)
-- [x] Purchase Invoice (no-VAT GL path; tax-bearing variant open)
+- [x] GRN (Goods Receipt) (DIRECT mode + **AGAINST_PO mode now done** — PO's own tax group/rate correctly consolidated, locked rate from PO; foreign-currency/batch-serial variants still open)
+- [x] Purchase Invoice (no-VAT GL path + **tax-bearing variant now done**: real VAT entered against a GRN's deferred estimated tax, 3-way balance Accrual+VAT=Supplier DB-verified exact on a fresh PO→GRN→Invoice chain built this session)
 - [x] Purchase Return (billed branch done, PRET-UI01 found; unbilled branch open)
 - [x] Purchase Reports (13/13 smoke pass w/ network-error tracing; 2 real bugs found+fixed — Vendor On-Time Delivery + Reorder/Replenishment, migration 235; Item-wise Purchase History has an unenforced-required-filter gap, documented not fixed; per-scenario depth mostly still open)
 
