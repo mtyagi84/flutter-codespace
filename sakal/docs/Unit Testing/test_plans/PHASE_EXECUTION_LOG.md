@@ -1099,6 +1099,91 @@ Purchase Cycle next would leave these 16 incomplete; prioritizing breadth
 across all phases first given the scale of what remains, per the overall
 plan's own phased structure.
 
+### Phase 2 resumed, 2026-10-31/11-01 — remaining Finance Reports, 1 more bug found+fixed, 1 anomaly investigated
+
+Batch-tested the remaining under-covered Finance Reports in one script
+(`e2e/test_fnrpt_batch.js`): Financial Ratio Analysis, Cash & Bank Position
+Summary, Customer Ageing, Supplier Ageing, VAT/Tax Return Summary,
+Withholding Tax Summary, Expense Report.
+
+**Real bug found and fixed**: VAT/Tax Return Summary and Withholding Tax
+Summary both returned raw HTTP 404s and never loaded — direct network
+capture caught `fn_vat_tax_summary_group_summary`/`fn_wht_summary_group_summary`
+both failing. Root-caused as the exact same defect class already fixed
+once this session for Day Book/Cheque Register (migrations 233/234): the
+`date_range` filter's `param_target='trans_date'` is correct for each
+report's main grid query (both filter `v_vat_tax_lines`/
+`v_withholding_tax_lines` directly by a real `trans_date` column), but
+each report's GROUP-SUMMARY function AND its separate TOTALS function (4
+functions total) declared their date parameters as `p_date_from`/
+`p_date_to` instead of `p_trans_date_from`/`p_trans_date_to`. Fixed in
+migration `237_vat_wht_summary_date_param_fix.sql` (same shape as 234 —
+rename the RPC's own parameters, leave the filter's `param_target` alone),
+deployed directly to dev DB, re-verified live: VAT/Tax Return Summary now
+correctly shows `VAT_STD`/16% with Output=0.00, Input=160.00, Net
+Payable=-160.00 (DB-verified exact match against `v_vat_tax_lines`);
+Withholding Tax Summary now loads a correctly-headed empty grid (no
+WITHHOLDING-type transaction exists yet this session).
+
+Financial Ratio Analysis, Customer Ageing, and Supplier Ageing all
+data-verified correctly: manually recomputed Gross Profit Margin/Net
+Profit Margin/Return on Assets from the ratio report's own displayed
+Reference figures — all three matched the screen exactly
+(`(576.19-250)/576.19×100=56.61`, etc.). Both Ageing reports correctly
+group by currency and show real outstanding/advance/net-closing figures
+matching known session fixtures. Expense Report (Matrix) was first tested
+against a stale/wrong route key (`/reports/EXPENSE_REPORT` instead of the
+real `/reports/EXPENSE_REPORT_MATRIX`, confirmed via `ric_master_menus`)
+— once corrected, loading October 2026 showed a `2026-10` column with
+`[6500001] QA Office...`=1,000.00 and `[6100001] Cost of Sales`=150.00,
+matching the known Expense Voucher exactly.
+
+**A real data anomaly was found on Cash & Bank Position Summary, investigated
+in depth, and NOT confirmed as a reproducible code defect**: the report
+showed `[5100001] QA Petty Cash EUR` with Balance (Base)=0.00 (correct —
+nets to zero) but Balance (Local)=-303,663.44 (a large, clearly-wrong
+nonzero value for an account that should net to zero in every currency).
+Traced to one specific historical line: `CRV/MAIN/2026/00001` (posted
+2026-10-25, from this test plan's own earlier PRV-C01 test) has
+`trans_amount=100 EUR`, `base_amount=107.5269` (correctly converted), but
+`local_amount=100.0000` — never converted to the tenant's local currency
+(CDF) at all, left as a raw 1:1 copy of the trans amount. A same-day
+Contra Voucher on the IDENTICAL account/currency pair converted correctly
+(`local_amount=303763.4409`), proving the local-currency conversion
+mechanism itself works in general.
+
+To determine whether this is a live, reproducible app bug, re-created the
+exact same scenario fresh through the real UI end-to-end, with deliberate
+multi-second settle waits after every field interaction (select the EUR
+Cash account → wait 3s for both `fn_get_exchange_rate` calls to resolve →
+switch to On Account → pick the customer line → enter 50 EUR → Post). The
+new voucher (`CRV/MAIN/2026/00003`, deleted after the test since it was
+pure test data) posted with `local_amount=151881.7204`
+(`local_rate=3037.63440860`) — **correctly converted**
+(`50 × 3037.6344 = 151,881.72`). Read `finance_voucher_entry_screen.dart`'s
+`_onCashBankSelected`/`_fetchRatesForTrans` directly — the code structurally
+always re-fetches `_localRate` on every Cash/Bank account change, same as
+the Display rate, with no obvious logic gap. Given the bug could not be
+forced to reproduce on a careful retry, this is written up as `PRV-C07` in
+`finance/payment_receipt_voucher.md` as an investigated-but-unconfirmed
+finding — most likely a timing race in the ORIGINAL automated test script
+(which may have clicked through faster than the async rate-fetch could
+complete) rather than a defect a real user would hit at normal speed, but
+explicitly flagged as not proven either way, with a concrete suggestion
+for how a future session could try to force the race if this becomes
+safety-critical. The original flawed historical line was left in place
+(immutable once posted, per project convention; it's QA test data, not
+production, so a reversing entry wasn't deemed necessary this pass).
+
+This substantially closes out Phase 2's remaining Finance Reports depth:
+of the 16 reports flagged open at the end of the previous Phase 2 session,
+Ageing×2, Expense Report Matrix, VAT/Withholding Tax Summary, Financial
+Ratio, and Cash & Bank Position are now data-verified (7 of 16). Day Book
+and Cheque Register were already fixed+verified in the prior session (2 of
+16). Remaining open: Pending Bills ×3 (data-verified once, not re-checked
+per-scenario), Bank Reconciliation Statement (smoke-only), and the P&L/
+Balance Sheet Account-Detail drilldown variants.
+
 ---
 
 ## Phase 3 — Purchase Cycle
