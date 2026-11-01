@@ -36,7 +36,7 @@ and `00_INDEX.md` for the per-screen test case tables themselves.
 ## Phase 4 — Inventory (IN — 25 screens + 15 Inventory Reports)
 - [x] Opening Stock (GL-off path; GL-on/serial/Excel variants open)
 - [x] Stock Transfer Request → Transfer → Receipt (SAME_BOOK done, chained; INTER_ENTITY **Blocked, not a bug** — this tenant's `ric_companies.inter_location_model='SIMPLE'`, locked once transactions exist per CLAUDE.md, so the INTER_ENTITY variant is untestable without an unsafe, out-of-scope company-setting change; 2 real bugs found — STR-BUG01, SRC-BUG01)
-- [x] Stock Adjustment ("+" and "-" direct entry both done, DB-verified exact GL/ledger/stock; Stock-Count-Review-auto-posted variant still open)
+- [x] Stock Adjustment ("+" and "-" direct entry both done, DB-verified exact GL/ledger/stock; `COST_NOT_ESTABLISHED` hard-block on a never-received product confirmed; Stock-Count-Review-auto-posted variant still open)
 - [x] Material Requisition → Material Issue (chained end-to-end; PRET-UI01-class finding on Issue Qty field)
 - [x] Stock Count → Stock Count Review (chained; composes Stock Adjustment engine directly, reservation-once-consumed confirmed live; no bugs found)
 - [x] Inventory Reports (15/15 smoke pass, all load correctly; Stock Ledger + Stock Adjustment Register spot-checked for real data accuracy; most individual per-scenario rows in `reports/inventory_reports.md` still Not Started — see log)

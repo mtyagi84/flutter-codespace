@@ -1527,9 +1527,22 @@ Dr `[5800] Internal Transfers` 300.00 / Cr `[3600001] Stock Account`
 `rim_product_location.current_stock` 10.0000 → 7.0000, `cost_price`
 unchanged at 100.0000 — confirms the documented rule that a `-` line
 never blocks on/recomputes cost, it just records whatever was already
-there. No bugs found. `ADJ-C02` (no-established-cost block), `ADJ-C04`/
-`ADJ-C05` (batch/serial), and the Stock-Count-Review-auto-posted variant
-(`ADJ-A06`/`ADJ-XS02`) remain open.
+there. No bugs found.
+
+**`ADJ-C02` (no-established-cost block) closed in the same pass**: created
+a brand-new product, PRD-00004 "QA No-Cost Widget 99001" (never touched by
+any GRN/Opening Stock/prior adjustment anywhere), via Product Master.
+Added a `+2` line for it at Main Store — Save Draft succeeded (correct,
+a DRAFT has no stock/GL effect), but clicking Approve was rejected
+outright (HTTP 400 on `fn_approve_stock_adjustment`) with a clear inline
+message: "Line 1: [PRD-00004] QA No-Cost Widget 99001 has no established
+cost at this location yet — receive it via GRN first, or set an opening
+cost, before adjusting it upward." Document stayed in Draft, untouched.
+Confirms the documented hard-block design exactly — no silent zero-cost
+post is possible.
+
+`ADJ-C04`/`ADJ-C05` (batch/serial new-lot vs existing-lot picker) and the
+Stock-Count-Review-auto-posted variant (`ADJ-A06`/`ADJ-XS02`) remain open.
 
 **Stock Transfer INTER_ENTITY variant — confirmed Blocked, not a bug.**
 Queried this tenant's `ric_companies.inter_location_model` directly:
