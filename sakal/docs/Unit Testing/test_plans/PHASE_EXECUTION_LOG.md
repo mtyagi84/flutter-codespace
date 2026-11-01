@@ -1515,6 +1515,31 @@ not just at the moment it was set.
 `ADJ-C04`/`ADJ-C05` (batch/serial new-lot vs existing-lot picker) remain
 open for a follow-up pass.
 
+### Stock Adjustment (IN-ADJ) — "-" direction closed (2026-11-01)
+Fresh scripts (`test_adj2_addline.js` through `test_adj11_finalapprove.js`,
+all deleted after the run). PRD-00001 "QA Test Widget 48042" at Main Store
+(`current_stock=10`, `cost_price=100`, from the Phase 3 Purchase Cycle
+chain), Reason=Damage, Direction=Decrease, Qty Pack=3. Saved as
+`ADJ/MAIN/2026/00003` DRAFT, approved — posted `ADJV/MAIN/2026/00003`:
+Dr `[5800] Internal Transfers` 300.00 / Cr `[3600001] Stock Account`
+300.00 (exact mirror-image direction of the `+` case above). DB-verified:
+`ril_stock_ledger` row `trans_type=ADJUSTMENT_OUT, qty_change=-3.00`;
+`rim_product_location.current_stock` 10.0000 → 7.0000, `cost_price`
+unchanged at 100.0000 — confirms the documented rule that a `-` line
+never blocks on/recomputes cost, it just records whatever was already
+there. No bugs found. `ADJ-C02` (no-established-cost block), `ADJ-C04`/
+`ADJ-C05` (batch/serial), and the Stock-Count-Review-auto-posted variant
+(`ADJ-A06`/`ADJ-XS02`) remain open.
+
+**Stock Transfer INTER_ENTITY variant — confirmed Blocked, not a bug.**
+Queried this tenant's `ric_companies.inter_location_model` directly:
+`SIMPLE`. Per CLAUDE.md, this setting is locked once transactions exist
+and must never be changed as a side effect of testing — an unsafe,
+out-of-scope action. The SAME_BOOK variant (already fully chained and
+DB-verified in an earlier Phase 4 pass) is this tenant's only reachable
+Stock Transfer mode; INTER_ENTITY stays untestable here by design, logged
+as Blocked rather than left as an open gap to chase.
+
 ### Material Requisition → Material Issue (IN-MRQ / IN-MIS) — done, chained end-to-end
 `e2e/test_material_req_issue.js` (Requisition, 9/9) + `e2e/test_material_
 issue.js` (Issue, 9/9), both green. Requisition: FROM Main Store,
